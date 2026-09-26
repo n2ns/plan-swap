@@ -6,11 +6,14 @@ import { codexPanelSource, manualRestartMessages, registerCodexCommands, restart
 import { CodexAccountStore } from '../src/codex/codexStore';
 import { setLocale, t } from '../src/i18n';
 import { LabelStore } from '../src/labels';
-import { env, window, commands } from './stubs/vscode';
+import { env, window, commands, type StubTerminal } from './stubs/vscode';
 import type { AccountsPanel } from '../src/accountsPanel';
-import type { FromWebview } from '../src/protocol';
-import { readSelectedDir, writeSelectedDir } from '../src/codex/codexState';
-import { makeTempHome, MemoryMemento, type TempHome } from './helpers';
+import type { FromWebview, ToWebview } from '../src/protocol';
+import { RC_BEGIN, STATE_FILE, installRcBlocks, rcBlock, rcStatus, readSelectedDir, writeSelectedDir } from '../src/codex/codexState';
+import { CODEX_DEFAULT_NAME, codexAccountDir, type CodexAccount } from '../src/codex/codexPaths';
+import { isSharedCodexAccount } from '../src/codex/codexShare';
+import { labelFor } from '../src/labels';
+import { assertTempHome, makeTempHome, MemoryMemento, read, type TempHome } from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -183,6 +186,360 @@ describe('validateName (Codex)', () => {
     } finally {
       fs.rmSync(path.join(home, '.codex-main'));
       fs.rmSync(def, { recursive: true });
+    }
+  });
+});
+
+describe('panel message handlers', () => {
+  let fx: TempHome;
+  let fxHome: string;
+  let def: string;
+  before(() => {
+    fx = makeTempHome('codex-handlers');
+    fxHome = fx.home;
+    def = path.join(fxHome, '.codex');
+    process.env.SHELL = '/bin/bash';
+    env.remoteName = undefined;
+  });
+  after(() => fx.restore());
+
+  interface Harness {
+    store: CodexAccountStore;
+    labels: LabelStore;
+    handle(message: FromWebview): Promise<void>;
+    posted: ToWebview[];
+    refreshes(): number;
+    dispose(): void;
+  }
+  const harness = async (accounts: CodexAccount[] = []): Promise<Harness> => {
+    assertTempHome(fxHome);
+    fs.mkdirSync(def, { recursive: true, mode: 0o700 });
+    const state = new MemoryMemento();
+    const store = new CodexAccountStore(state);
+    const labels = new LabelStore(state, 'codex.labels');
+    for (const a of accounts) {
+      fs.mkdirSync(a.dir, { recursive: true, mode: 0o700 });
+      await store.add(a);
+    }
+    let handle!: (message: FromWebview) => Promise<void>;
+    const posted: ToWebview[] = [];
+    let refreshes = 0;
+    const panel = {
+      setHandler(_mode: string, callback: typeof handle) { handle = callback; },
+      resolve(_mode: string, dir: string) {
+        const a = store.findByDir(dir);
+        return a && { name: a.name, dir: a.dir, kind: a.name === CODEX_DEFAULT_NAME ? 'default' : 'named' };
+      },
+      refresh() { refreshes++; },
+      post(message: ToWebview) { posted.push(message); },
+    } as unknown as AccountsPanel;
+    const disposables = registerCodexCommands({ store, labels, panel, tools: {} });
+    return { store, labels, handle: (m) => handle(m), posted, refreshes: () => refreshes, dispose: () => disposables.forEach((d) => d.dispose()) };
+  };
+  const named = (name: string): CodexAccount => ({ name, dir: codexAccountDir(name) });
+  const bashrc = (): string => path.join(fxHome, '.bashrc');
+  const profile = (): string => path.join(fxHome, '.profile');
+  // selfCheck spawns a real login shell that inherits process.env; keep it minimal so nothing leaks in (as in codexState.test)
+  const inCleanEnv = async <T,>(fn: () => Promise<T>): Promise<T> => {
+    const saved = process.env;
+    process.env = { HOME: fxHome, PATH: saved.PATH, SHELL: '/bin/bash', TERM: 'dumb', LANG: 'C.UTF-8' } as NodeJS.ProcessEnv;
+    try {
+      return await fn();
+    } finally {
+      process.env = saved;
+    }
+  };
+  const modal = (ctx: { mock: { method: typeof import('node:test').mock.method } }, answer: (message: string) => string | undefined) =>
+    ctx.mock.method(window, 'showWarningMessage', async (message: string) => answer(message));
+
+  test('enable: pre-check, confirmation, rc blocks written, self-check passes, state file untouched', async (ctx) => {
+    fs.writeFileSync(bashrc(), 'x=1\n');
+    fs.writeFileSync(profile(), '. ~/.bashrc\n');
+    writeSelectedDir(path.join(fxHome, 'keep'));
+    const h = await harness();
+    const errors = ctx.mock.method(window, 'showErrorMessage', async () => undefined);
+    let confirm = false;
+    modal(ctx, () => (confirm ? t('codex.enableButton') : undefined));
+    try {
+      await inCleanEnv(() => h.handle({ type: 'enable', mode: 'codex' }));
+      assert.equal(read(bashrc()), 'x=1\n', 'cancelled: nothing written');
+      confirm = true;
+      await inCleanEnv(() => h.handle({ type: 'enable', mode: 'codex' }));
+      assert.equal(errors.mock.callCount(), 0);
+      assert.equal(read(bashrc()), 'x=1\n\n' + rcBlock());
+      assert.equal(read(profile()), '. ~/.bashrc\n\n' + rcBlock());
+      assert.equal(readSelectedDir(), path.join(fxHome, 'keep'));
+      assert.equal(h.refreshes(), 1);
+      assert.equal(codexPanelSource(h.store, h.labels).enabled(), true);
+    } finally {
+      h.dispose();
+    }
+  });
+
+  test('enable: a failed self-check rolls back only the files newly written this time', async (ctx) => {
+    // ~/.bash_profile mentions .bashrc (pre-check passes) but does not source it, so the login shell never sees the block
+    fs.writeFileSync(path.join(fxHome, '.bash_profile'), ': ~/.bashrc\n');
+    fs.writeFileSync(bashrc(), 'x=1\n\n' + rcBlock());
+    fs.writeFileSync(profile(), 'p=1\n');
+    writeSelectedDir(undefined);
+    const h = await harness();
+    const errors = ctx.mock.method(window, 'showErrorMessage', async () => undefined);
+    modal(ctx, () => t('codex.enableButton'));
+    try {
+      await inCleanEnv(() => h.handle({ type: 'enable', mode: 'codex' }));
+      assert.equal(errors.mock.callCount(), 1);
+      assert.match(String(errors.mock.calls[0].arguments[0]), /^Self-check failed; rc files were rolled back: /);
+      assert.equal(read(profile()), 'p=1\n', 'rolled back');
+      assert.equal(read(bashrc()), 'x=1\n\n' + rcBlock(), 'the pre-existing block is kept');
+      assert.equal(read(STATE_FILE()), '', 'the state file is restored');
+      assert.equal(h.refreshes(), 1);
+    } finally {
+      h.dispose();
+      fs.rmSync(path.join(fxHome, '.bash_profile'));
+    }
+  });
+
+  test('enable: pre-check failures are reported without a confirmation', async (ctx) => {
+    fs.writeFileSync(bashrc(), 'export CODEX_HOME=/mine\n');
+    fs.writeFileSync(profile(), 'p=1\n');
+    const h = await harness();
+    const errors = ctx.mock.method(window, 'showErrorMessage', async () => undefined);
+    const warnings = modal(ctx, () => t('codex.enableButton'));
+    try {
+      await h.handle({ type: 'enable', mode: 'codex' });
+      assert.equal(warnings.mock.callCount(), 0);
+      assert.equal(errors.mock.calls[0].arguments[0], t('codex.enableFailedReasons', { reasons: t('codex.pre.userExport', { file: bashrc() }) }));
+      assert.equal(read(bashrc()), 'export CODEX_HOME=/mine\n');
+    } finally {
+      h.dispose();
+    }
+  });
+
+  test('disable: removes both blocks and the state file after confirmation; a cancel changes nothing', async (ctx) => {
+    fs.writeFileSync(bashrc(), 'x=1\n');
+    fs.writeFileSync(profile(), 'p=1\n');
+    installRcBlocks();
+    writeSelectedDir(path.join(fxHome, '.codex-x'));
+    const h = await harness();
+    let confirm = false;
+    modal(ctx, () => (confirm ? t('codex.disableButton') : undefined));
+    try {
+      await commands.registered['planswap.codex.disable']();
+      assert.equal(readSelectedDir(), path.join(fxHome, '.codex-x'));
+      assert.equal(read(bashrc()), 'x=1\n\n' + rcBlock());
+      confirm = true;
+      await commands.registered['planswap.codex.disable']();
+      assert.equal(read(bashrc()), 'x=1\n');
+      assert.equal(read(profile()), 'p=1\n');
+      assert.ok(!fs.existsSync(STATE_FILE()));
+      assert.equal(codexPanelSource(h.store, h.labels).enabled(), false);
+    } finally {
+      h.dispose();
+    }
+  });
+
+  test('enabled(): a start marker without its end marker counts as not enabled so the repair guidance is reachable', async () => {
+    fs.writeFileSync(bashrc(), 'x=1\n\n' + rcBlock());
+    fs.writeFileSync(profile(), 'p=1\n\n' + RC_BEGIN + '\n');
+    const h = await harness();
+    try {
+      const source = codexPanelSource(h.store, h.labels);
+      assert.deepEqual(rcStatus().map((s) => [s.hasBlock, s.broken]), [[true, true], [true, false]]);
+      assert.equal(source.enabled(), false);
+      fs.writeFileSync(profile(), 'p=1\n\n' + rcBlock());
+      assert.equal(source.enabled(), true);
+    } finally {
+      h.dispose();
+    }
+  });
+
+  test('switch: an account already effective in this window only realigns the state file; no confirmation, no restart', async (ctx) => {
+    const a = named('eff');
+    const h = await harness([a]);
+    const warnings = modal(ctx, () => t('common.continue'));
+    env.remoteName = 'wsl';
+    process.env.CODEX_HOME = a.dir;
+    try {
+      writeSelectedDir(undefined);
+      await h.handle({ type: 'switch', mode: 'codex', dir: a.dir });
+      assert.equal(readSelectedDir(), a.dir);
+      assert.equal(warnings.mock.callCount(), 0, 'neither the confirmation nor a manual-restart warning');
+      assert.equal(h.refreshes(), 1);
+      // Back to the default while a named account is effective: the ordinary confirmed switch
+      await h.handle({ type: 'switch', mode: 'codex', dir: def });
+      assert.equal(readSelectedDir(), undefined);
+      assert.equal(warnings.mock.callCount() >= 1, true);
+    } finally {
+      delete process.env.CODEX_HOME;
+      env.remoteName = undefined;
+      h.dispose();
+    }
+  });
+
+  test('add: a linked account is created and linked; an independent one gets a copy; invalid names are reported', async () => {
+    fs.mkdirSync(def, { recursive: true });
+    fs.writeFileSync(path.join(def, 'config.toml'), 'model = "m"\n');
+    fs.mkdirSync(path.join(def, 'sessions'), { recursive: true });
+    const h = await harness();
+    try {
+      await h.handle({ type: 'add', mode: 'codex', name: 'linked', shared: true });
+      assert.deepEqual(h.posted.at(-1), { type: 'addResult', mode: 'codex', error: undefined });
+      assert.ok(h.store.find('linked'));
+      assert.equal(isSharedCodexAccount(codexAccountDir('linked')), true);
+      assert.ok(fs.lstatSync(path.join(codexAccountDir('linked'), 'config.toml')).isSymbolicLink());
+
+      await h.handle({ type: 'add', mode: 'codex', name: 'own', shared: false });
+      assert.deepEqual(h.posted.at(-1), { type: 'addResult', mode: 'codex', error: undefined });
+      assert.equal(isSharedCodexAccount(codexAccountDir('own')), false);
+      assert.ok(fs.lstatSync(path.join(codexAccountDir('own'), 'config.toml')).isFile());
+      assert.equal(read(path.join(codexAccountDir('own'), 'config.toml')), 'model = "m"\n');
+      assert.ok(!fs.existsSync(path.join(codexAccountDir('own'), 'sessions')));
+
+      await h.handle({ type: 'add', mode: 'codex', name: 'own', shared: false });
+      assert.deepEqual(h.posted.at(-1), { type: 'addResult', mode: 'codex', error: t('name.exists') });
+      assert.equal(h.refreshes(), 2);
+    } finally {
+      h.dispose();
+    }
+  });
+
+  test('remove: the directory of a non-effective, non-selected account is deleted through deleteCodexDir', async (ctx) => {
+    const a = named('gone');
+    const h = await harness([a]);
+    await h.labels.set(a.name, 'Old');
+    fs.writeFileSync(path.join(a.dir, 'auth.json'), '{}');
+    writeSelectedDir(undefined);
+    modal(ctx, (message) => (message === t('account.removeDirPrompt', { label: 'Old', dir: a.dir }) ? t('common.deleteDir') : undefined));
+    try {
+      await h.handle({ type: 'remove', mode: 'codex', dir: a.dir });
+      assert.equal(h.store.find('gone'), undefined);
+      assert.equal(labelFor('gone', h.labels), 'gone', 'alias cleared');
+      assert.ok(!fs.existsSync(a.dir));
+      assert.ok(fs.existsSync(def));
+    } finally {
+      h.dispose();
+    }
+  });
+
+  test('remove: an account selected or made effective while the modal was open is not deleted', async (ctx) => {
+    const a = named('raced');
+    const h = await harness([a]);
+    writeSelectedDir(undefined);
+    const shown: string[] = [];
+    modal(ctx, (message) => {
+      shown.push(message);
+      if (message !== t('account.removeDirPrompt', { label: 'raced', dir: a.dir })) return undefined;
+      writeSelectedDir(a.dir);   // another window selects it meanwhile
+      return t('common.deleteDir');
+    });
+    try {
+      await h.handle({ type: 'remove', mode: 'codex', dir: a.dir });
+      assert.ok(fs.existsSync(a.dir), 'the directory survives');
+      assert.equal(shown.at(-1), t('codex.removeSelected', { label: 'raced' }));
+      assert.equal(h.store.find('raced'), undefined, 'the list entry was already removed');
+    } finally {
+      h.dispose();
+    }
+  });
+
+  test('remove: the effective account is refused before any modal', async (ctx) => {
+    const a = named('active');
+    const h = await harness([a]);
+    writeSelectedDir(undefined);
+    process.env.CODEX_HOME = a.dir;
+    const warnings = modal(ctx, () => t('common.deleteDir'));
+    try {
+      await h.handle({ type: 'remove', mode: 'codex', dir: a.dir });
+      assert.deepEqual(warnings.mock.calls.map((c) => c.arguments[0]), [t('codex.removeEffective', { label: 'active' })]);
+      assert.ok(h.store.find('active'));
+      assert.ok(fs.existsSync(a.dir));
+    } finally {
+      delete process.env.CODEX_HOME;
+      h.dispose();
+    }
+  });
+
+  test('share then unshare: conversion after confirmation; the selected account is refused', async (ctx) => {
+    fs.writeFileSync(path.join(def, 'config.toml'), 'model = "m"\n');
+    const a = named('conv');
+    const h = await harness([a]);
+    fs.mkdirSync(path.join(a.dir, 'sessions'), { recursive: true });
+    fs.writeFileSync(path.join(a.dir, 'sessions', 'x.jsonl'), 'x');
+    fs.writeFileSync(path.join(a.dir, 'auth.json'), 'secret');
+    writeSelectedDir(undefined);
+    const infos = ctx.mock.method(window, 'showInformationMessage', async () => undefined);
+    const errors = ctx.mock.method(window, 'showErrorMessage', async () => undefined);
+    const warnings = modal(ctx, (message) =>
+      message.startsWith('Link ') ? t('share.confirmButton') : message.startsWith('Unlink ') ? t('unshare.confirmButton') : undefined);
+    try {
+      await h.handle({ type: 'share', mode: 'codex', dir: a.dir });
+      assert.equal(errors.mock.callCount(), 0);
+      assert.equal(isSharedCodexAccount(a.dir), true);
+      assert.equal(read(path.join(def, 'sessions', 'x.jsonl')), 'x');
+      assert.equal(read(path.join(a.dir, 'auth.json')), 'secret');
+      assert.match(String(infos.mock.calls[0].arguments[0]), /^conv is now linked to the default account\. /);
+
+      await h.handle({ type: 'unshare', mode: 'codex', dir: a.dir });
+      assert.equal(errors.mock.callCount(), 0);
+      assert.equal(isSharedCodexAccount(a.dir), false);
+      assert.equal(read(path.join(a.dir, 'config.toml')), 'model = "m"\n');
+      assert.ok(!fs.existsSync(path.join(a.dir, 'sessions')));
+      assert.match(String(infos.mock.calls[1].arguments[0]), /^conv is now independent: removed \d+ link\(s\), copied /);
+      assert.equal(h.refreshes(), 2);
+
+      writeSelectedDir(a.dir);
+      await h.handle({ type: 'share', mode: 'codex', dir: a.dir });
+      assert.equal(warnings.mock.calls.at(-1)?.arguments[0], t('share.current', { label: 'conv' }));
+      assert.equal(isSharedCodexAccount(a.dir), false);
+    } finally {
+      writeSelectedDir(undefined);
+      h.dispose();
+    }
+  });
+
+  test('rename: named rows get an alias; a colliding label is reported; the default row is ignored', async () => {
+    const a = named('rn');
+    const b = named('other');
+    const h = await harness([a, b]);
+    try {
+      await h.handle({ type: 'rename', mode: 'codex', dir: a.dir, label: 'Work' });
+      assert.deepEqual(h.posted.at(-1), { type: 'renameResult', mode: 'codex', dir: a.dir, error: undefined });
+      assert.equal(labelFor('rn', h.labels), 'Work');
+      await h.handle({ type: 'rename', mode: 'codex', dir: a.dir, label: 'other' });
+      assert.equal((h.posted.at(-1) as { error?: string }).error, t('label.dupName'));
+      assert.equal(labelFor('rn', h.labels), 'Work');
+      await h.handle({ type: 'rename', mode: 'codex', dir: a.dir, label: 'rn' });
+      assert.equal(labelFor('rn', h.labels), 'rn', 'a label equal to the name clears the alias');
+      await h.handle({ type: 'rename', mode: 'codex', dir: def, label: 'Main' });
+      assert.deepEqual(h.posted.at(-1), { type: 'renameResult', mode: 'codex', dir: def, error: undefined });
+      assert.equal(labelFor(CODEX_DEFAULT_NAME, h.labels), CODEX_DEFAULT_NAME);
+    } finally {
+      h.dispose();
+    }
+  });
+
+  test('terminal: runs codex login without auth.json, codex with it, and env -u for the default account', async (ctx) => {
+    const a = named('term');
+    const h = await harness([a]);
+    await h.labels.set(a.name, 'Term Label');
+    const created: StubTerminal[] = [];
+    ctx.mock.method(window, 'createTerminal', (options: { name: string }) => {
+      const terminal: StubTerminal = { name: options.name, sent: [], shown: 0, sendText(text) { terminal.sent.push(text); }, show() { terminal.shown++; } };
+      created.push(terminal);
+      return terminal;
+    });
+    try {
+      await h.handle({ type: 'terminal', mode: 'codex', dir: a.dir });
+      fs.writeFileSync(path.join(a.dir, 'auth.json'), '{}');
+      await h.handle({ type: 'terminal', mode: 'codex', dir: a.dir });
+      await h.handle({ type: 'terminal', mode: 'codex', dir: def });
+      assert.deepEqual(created.map((c) => [c.name, c.sent, c.shown]), [
+        ['Codex (Term Label)', [`env CODEX_HOME='${a.dir}' codex login`], 1],
+        ['Codex (Term Label)', [`env CODEX_HOME='${a.dir}' codex`], 1],
+        ['Codex (default)', ['env -u CODEX_HOME codex login'], 1],
+      ]);
+    } finally {
+      h.dispose();
     }
   });
 });

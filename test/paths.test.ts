@@ -2,7 +2,7 @@ import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { setLocale } from '../src/i18n';
+import { setLocale, t } from '../src/i18n';
 import {
   accountDir, checkSafeToDelete, claudeJsonPath, copySettingsStripped, defaultDir, deleteAccountDir,
   ensureAccountDir, formatClaudePlan, readAccountInfo, samePath, sameRealPath, scanAccountDirs,
@@ -195,14 +195,21 @@ describe('copySettingsStripped', () => {
   });
 });
 
-describe('scanAccountDirs', () => {
-  before(() => {
-    fs.mkdirSync(path.join(home, '.claude-bad name'));
-    fs.mkdirSync(path.join(home, '.claude-'));
-    fs.writeFileSync(path.join(home, '.claude-file'), '');
+// Entries shared by the scan and deletion tests; created on demand so each describe works on its own
+function ensureScanFixtures(): void {
+  for (const d of [accountDir('work'), accountDir('w2'), path.join(home, '.claude-bad name'), path.join(home, '.claude-'), path.join(home, 'other')]) {
+    fs.mkdirSync(d, { recursive: true, mode: 0o700 });
+  }
+  if (!fs.existsSync(path.join(home, '.claude-file'))) fs.writeFileSync(path.join(home, '.claude-file'), '');
+  try {
+    fs.lstatSync(path.join(home, '.claude-link'));
+  } catch {
     fs.symlinkSync(accountDir('work'), path.join(home, '.claude-link'));
-    fs.mkdirSync(path.join(home, 'other'));
-  });
+  }
+}
+
+describe('scanAccountDirs', () => {
+  before(ensureScanFixtures);
   test('filters symlinks, files, invalid names', () => {
     const names = scanAccountDirs().map((a) => a.name);
     assert.ok(names.includes('work') && names.includes('w2'), String(names));
@@ -218,6 +225,7 @@ describe('scanAccountDirs', () => {
 });
 
 describe('checkSafeToDelete / deleteAccountDir', () => {
+  before(ensureScanFixtures);
   test('refuses the default directory (including one set via CLAUDE_CONFIG_DIR)', () => {
     process.env.CLAUDE_CONFIG_DIR = accountDir('work');
     try {
@@ -317,6 +325,19 @@ describe('syncMcpServers', () => {
     setSource({ one });
     assert.deepEqual(syncMcpServers(src(), def), { added: [], kept: [] });
     assert.ok(!fs.existsSync(path.join(def, '.claude.json')));
+  });
+
+  test('a target rewritten by the CLI between read and rename is left unchanged and reported', () => {
+    setSource({ one });
+    const f = mk('f');
+    const file = path.join(f, '.claude.json');
+    fs.writeFileSync(file, JSON.stringify({ userID: 'u' }));
+    const rewritten = JSON.stringify({ userID: 'u', numStartups: 2 });
+    assert.throws(() => syncMcpServers(src(), f, () => fs.writeFileSync(file, rewritten)), { message: t('mcp.changed', { file }) });
+    assert.equal(read(file), rewritten);
+    assert.deepEqual(fs.readdirSync(f), ['.claude.json']);
+    assert.deepEqual(syncMcpServers(src(), f), { added: ['one'], kept: [] });
+    assert.deepEqual(target(f), { userID: 'u', numStartups: 2, mcpServers: { one } });
   });
 });
 

@@ -18,7 +18,7 @@ const contexts = await Promise.all([
     bundle: true,
     format: 'cjs',
     platform: 'node',
-    target: 'node20',
+    target: 'node22',
     external: ['vscode'],
     sourcemap: true,
   }),

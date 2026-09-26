@@ -67,7 +67,7 @@ For changes to shell configuration or automatic server restart, the user also ve
 
 ### Codex in a local Linux desktop VS Code
 
-Performed by the user with an installed build. Local switching saves selection and shows manual instructions; PlanSwap never exits or relaunches the desktop editor. Record editor/official-extension versions, connection context, starting/selected/effective labels and results; never record credentials or account emails. See [Codex design §5.1](codex-design.md#51-relaunching-a-local-desktop-editor).
+Performed by the user with an installed build. Local switching saves selection and shows manual instructions; PlanSwap never exits or relaunches the desktop editor. Record editor/official-extension versions, connection context, starting/selected/effective labels and results; never record credentials or account emails. See [Codex design §5.1](codex-design.md#51-local-desktop-editor-manual-restart).
 
 1. **Labels and instructions**: in both languages, the local pending button says **Show instructions**, and the footer provides **How to Apply the Codex Account**. The banner explains that a restart is required. There is no WSL shutdown instruction or delay.
 2. **Cancel selection**: cancel the account-switch confirmation; selection and effective account remain unchanged.

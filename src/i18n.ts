@@ -33,6 +33,7 @@ export const en = {
   'name.exists': 'An account with this name already exists',
   'name.dupLabel': "Same as an existing account's display name",
   'name.sameAsDefaultDir': 'This account directory is the same as the default account directory',
+  'name.dirIsSymlink': 'This account directory is a symbolic link',
 
   // Display name validation (labels.validate)
   'label.empty': 'Enter a display name',
@@ -49,6 +50,8 @@ export const en = {
   'claude.removeConfirm': 'Delete account {label}?',
   'claude.removeDirDetail':
     "The directory contains this account's login credentials and session history and cannot be recovered once deleted. If you just switched away from this account and have not reloaded the window, open sessions are still using this directory.",
+  'claude.removeDirDetailShared':
+    'Linked data in the default account will be kept. This account directory and everything stored locally in it, including login credentials, backups and other unlinked files, will be permanently deleted.',
   'share.removeDirDetail':
     "Linked data in the default account will be kept. This account directory and everything stored locally in it, including login credentials, per-account memories, backups and other unlinked files, will be permanently deleted.",
   'claude.pick.switch': 'Select the account to switch to',
@@ -124,6 +127,7 @@ export const en = {
   'codex.pre.broken': 'Marker block is incomplete; please fix {file} manually',
   'codex.pre.userExport': '{file} already has your own export CODEX_HOME, which conflicts',
   'codex.rc.missingEnd': 'Marker block is incomplete (missing end marker); please check {file} manually',
+  'codex.rc.danglingLink': '{file} is a symbolic link whose target does not exist; fix the link before retrying',
   'codex.self.bashFailed': 'Cannot run bash: {error}',
   'codex.self.mismatch': 'CODEX_HOME in the login shell is "{actual}", expected "{expected}"{stderr}',
   'codex.self.stderr': '; stderr: {stderr}',
@@ -188,6 +192,7 @@ export const en = {
   'share.r.backups': 'backed up: {list}',
   'share.r.conflicts': 'kept the account\'s own: {list}',
   'share.r.refused': 'not linked for safety: {list}',
+  'share.r.busy': 'left as is while the account is in use: {list}',
   'tools.fileMissingCreate': 'File does not exist. Create it?\n{file}',
   'tools.create': 'Create',
   'tools.createFailed': 'Failed to create file: {error}',
@@ -231,6 +236,7 @@ export const zhCn: Record<MessageKey, string> = {
   'name.exists': '已存在同名账号',
   'name.dupLabel': '与已有账号的显示名相同',
   'name.sameAsDefaultDir': '该账号目录与默认账号目录相同',
+  'name.dirIsSymlink': '该账号目录是符号链接',
 
   'label.empty': '请输入显示名',
   'label.tooLong': '显示名最多 {max} 个字符',
@@ -244,6 +250,7 @@ export const zhCn: Record<MessageKey, string> = {
   'claude.removeConfirm': '确定删除账号 {label}？',
   'claude.removeDirDetail':
     '目录内含该账号的登录凭据与会话历史，删除后无法恢复。若刚从该账号切走且尚未重新加载窗口，已打开的会话仍在使用此目录。',
+  'claude.removeDirDetailShared': '默认账号中的链接目标会保留。本账号目录及其中本地存储的全部内容（包括登录凭据、备份和其他未链接文件）将永久删除。',
   'claude.pick.switch': '选择要切换到的账号',
   'claude.pick.remove': '选择要删除的账号',
   'claude.pick.terminal': '选择要在终端中打开 claude 的账号',
@@ -306,6 +313,7 @@ export const zhCn: Record<MessageKey, string> = {
   'codex.pre.broken': '标记块不完整，请手工修复 {file}',
   'codex.pre.userExport': '{file} 中已有用户自己的 export CODEX_HOME，存在冲突',
   'codex.rc.missingEnd': '标记块不完整（缺少结束标记），请手工检查 {file}',
+  'codex.rc.danglingLink': '{file} 是指向不存在目标的符号链接，请先修复该链接再重试',
   'codex.self.bashFailed': '无法运行 bash：{error}',
   'codex.self.mismatch': '登录 shell 中 CODEX_HOME 为 "{actual}"，预期 "{expected}"{stderr}',
   'codex.self.stderr': '；stderr：{stderr}',
@@ -367,6 +375,7 @@ export const zhCn: Record<MessageKey, string> = {
   'share.r.backups': '已备份：{list}',
   'share.r.conflicts': '保留了账号自己的：{list}',
   'share.r.refused': '出于安全未链接：{list}',
+  'share.r.busy': '账号使用中，暂未处理：{list}',
   'tools.fileMissingCreate': '文件不存在，是否创建？\n{file}',
   'tools.create': '创建',
   'tools.createFailed': '创建文件失败：{error}',

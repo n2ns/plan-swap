@@ -133,7 +133,9 @@ export function preCheck(): PreCheck {
   for (const name of ['.bash_profile', '.bash_login']) {
     const file = path.join(os.homedir(), name);
     const text = readText(file);
-    if (text !== undefined && !text.includes('.bashrc')) {
+    // Comment lines do not source anything
+    const sources = (l: string): boolean => !l.trimStart().startsWith('#') && l.includes('.bashrc');
+    if (text !== undefined && !text.split('\n').some(sources)) {
       reasons.push(t('codex.pre.bashProfile', { file }));
     }
   }
@@ -156,13 +158,15 @@ function statMode(file: string): number | undefined {
   }
 }
 
-/** Atomic write: resolve symlinks to the real target, temp file in the same dir + fsync + chmod + rename. */
+/** Atomic write: resolve symlinks to the real target, temp file in the same dir + fsync + chmod + rename.
+ *  A dangling symlink is never replaced by a regular file: throws t('codex.rc.danglingLink'). */
 function writeRc(file: string, content: string, mode: number | undefined): void {
   let target = file;
   try {
     target = fs.realpathSync(file);
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+    if (fs.lstatSync(file, { throwIfNoEntry: false })?.isSymbolicLink()) throw new Error(t('codex.rc.danglingLink', { file }));
   }
   const dirName = path.dirname(target);
   const tmp = path.join(dirName, `.${path.basename(target)}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`);

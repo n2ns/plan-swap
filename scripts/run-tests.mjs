@@ -20,7 +20,7 @@ await esbuild.build({
   bundle: true,
   format: 'cjs',
   platform: 'node',
-  target: 'node20',
+  target: 'node22',
   sourcemap: 'inline',
   alias: { vscode: path.join(testDir, 'stubs', 'vscode.ts') },
   logLevel: 'error',

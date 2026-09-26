@@ -186,6 +186,47 @@ describe('ensureClaudeLinks history repair', () => {
     assert.ok(r.conflicts.includes('history.jsonl'));
     assert.equal(read(path.join(acc, 'history.jsonl')), '{"own":1}\n');
   });
+
+  test('a real history.jsonl is left as is and reported under busy while the account is in use', () => {
+    write(path.join(def, 'history.jsonl'), '{"a":1}\n');
+    const acc = accountDir('h');
+    fs.mkdirSync(acc, { mode: 0o700 });
+    ensureClaudeLinks(acc);
+    fs.unlinkSync(path.join(acc, 'history.jsonl'));
+    write(path.join(acc, 'history.jsonl'), '{"b":3}\n');
+    write(path.join(def, 'sessions', '42.json'), JSON.stringify({ pid: 42 }));
+    const r = ensureClaudeLinks(acc, fakeProc({ 42: { CLAUDE_CONFIG_DIR: acc } }));
+    assert.deepEqual(r.busy, ['history.jsonl']);
+    assert.ok(!r.linked.includes('history.jsonl') && !r.conflicts.includes('history.jsonl'));
+    assert.ok(fs.lstatSync(path.join(acc, 'history.jsonl')).isFile());
+    assert.equal(read(path.join(acc, 'history.jsonl')), '{"b":3}\n');
+    assert.equal(read(path.join(def, 'history.jsonl')), '{"a":1}\n');
+    // Another account's session does not block the repair
+    const again = ensureClaudeLinks(acc, fakeProc({ 42: { CLAUDE_CONFIG_DIR: accountDir('other') } }));
+    assert.equal(again.busy, undefined);
+    assert.ok(again.linked.includes('history.jsonl'));
+    assert.equal(read(path.join(def, 'history.jsonl')), '{"a":1}\n{"b":3}\n');
+  });
+
+  test('a whole-folder skills link and dangling child links are kept while the account is in use', () => {
+    write(path.join(def, 'skills', 'one', 'SKILL.md'), '1');
+    const acc = accountDir('s');
+    fs.mkdirSync(acc, { mode: 0o700 });
+    fs.symlinkSync(path.join(def, 'skills'), path.join(acc, 'skills'));
+    fs.mkdirSync(path.join(acc, 'plugins'), { mode: 0o700 });
+    fs.symlinkSync(path.join(def, 'plugins', 'gone'), path.join(acc, 'plugins', 'gone'));
+    write(path.join(acc, 'sessions', '7.json'), JSON.stringify({ pid: 7 }));
+    const busy = fakeProc({ 7: { CLAUDE_CONFIG_DIR: acc } });
+    const r = ensureClaudeLinks(acc, busy);
+    assert.deepEqual(r.busy, ['skills', 'plugins/gone']);
+    assert.ok(fs.lstatSync(path.join(acc, 'skills')).isSymbolicLink());
+    assert.ok(fs.lstatSync(path.join(acc, 'plugins', 'gone')).isSymbolicLink());
+    const later = ensureClaudeLinks(acc, fakeProc({}));
+    assert.equal(later.busy, undefined);
+    assert.ok(fs.lstatSync(path.join(acc, 'skills')).isDirectory());
+    assert.ok(isLinkTo(path.join(acc, 'skills', 'one'), path.join(def, 'skills', 'one')));
+    assert.ok(!exists(path.join(acc, 'plugins', 'gone')));
+  });
 });
 
 describe('isSharedClaudeAccount', () => {
@@ -271,6 +312,20 @@ describe('mirrorClaudeJson', () => {
     write(src(), JSON.stringify({ mcpServers: { a: {} } }));
     assert.deepEqual(mirrorClaudeJson(src(), def).changed, []);
     assert.ok(!exists(path.join(def, '.claude.json')));
+  });
+
+  test('a target rewritten by the CLI between read and rename is left unchanged and reported', () => {
+    write(src(), JSON.stringify({ mcpServers: { a: { command: 'a' } } }));
+    const acc = accountDir('race');
+    const file = path.join(acc, '.claude.json');
+    write(file, JSON.stringify({ userID: 'u' }));
+    const rewritten = JSON.stringify({ userID: 'u', numStartups: 2 });
+    assert.throws(() => mirrorClaudeJson(src(), acc, () => fs.writeFileSync(file, rewritten)), { message: t('mcp.changed', { file }) });
+    assert.equal(read(file), rewritten);
+    assert.deepEqual(fs.readdirSync(acc), ['.claude.json']);
+    // The next run starts from the new content
+    assert.deepEqual(mirrorClaudeJson(src(), acc).changed, ['mcpServers']);
+    assert.deepEqual(JSON.parse(read(file)), { userID: 'u', numStartups: 2, mcpServers: { a: { command: 'a' } } });
   });
 });
 
@@ -447,9 +502,18 @@ describe('migrateClaudeToShared', () => {
     const acc = accountDir('a');
     write(path.join(acc, 'sessions', '42.json'), JSON.stringify({ pid: 42 }));
     write(path.join(acc, 'projects', 'p', 'x'), 'x');
-    assert.throws(() => migrateClaudeToShared(acc, 'a', fakeProc({ 42: { CLAUDE_CONFIG_DIR: acc } })), /still running with account a/);
+    assert.throws(() => migrateClaudeToShared(acc, 'a', fakeProc({ 42: { CLAUDE_CONFIG_DIR: acc } })), /still running with account a;/);
     assert.equal(read(path.join(acc, 'projects', 'p', 'x')), 'x');
     assert.ok(!exists(path.join(def, 'projects')));
+  });
+
+  test('the busy error names the display name when one is passed', () => {
+    const acc = accountDir('a');
+    write(path.join(acc, 'sessions', '42.json'), JSON.stringify({ pid: 42 }));
+    assert.throws(
+      () => migrateClaudeToShared(acc, 'a', fakeProc({ 42: { CLAUDE_CONFIG_DIR: acc } }), 'Work'),
+      { message: t('share.busy', { name: 'Work' }) },
+    );
   });
 });
 

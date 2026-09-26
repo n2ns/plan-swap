@@ -43,8 +43,10 @@ For Claude, new sessions use the selected account; reload the window to update o
 | Antigravity IDE | After your confirmation, PlanSwap restarts the WSL server. Click **Reload Window** in each disconnected window. |
 | VSCodium | After your confirmation, PlanSwap restarts the WSL server. Click **Reload Window** in each disconnected window. |
 | VS Code | Close all VS Code windows connected to that WSL distribution, wait a few seconds, then reopen them. |
+| Local Linux desktop editor | The selection is saved and PlanSwap shows instructions: fully exit the editor and relaunch it with `CODEX_HOME` set to the selected account directory. |
+| Other remote windows | The selection is saved and PlanSwap shows instructions for restarting the remote editor server with `CODEX_HOME` set. |
 
-**Save your work before switching Codex accounts.** Restarting the WSL server disconnects its editor windows and closes integrated terminals and running CLI sessions. Reloading just one window does not replace this restart.
+**Save your work before switching Codex accounts.** Restarting the WSL server disconnects its editor windows and closes integrated terminals and running CLI sessions. Reloading just one window does not replace this restart or a manual relaunch.
 
 Only Antigravity IDE has been tested end to end. VSCodium and VS Code support has not yet been verified end to end in those editors.
 
@@ -109,7 +111,7 @@ In extension settings, set `planswap.language` to `auto` (follow your editor), `
 
 ## Known limitations
 
-- **Open sessions keep their current account.** Reload Claude panels after a switch; complete the WSL server restart for Codex.
+- **Open sessions keep their current account.** Reload Claude panels after a switch; complete the WSL server restart or the manual relaunch for Codex.
 - **Switching is not per window.** Other windows of the same editor connected to the same WSL environment are affected too.
 - **Continuing another account's session can fail**, particularly between Codex accounts in different ChatGPT organizations. Avoid opening the same session from two accounts at once.
 - **Some shared settings need a refresh.** After changing the default setup, use **Re-link**. If PlanSwap reports conflicting files, resolve them manually. Deleting Claude prompt history from a linked account does not necessarily remove it from the shared history.

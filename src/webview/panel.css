@@ -1,4 +1,4 @@
-/* All colors come from the editor's injected theme variables (or color-mix of them), so light and dark themes adapt automatically */
+/* All colors come from the editor's injected theme variables (or color-mix / relative-color derivations of them), so light, dark and high-contrast themes adapt automatically */
 :root {
   --gap: 8px;
   --radius-card: 12px;
@@ -17,7 +17,11 @@
   --surface-2: color-mix(in srgb, var(--ink) 8%, var(--base));
   --line: color-mix(in srgb, var(--ink) 10%, transparent);
   --line-strong: color-mix(in srgb, var(--ink) 16%, transparent);
-  --shadow: 0 2px 10px color-mix(in srgb, var(--vscode-widget-shadow, #000) 28%, transparent);
+  /* Shadow color: the theme's widget shadow; high-contrast themes define no shadow and get their widget border instead */
+  --shadow-color: var(--vscode-widget-shadow, var(--vscode-widget-border));
+  --shadow: 0 2px 10px color-mix(in srgb, var(--shadow-color) 28%, transparent);
+  /* White in every built-in theme (button text); used for highlights instead of a literal white */
+  --highlight: var(--vscode-button-foreground);
   --ease: 120ms ease-out;
 }
 
@@ -84,7 +88,7 @@ body {
 .tab:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 6%, transparent); }
 .tab:focus-visible { box-shadow: 0 0 0 1px var(--accent) inset; }
 .tab.is-active {
-  color: var(--vscode-button-foreground, #fff);
+  color: var(--vscode-button-foreground);
   background: var(--accent);
   box-shadow: 0 1px 4px color-mix(in srgb, var(--accent) 40%, transparent);
 }
@@ -119,40 +123,44 @@ body {
 .banner > .icon-btn { position: absolute; top: 6px; right: 6px; margin: 0; }
 .banner:has(> .icon-btn) .banner-title { padding-right: 26px; }
 
-/* ---------- Plan colors: data-plan -> --plan-color / --plan-color-2 ---------- */
-/* Dark theme values by default; light / high-contrast light themes override below */
+/* ---------- Plan colors: data-plan -> --plan-color / --plan-color-2 / --plan-ink ---------- */
+/* Every value derives from the theme's chart / description colors, which already have dark, light and high-contrast variants */
 [data-plan] { --plan-color: var(--accent); --plan-color-2: var(--plan-color); --plan-ink: var(--plan-color); }
-[data-plan="tier3"] { --plan-color: #d9a441; --plan-color-2: #f5d27a; --plan-ink: #8a5a00; }
-[data-plan="tier2"] { --plan-color: #dfbd5c; --plan-ink: #3f2b00; }
-[data-plan="tier1"] { --plan-color: #4da3ff; }
-[data-plan="team"] { --plan-color: #3ec7d6; }
-[data-plan="enterprise"] { --plan-color: #9aa8b8; }
-[data-plan="tier0"] { --plan-color: #9d9d9d; }
-[data-plan="apikey"] { --plan-color: #e8973a; }
-.vscode-light [data-plan="tier2"], .vscode-high-contrast-light [data-plan="tier2"] { --plan-color: #c9a53f; --plan-ink: #3f2b00; }
-.vscode-light [data-plan="tier1"], .vscode-high-contrast-light [data-plan="tier1"] { --plan-color: #0b6bcb; }
-.vscode-light [data-plan="team"], .vscode-high-contrast-light [data-plan="team"] { --plan-color: #0b7f8e; }
-.vscode-light [data-plan="enterprise"], .vscode-high-contrast-light [data-plan="enterprise"] { --plan-color: #566b80; }
-.vscode-light [data-plan="tier0"], .vscode-high-contrast-light [data-plan="tier0"] { --plan-color: #717171; }
-.vscode-light [data-plan="apikey"], .vscode-high-contrast-light [data-plan="apikey"] { --plan-color: #c2610a; }
+/* Darkened plan color for text on a solid plan-colored background (relative color syntax keeps the hue) */
+[data-plan="tier3"], [data-plan="tier2"] { --plan-ink: rgb(from var(--plan-color) calc(r * 0.3) calc(g * 0.3) calc(b * 0.3)); }
+/* Top tier: amber (chart yellow) to bright gold (chart yellow lightened with the highlight color) */
+[data-plan="tier3"] { --plan-color: var(--vscode-charts-yellow); --plan-color-2: color-mix(in srgb, var(--vscode-charts-yellow) 60%, var(--highlight)); }
+/* High tier: champagne gold, a softened chart yellow */
+[data-plan="tier2"] { --plan-color: color-mix(in srgb, var(--vscode-charts-yellow) 70%, var(--highlight)); }
+[data-plan="tier1"] { --plan-color: var(--vscode-charts-blue); }
+/* Teal: halfway between the chart blue and green */
+[data-plan="team"] { --plan-color: color-mix(in srgb, var(--vscode-charts-blue) 50%, var(--vscode-charts-green)); }
+/* Slate: the secondary text color with a little chart blue */
+[data-plan="enterprise"] { --plan-color: color-mix(in srgb, var(--vscode-charts-blue) 25%, var(--vscode-descriptionForeground)); }
+[data-plan="tier0"] { --plan-color: var(--vscode-descriptionForeground); }
+[data-plan="apikey"] { --plan-color: var(--vscode-charts-orange); }
 
 .ok { color: var(--ok); }
 .warn { color: var(--warn); }
 
 /* ---------- Avatar ---------- */
+/* 20px disc; position: relative and overflow: visible let the default account's home badge overhang the bottom-right corner */
 .avatar {
+  position: relative;
   flex: none;
   display: grid;
   place-items: center;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
+  overflow: visible;
+  font-size: 0.7em;
   font-weight: 700;
   color: var(--vscode-button-foreground, var(--vscode-editor-background));
   background: linear-gradient(145deg, color-mix(in srgb, var(--avatar-color, var(--accent)) 100%, transparent), color-mix(in srgb, var(--avatar-color, var(--accent)) 65%, var(--base)));
-  box-shadow: 0 0 0 2px var(--base), 0 0 0 3px color-mix(in srgb, var(--avatar-color, var(--accent)) 55%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--base) 60%, transparent);
 }
-.avatar { width: 20px; height: 20px; font-size: 0.7em; box-shadow: 0 0 0 1px color-mix(in srgb, var(--base) 60%, transparent); }
 /* Home badge of the default account: at the avatar's bottom-right, ringed with the sidebar color to separate it from the avatar */
-.avatar { position: relative; overflow: visible; }
 .avatar-badge {
   position: absolute;
   right: -4px;
@@ -232,7 +240,6 @@ body {
 .row[data-plan="none"]:hover { border-color: var(--line-strong); }
 .row:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .row.is-current, .row.is-current[data-plan="none"] {
-  grid-template-columns: 20px minmax(0, 1fr);
   border-color: var(--plan-color, var(--accent));
   background:
     radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--plan-color-2, var(--accent)) 26%, transparent) 0%, transparent 55%),
@@ -284,15 +291,15 @@ body {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  color: #fff;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 70%, #fff) 0%, var(--accent) 55%, color-mix(in srgb, var(--accent) 75%, #000) 100%);
+  color: var(--highlight);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 70%, var(--highlight)) 0%, var(--accent) 55%, rgb(from var(--accent) calc(r * 0.75) calc(g * 0.75) calc(b * 0.75)) 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.55),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 color-mix(in srgb, var(--highlight) 55%, transparent),
+    inset 0 -1px 0 var(--shadow-color),
     0 0 0 1.5px var(--vscode-editor-background),
-    0 1px 2px rgba(0, 0, 0, 0.45);
+    0 1px 2px var(--shadow-color);
 }
-.current-icon vscode-icon { color: #fff; filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.35)); }
+.current-icon vscode-icon { color: var(--highlight); filter: drop-shadow(0 1px 0 var(--shadow-color)); }
 /* Shared-account badge: 16px flat disc right after the name, same size as the current-account badge */
 .shared-icon {
   flex: none;
@@ -334,7 +341,6 @@ body {
       '. hint hint actions'
       '. error error actions';
   }
-  .row.is-current { grid-template-columns: 20px minmax(0, 1fr) fit-content(40%) auto; }
   .row-foot { display: contents; }
   .row-tags { grid-area: tags; margin-top: 0; }
   .row-actions { grid-area: actions; align-self: center; margin-left: 4px; }
@@ -395,15 +401,18 @@ body {
   font-weight: 600;
   white-space: nowrap;
 }
+/* Light themes: the chart colors are tuned for lines on white, so the text of the tinted pills (not the gold tiers, whose text is already dark) is a darkened plan color */
+.vscode-light .row:not([data-plan="tier3"], [data-plan="tier2"]) .pill.plan,
+.vscode-high-contrast-light .row:not([data-plan="tier3"], [data-plan="tier2"]) .pill.plan { color: rgb(from var(--plan-color) calc(r * 0.6) calc(g * 0.6) calc(b * 0.6)); }
 /* Max 20x: gold gradient background + dark gold text + top highlight */
 [data-plan="tier3"] .pill.plan {
   background: linear-gradient(180deg, var(--plan-color-2), var(--plan-color));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--highlight) 45%, transparent);
 }
 /* High tier (Max 5x / Pro Lite): solid champagne-gold background + dark text; bolder than a tint, one gradient highlight less than the top tier */
 [data-plan="tier2"] .pill.plan {
   background: color-mix(in srgb, var(--plan-color) 85%, transparent);
-  border-color: color-mix(in srgb, var(--plan-color) 70%, #000);
+  border-color: rgb(from var(--plan-color) calc(r * 0.7) calc(g * 0.7) calc(b * 0.7));
 }
 
 /* ---------- Inline rename (not for the external directory row) ---------- */
@@ -464,7 +473,7 @@ body {
 .confirm-hint { color: var(--muted); font-size: 0.85em; overflow-wrap: anywhere; }
 .confirm-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
 
-/* ---------- Page tools: three small text buttons, at least 96px each; they wrap when they do not fit (2+1 or stacked) and stretch to fill the line ---------- */
+/* ---------- Page tools: four small text buttons, at least 96px each; they wrap when they do not fit (2+1 or stacked) and stretch to fill the line ---------- */
 .page-tools-row { display: flex; flex-wrap: wrap; gap: var(--gap); min-width: 0; }
 .page-tools-row vscode-button {
   flex: 1 1 auto;
@@ -524,7 +533,7 @@ body {
 /* Light theme: white text on light blue lacks contrast, use dark accent text instead */
 .vscode-light .input-group vscode-button[disabled]::part(base),
 .vscode-high-contrast-light .input-group vscode-button[disabled]::part(base) {
-  color: color-mix(in srgb, var(--vscode-button-background) 80%, #000);
+  color: rgb(from var(--vscode-button-background) calc(r * 0.8) calc(g * 0.8) calc(b * 0.8));
 }
 /* Enabled state: solid accent (component default); brighter on hover, accent glow on focus */
 .input-group vscode-button:not([disabled]):hover::part(base) { filter: brightness(1.12); }

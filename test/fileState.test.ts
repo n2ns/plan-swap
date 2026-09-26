@@ -52,6 +52,19 @@ describe('FileMemento', () => {
     await m.update('k', 'v');
     assert.deepEqual(JSON.parse(read(file)), { k: 'v' });
   });
+  test('update merges into the file as it is on disk, so keys written by another process meanwhile are kept', async () => {
+    const m = fresh('i.json');
+    await m.update('accounts', [{ name: 'x', dir: '/tmp/x' }]);
+    const file = path.join(tmp.home, '.config', 'planswap', 'i.json');
+    // Another extension host rewrote the file between the two updates
+    fs.writeFileSync(file, JSON.stringify({ accounts: [{ name: 'y', dir: '/tmp/y' }], 'codex.labels': { y: 'Y' } }));
+    await m.update('claude.labels', { x: 'Work' });
+    assert.deepEqual(JSON.parse(read(file)), {
+      accounts: [{ name: 'y', dir: '/tmp/y' }],
+      'codex.labels': { y: 'Y' },
+      'claude.labels': { x: 'Work' },
+    });
+  });
   test('own properties only: __proto__ and constructor are not resolved from the prototype', async () => {
     const m = fresh('e.json');
     assert.equal(m.get('constructor'), undefined);

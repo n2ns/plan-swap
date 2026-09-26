@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.1.5] - 2026-09-27
+
+### Changed
+
+- The Codex row now distinguishes the account in effect from the account selected for the next restart, and the Command Palette entry is now **Apply Codex Account: Restart or Show Instructions**.
+- Codex switching in a local Linux desktop editor or a non-WSL remote window now saves the selection and shows manual restart instructions instead of failing. Automatic restart remains available only in WSL windows of Antigravity IDE and VSCodium.
+- Switching back to the Codex account that is already in effect no longer restarts the WSL server.
+- The Claude switch failure message no longer assumes a WSL window.
+- Deleting a linked account's directory now explains exactly what is kept in the default account and what is removed.
+- Tabs can be changed with the arrow keys.
+- Plan badges and other panel colors now follow the editor theme, including light and high-contrast themes.
+
+### Fixed
+
+- Busy checks now treat an unreadable `/proc` as "in use" instead of allowing a delete, share or re-link to proceed.
+- Re-linking a Claude account that still has a running session no longer moves its prompt history; the switch proceeds and the skipped step is reported.
+- Deleting a Claude account directory is now refused while that account has a running session.
+- Collapsing the versions card no longer runs the CLI version commands.
+- A linked Codex account's `config.toml` link is now removed when the default `config.toml` later gains identity keys, matching the rule applied when the link is first created.
+- Broken Codex marker blocks (a start marker without its end marker) now show the Enable button with repair guidance instead of appearing enabled.
+- Adding a Claude account whose directory already exists as a symbolic link is now refused.
+
 ## [0.1.4] - 2026-09-27
 
 ### Added

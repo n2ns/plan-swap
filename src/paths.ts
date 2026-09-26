@@ -164,9 +164,10 @@ function readJsonObject(file: string): Record<string, unknown> | undefined {
  * names the account lacks are added, identical ones skipped, differing ones kept (reported in kept); nothing is ever removed.
  * A missing target file is created (0600) with only mcpServers; an existing one keeps every other key and its mode
  * and is replaced atomically (temporary file + rename, symlinks followed). Throws when the target is not a JSON object
- * or changed while merging (the CLI rewrites it). The default dir itself is never written.
+ * or changed while merging (the CLI rewrites it). The default dir itself is never written. beforeCommit runs between
+ * writing the temporary file and the change check (tests simulate a concurrent CLI write).
  */
-export function syncMcpServers(fromJson: string, dir: string): McpSyncResult {
+export function syncMcpServers(fromJson: string, dir: string, beforeCommit?: () => void): McpSyncResult {
   const result: McpSyncResult = { added: [], kept: [] };
   if (sameRealPath(dir, defaultDir())) return result;
   const source = readJsonObject(fromJson)?.mcpServers;
@@ -209,6 +210,7 @@ export function syncMcpServers(fromJson: string, dir: string): McpSyncResult {
   fs.rmSync(tmp, { force: true });
   try {
     fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n', { mode, flag: 'wx' });
+    beforeCommit?.();
     // Refuse to overwrite a write the CLI made in the meantime
     const now = fs.existsSync(real) ? fs.readFileSync(real, 'utf8') : undefined;
     if (now !== before) throw new Error(t('mcp.changed', { file: real }));

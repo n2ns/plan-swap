@@ -1,7 +1,6 @@
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { setLocale } from '../src/i18n';
 import {
@@ -227,6 +226,21 @@ describe('installRcBlocks / removeRcBlocks / rcStatus', () => {
     fs.rmSync(path.dirname(realBashrc), { recursive: true });
     fs.writeFileSync(bashrc, 'x\n');
   });
+  test('a dangling symlinked rc file is never replaced by a regular file', () => {
+    const saved = read(bashrc);
+    fs.rmSync(profile);
+    fs.symlinkSync(path.join(home, 'dotfiles', 'missing-profile'), profile);
+    assert.throws(() => installRcBlocks(), {
+      message: `${profile} is a symbolic link whose target does not exist; fix the link before retrying`,
+    });
+    assert.ok(fs.lstatSync(profile).isSymbolicLink());
+    assert.ok(!fs.existsSync(profile));
+    assert.equal(rcStatus()[0].hasBlock, false);
+    assert.deepEqual(fs.readdirSync(home).filter((f) => f.endsWith('.tmp')), []);
+    fs.unlinkSync(profile);
+    fs.writeFileSync(profile, 'y\n');
+    fs.writeFileSync(bashrc, saved);
+  });
   test('removes every marker block', () => {
     fs.writeFileSync(bashrc, 'a=1\n\n' + rcBlock() + 'mid\n\n' + rcBlock() + rcBlock() + 'z=9\n');
     fs.writeFileSync(profile, rcBlock() + rcBlock());
@@ -415,6 +429,13 @@ describe('preCheck', () => {
     assert.match(r.reasons[0], /bash_profile/);
     fs.writeFileSync(path.join(home, '.bash_profile'), '. ~/.bashrc\n');
     assert.equal(preCheck().ok, true);
+    // A comment mentioning .bashrc does not source it
+    fs.writeFileSync(path.join(home, '.bash_profile'), '# sources ~/.bashrc\necho hi\n');
+    r = preCheck();
+    assert.equal(r.ok, false);
+    assert.match(r.reasons[0], /bash_profile/);
+    fs.writeFileSync(path.join(home, '.bash_profile'), '# header\n[ -f ~/.bashrc ] && . ~/.bashrc\n');
+    assert.equal(preCheck().ok, true);
     fs.writeFileSync(path.join(home, '.bash_login'), 'nothing\n');
     r = preCheck();
     assert.equal(r.ok, false);
@@ -461,7 +482,6 @@ describe('selfCheck (real bash -i -l, clean environment)', () => {
       process.env = saved;
     }
   };
-  const tmpDirs = (): string[] => fs.readdirSync(os.tmpdir()).filter((d) => d.startsWith('planswap-codex-'));
   before(() => {
     fs.writeFileSync(bashrc, bashrcOrig, { mode: 0o600 });
     fs.writeFileSync(profile, profileOrig, { mode: 0o644 });
@@ -469,14 +489,17 @@ describe('selfCheck (real bash -i -l, clean environment)', () => {
   });
   test('passes, restores the state file (trimmed + resolved, 0600) and cleans up its temp directory', () => {
     fs.writeFileSync(STATE_FILE(), '  ' + home + '/.codex-orig\n', { mode: 0o644 });
-    const before = tmpDirs();
     const r = inCleanEnv(selfCheck);
     assert.ok(r.ok, 'selfCheck failed: ' + r.detail);
     assert.match(r.detail, /^CODEX_HOME=/);
     assert.equal(read(STATE_FILE()), home + '/.codex-orig');
     assert.equal(mode(STATE_FILE()), '600');
     assert.deepEqual(fs.readdirSync(path.dirname(STATE_FILE())), ['codex-home']);
-    assert.deepEqual(tmpDirs(), before);
+    // The login shell printed the temporary directory selfCheck created; it must be gone (other test files run
+    // selfCheck concurrently, so the temp dir listing cannot be compared as a whole)
+    const used = r.detail.slice('CODEX_HOME='.length);
+    assert.ok(path.basename(used).startsWith('planswap-codex-'), used);
+    assert.ok(!fs.existsSync(used), 'temporary directory left behind: ' + used);
   });
   test('state file originally missing → still missing after the self-check', () => {
     fs.rmSync(STATE_FILE());

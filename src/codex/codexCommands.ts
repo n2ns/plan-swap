@@ -77,16 +77,15 @@ export function manualRestartMessages(kind: ServerKind, remoteName: string | und
   };
 }
 
-/** Automatic restart is restricted to the existing supported WSL servers. */
-export function restartInfo(): RestartInfo {
+/** Automatic restart is restricted to the existing supported WSL servers. kind: the caller's detectServerKind() result. */
+export function restartInfo(kind: ServerKind = detectServerKind()): RestartInfo {
   const remoteName = vscode.env.remoteName;
   const context = remoteName === undefined ? 'local' : remoteName === 'wsl' ? 'wsl' : 'remote';
-  return { context, auto: context === 'wsl' && canAutoRestart(detectServerKind()) };
+  return { context, auto: context === 'wsl' && canAutoRestart(kind) };
 }
 
 // Returns false when automatic restart is unsupported or validation failed and the manual alternative was shown
-function restart(): boolean {
-  const kind = detectServerKind();
+function restart(kind: ServerKind): boolean {
   const messages = manualRestartMessages(kind, vscode.env.remoteName);
   if (vscode.env.remoteName !== 'wsl' || !canAutoRestart(kind)) {
     void vscode.window.showWarningMessage(messages.required);
@@ -111,7 +110,7 @@ function restart(): boolean {
 /** Restart a supported WSL server with modal confirmation; otherwise show instructions: shared by the panel button, Command Palette and toolbar */
 export async function restartServerInteractive(): Promise<void> {
   const kind = detectServerKind();
-  const info = restartInfo();
+  const info = restartInfo(kind);
   if (!info.auto) {
     void vscode.window.showWarningMessage(manualRestartMessages(kind, vscode.env.remoteName).required);
     return;
@@ -120,7 +119,7 @@ export async function restartServerInteractive(): Promise<void> {
   const confirm = t('codex.restartConfirm', { editor: editorName(kind) });
   const ok = await vscode.window.showWarningMessage(confirm, { modal: true }, continueLabel);
   if (ok !== continueLabel) return;
-  restart();
+  restart(kind);
 }
 
 /** Data source of the Codex panel tab */
@@ -155,10 +154,11 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore): 
   };
   return {
     accounts,
-    // Treat errors such as unreadable rc files as not enabled so panel rendering is not interrupted
+    // Treat errors such as unreadable rc files as not enabled so panel rendering is not interrupted; a broken block
+    // (start marker without end marker) counts as not enabled so the Enable button leads to preCheck's repair guidance
     enabled: () => {
       try {
-        return rcStatus().every((s) => s.hasBlock);
+        return rcStatus().every((s) => s.hasBlock && !s.broken);
       } catch {
         return false;
       }
@@ -169,7 +169,13 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore): 
       const account = store.findByDir(selected);
       return account ? labelFor(account.name, labels) : selected;
     },
-    watchTargets: () => [...accounts().map((r) => path.join(r.dir, 'auth.json')), STATE_FILE()],
+    // Same directories as accounts() (registered ones plus the external effective dir) without decoding any auth.json
+    watchTargets: () => {
+      const cur = effectiveDir();
+      const dirs = store.all().map((a) => a.dir);
+      if (!dirs.some((d) => samePath(d, cur))) dirs.push(cur);
+      return [...dirs.map((d) => path.join(d, 'auth.json')), STATE_FILE()];
+    },
     restart: () => restartInfo(),
   };
 }
@@ -297,8 +303,20 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       void vscode.window.showErrorMessage(t('account.dirMissing', { dir: account.dir }));
       return;
     }
+    // Already effective in this window (e.g. another window selected a different account): only the state file
+    // is brought back in line; no confirmation and no restart
+    if (isEffective(account)) {
+      try {
+        writeSelectedDir(account.name === CODEX_DEFAULT_NAME ? undefined : account.dir);
+      } catch (err) {
+        void vscode.window.showErrorMessage(t('codex.writeStateFailed', { error: errText(err) }));
+        return;
+      }
+      panel.refresh();
+      return;
+    }
     const kind = detectServerKind();
-    const info = restartInfo();
+    const info = restartInfo(kind);
     const auto = info.auto;
     const confirmText = !auto
       ? manualRestartMessages(kind, vscode.env.remoteName).switchConfirm
@@ -323,7 +341,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     }
     panel.refresh();
     // Manual kinds already showed the instructions in the confirmation
-    if (auto) restart();
+    if (auto) restart(kind);
   }
 
   // Rename: only named rows (the default and external rows cannot be renamed); label equal to name clears the alias
@@ -414,7 +432,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       return;
     }
     try {
-      const r = makeCodexIndependent(account.dir);
+      const r = makeCodexIndependent(account.dir, account.name);
       const done = t('unshare.done', { label: labelOf(account), removed: r.removed.length, copied: r.copied.join(', ') || t('unshare.nothingCopied') });
       const skipped = r.skipped.length ? t('unshare.skipped', { list: r.skipped.map((s) => `${s.file} (${s.reason})`).join(', ') }) : '';
       void vscode.window.showInformationMessage([done, skipped].filter(Boolean).join(' '));
@@ -427,18 +445,23 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
   // confirmed: the panel already did an inline confirmation; Command Palette entries need a modal confirmation
   async function removeAccount(account: CodexAccount, confirmed: boolean): Promise<void> {
     if (account.name === CODEX_DEFAULT_NAME || !store.find(account.name)) return;
-    if (isEffective(account)) {
-      void vscode.window.showWarningMessage(t('codex.removeEffective', { label: labelOf(account) }));
-      return;
-    }
-    if (isSelected(account)) {
-      void vscode.window.showWarningMessage(t('codex.removeSelected', { label: labelOf(account) }));
-      return;
-    }
+    // Re-checked after every modal: another window may have selected the account meanwhile
+    const inUse = (): boolean => {
+      if (isEffective(account)) {
+        void vscode.window.showWarningMessage(t('codex.removeEffective', { label: labelOf(account) }));
+        return true;
+      }
+      if (isSelected(account)) {
+        void vscode.window.showWarningMessage(t('codex.removeSelected', { label: labelOf(account) }));
+        return true;
+      }
+      return false;
+    };
+    if (inUse()) return;
     if (!confirmed) {
       const deleteLabel = t('common.delete');
       const ok = await vscode.window.showWarningMessage(t('codex.removeConfirm', { label: labelOf(account) }), { modal: true }, deleteLabel);
-      if (ok !== deleteLabel) return;
+      if (ok !== deleteLabel || inUse()) return;
     }
 
     // Capture the alias before labels.remove clears it
@@ -455,7 +478,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       { modal: true, detail },
       deleteDirLabel,
     );
-    if (delDir !== deleteDirLabel) return;
+    if (delDir !== deleteDirLabel || inUse()) return;
     try {
       await deleteCodexDir(account.dir);
       await store.unignore(account.dir);

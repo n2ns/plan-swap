@@ -32,12 +32,30 @@ export const workspace = {
 };
 
 export const env: { remoteName: string | undefined } = { remoteName: undefined };
+export interface StubTerminal { name: string; sent: string[]; shown: number; sendText(text: string): void; show(): void }
 export const window = {
   async showInformationMessage(..._args: unknown[]): Promise<string | undefined> { return undefined; },
   async showWarningMessage(..._args: unknown[]): Promise<string | undefined> { return undefined; },
+  async showErrorMessage(..._args: unknown[]): Promise<string | undefined> { return undefined; },
+  async showQuickPick<T>(_items: T[], _options?: unknown): Promise<T | undefined> { return undefined; },
+  createTerminal(options: { name: string }): StubTerminal {
+    const terminal: StubTerminal = {
+      name: options.name,
+      sent: [],
+      shown: 0,
+      sendText(text: string) { terminal.sent.push(text); },
+      show() { terminal.shown++; },
+    };
+    return terminal;
+  },
   onDidCloseTerminal(_listener: unknown) { return { dispose() {} }; },
 };
 export const commands = {
-  registerCommand(_id: string, _handler: unknown) { return { dispose() {} }; },
+  /** Handlers by command id, as registered by the last registerCommand call for that id */
+  registered: {} as Record<string, (...args: unknown[]) => Promise<void>>,
+  registerCommand(id: string, handler: unknown) {
+    commands.registered[id] = handler as (...args: unknown[]) => Promise<void>;
+    return { dispose() { delete commands.registered[id]; } };
+  },
   async executeCommand(..._args: unknown[]): Promise<void> {},
 };

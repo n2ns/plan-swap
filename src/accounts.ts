@@ -43,7 +43,7 @@ export class AccountStore {
 
   async add(account: Account): Promise<void> {
     await this.state.update(IGNORED_KEY, this.ignored().filter((d) => !samePath(d, account.dir)));
-    await this.save([...this.load().filter((a) => a.name !== account.name), account]);
+    await this.save([...this.load().filter((a) => !sameName(a.name, account.name)), account]);
   }
 
   async remove(name: string): Promise<void> {

@@ -41,6 +41,7 @@ export interface ShareReport {
   created: string[];    // entries created empty in the default dir
   conflicts: string[];  // entries the account has as a real file/dir or a link elsewhere; left untouched
   refused: string[];    // entries refused for safety (e.g. 'settings.json' when the default has identity keys)
+  busy?: string[];      // entries whose repair would move or unlink account files, skipped because the account is busy (Claude only)
 }
 
 export interface MigrateReport extends ShareReport {
@@ -154,14 +155,19 @@ export function mergeLines(src: string, dst: string): number {
 
 /** Creates/repairs every link of a shared account (idempotent). Never touches the default dir's existing content;
  *  in a shared account a real history.jsonl (replaced by `claude project purge`) is merged back and relinked.
- *  Also removes links in skills/ or plugins/ whose default child no longer exists. dir === default → empty report. */
-export function ensureClaudeLinks(dir: string): ShareReport {
+ *  Also removes links in skills/ or plugins/ whose default child no longer exists. Steps that move or unlink account
+ *  files are skipped and reported under busy while claudeAccountBusy(dir, procRoot). dir === default → empty report. */
+export function ensureClaudeLinks(dir: string, procRoot = '/proc'): ShareReport {
   const report = emptyReport();
   if (isDefault(dir)) return report;
   const def = defaultDir();
   const acc = path.resolve(dir);
   fs.mkdirSync(def, { recursive: true, mode: 0o700 });
   fs.mkdirSync(acc, { recursive: true, mode: 0o700 });
+
+  // Checked only when a destructive step comes up; a running Claude process may still be writing those files
+  let busy: boolean | undefined;
+  const isBusy = (): boolean => (busy ??= claudeAccountBusy(dir, procRoot));
 
   const shared = isSharedClaudeAccount(dir);
   for (const { name, kind } of CLAUDE_SHARED_ENTRIES) {
@@ -173,7 +179,13 @@ export function ensureClaudeLinks(dir: string): ShareReport {
     if (ensureDefaultEntry(target, kind)) report.created.push(name);
     const link = path.join(acc, name);
     // `claude project purge` rewrites history.jsonl by rename, replacing the link: merge the lines back and relink
-    if (shared && name === 'history.jsonl' && lstatOrUndefined(link)?.isFile()) mergeLines(link, target);
+    if (shared && name === 'history.jsonl' && lstatOrUndefined(link)?.isFile()) {
+      if (isBusy()) {
+        (report.busy ??= []).push(name);
+        continue;
+      }
+      mergeLines(link, target);
+    }
     record(report, name, linkEntry(link, target));
   }
 
@@ -184,6 +196,10 @@ export function ensureClaudeLinks(dir: string): ShareReport {
     const st = lstatOrUndefined(accFolder);
     if (st?.isSymbolicLink() && linksTo(accFolder, defFolder)) {
       // Whole-folder link from an earlier version: replace it by a real folder with per-child links
+      if (isBusy()) {
+        (report.busy ??= []).push(name);
+        continue;
+      }
       fs.unlinkSync(accFolder);
       fs.mkdirSync(accFolder, { mode: 0o700 });
     } else if (!st) {
@@ -202,7 +218,9 @@ export function ensureClaudeLinks(dir: string): ShareReport {
       const link = path.join(accFolder, child);
       if (!lstatOrUndefined(link)?.isSymbolicLink()) continue;
       const to = path.resolve(accFolder, fs.readlinkSync(link));
-      if (path.dirname(to) === defFolder && !lstatOrUndefined(to)) fs.unlinkSync(link);
+      if (path.dirname(to) !== defFolder || lstatOrUndefined(to)) continue;
+      if (isBusy()) (report.busy ??= []).push(`${name}/${child}`);
+      else fs.unlinkSync(link);
     }
   }
   return report;
@@ -227,8 +245,9 @@ function readSourceJson(file: string): Record<string, unknown> {
   return data;
 }
 
-/** Mirrors shareable keys of the default account's info file into <dir>/.claude.json (see the contract). */
-export function mirrorClaudeJson(fromJson: string, dir: string): { changed: string[] } {
+/** Mirrors shareable keys of the default account's info file into <dir>/.claude.json (see the contract).
+ *  beforeCommit runs between writing the temporary file and the change check (tests simulate a concurrent CLI write). */
+export function mirrorClaudeJson(fromJson: string, dir: string, beforeCommit?: () => void): { changed: string[] } {
   const changed: string[] = [];
   if (isDefault(dir)) return { changed };
   const source = readSourceJson(fromJson);
@@ -283,6 +302,7 @@ export function mirrorClaudeJson(fromJson: string, dir: string): { changed: stri
   fs.rmSync(tmp, { force: true });
   try {
     fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n', { mode, flag: 'wx' });
+    beforeCommit?.();
     // Refuse to overwrite a write the CLI made in the meantime
     const now = fs.existsSync(real) ? fs.readFileSync(real, 'utf8') : undefined;
     if (now !== before) throw new Error(t('mcp.changed', { file: real }));
@@ -430,12 +450,12 @@ function appendHistory(src: string, dst: string): void {
   fs.unlinkSync(src);
 }
 
-/** Converts an independent account into a shared one (see the contract); ends with ensureClaudeLinks(dir).
- *  Throws t('share.busy') when claudeAccountBusy(dir, procRoot). */
-export function migrateClaudeToShared(dir: string, accountName: string, procRoot = '/proc'): MigrateReport {
+/** Converts an independent account into a shared one (see the contract); ends with ensureClaudeLinks(dir, procRoot).
+ *  Throws t('share.busy') with the display name label (defaults to accountName) when claudeAccountBusy(dir, procRoot). */
+export function migrateClaudeToShared(dir: string, accountName: string, procRoot = '/proc', label = accountName): MigrateReport {
   const report: MigrateReport = { ...emptyReport(), moved: 0, duplicates: 0, keptBoth: [], backups: [] };
   if (isDefault(dir)) return report;
-  if (claudeAccountBusy(dir, procRoot)) throw new Error(t('share.busy', { name: accountName }));
+  if (claudeAccountBusy(dir, procRoot)) throw new Error(t('share.busy', { name: label }));
   const def = defaultDir();
   const acc = path.resolve(dir);
   fs.mkdirSync(def, { recursive: true, mode: 0o700 });
@@ -490,11 +510,12 @@ export function migrateClaudeToShared(dir: string, accountName: string, procRoot
     }
   }
 
-  const links = ensureClaudeLinks(dir);
+  const links = ensureClaudeLinks(dir, procRoot);
   report.linked.push(...links.linked);
   report.created.push(...links.created);
   report.conflicts.push(...links.conflicts);
   report.refused.push(...links.refused);
+  if (links.busy) report.busy = [...links.busy];
   return report;
 }
 

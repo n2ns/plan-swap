@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { samePath, sameRealPath } from '../paths';
+import { sameRealPath } from '../paths';
 import { t } from '../i18n';
 
 export const CODEX_DEFAULT_NAME = 'default';
@@ -302,7 +302,7 @@ export function checkCodexSafeToDelete(dir: string): string | undefined {
   // Only direct children of the home directory, so a symlinked parent cannot escape the home directory
   if (path.dirname(target) !== home) return t('del.notHomeChild', { dir: target });
   if (!CODEX_DIR_BASENAME_RE.test(path.basename(target))) return t('del.badName', { pattern: '.codex-<name>', dir: target });
-  if (samePath(target, codexDefaultDir()) || sameRealPath(target, codexDefaultDir())) return t('del.isDefault', { dir: target });
+  if (sameRealPath(target, codexDefaultDir())) return t('del.isDefault', { dir: target });
   let st: fs.Stats;
   try {
     st = fs.lstatSync(target);

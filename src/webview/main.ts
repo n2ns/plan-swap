@@ -207,7 +207,7 @@ class Page {
     onClick(this.addButton, () => this.submitAdd());
     this.addShared.addEventListener('change', () => this.updateAddHelp());
     this.tools = this.renderTools();
-    this.root = h('div', { class: 'page', role: 'tabpanel', id: `panel-${mode}` }, this.top, this.tools, this.addSection);
+    this.root = h('div', { class: 'page', role: 'tabpanel', id: `panel-${mode}`, 'aria-labelledby': `tab-${mode}` }, this.top, this.tools, this.addSection);
     this.applyLocale();
   }
 
@@ -427,8 +427,8 @@ class Page {
     if (this.mode !== 'codex' || !this.tab.pendingDir) return null;
     const { context, auto } = codexRestart();
     const local = context === 'local';
-    const text = context === 'remote' ? 'pending.textRemote' : !local ? 'pending.text' : auto ? 'pending.textLocal' : 'pending.textLocalManual';
-    const button = !auto ? 'pending.instructions' : local ? 'pending.restartEditor' : 'pending.restart';
+    const text = context === 'remote' ? 'pending.textRemote' : local ? 'pending.textLocalManual' : 'pending.text';
+    const button = auto ? 'pending.restart' : 'pending.instructions';
     return h(
       'div',
       { class: 'banner', role: 'status' },
@@ -652,7 +652,7 @@ class Page {
 // ---------- Tab bar and page assembly ----------
 const pages: Record<PanelMode, Page> = { claude: new Page('claude'), codex: new Page('codex') };
 function tabButton(mode: PanelMode): HTMLElement {
-  return onClick(h('button', { class: 'tab', type: 'button', role: 'tab', 'aria-controls': `panel-${mode}` }), () => {
+  return onClick(h('button', { class: 'tab', type: 'button', role: 'tab', id: `tab-${mode}`, 'aria-controls': `panel-${mode}` }), () => {
     if (activeTab === mode) return;
     setActiveTab(mode);
     send({ type: 'setTab', mode });
@@ -710,8 +710,7 @@ const footer = h('div', { class: 'tools', role: 'toolbar' });
 const footerVersion = h('div', { class: 'extension-version' });
 // Title of the restart button; the footer is rebuilt only when it changes so keyboard focus survives state pushes
 function footerRestartTitle(): MessageKey {
-  const { context, auto } = codexRestart();
-  return !auto ? 'footer.restartManual' : context === 'local' ? 'footer.restartEditor' : 'footer.restartServer';
+  return codexRestart().auto ? 'footer.restartServer' : 'footer.restartManual';
 }
 let footerKey = '';
 function renderFooter(): void {
@@ -720,26 +719,22 @@ function renderFooter(): void {
   footerVersion.textContent = t('footer.version', { version: __PLANSWAP_VERSION__ });
   footer.replaceChildren(
     ...FOOTER_TOOLS.map(([icon, title, tool]) =>
-      toolbarButton(icon, t(tool === 'restartServer' ? footerRestartTitle() : title), () => send({ type: 'tool', mode: activeTab ?? state.active, tool })),
+      toolbarButton(icon, t(tool === 'restartServer' ? footerRestartTitle() : title), () => {
+        // The info button hides an open versions card locally; only opening asks the host (which runs the CLIs)
+        if (tool === 'cliVersions' && !versionsCard.hidden) {
+          versionsCard.hidden = true;
+          return;
+        }
+        send({ type: 'tool', mode: activeTab ?? state.active, tool });
+      }),
     ),
   );
 }
 // Versions card: shown above the footer toolbar; the info button again or the close button hides it
 const versionsCard = h('div', { class: 'versions', hidden: true, role: 'status' });
 let versionItems: Array<{ label: string; value: string }> = [];
-// Pending re-requests after locale changes while the card was open: those versions messages replace the items instead of toggling the card
-let refreshingVersions = 0;
+// Every versions reply (a click or a locale-change refresh) replaces the items and shows the card
 function showVersions(items: Array<{ label: string; value: string }>): void {
-  if (refreshingVersions > 0) {
-    refreshingVersions--;
-    versionItems = items;
-    renderVersions();
-    return;
-  }
-  if (!versionsCard.hidden) {
-    versionsCard.hidden = true;
-    return;
-  }
   versionItems = items;
   renderVersions();
   versionsCard.hidden = false;
@@ -765,10 +760,7 @@ function applyLocale(): void {
   renderFooter();
   renderVersions();
   // Item labels and values are host strings in the old locale; ask the host to regenerate them
-  if (!versionsCard.hidden) {
-    refreshingVersions++;
-    send({ type: 'tool', mode: activeTab ?? state.active, tool: 'cliVersions' });
-  }
+  if (!versionsCard.hidden) send({ type: 'tool', mode: activeTab ?? state.active, tool: 'cliVersions' });
   for (const mode of MODES) pages[mode].applyLocale();
 }
 

@@ -18,6 +18,7 @@ import {
   copyClaudeIndependent,
   ensureClaudeLinks,
   isSharedClaudeAccount,
+  lstatOrUndefined,
   makeClaudeIndependent,
   migrateClaudeToShared,
   mirrorClaudeJson,
@@ -41,10 +42,13 @@ export interface Deps {
   // Codex-side store; the refresh command applies to both tabs
   codex?: { store: CodexAccountStore; labels: LabelStore };
   tools: ToolDeps;
+  // Root of the process tree for the busy checks; tests pass a fake, product code leaves the default /proc
+  procRoot?: string;
 }
 
 export function registerCommands(deps: Deps): vscode.Disposable[] {
   const { store, panel, statusBar, labels, codex, tools } = deps;
+  const procRoot = deps.procRoot ?? '/proc';
   const MODE = 'claude';
   // Terminals created by this extension -> their account
   const terminals = new Map<vscode.Terminal, Account>();
@@ -157,7 +161,7 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
   // Re-links a shared account and mirrors the default account's info file; returns a warning text or undefined
   function refreshShared(account: Account): string | undefined {
     try {
-      const notes = describeShareReport(ensureClaudeLinks(account.dir));
+      const notes = describeShareReport(ensureClaudeLinks(account.dir, procRoot));
       mirrorClaudeJson(defaultJson(), account.dir);
       return notes || undefined;
     } catch (err) {
@@ -175,12 +179,12 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
     const ok = t('share.confirmButton');
     const picked = await vscode.window.showWarningMessage(t('share.confirm', { label: labelOf(account), dir: account.dir }), { modal: true }, ok);
     if (picked !== ok) return;
-    if (claudeAccountBusy(account.dir)) {
+    if (claudeAccountBusy(account.dir, procRoot)) {
       void vscode.window.showWarningMessage(t('share.busy', { name: labelOf(account) }));
       return;
     }
     try {
-      const report = migrateClaudeToShared(account.dir, account.name);
+      const report = migrateClaudeToShared(account.dir, account.name, procRoot, labelOf(account));
       mirrorClaudeJson(defaultJson(), account.dir);
       void vscode.window.showInformationMessage(t('share.done', { label: labelOf(account), summary: describeShareReport(report) || t('share.nothingElse') }));
     } catch (err) {
@@ -199,7 +203,7 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
     const ok = t('unshare.confirmButton');
     const picked = await vscode.window.showWarningMessage(t('unshare.confirm', { label: labelOf(account), dir: account.dir }), { modal: true }, ok);
     if (picked !== ok) return;
-    if (claudeAccountBusy(account.dir)) {
+    if (claudeAccountBusy(account.dir, procRoot)) {
       void vscode.window.showWarningMessage(t('share.busy', { name: labelOf(account) }));
       return;
     }
@@ -222,6 +226,11 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
       void vscode.window.showWarningMessage(t('claude.removeCurrent', { label: labelOf(account) }));
       return;
     }
+    // A running Claude process of this account would keep writing into the directory offered for deletion
+    if (claudeAccountBusy(account.dir, procRoot)) {
+      void vscode.window.showWarningMessage(t('share.busy', { name: labelOf(account) }));
+      return;
+    }
     if (!confirmed) {
       const deleteLabel = t('common.delete');
       const ok = await vscode.window.showWarningMessage(t('claude.removeConfirm', { label: labelOf(account) }), { modal: true }, deleteLabel);
@@ -235,7 +244,7 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
     await labels.remove(account.name);
     refreshUi();
 
-    const detail = t(shared ? 'share.removeDirDetail' : 'claude.removeDirDetail');
+    const detail = t(shared ? 'claude.removeDirDetailShared' : 'claude.removeDirDetail');
     const deleteDirLabel = t('common.deleteDir');
     const delDir = await vscode.window.showWarningMessage(
       t('account.removeDirPrompt', { label, dir: account.dir }),
@@ -363,6 +372,8 @@ export function validateName(name: string, store: AccountStore, labels: LabelSto
   if (store.all().some((a) => sameName(a.name, name))) return t('name.exists');
   if (store.all().some((a) => sameName(labelFor(a.name, labels), name))) return t('name.dupLabel');
   if (sameRealPath(accountDir(name), defaultDir())) return t('name.sameAsDefaultDir');
+  // scanAccountDirs skips symlinks, so a linked directory must not be registered by adding its name either
+  if (lstatOrUndefined(accountDir(name))?.isSymbolicLink()) return t('name.dirIsSymlink');
   return undefined;
 }
 

@@ -110,6 +110,13 @@ describe('validate', () => {
     assert.equal(store.validate('a'.repeat(32), 'main', existing), undefined);
     assert.equal(store.validate('a'.repeat(33), 'main', existing), 'Display name can be at most 32 characters');
   });
+  test('the limit counts grapheme clusters, not UTF-16 code units', () => {
+    const family = '\u{1F468}\u200D\u{1F469}\u200D\u{1F467}';   // one grapheme, 8 code units
+    assert.equal(store.validate(family.repeat(32), 'main', existing), undefined);
+    assert.equal(store.validate(family.repeat(33), 'main', existing), 'Display name can be at most 32 characters');
+    assert.equal(store.validate('e\u0301'.repeat(32), 'main', existing), undefined);
+    assert.equal(store.validate('\u4E2D'.repeat(33), 'main', existing), 'Display name can be at most 32 characters');
+  });
   test('contains a line break', () => {
     assert.equal(store.validate('a\nb', 'main', existing), 'Display name cannot contain line breaks');
   });

@@ -8,6 +8,7 @@ export interface ShareReportLike {
   duplicates?: number;
   keptBoth?: string[];
   backups?: string[];
+  busy?: string[];
 }
 
 /** Empty string when there is nothing worth telling (newly linked or created entries are not reported) */
@@ -20,5 +21,6 @@ export function describeShareReport(r: ShareReportLike): string {
   if (r.backups?.length) parts.push(t('share.r.backups', { list: list(r.backups) }));
   if (r.conflicts.length) parts.push(t('share.r.conflicts', { list: list(r.conflicts) }));
   if (r.refused.length) parts.push(t('share.r.refused', { list: list(r.refused) }));
+  if (r.busy?.length) parts.push(t('share.r.busy', { list: list(r.busy) }));
   return parts.join(t('common.listSep'));
 }

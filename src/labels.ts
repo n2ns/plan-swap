@@ -7,6 +7,12 @@ export const EXTERNAL_NAME = '<external>';
 // Name of the default account on both sides (paths.DEFAULT_NAME / codexPaths.CODEX_DEFAULT_NAME); it cannot be renamed
 const DEFAULT_NAME = 'default';
 const MAX_LABEL_LENGTH = 32;
+// Length in grapheme clusters (an emoji sequence or a letter with combining marks counts once); UTF-16 code units
+// when the host Node lacks Intl.Segmenter
+const segmenter = typeof Intl.Segmenter === 'function' ? new Intl.Segmenter(undefined, { granularity: 'grapheme' }) : undefined;
+function lengthOf(s: string): number {
+  return segmenter ? [...segmenter.segment(s)].length : s.length;
+}
 
 type Labels = Record<string, string>;
 
@@ -39,13 +45,13 @@ export class LabelStore {
 
   /**
    * Returns an error message, or undefined when valid.
-   * Trimmed non-empty; ≤32 chars; no line breaks; not the external sentinel or any of its localized names;
+   * Trimmed non-empty; ≤32 grapheme clusters; no line breaks; not the external sentinel or any of its localized names;
    * not equal (case-insensitively) to the name or label of another account of the same vendor (excluding itself)
    */
   validate(label: string, name: string, existing: Array<{ name: string; label: string }>): string | undefined {
     const value = label.trim();
     if (!value) return t('label.empty');
-    if (value.length > MAX_LABEL_LENGTH) return t('label.tooLong', { max: MAX_LABEL_LENGTH });
+    if (lengthOf(value) > MAX_LABEL_LENGTH) return t('label.tooLong', { max: MAX_LABEL_LENGTH });
     if (/[\r\n]/.test(value)) return t('label.newline');
     if (value === EXTERNAL_NAME || translationsOf('account.external').includes(value)) return t('name.reserved', { name: value });
     const others = existing.filter((a) => a.name !== name);

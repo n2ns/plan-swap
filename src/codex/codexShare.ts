@@ -133,6 +133,8 @@ export function ensureCodexLinks(dir: string): ShareReport {
     const target = path.join(def, name);
     const link = path.join(acc, name);
     if (name === 'config.toml' && !configShareable(target)) {
+      // A link created while the default config was still shareable is removed; no copy is made
+      if (linksTo(link, target)) fs.unlinkSync(link);
       report.refused.push(name);
       continue;
     }
@@ -249,8 +251,7 @@ export function migrateCodexToShared(dir: string, accountName: string, procRoot 
     } else if (!st.isFile()) {
       continue;
     } else if (JSONL_FILES.includes(name)) {
-      mergeLines(src, dst);
-      report.moved++;
+      if (mergeLines(src, dst) > 0) report.moved++;
     } else if (name.endsWith('.sqlite')) {
       backupSqlite(src, name, report);
     } else {
@@ -333,8 +334,11 @@ export function copyCodexIndependent(dir: string): { copied: string[]; skipped: 
       if (child === '.system') continue;
       const to = path.join(acc, 'skills', child);
       if (lstatOrUndefined(to)) continue;
+      const from = path.join(skills, child);
+      if (!fs.existsSync(from)) continue;   // dangling link
       fs.mkdirSync(path.join(acc, 'skills'), { recursive: true, mode: 0o700 });
-      copyTree(path.join(skills, child), to);
+      // A child that is itself a link (e.g. into dotfiles) is copied from its real location
+      copyTree(fs.realpathSync(from), to);
       copied.push(`skills/${child}`);
     }
   }
@@ -345,13 +349,15 @@ export function copyCodexIndependent(dir: string): { copied: string[]; skipped: 
  *  CODEX_SHARED_ENTRIES entries, including dangling link-only links, and the skills/ plugins/cache children whose
  *  link resolves into the default directory; anything else, including auth.json and memories/, is left untouched),
  *  then copies the default configuration as copyCodexIndependent does. Sessions and history stay in the default
- *  directory. Throws for the default directory and for an account that is not shared. */
+ *  directory. Throws for the default directory, for an account that is not shared and, as migrateCodexToShared,
+ *  t('share.busyCodex') when codexAccountBusy(dir, procRoot). */
 // Entries that get an own copy when the account becomes independent; unlinked before the copy, the rest after it
 const INDEPENDENT_CONFIG_ENTRIES = new Set(['config.toml', ...INDEPENDENT_COPY_FILES, ...INDEPENDENT_COPY_DIRS]);
 
-export function makeCodexIndependent(dir: string): { removed: string[]; copied: string[]; skipped: Array<{ file: string; reason: string }> } {
+export function makeCodexIndependent(dir: string, accountName: string, procRoot = '/proc'): { removed: string[]; copied: string[]; skipped: Array<{ file: string; reason: string }> } {
   if (isDefault(dir)) throw new Error(t('unshare.default', { dir }));
   if (!isSharedCodexAccount(dir)) throw new Error(t('unshare.notShared', { dir }));
+  if (codexAccountBusy(dir, procRoot)) throw new Error(t('share.busyCodex', { name: accountName }));
   const def = codexDefaultDir();
   const acc = path.resolve(dir);
   const removed: string[] = [];

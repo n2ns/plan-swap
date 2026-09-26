@@ -58,7 +58,13 @@ export function claudePanelSource(store: AccountStore, labels: LabelStore): Pane
     accounts,
     enabled: () => true,
     pendingDir: () => undefined,
-    watchTargets: () => accounts().map((r) => claudeJsonPath(r.dir, isExplicitConfigDir(r.dir))),
+    // Same directories as accounts() (registered ones plus the external current dir) without reading any .claude.json
+    watchTargets: () => {
+      const cur = currentDir();
+      const dirs = store.all().map((a) => a.dir);
+      if (!dirs.some((d) => samePath(d, cur))) dirs.push(cur);
+      return dirs.map((d) => claudeJsonPath(d, isExplicitConfigDir(d)));
+    },
   };
 }
 
@@ -147,7 +153,8 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
           this.post({ type: 'focusAdd', mode });
         }
       } else if (msg.type === 'setTab') {
-        void this.memento.update(ACTIVE_TAB_KEY, msg.mode);
+        // The webview is untrusted input: only the known modes reach the memento
+        if (msg.mode === 'claude' || msg.mode === 'codex') void this.memento.update(ACTIVE_TAB_KEY, msg.mode);
       } else void this.handlers[msg.mode]?.(msg);
     });
     view.onDidChangeVisibility(() => {

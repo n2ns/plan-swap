@@ -2,7 +2,7 @@
   "name": "planswap",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "publisher": "n2ns",
   "private": true,
   "license": "MIT",
@@ -204,7 +204,7 @@
     "package": "vsce package"
   },
   "devDependencies": {
-    "@types/node": "26.6.2",
+    "@types/node": "22.20.4",
     "@types/vscode": "1.107.0",
     "@vscode/vsce": "4.0.0",
     "esbuild": "0.28.2",

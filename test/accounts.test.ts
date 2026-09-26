@@ -65,6 +65,13 @@ describe('AccountStore add / remove / unignore', () => {
     assert.deepEqual(memento.get('ignoredDirs'), ['/other']);
   });
 
+  test('add replaces an entry whose name differs only in case', async () => {
+    const { store } = make();
+    await store.add({ name: 'work', dir: path.join(home, '.claude-work') });
+    await store.add({ name: 'Work', dir: path.join(home, '.claude-Work') });
+    assert.deepEqual(store.named(), [{ name: 'Work', dir: path.join(home, '.claude-Work') }]);
+  });
+
   test('remove records the directory once; removing an unknown name changes nothing', async () => {
     const { memento, store } = make();
     const dir = path.join(home, '.claude-a');
