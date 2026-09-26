@@ -42,7 +42,7 @@ export const en = {
 
   // Claude commands
   'claude.switchFailed':
-    'Switch failed. Possible causes: the official Claude Code extension is not installed on the WSL side, or the remote settings.json has a syntax error. Original error: {error}',
+    'Switch failed. Possible causes: the official Claude Code extension is not installed or enabled in the current environment, or settings.json has a syntax error. Original error: {error}',
   'claude.switched':
     'Switched to {label}. New sessions will use this account; sessions already open are still using the old account.',
   'claude.removeCurrent': '{label} is the current account and cannot be deleted. Switch to another account first.',
@@ -229,7 +229,7 @@ export const zhCn: Record<MessageKey, string> = {
   'label.dupName': '与已有账号名相同',
 
   'claude.switchFailed':
-    '切换失败。可能原因：官方 Claude Code 插件未安装在 WSL 侧；或远端 settings.json 存在语法错误。原始错误：{error}',
+    '切换失败。可能原因：当前环境未安装或启用官方 Claude Code 插件；或 settings.json 存在语法错误。原始错误：{error}',
   'claude.switched': '已切换到 {label}。新会话将使用该账号，已打开的会话仍在使用旧账号。',
   'claude.removeCurrent': '{label} 是当前账号，不能删除。请先切换到其他账号。',
   'claude.removeConfirm': '确定删除账号 {label}？',
