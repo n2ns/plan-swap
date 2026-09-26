@@ -32,9 +32,3 @@ is still missing. Remove an item once it is done or decided.
 - **Repeatable UI preview harness.** Width checks (200 / 240 / 280 / 340 / 420 px, both languages) were done with ad-hoc
   pages and a CDP driver in a scratch directory. A `scripts/preview` harness in the repo would make them repeatable. The
   preview theme colors were hand-written dark values, so only layout was verified, not the real theme.
-
-## User actions pending
-
-- **Convert the `xiaoni` account to shared** from another account (a running session in that account blocks the
-  migration). One file differs on both sides and needs a manual merge afterwards:
-  `projects/-home-deploy--projects/memory/MEMORY.md` (the account copy is kept as `MEMORY.md.from-xiaoni`).
