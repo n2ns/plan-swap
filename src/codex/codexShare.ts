@@ -178,14 +178,15 @@ export function ensureCodexLinks(dir: string): ShareReport {
 
 /** true when a Codex process uses this dir: codexDaemonAlive(dir), or a <procRoot>/<pid> whose exe basename is
  *  'codex' and whose environ CODEX_HOME resolves to dir (for the default dir: unset, empty or ~/.codex).
- *  Unreadable /proc entries are skipped. procRoot is for tests. */
+ *  Unreadable /proc entries are skipped; an unreadable procRoot counts as busy. procRoot is for tests. */
 export function codexAccountBusy(dir: string, procRoot = '/proc'): boolean {
   if (codexDaemonAlive(path.resolve(dir))) return true;
   let pids: string[];
   try {
     pids = fs.readdirSync(procRoot).filter((p) => /^\d+$/.test(p));
   } catch {
-    return false;
+    // A running Codex cannot be ruled out
+    return true;
   }
   const def = codexDefaultDir();
   const forDefault = isDefault(dir);

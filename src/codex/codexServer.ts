@@ -150,6 +150,8 @@ export function planRestart(): ServerPlan {
 }
 
 export function executeRestart(plan: ServerPlan): void {
+  // process.kill is TerminateProcess outside Linux; never signal there
+  if (process.platform !== 'linux') throw new Error(t('ext.linuxOnly'));
   process.kill(plan.serverPid, 'SIGTERM');
   for (const pid of plan.children) {
     try {

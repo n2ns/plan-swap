@@ -294,7 +294,8 @@ export function mirrorClaudeJson(fromJson: string, dir: string): { changed: stri
 }
 
 /** true when a Claude process is running with this config dir: a <dir>/sessions/*.json whose pid is alive and whose
- *  /proc/<pid>/environ has CLAUDE_CONFIG_DIR=<dir> (for the default dir: unset or the default). procRoot is for tests. */
+ *  /proc/<pid>/environ has CLAUDE_CONFIG_DIR=<dir> (for the default dir: unset or the default). Without procRoot
+ *  (e.g. no /proc) a session file counts as busy. procRoot is for tests. */
 export function claudeAccountBusy(dir: string, procRoot = '/proc'): boolean {
   const sessions = path.join(path.resolve(dir), 'sessions');
   let files: string[];
@@ -303,6 +304,8 @@ export function claudeAccountBusy(dir: string, procRoot = '/proc'): boolean {
   } catch {
     return false;
   }
+  // A live session cannot be ruled out without procRoot
+  if (files.length > 0 && !fs.existsSync(procRoot)) return true;
   const def = defaultDir();
   const forDefault = sameRealPath(dir, def);
   for (const f of files) {

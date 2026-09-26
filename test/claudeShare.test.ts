@@ -278,6 +278,7 @@ describe('mirrorClaudeJson', () => {
 function fakeProc(procs: Record<number, Record<string, string>>): string {
   const root = path.join(home, 'fakeproc');
   fs.rmSync(root, { recursive: true, force: true });
+  fs.mkdirSync(root);
   for (const [pid, env] of Object.entries(procs)) {
     write(path.join(root, pid, 'environ'), Object.entries(env).map(([k, v]) => `${k}=${v}`).join('\0') + '\0');
   }
@@ -301,6 +302,13 @@ describe('claudeAccountBusy', () => {
     assert.equal(claudeAccountBusy(def, fakeProc({ 200: { CLAUDE_CONFIG_DIR: acc } })), false);
     // No sessions folder
     assert.equal(claudeAccountBusy(accountDir('none'), fakeProc({})), false);
+  });
+  test('a missing procRoot counts a session file as busy', () => {
+    const acc = accountDir('noproc');
+    const noproc = path.join(home, 'noproc');
+    assert.equal(claudeAccountBusy(acc, noproc), false);
+    write(path.join(acc, 'sessions', '300.json'), JSON.stringify({ pid: 300 }));
+    assert.equal(claudeAccountBusy(acc, noproc), true);
   });
 });
 

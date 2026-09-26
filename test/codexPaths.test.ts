@@ -246,6 +246,13 @@ describe('scanCodexDirs / checkCodexSafeToDelete / codexDaemonAlive / deleteCode
     assert.match(checkCodexSafeToDelete(path.join(home, '.codex-b_1')) ?? '', /codex daemon is still running/);
     clear();
   });
+  test('daemon: a missing procRoot counts a valid pid file as alive', () => {
+    const noproc = path.join(home, 'noproc');
+    assert.equal(codexDaemonAlive(path.join(home, '.codex-b_1'), noproc), false);
+    pidFile('daemon.pid', { pid: 1, processStartTime: '133000000000000000' });
+    assert.equal(codexDaemonAlive(path.join(home, '.codex-b_1'), noproc), true);
+    clear();
+  });
   test('daemon: a processStartTime string field also works', () => {
     pidFile('app-server-updater.pid', { pid: process.pid, processStartTime: String(myTicks) });
     assert.equal(codexDaemonAlive(path.join(home, '.codex-b_1')), true);

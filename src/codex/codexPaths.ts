@@ -248,10 +248,10 @@ export function copyCodexSeed(fromDir: string, toDir: string): CopyResult {
 }
 
 // starttime (field 22) of /proc/<pid>/stat; comm may contain spaces and parentheses, so parse after the last ')'
-function procStartTime(pid: number): number | undefined {
+function procStartTime(pid: number, procRoot: string): number | undefined {
   let stat: string;
   try {
-    stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf8');
+    stat = fs.readFileSync(path.join(procRoot, String(pid), 'stat'), 'utf8');
   } catch {
     return undefined;
   }
@@ -272,7 +272,7 @@ function toTicks(v: unknown): number | undefined {
   return undefined;
 }
 
-function pidFileAlive(file: string): boolean {
+function pidFileAlive(file: string, procRoot: string): boolean {
   let data: unknown;
   try {
     data = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -285,12 +285,15 @@ function pidFileAlive(file: string): boolean {
   const identity = data.processIdentity;
   const ticks = toTicks(isPlainObject(identity) ? identity.startTicks : undefined) ?? toTicks(data.processStartTime);
   if (ticks === undefined) return false;
-  return procStartTime(pid) === ticks;
+  // Without procRoot (e.g. no /proc) the daemon cannot be ruled out
+  if (!fs.existsSync(procRoot)) return true;
+  return procStartTime(pid, procRoot) === ticks;
 }
 
-export function codexDaemonAlive(dir: string): boolean {
+/** procRoot is for tests. */
+export function codexDaemonAlive(dir: string, procRoot = '/proc'): boolean {
   const base = path.join(dir, 'app-server-daemon');
-  return DAEMON_PID_FILES.some((f) => pidFileAlive(path.join(base, f)));
+  return DAEMON_PID_FILES.some((f) => pidFileAlive(path.join(base, f), procRoot));
 }
 
 export function checkCodexSafeToDelete(dir: string): string | undefined {

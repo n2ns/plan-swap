@@ -301,8 +301,8 @@ describe('codexAccountBusy', () => {
     assert.equal(codexAccountBusy(def, fakeProc({ 20: { exe: CODEX_EXE, env: { CODEX_HOME: acc } } })), false);
     // An unset CODEX_HOME never matches a named account
     assert.equal(codexAccountBusy(acc, fakeProc({ 20: { exe: CODEX_EXE, env: { PATH: '/bin' } } })), false);
-    // Missing procRoot
-    assert.equal(codexAccountBusy(acc, path.join(home, 'noproc')), false);
+    // Missing procRoot: a running Codex cannot be ruled out
+    assert.equal(codexAccountBusy(acc, path.join(home, 'noproc')), true);
   });
 
   test('a live app-server daemon makes the account busy', () => {

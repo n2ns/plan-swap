@@ -7,12 +7,12 @@ import type { Memento } from 'vscode';
 
 // Record the real home directory at module load (before any `before` hook) for later assertions
 const REAL_HOME = os.homedir();
-const ENV_KEYS = ['HOME', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'SHELL'] as const;
+const ENV_KEYS = ['HOME', 'USERPROFILE', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'SHELL'] as const;
 
 export interface TempHome { home: string; restore(): void }
 
 /**
- * Creates a mktemp directory and points process.env.HOME at it; also clears CLAUDE_CONFIG_DIR / CODEX_HOME
+ * Creates a mktemp directory and points process.env.HOME and USERPROFILE (read by os.homedir() on Windows) at it; also clears CLAUDE_CONFIG_DIR / CODEX_HOME
  * so that defaultDir / codexDefaultDir / effectiveDir all resolve inside the temporary directory.
  * restore() deletes the directory and restores the environment variables.
  */
@@ -22,6 +22,7 @@ export function makeTempHome(prefix: string): TempHome {
   // The prefix avoids selfCheck's own planswap-codex-*, otherwise parallel tests would disturb its leftover check
   const home = fs.mkdtempSync(path.join(os.tmpdir(), `planswap-test-${prefix}-`));
   process.env.HOME = home;
+  process.env.USERPROFILE = home;
   delete process.env.CLAUDE_CONFIG_DIR;
   delete process.env.CODEX_HOME;
   assertTempHome(home);

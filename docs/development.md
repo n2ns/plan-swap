@@ -54,7 +54,7 @@ Frontend assets must all be emitted into `dist/media/`, the Webview's only `loca
 ## Verification and release boundaries
 
 - Before committing, `npm run typecheck`, `npm test` and `npm run build` must pass.
-- File-system tests use a temporary HOME via `makeTempHome` in `test/helpers.ts`, which asserts the real home is not used. Never run account, rc-file or state-file write/delete tests under the real home. Busy checks and migrations use a fake `procRoot` where applicable; never test `executeRestart` or signal the editor server or its children.
+- File-system tests use a temporary HOME via `makeTempHome` in `test/helpers.ts` (it sets both `HOME` and `USERPROFILE`, which `os.homedir()` reads on Windows), which asserts the real home is not used. Never run account, rc-file or state-file write/delete tests under the real home. Busy checks and migrations use a fake `procRoot` where applicable; never test `executeRestart` or signal the editor server or its children.
 - The local tests use disposable fixtures; UI integration and real-account acceptance are separate and follow [Manual Verification](manual-verification.md). Record what ran and what remains unverified.
 - Before releasing, check `README.md` and `CHANGELOG.md`: neither may contain `[Unreleased]` content, including an empty heading. Packaging does not authorize installation or publication. Never install the `.vsix` into the user's editor automatically; the user installs it after packaging. Publish only under the user's explicit release authorization.
 
