@@ -14,7 +14,7 @@
   "command.codex.addAccount": "添加 Codex 账号",
   "command.codex.removeAccount": "删除 Codex 账号",
   "command.codex.openTerminal": "在终端中以 Codex 账号运行 codex",
-  "command.codex.restartServer": "重启 WSL 服务端",
+  "command.codex.restartServer": "应用 Codex 账号：重启或查看说明",
   "command.tools.openClaudeMd": "打开全局 CLAUDE.md",
   "category.tools": "PlanSwap",
   "command.tools.openAgentsMd": "打开全局 AGENTS.md",

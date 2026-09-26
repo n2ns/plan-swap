@@ -5,7 +5,7 @@ import { NAME_RE, samePath, sameRealPath } from '../paths';
 import { shQuote } from '../commands';
 import { type AccountsPanel, type PanelSource, tildify } from '../accountsPanel';
 import { labelFor, sameName, type LabelStore, EXTERNAL_NAME } from '../labels';
-import type { AccountView, FromWebview } from '../protocol';
+import type { AccountView, FromWebview, RestartInfo } from '../protocol';
 import {
   CODEX_DEFAULT_NAME,
   type CodexAccount,
@@ -49,45 +49,76 @@ const EDITOR_NAMES: Record<ServerKind, string> = {
 };
 const editorName = (kind: ServerKind): string => EDITOR_NAMES[kind];
 
-// Manual restart guidance for the given server kind
-function manualHint(kind: ServerKind): string {
-  if (kind === 'vscode') return t('codex.manualRestartHintVscode');
-  if (kind === 'unknown') return t('codex.manualRestartHintUnknown');
-  return t('codex.manualRestartHint', { editor: editorName(kind) });
+/** Uses the editor connection context, not the kernel, so WSLg desktop windows get local guidance. */
+export function manualRestartMessages(kind: ServerKind, remoteName: string | undefined): { hint: string; required: string; switchConfirm: string } {
+  if (remoteName === undefined) {
+    const hint = t('codex.manualRestartHintLocal');
+    return {
+      hint,
+      required: t('codex.manualRestartRequiredLocal', { hint }),
+      switchConfirm: t('codex.switchConfirmManualLocal', { hint }),
+    };
+  }
+  if (remoteName !== 'wsl') {
+    const hint = t('codex.manualRestartHintRemote');
+    return {
+      hint,
+      required: t('codex.manualRestartRequiredRemote', { hint }),
+      switchConfirm: t('codex.switchConfirmManualRemote', { hint }),
+    };
+  }
+  const hint = kind === 'vscode' ? t('codex.manualRestartHintVscode')
+    : kind === 'unknown' ? t('codex.manualRestartHintUnknown')
+      : t('codex.manualRestartHint', { editor: editorName(kind) });
+  return {
+    hint,
+    required: t('codex.manualRestartRequired', { hint }),
+    switchConfirm: t('codex.switchConfirmManual', { hint }),
+  };
+}
+
+/** Automatic restart is restricted to the existing supported WSL servers. */
+export function restartInfo(): RestartInfo {
+  const remoteName = vscode.env.remoteName;
+  const context = remoteName === undefined ? 'local' : remoteName === 'wsl' ? 'wsl' : 'remote';
+  return { context, auto: context === 'wsl' && canAutoRestart(detectServerKind()) };
 }
 
 // Returns false when automatic restart is unsupported or validation failed and the manual alternative was shown
 function restart(): boolean {
   const kind = detectServerKind();
-  if (!canAutoRestart(kind)) {
-    void vscode.window.showWarningMessage(t('codex.manualRestartRequired', { hint: manualHint(kind) }));
+  const messages = manualRestartMessages(kind, vscode.env.remoteName);
+  if (vscode.env.remoteName !== 'wsl' || !canAutoRestart(kind)) {
+    void vscode.window.showWarningMessage(messages.required);
     return false;
   }
   let plan;
   try {
     plan = planRestart();
   } catch (err) {
-    void vscode.window.showWarningMessage(t('codex.restartPlanFailed', { error: errText(err), hint: manualHint(kind) }));
+    void vscode.window.showWarningMessage(t('codex.restartPlanFailed', { error: errText(err), hint: messages.hint }));
     return false;
   }
   try {
     executeRestart(plan);
   } catch (err) {
-    void vscode.window.showWarningMessage(t('codex.restartFailed', { error: errText(err), hint: manualHint(kind) }));
+    void vscode.window.showWarningMessage(t('codex.restartFailed', { error: errText(err), hint: messages.hint }));
     return false;
   }
   return true;
 }
 
-/** "Restart WSL server" with modal confirmation: shared by the panel button, Command Palette and toolbar */
+/** Restart a supported WSL server with modal confirmation; otherwise show instructions: shared by the panel button, Command Palette and toolbar */
 export async function restartServerInteractive(): Promise<void> {
   const kind = detectServerKind();
-  if (!canAutoRestart(kind)) {
-    void vscode.window.showWarningMessage(t('codex.manualRestartRequired', { hint: manualHint(kind) }));
+  const info = restartInfo();
+  if (!info.auto) {
+    void vscode.window.showWarningMessage(manualRestartMessages(kind, vscode.env.remoteName).required);
     return;
   }
   const continueLabel = t('common.continue');
-  const ok = await vscode.window.showWarningMessage(t('codex.restartConfirm', { editor: editorName(kind) }), { modal: true }, continueLabel);
+  const confirm = t('codex.restartConfirm', { editor: editorName(kind) });
+  const ok = await vscode.window.showWarningMessage(confirm, { modal: true }, continueLabel);
   if (ok !== continueLabel) return;
   restart();
 }
@@ -96,6 +127,7 @@ export async function restartServerInteractive(): Promise<void> {
 export function codexPanelSource(store: CodexAccountStore, labels: LabelStore): PanelSource {
   const accounts = (): AccountView[] => {
     const cur = effectiveDir();
+    const selected = readSelectedDir() ?? codexDefaultDir();
     const rows: AccountView[] = store.all().map((a) => ({
       kind: a.name === CODEX_DEFAULT_NAME ? 'default' : 'named',
       name: a.name,
@@ -104,6 +136,7 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore): 
       dirLabel: tildify(a.dir),
       ...readCodexAccountInfo(a.dir),
       isCurrent: samePath(a.dir, cur),
+      isSelected: samePath(a.dir, selected),
       shared: a.name === CODEX_DEFAULT_NAME ? undefined : isSharedCodexAccount(a.dir),
     }));
     if (!rows.some((r) => r.isCurrent)) {
@@ -115,6 +148,7 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore): 
         dirLabel: tildify(cur),
         ...readCodexAccountInfo(cur),
         isCurrent: true,
+        isSelected: samePath(cur, selected),
       });
     }
     return rows;
@@ -136,6 +170,7 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore): 
       return account ? labelFor(account.name, labels) : selected;
     },
     watchTargets: () => [...accounts().map((r) => path.join(r.dir, 'auth.json')), STATE_FILE()],
+    restart: () => restartInfo(),
   };
 }
 
@@ -263,10 +298,11 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       return;
     }
     const kind = detectServerKind();
-    const auto = canAutoRestart(kind);
-    const confirmText = auto
-      ? t('codex.switchConfirm', { editor: editorName(kind) })
-      : t('codex.switchConfirmManual', { hint: manualHint(kind) });
+    const info = restartInfo();
+    const auto = info.auto;
+    const confirmText = !auto
+      ? manualRestartMessages(kind, vscode.env.remoteName).switchConfirm
+      : t('codex.switchConfirm', { editor: editorName(kind) });
     const continueLabel = t('common.continue');
     const ok = await vscode.window.showWarningMessage(confirmText, { modal: true }, continueLabel);
     if (ok !== continueLabel) return;
@@ -506,7 +542,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       const a = await pickAccount(allWithExternal(), t('codex.pick.terminal'));
       if (a) openTerminal(a, !codexLoggedIn(a.dir));
     }),
-    vscode.commands.registerCommand('planswap.codex.restartServer', restartServerInteractive),
+    vscode.commands.registerCommand('planswap.codex.restartServer', () => restartServerInteractive()),
     vscode.window.onDidCloseTerminal((terminal) => {
       if (!terminals.delete(terminal)) return;
       panel.refresh();

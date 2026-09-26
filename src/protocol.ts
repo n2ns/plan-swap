@@ -19,9 +19,16 @@ export interface AccountView {
   plan?: string;
   loggedIn: boolean;
   isCurrent: boolean;
+  // Codex only: selected for the next editor/server start; independent of the effective account
+  isSelected?: boolean;
   // Named rows only: true = shared with the default account (links), false = independent; undefined for default / external
   shared?: boolean;
 }
+
+// Editor connection context: local desktop (including WSLg), WSL remote, or another remote
+export type EditorContext = 'local' | 'wsl' | 'remote';
+// How a new Codex selection takes effect in this window; auto = false means the action only shows instructions
+export interface RestartInfo { context: EditorContext; auto: boolean }
 
 export interface TabState {
   // false when codex is not enabled (always true for claude)
@@ -31,6 +38,8 @@ export interface TabState {
   switchedTo?: string;
   // codex only: set when the state file points to a directory other than this window's effective one (shows "X selected, takes effect after server restart"); value is the display name
   pendingDir?: string;
+  // codex only: labels of the restart actions (pending banner, footer toolbar, disabled page)
+  restart?: RestartInfo;
 }
 
 export interface PanelState {

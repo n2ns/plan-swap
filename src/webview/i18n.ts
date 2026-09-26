@@ -62,12 +62,21 @@ export const en = {
 
   'disabled.title': 'Codex account switching is not enabled',
   'disabled.text':
-    "When enabled, each account uses its own CODEX_HOME directory (default ~/.codex, others ~/.codex-<name>). The extension writes a marker block into ~/.profile and ~/.bashrc that reads the selected directory from a state file. Switching accounts requires restarting the editor's WSL server; all WSL windows disconnect.",
+    'When enabled, each account uses its own CODEX_HOME directory (default ~/.codex, others ~/.codex-<name>). The extension writes a marker block into ~/.profile and ~/.bashrc that reads the selected directory from a state file.',
+  'disabled.restartWsl': "Switching accounts requires restarting the editor's WSL server; all WSL windows disconnect.",
+  'disabled.restartLocal': 'Switching accounts requires restarting this editor; all of its windows close and integrated terminals end.',
+  'disabled.restartRemote': 'Switching accounts requires restarting the editor server in the remote environment.',
   'disabled.enable': 'Enable Codex switching',
 
   'pending.title': '{name} selected; takes effect after restarting the server',
+  'pending.titleLocal': '{name} selected; takes effect after restarting the editor',
   'pending.text': 'Restarting the server disconnects all WSL windows (reload or reopen them); integrated terminals close.',
+  'pending.textLocal': 'Restarting quits all windows of this editor (unsaved changes are asked about first) and starts it again; integrated terminals close.',
+  'pending.textLocalManual': 'Fully exit this editor and start it again; reloading the window is not enough.',
+  'pending.textRemote': 'Restart the editor server in the remote environment, then reconnect.',
   'pending.restart': 'Restart server',
+  'pending.restartEditor': 'Restart editor',
+  'pending.instructions': 'Show instructions',
 
   'banner.title': 'Switched to {name}',
   'banner.text': 'New sessions use the new account; open sessions still use the old one. After reloading, all panels start over with the new account.',
@@ -83,6 +92,8 @@ export const en = {
   'common.reloadWindow': 'Reload Window',
   'footer.restartExtHost': 'Restart Extension Host',
   'footer.restartServer': 'Restart WSL Server',
+  'footer.restartEditor': 'Restart Editor to Apply the Codex Account',
+  'footer.restartManual': 'How to Apply the Codex Account',
   'footer.help': 'User guide',
   'footer.star': 'Star',
   'footer.version': 'v{version}',
@@ -151,12 +162,21 @@ export const zhCn: Record<MessageKey, string> = {
 
   'disabled.title': 'Codex 账号切换尚未启用',
   'disabled.text':
-    '启用后，每个账号使用独立的 CODEX_HOME 目录（默认 ~/.codex，其他为 ~/.codex-<名字>）。插件会在 ~/.profile 与 ~/.bashrc 写入一段标记块，从状态文件读取所选目录。切换账号需要重启编辑器的 WSL 服务端，所有 WSL 窗口会断开。',
+    '启用后，每个账号使用独立的 CODEX_HOME 目录（默认 ~/.codex，其他为 ~/.codex-<名字>）。插件会在 ~/.profile 与 ~/.bashrc 写入一段标记块，从状态文件读取所选目录。',
+  'disabled.restartWsl': '切换账号需要重启编辑器的 WSL 服务端，所有 WSL 窗口会断开。',
+  'disabled.restartLocal': '切换账号需要重启当前编辑器，它的所有窗口会关闭，集成终端会结束。',
+  'disabled.restartRemote': '切换账号需要在远程环境中重启编辑器服务端。',
   'disabled.enable': '启用 Codex 切换',
 
   'pending.title': '已选择 {name}，重启服务端后生效',
+  'pending.titleLocal': '已选择 {name}，重启编辑器后生效',
   'pending.text': '重启服务端会断开所有 WSL 窗口（需重新加载或重新打开），集成终端关闭。',
+  'pending.textLocal': '重启会退出当前编辑器的所有窗口（有未保存的更改时会先询问）并重新启动，集成终端关闭。',
+  'pending.textLocalManual': '请完全退出当前编辑器后重新启动，仅重新加载窗口不够。',
+  'pending.textRemote': '请在远程环境中重启编辑器服务端，然后重新连接。',
   'pending.restart': '重启服务端',
+  'pending.restartEditor': '重启编辑器',
+  'pending.instructions': '查看操作说明',
 
   'banner.title': '已切换到 {name}',
   'banner.text': '新会话使用新账号；已打开的会话仍在使用旧账号。重新加载后所有面板以新账号重新开始。',
@@ -172,6 +192,8 @@ export const zhCn: Record<MessageKey, string> = {
   'common.reloadWindow': '重新加载窗口',
   'footer.restartExtHost': '重启扩展宿主',
   'footer.restartServer': '重启 WSL 服务端',
+  'footer.restartEditor': '重启编辑器以应用 Codex 账号',
+  'footer.restartManual': '如何应用 Codex 账号',
   'footer.help': '使用说明',
   'footer.star': 'Star',
   'footer.version': 'v{version}',

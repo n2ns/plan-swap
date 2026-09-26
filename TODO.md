@@ -5,6 +5,7 @@ is still missing. Remove an item once it is done or decided.
 
 ## Needs verification with real accounts
 
+- **Linux desktop support.** On 2026-09-27, user screenshots confirmed Claude's `default` → `xiaoni` switch after reload and Codex startup with the named `O4N` selection through the external launcher: official identities matched and new conversations succeeded. The user also confirmed Codex return-to-default succeeded, without a separate live environment inspection. Current product behavior is save-selection plus manual restart guidance. Installed-build acceptance remains outstanding: selection cancellation/pending state, instructions-only actions, named/default restart, multiple windows, launch-route and keyring behavior, WSL regression, and Claude return-to-default. A native Linux desktop/VM smoke test is still required before claiming non-WSLg coverage. Use the [local Linux manual checklist](docs/manual-verification.md#codex-in-a-local-linux-desktop-vs-code); the recorded environment and external launcher are in [Development](docs/development.md#2-local-linux-desktop-testing-through-wslg).
 - **Resuming a session started by another account.**
   - Codex: rollouts replay reasoning and compaction items whose `encrypted_content` is bound to an organization. The server
     may reject them ("encrypted content organization_id did not match the target organization"), and codex-cli 0.157.1

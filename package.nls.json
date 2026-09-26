@@ -14,7 +14,7 @@
   "command.codex.addAccount": "Add Codex Account",
   "command.codex.removeAccount": "Delete Codex Account",
   "command.codex.openTerminal": "Run codex in Terminal with Codex Account",
-  "command.codex.restartServer": "Restart WSL Server",
+  "command.codex.restartServer": "Apply Codex Account: Restart or Show Instructions",
   "command.tools.openClaudeMd": "Open Global CLAUDE.md",
   "category.tools": "PlanSwap",
   "command.tools.openAgentsMd": "Open Global AGENTS.md",

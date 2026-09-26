@@ -9,7 +9,7 @@ Purpose: Codex account-switching design, shell/environment propagation, editor r
 
 - Goal: add OpenAI Codex account switching to the same sidebar extension. After a switch, the official Codex editor extension, the codex processes it starts, and the codex CLI in integrated terminals all use the selected account, without signing in again.
 - Claude account switching is a separate feature; the two do not affect each other.
-- Runtime environment: WSL / Linux only, the editor is Antigravity IDE (VS Code 1.107 core); VSCodium and VS Code are also recognized (section 5). WSL remote window. The login shell is bash.
+- Runtime environment: WSL / Linux only, the editor is Antigravity IDE (VS Code 1.107 core); VSCodium and VS Code are also recognized (section 5). WSL remote window. A local Linux desktop VS Code window (including one displayed through WSLg) relaunches the editor instead (5.1); that path awaits user acceptance and is not yet a support claim. The login shell is bash.
 - Cost accepted by the user: switching the Codex account requires restarting the editor's server inside WSL (automatic only for Antigravity and VSCodium, see section 5). All WSL windows disconnect and each shows "Cannot reconnect. Please reload the window." once; the user clicks "Reload Window" once in each window. Integrated terminals close.
 - Non-goals:
   - `auth.json` is read-only, and only the JWT payload of its `tokens.id_token` is decoded (signature not verified) to display email and plan; no token is ever copied, swapped, cached or output (the raw `access_token`/`refresh_token`/`id_token` never reach logs, state, messages or the UI). `auth.json` is never written.
@@ -43,6 +43,14 @@ The following facts about shared accounts come from codex-cli 0.157.1 (source an
 16. `history.jsonl` is appended to in place; deleting a thread rewrites `session_index.jsonl` by rename, which replaces the link of that account by a regular file (repaired by merging the lines back, 8.6). `.tmp/rollout-compression.lock` is created with `O_EXCL`, which fails on a dangling link, so it is not shared; `.tmp/rollout-maintenance.lock` is an flock file and is shared so two accounts do not maintain the shared rollouts at once.
 17. Codex refuses a symlinked memories root, so `memories/` and the memories databases stay per account.
 18. Resuming a thread across accounts is not blocked locally, but reasoning and compaction items carry `encrypted_content` bound to the organization that produced it; the server may reject resuming another organization's session ("encrypted content organization_id did not match").
+
+The following facts about a **local Linux desktop editor** were read on 2026-09-27 from the installed VS Code 1.139.1 (commit `04c0d99f4fb0d8afe6ce4f0c58e31e183ac3e4b1`, `/usr/share/code/resources/app/out/main.js`, `vs/base/parts/sandbox/electron-browser/preload.js`, `vs/workbench/workbench.desktop.main.js`), the official Codex extension 26.917.62051 and the running WSLg test editor's process tree. They are source-derived, not runtime acceptance; re-verify after upgrades.
+
+19. The official Codex extension resolves its home as `process.env.CODEX_HOME ?? ~/.codex` and spawns its processes with `{...process.env, ...}` of the extension host. Its extra shell probe runs only when `CODEX_HOME` is empty and `vscode.env.remoteName` is a non-`wsl` remote, so a local window uses the extension host environment as is.
+20. The desktop extension host environment is `{...main process env, ...resolved shell env, ...window userEnv}`. The main process resolves the shell environment (`$SHELL -i -l -c`, cached for the main process lifetime) unless it was started with `VSCODE_CLI=1` (the `code` CLI script) and without `--force-user-env`. The first window has no `userEnv`. Reload Window and extension host restarts reuse the cached environment, so only a new main process picks up a new `CODEX_HOME`. A shell that unsets `CODEX_HOME` cannot remove a value the main process inherited, because the merge only adds keys.
+21. One main process serves every window of a user data directory; a second launch with the same `--user-data-dir` hands its arguments to the running instance through `<XDG_RUNTIME_DIR>/vscode-<hash>-<version>-main.sock` and exits, so a relaunch must wait until the old main process has exited. The extension host is a utility process whose parent is the main process. Chromium rewrites the main process title, so `/proc/<pid>/cmdline` is one space-joined string and `/proc/<pid>/environ` is not usable.
+22. `workbench.action.quit` asks the main process to quit and returns without waiting. Each window may veto for unsaved changes; extension hosts are shut down (and `deactivate()` runs) only for windows that do not veto. Closing the last window quits the application on Linux.
+23. The editor binary runs as Node when `ELECTRON_RUN_AS_NODE=1` (VS Code uses this itself for shell resolution), so a helper needs no separate Node installation.
 
 The daemon liveness check also relies on the JSON format Codex writes to `<dir>/app-server-daemon/*.pid` (`pid`, `processIdentity.startTicks` / `processStartTime`); re-verify it after Codex upgrades.
 
@@ -121,14 +129,28 @@ fi
   2. Enumerate `/proc/*/stat` and collect every child whose parent is the server (extension hosts, pty host, file watcher, etc.), excluding this extension host itself.
   3. Send `SIGTERM` to the server, then to the children collected in step 2. Use `process.kill`, never shell commands. This extension host exits by itself through its parent-process guard.
 - Afterwards: every WSL window shows "Cannot reconnect. Please reload the window.", and the user clicks "Reload Window".
-- Manual method, by kind (`{editor}` is "Antigravity" or "VSCodium", not localized):
-  - `antigravity` / `vscodium`: "Manual alternative: close all {editor} windows connected to this distro, wait at least 5 minutes, then reopen." (the server auto-shutdown delay is 300 seconds)
-  - `vscode`: "Close all VS Code windows connected to this distro, wait a few seconds, then reopen them."
-  - `unknown`: "Close all editor windows connected to this distro, wait at least 5 minutes, then reopen them. If the account has still not changed, run "wsl --shutdown" in Windows (this stops all WSL distros) and reopen."
-- Modal confirmation before switching:
-  - automatic kinds: "Switching the Codex account restarts {editor}'s WSL server: all WSL windows disconnect and prompt to reload, all extensions restart, and integrated terminals close. Continue?"
-  - manual kinds: "The new Codex account takes effect only after the WSL server restarts, which this editor cannot do automatically. {hint} Continue?" (`{hint}` is the manual method above); after confirming, the state file is written and no further warning is shown.
-- "Restart WSL Server": automatic kinds show the modal "Restart {editor}'s WSL server: all WSL windows disconnect and prompt to reload, all extensions restart, and integrated terminals close. Continue?"; manual kinds show the warning "This editor's WSL server cannot be restarted automatically. {hint}" directly, without a modal.
+- Manual guidance is selected first by `vscode.env.remoteName`, then by server kind within a WSL window. The kernel is not used for this decision: Linux desktop VS Code displayed through WSLg is a local window.
+  - `undefined` (local Linux): fully exit and relaunch the editor with `CODEX_HOME` set to the selected directory; unset it for the default account. Reload Window alone does not apply the new environment. The warning says the Linux editor cannot be restarted automatically.
+  - `wsl`: preserve the existing editor-specific manual methods. Antigravity/VSCodium: close the connected windows and wait at least five minutes (300-second server shutdown delay). VS Code: close the connected windows and wait a few seconds. Unknown: close the connected windows and wait five minutes, with `wsl --shutdown` as the fallback, explicitly noting that it stops all WSL distributions.
+  - Other remote names: restart the editor server in that remote environment with the selected `CODEX_HOME` (unset for default), then reconnect. This is manual guidance, not a new support guarantee for SSH or containers.
+- Modal confirmation before switching uses the same connection context: restart the Linux editor locally, the WSL server in WSL, or the remote editor server elsewhere. All manual confirmations include the matching instructions; after confirming, the state file is written and no further warning is shown.
+- Automatic restart is offered when `remoteName === 'wsl'` and the server kind is Antigravity or VSCodium (existing modal, validation and signaling unchanged), and for a verified local desktop VS Code (5.1). Every other case shows the context-specific manual warning without a modal. The host reports `{ context, auto }` (`RestartInfo`) to the Webview so labels never imply an automatic restart that will not happen.
+
+### 5.1 Relaunching a local desktop editor
+
+Local Linux windows (including WSLg desktop) use **save selection + manual restart instructions**. This is the user-approved scope after review on 2026-09-27; the desktop auto-relaunch implementation was withdrawn.
+
+1. Confirming an account switch writes the selection file and refreshes the pending state. Cancelling the confirmation leaves the selection unchanged.
+2. The pending action, footer and restart command show local instructions only. They never quit an editor, arm a deferred request or spawn a relaunch helper. Ordinary exit or extension deactivation cannot trigger a later restart.
+3. The user saves work and fully exits the intended editor instance when ready, then launches it with `CODEX_HOME` set to the selected directory (or unset for default). Preserve the original executable, profile/extensions arguments and workspace. Reload Window alone is insufficient. If the instance also contains remote windows, defer the full exit until those windows can safely close; PlanSwap does not close them.
+4. Preserve the original session setup. For the WSLg test launched through `dbus-run-session`, run the original launcher again to create a fresh bus/keyring session; do not reuse the ended session's `DBUS_SESSION_BUS_ADDRESS`. The external test launcher remains outside the product.
+5. The selected account remains pending until a new extension host actually reports the intended `CODEX_HOME`. Saving the selection is not activation.
+
+Subsequent cold starts (source-derived, pending user verification):
+
+- Desktop menu/icon (no `VSCODE_CLI`): the shell environment resolution runs the marker block, so a named selection is applied. Returning to the default account is reliable only if the graphical session itself does not carry a `CODEX_HOME` (fact 20); a session that sourced `~/.profile` while a named account was selected keeps that value until the next login.
+- `code` from a terminal: no shell resolution; the terminal's environment is used, which reflects the selection at the time that terminal started.
+- Any launch while an instance of the same user data directory is running is absorbed by that instance and keeps its old environment.
 
 ## 6. Data model
 
@@ -147,7 +169,7 @@ fi
 - While not enabled, the Codex page only shows an explanation, the "Enable Codex switching" button and the "Tools" row.
 - Once enabled the layout matches the Claude page: account list (current account pinned to the first row), "Tools" row, add input at the bottom; every named account row also has a pencil icon for renaming (aliases stored per account in `codex.labels`).
 - Differences:
-  - Switch button → modal confirmation → write the state file → restart the server. There is no reload banner; when the state file and the effective directory differ, the top shows "X selected; takes effect after restarting the server" and a "Restart server" button.
+  - Switch button → modal confirmation → write the state file → restart the server (WSL) or the editor (local desktop, 5.1). There is no reload banner; when the state file and the effective directory differ, the top shows "X selected; takes effect after restarting the server" ("…restarting the editor" in a local window) with a button whose label follows `RestartInfo`: "Restart server", "Restart editor", or "Show instructions" when only manual guidance is available.
   - Current and other rows: email and plan when there is an email (`Plus`, `Pro`, `Team`, `API key`, etc.); "Logged in" when signed in without email; "Not logged in" when signed out.
   - The "Log in" button of signed-out accounts runs `env CODEX_HOME='<dir>' codex login` in a terminal; alternatively switch and sign in directly in the Codex panel (the directory is empty, so no account is revoked).
   - The terminal icon of signed-in accounts runs `env CODEX_HOME='<dir>' codex`.
@@ -167,7 +189,7 @@ Command titles below are the English entries of `package.nls.json`; the category
 | `planswap.codex.addAccount` | Add Codex Account | `panel.focusAdd('codex')`: opens the panel, switches to the Codex tab and focuses the add input |
 | `planswap.codex.removeAccount` | Delete Codex Account | QuickPick (without the current account) → 8.3 |
 | `planswap.codex.openTerminal` | Run codex in Terminal with Codex Account | QuickPick → 8.4 |
-| `planswap.codex.restartServer` | Restart WSL Server | Section 5, for when the state file has been changed but the server not yet restarted |
+| `planswap.codex.restartServer` | Restart Editor or WSL Server to Apply Codex Account | Section 5 / 5.1, for when the state file has been changed but the server or editor not yet restarted (command id unchanged) |
 
 ### 8.1 Switch
 
@@ -177,7 +199,7 @@ A switch request that arrives while another switch is in progress (e.g. its moda
 2. Report an error and return when the target directory does not exist.
 3. Modal confirmation (text from section 5, depending on the editor kind).
 4. If the target is a shared account, `ensureCodexLinks` runs first (8.6); a non-empty report or an error only shows the warning "Re-linking X to the default account reported: …". Then write the state file atomically (empty for the default account).
-5. Automatic kinds: restart the server as in section 5; when the checks fail, show the manual method. Manual kinds: nothing more (the confirmation already showed the manual method).
+5. Automatic kinds: restart the server as in section 5, or request the desktop relaunch as in 5.1; when the checks fail, show the manual method. Manual kinds: nothing more (the confirmation already showed the manual method).
 
 ### 8.2 Add
 
@@ -256,3 +278,4 @@ The self-check, server/terminal shutdown observations, reconnect environment che
 11. Shared accounts are only re-linked when adding, after the switch confirmation, by "Re-link" and after a conversion; Codex replacing a link in between is repaired only then (jsonl files) or reported (other entries).
 12. Converting an independent account cannot be undone automatically; differing files are kept as `<name>.from-<account>` / `<name>.independent-backup`, and the account's thread databases are only kept as backups.
 13. MCP servers in the shared `config.toml` are shared, but MCP OAuth credentials are never linked or copied, so OAuth-based servers must be authorized in each account; for independent accounts, `env` values of MCP servers are copied in plain text with `config.toml`.
+14. Local desktop switching (5.1) saves selection and shows manual restart instructions. There is no desktop automatic quit/relaunch. The previously user-tested external launcher remains a manual route; installed-build acceptance of the updated guidance remains pending. Cold starts depend on the launch route (5.1).

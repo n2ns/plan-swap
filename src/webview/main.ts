@@ -4,7 +4,7 @@ import '@vscode-elements/elements/dist/vscode-checkbox/index.js';
 import '@vscode-elements/elements/dist/vscode-textfield/index.js';
 import '@vscode-elements/elements/dist/vscode-toolbar-button/index.js';
 import '@vscode-elements/elements/dist/vscode-icon/index.js';
-import type { AccountView, FromWebview, PanelMode, PanelState, TabState, ToolId, ToWebview } from '../protocol';
+import type { AccountView, FromWebview, PanelMode, PanelState, RestartInfo, TabState, ToolId, ToWebview } from '../protocol';
 import { getLocale, setLocale, t, type MessageKey } from './i18n';
 
 declare const __PLANSWAP_VERSION__: string;
@@ -43,6 +43,10 @@ const TEXT = {
   claude: { dirPrefix: '~/.claude-', mdLabel: 'CLAUDE.md' },
   codex: { dirPrefix: '~/.codex-', mdLabel: 'AGENTS.md' },
 } as const;
+
+// Restart action wording follows the host-reported context; before the first state arrives, keep the WSL wording
+const codexRestart = (): RestartInfo => state.codex.restart ?? { context: 'wsl', auto: true };
+const DISABLED_RESTART = { local: 'disabled.restartLocal', wsl: 'disabled.restartWsl', remote: 'disabled.restartRemote' } as const;
 
 type Attrs = Record<string, string | boolean | undefined>;
 type Child = Node | string | null | undefined | false;
@@ -413,7 +417,7 @@ class Page {
       { class: 'disabled-card' },
       h('div', { class: 'disabled-icon' }, h('vscode-icon', { name: 'plug', size: '26' })),
       h('div', { class: 'disabled-title' }, t('disabled.title')),
-      h('div', { class: 'disabled-text' }, t('disabled.text')),
+      h('div', { class: 'disabled-text' }, `${t('disabled.text')} ${t(DISABLED_RESTART[codexRestart().context])}`),
       h('div', { class: 'disabled-actions' }, onClick(h('vscode-button', { icon: 'check' }, t('disabled.enable')), () => this.send({ type: 'enable' }))),
     );
   }
@@ -421,6 +425,10 @@ class Page {
   // Codex: the state file changed but this window has not restarted the server yet
   private renderPending(): HTMLElement | null {
     if (this.mode !== 'codex' || !this.tab.pendingDir) return null;
+    const { context, auto } = codexRestart();
+    const local = context === 'local';
+    const text = context === 'remote' ? 'pending.textRemote' : !local ? 'pending.text' : auto ? 'pending.textLocal' : 'pending.textLocalManual';
+    const button = !auto ? 'pending.instructions' : local ? 'pending.restartEditor' : 'pending.restart';
     return h(
       'div',
       { class: 'banner', role: 'status' },
@@ -428,12 +436,12 @@ class Page {
       h(
         'div',
         { class: 'banner-body' },
-        h('div', { class: 'banner-title' }, t('pending.title', { name: this.tab.pendingDir })),
-        h('div', { class: 'banner-text' }, t('pending.text')),
+        h('div', { class: 'banner-title' }, t(local ? 'pending.titleLocal' : 'pending.title', { name: this.tab.pendingDir })),
+        h('div', { class: 'banner-text' }, t(text)),
         h(
           'div',
           { class: 'banner-actions' },
-          onClick(h('vscode-button', { icon: 'debug-restart' }, t('pending.restart')), () => this.send({ type: 'restartServer' })),
+          onClick(h('vscode-button', { icon: auto ? 'debug-restart' : 'info' }, t(button)), () => this.send({ type: 'restartServer' })),
         ),
       ),
     );
@@ -488,13 +496,15 @@ class Page {
     }
 
     const editing = this.renamingDir === a.dir && !!this.renameField;
+    const selected = this.mode === 'codex' && a.isSelected === true;
+    const canSwitch = !a.isCurrent || (this.mode === 'codex' && a.isSelected === false);
     if (editing) classes.push('is-editing');
 
     // Built in edit mode too: CSS hides it there (visibility: hidden) so the card keeps its height and columns
     const actions = h('div', { class: 'row-actions' });
     {
       // Conversions are refused by the host for the current account and for the Codex account selected but not yet effective
-      const convertible = a.kind === 'named' && !a.isCurrent && !(this.mode === 'codex' && this.tab.pendingDir === a.dir);
+      const convertible = a.kind === 'named' && !a.isCurrent && !selected;
       // Independent account: offer converting it to a shared one (the host confirms)
       if (convertible && a.shared === false) {
         actions.append(toolbarButton('link', t('row.share'), () => this.send({ type: 'share', dir: a.dir })));
@@ -504,7 +514,7 @@ class Page {
         actions.append(toolbarButton('debug-disconnect', t('row.unshare'), () => this.send({ type: 'unshare', dir: a.dir })));
       }
       // The second click of a double-click (detail > 1) would send a duplicate switch
-      if (!a.isCurrent) {
+      if (canSwitch) {
         actions.append(
           toolbarButton('arrow-swap', t('row.switch'), (e) => {
             if (e.detail > 1) return;
@@ -522,7 +532,7 @@ class Page {
         );
       }
       // The current account cannot be removed
-      if (a.kind === 'named' && !a.isCurrent) {
+      if (a.kind === 'named' && !a.isCurrent && !selected) {
         actions.append(
           toolbarButton('trash', t('row.remove'), () => {
             this.confirmingDir = a.dir;
@@ -561,7 +571,7 @@ class Page {
     // .row-main is display: contents, so its lines land directly in the .row grid
     const row = h(
       'li',
-      { class: classes.join(' '), 'data-plan': planClass(a.plan, this.mode), tabindex: a.isCurrent || editing ? undefined : '0' },
+      { class: classes.join(' '), 'data-plan': planClass(a.plan, this.mode), tabindex: !canSwitch || editing ? undefined : '0' },
       avatar(a),
       h(
         'div',
@@ -575,8 +585,8 @@ class Page {
         editing && this.renameError && h('div', { class: 'row-error', role: 'alert' }, this.renameError),
       ),
     );
-    // Double-click on a non-current row switches; single click does nothing, to avoid accidents
-    if (!a.isCurrent && !editing) {
+    // Double-click or Enter selects an account, including the effective account when cancelling a pending selection
+    if (canSwitch && !editing) {
       row.addEventListener('dblclick', () => {
         if (Date.now() - this.lastSwitchAt > 500) this.send({ type: 'switch', dir: a.dir });
       });
@@ -650,6 +660,22 @@ function tabButton(mode: PanelMode): HTMLElement {
 }
 const tabButtons: Record<PanelMode, HTMLElement> = { claude: tabButton('claude'), codex: tabButton('codex') };
 const tabBar = h('div', { class: 'tabs', role: 'tablist' }, tabButtons.claude, tabButtons.codex);
+tabBar.addEventListener('keydown', (event) => {
+  const index = MODES.findIndex((mode) => tabButtons[mode] === event.target);
+  if (index < 0) return;
+  let next: PanelMode;
+  switch (event.key) {
+    case 'ArrowRight': next = MODES[(index + 1) % MODES.length]; break;
+    case 'ArrowLeft': next = MODES[(index + MODES.length - 1) % MODES.length]; break;
+    case 'Home': next = MODES[0]; break;
+    case 'End': next = MODES[MODES.length - 1]; break;
+    default: return;
+  }
+  event.preventDefault();
+  tabButtons[next].click();
+  tabButtons[next].focus();
+});
+
 
 function setActiveTab(mode: PanelMode): void {
   activeTab = mode;
@@ -682,11 +708,20 @@ const FOOTER_TOOLS = [
 ] as const satisfies ReadonlyArray<readonly [icon: string, title: MessageKey, tool: ToolId]>;
 const footer = h('div', { class: 'tools', role: 'toolbar' });
 const footerVersion = h('div', { class: 'extension-version' });
+// Title of the restart button; the footer is rebuilt only when it changes so keyboard focus survives state pushes
+function footerRestartTitle(): MessageKey {
+  const { context, auto } = codexRestart();
+  return !auto ? 'footer.restartManual' : context === 'local' ? 'footer.restartEditor' : 'footer.restartServer';
+}
+let footerKey = '';
 function renderFooter(): void {
+  footerKey = `${getLocale()}|${footerRestartTitle()}`;
   footer.setAttribute('aria-label', t('tools.title'));
   footerVersion.textContent = t('footer.version', { version: __PLANSWAP_VERSION__ });
   footer.replaceChildren(
-    ...FOOTER_TOOLS.map(([icon, title, tool]) => toolbarButton(icon, t(title), () => send({ type: 'tool', mode: activeTab ?? state.active, tool }))),
+    ...FOOTER_TOOLS.map(([icon, title, tool]) =>
+      toolbarButton(icon, t(tool === 'restartServer' ? footerRestartTitle() : title), () => send({ type: 'tool', mode: activeTab ?? state.active, tool })),
+    ),
   );
 }
 // Versions card: shown above the footer toolbar; the info button again or the close button hides it
@@ -749,6 +784,7 @@ window.addEventListener('message', (e: MessageEvent<ToWebview>) => {
     // The host sets <html lang> only once when it creates the webview; keep it in sync on every push
     document.documentElement.lang = state.locale === 'zh-cn' ? 'zh-CN' : 'en';
     if (state.locale !== getLocale()) applyLocale();
+    else if (footerKey !== `${getLocale()}|${footerRestartTitle()}`) renderFooter();
     // No local record yet: adopt the host's tab and remember it
     if (!activeTab) setActiveTab(state.active);
     for (const mode of MODES) pages[mode].onState();

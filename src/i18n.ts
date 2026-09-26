@@ -50,7 +50,7 @@ export const en = {
   'claude.removeDirDetail':
     "The directory contains this account's login credentials and session history and cannot be recovered once deleted. If you just switched away from this account and have not reloaded the window, open sessions are still using this directory.",
   'share.removeDirDetail':
-    "This linked account's directory only holds its login credentials and account caches; its history, settings and other linked data live in the default account and are kept. The login cannot be recovered once deleted.",
+    "Linked data in the default account will be kept. This account directory and everything stored locally in it, including login credentials, per-account memories, backups and other unlinked files, will be permanently deleted.",
   'claude.pick.switch': 'Select the account to switch to',
   'claude.pick.remove': 'Select the account to delete',
   'claude.pick.terminal': 'Select the account to open claude with in a terminal',
@@ -64,6 +64,14 @@ export const en = {
   'codex.manualRestartHintUnknown':
     'Close all editor windows connected to this distro, wait at least 5 minutes, then reopen them. If the account has still not changed, run "wsl --shutdown" in Windows (this stops all WSL distros) and reopen.',
   'codex.manualRestartRequired': "This editor's WSL server cannot be restarted automatically. {hint}",
+  'codex.manualRestartHintLocal':
+    'When ready, fully exit this Linux editor instance and use the original launcher with CODEX_HOME set to the selected account directory (unset it for default). Preserve the profile and keyring setup; a dbus-run-session launcher must create a fresh session. Reload Window alone does not apply the new environment.',
+  'codex.manualRestartRequiredLocal': 'This Linux editor cannot be restarted automatically. {hint}',
+  'codex.switchConfirmManualLocal': 'Save this Codex account selection? It stays pending until you restart this Linux editor manually. {hint}',
+  'codex.manualRestartHintRemote':
+    'Restart the editor server in the remote environment with CODEX_HOME set to the selected account directory, then reconnect. For the default account, unset CODEX_HOME before restarting the server.',
+  'codex.manualRestartRequiredRemote': 'Automatic restart is unavailable for this remote environment. {hint}',
+  'codex.switchConfirmManualRemote': 'The new Codex account requires restarting the remote editor server. {hint} Continue?',
   'claude.switchConfirm': 'Switch the Claude account to {label}? New sessions will use it; sessions already open keep the current account until the window is reloaded.',
   'claude.switchButton': 'Switch',
   'codex.switchConfirm':
@@ -84,7 +92,7 @@ export const en = {
   'codex.selfCheckFailed': 'Self-check failed; rc files were rolled back: {detail}',
   'codex.selfCheckFailedRollbackFailed': 'Self-check failed: {detail}\nRollback failed: {errors}',
   'codex.disableConfirm':
-    'The marker blocks in ~/.profile and ~/.bashrc will be removed and the selected Codex account cleared. CODEX_HOME in open windows does not change until the server restarts. Continue?',
+    'The marker blocks in ~/.profile and ~/.bashrc will be removed and the selected Codex account cleared. CODEX_HOME in open windows does not change until the editor or its server restarts. Continue?',
   'codex.disableButton': 'Disable',
   'codex.disableFailed': 'Failed to disable: {error}',
   'codex.writeStateFailed': 'Failed to write the state file: {error}',
@@ -145,10 +153,11 @@ export const en = {
 
   // tools.ts
   'tools.updateCli': 'Update {vendor} CLI',
-  'tools.codexNotInit': 'The Codex part is not initialized; cannot restart the WSL server.',
+  'tools.codexNotInit': 'The Codex part is not initialized; cannot restart.',
   'tools.syncNotInit': 'The {vendor} part is not initialized; cannot re-link linked accounts.',
   'tools.pick.sync': 'Select the vendor whose linked accounts to re-link',
   'sync.none': 'No linked {vendor} accounts to re-link.',
+  'sync.attempted': 'Attempted to re-link {count} linked {vendor} account(s).',
   'sync.done': 'Re-linked {count} linked {vendor} account(s) to the default account.',
   'sync.issues': 'Needs attention: {list}',
   'sync.item': '{name}: {notes}',
@@ -245,6 +254,12 @@ export const zhCn: Record<MessageKey, string> = {
   'codex.manualRestartHintVscode': '关闭所有连接到该发行版的 VS Code 窗口，等待几秒后重新打开。',
   'codex.manualRestartHintUnknown': '关闭所有连接到该发行版的编辑器窗口，等待至少 5 分钟后重新打开；若账号仍未切换，请在 Windows 中运行 "wsl --shutdown"（会停止所有 WSL 发行版）后重新打开。',
   'codex.manualRestartRequired': '无法自动重启此编辑器的 WSL 服务端。{hint}',
+  'codex.manualRestartHintLocal': '准备好后，请完全退出当前 Linux 编辑器实例，通过原启动方式重新打开，并将 CODEX_HOME 设为所选账号目录（默认账号则取消设置）。保留原配置和密钥环环境；使用 dbus-run-session 时需重新创建会话。仅重新加载窗口不会应用新的环境变量。',
+  'codex.manualRestartRequiredLocal': '当前 Linux 编辑器不支持自动重启。{hint}',
+  'codex.switchConfirmManualLocal': '保存此 Codex 账号选择？手动重启当前 Linux 编辑器后才会生效。{hint}',
+  'codex.manualRestartHintRemote': '请在远程环境中重启编辑器服务端，启动时将 CODEX_HOME 设置为所选账号目录，然后重新连接。切回默认账号时，请在重启服务端前取消设置 CODEX_HOME。',
+  'codex.manualRestartRequiredRemote': '当前远程环境不支持自动重启。{hint}',
+  'codex.switchConfirmManualRemote': '新 Codex 账号需要重启远程编辑器服务端后才生效。{hint}继续？',
   'claude.switchConfirm': '将 Claude 账号切换到 {label}？新会话将使用该账号，已打开的会话在重新加载窗口前仍使用当前账号。',
   'claude.switchButton': '切换',
   'codex.switchConfirm':
@@ -263,7 +278,7 @@ export const zhCn: Record<MessageKey, string> = {
   'codex.selfCheckFailed': '自检失败，已回滚 rc 文件：{detail}',
   'codex.selfCheckFailedRollbackFailed': '自检失败：{detail}\n回滚失败：{errors}',
   'codex.disableConfirm':
-    '将删除 ~/.profile 与 ~/.bashrc 中的标记块并清除已选择的 Codex 账号。已打开窗口的 CODEX_HOME 在重启服务端前不变。继续？',
+    '将删除 ~/.profile 与 ~/.bashrc 中的标记块并清除已选择的 Codex 账号。已打开窗口的 CODEX_HOME 在重启编辑器或其服务端前不变。继续？',
   'codex.disableButton': '停用',
   'codex.disableFailed': '停用失败：{error}',
   'codex.writeStateFailed': '写入状态文件失败：{error}',
@@ -273,7 +288,7 @@ export const zhCn: Record<MessageKey, string> = {
   'codex.removeSelected': '{label} 是已选择、等待重启后生效的账号，不能删除。请先切换到其他账号。',
   'codex.removeConfirm': '确定删除 Codex 账号 {label}？',
   'codex.removeDirDetail': '目录内含该账号的登录凭据、会话与本地数据，删除后无法恢复。',
-  'share.removeDirDetail': '这是链接账号，目录里只有它的登录凭据和账号缓存；会话历史、设置等链接的数据都在默认账号里，不会被删除。登录凭据删除后无法恢复。',
+  'share.removeDirDetail': '默认账号中的链接目标会保留。本账号目录及其中本地存储的全部内容（包括登录凭据、独立记忆、备份和其他未链接文件）将永久删除。',
   'codex.pick.switch': '选择要切换到的 Codex 账号',
   'codex.pick.remove': '选择要删除的 Codex 账号',
   'codex.pick.terminal': '选择要在终端中运行 codex 的账号',
@@ -317,10 +332,11 @@ export const zhCn: Record<MessageKey, string> = {
   'del.daemonAlive': '该账号的 codex 守护进程仍在运行，拒绝删除：{dir}',
 
   'tools.updateCli': '更新 {vendor} CLI',
-  'tools.codexNotInit': 'Codex 部分未初始化，无法重启 WSL 服务端。',
+  'tools.codexNotInit': 'Codex 部分未初始化，无法重启。',
   'tools.syncNotInit': '{vendor} 部分未初始化，无法重新链接账号。',
   'tools.pick.sync': '选择要重新链接账号的厂家',
   'sync.none': '没有可重新链接的 {vendor} 链接账号。',
+  'sync.attempted': '已尝试重新链接 {count} 个 {vendor} 账号。',
   'sync.done': '已把 {count} 个 {vendor} 链接账号重新链接到默认账号。',
   'sync.issues': '需要处理：{list}',
   'sync.item': '{name}：{notes}',

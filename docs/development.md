@@ -133,3 +133,51 @@ Notes:
   - Use Ctrl+F5 in VS Code and debug with breakpoints in Antigravity.
   - Stay on VS Code 1.138 until the fix is released.
 - An extension host left over from a failed attempt stays paused at `--inspect-brk`. Close its window, or reload the WSL window, to reclaim it.
+
+## 2. Local Linux desktop testing through WSLg
+
+Recorded environment (2026-09-27; a test snapshot, not minimum requirements): Ubuntu 26.04.1 amd64 in the user-supplied `Ubuntu_26_Dev` distribution, WSL 2.6.3.0 / WSLg 1.0.71, Linux desktop VS Code 1.139.1 (`/usr/share/code/code`), PlanSwap 0.1.4, Claude Code extension 2.1.283 and Codex extension 26.917.62051. This is a local Linux editor displayed through WSLg, not Windows VS Code connected through Remote WSL. A full Linux desktop environment is not required.
+
+### Manual test launcher
+
+The test setup uses an external `~/.local/bin/vscode-linux-test` launcher with the following recorded contents. This script is not installed or maintained by PlanSwap; adjust the executable and profile paths for another environment.
+
+```sh
+#!/bin/sh
+
+# Apply the saved selection before the editor and its extensions start.
+planswap_selection="$HOME/.config/planswap/codex-home"
+if [ -f "$planswap_selection" ]; then
+  planswap_codex_home=$(cat "$planswap_selection") || exit 1
+  if [ -n "$planswap_codex_home" ]; then
+    if [ ! -d "$planswap_codex_home" ]; then
+      printf 'Selected Codex directory does not exist: %s\n' "$planswap_codex_home" >&2
+      exit 1
+    fi
+    export CODEX_HOME="$planswap_codex_home"
+  else
+    unset CODEX_HOME
+  fi
+fi
+
+exec dbus-run-session -- sh -c '
+  gnome-keyring-daemon --start --components=secrets
+  exec /usr/share/code/code \
+    --password-store=gnome-libsecret \
+    --user-data-dir="$HOME/.config/Code-PlanSwap-Test" \
+    --extensions-dir="$HOME/.local/share/planswap-test/extensions" \
+    --new-window "$@"
+' vscode-linux-test "$@"
+```
+
+Run `vscode-linux-test` (optionally with a workspace path) from the Ubuntu terminal and keep that terminal open. The launcher reads the saved selection before startup: a named selection sets `CODEX_HOME`, an empty selection unsets it for default, and an absent file preserves the unmanaged environment. An unreadable selection or a missing selected directory stops launch.
+
+When ready to apply another selection, save work and fully exit the intended editor instance before relaunching; an existing instance with the same user data directory can absorb a new launch and keep the old environment. Preserve the original profile/extensions arguments and workspace. The separate editor directories isolate editor configuration and extensions, **not HOME or account data**. Automated account/state tests still require a temporary HOME.
+
+### Keyring and display observations
+
+- The test session initially pointed to a missing `/run/user/1000/bus`. Starting GNOME Keyring and the editor under `dbus-run-session` allowed startup. A private bus ends with its wrapped process: use the launcher again to create a fresh session, rather than reuse the ended bus address. Secure-storage persistence/unlock across fresh sessions was not separately verified.
+- WSLg displayed `xeyes` successfully. The VS Code test profile used `"window.titleBarStyle": "native"`.
+- Multiple monitors with mixed scaling produced mouse-coordinate offsets. Moving the window between monitors was followed by a user report that dragging worked; this was an observed workaround, not a verified permanent fix. Relevant upstream reports: [WSLg #324](https://github.com/microsoft/wslg/issues/324) and [WSLg #1233](https://github.com/microsoft/wslg/issues/1233).
+
+The current manual switching contract is in [Codex design §5.1](codex-design.md#51-relaunching-a-local-desktop-editor), procedures in [Manual Verification](manual-verification.md#codex-in-a-local-linux-desktop-vs-code), and remaining acceptance in [TODO](../TODO.md).

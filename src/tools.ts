@@ -116,7 +116,7 @@ function syncShared(mode: PanelMode, deps: ToolDeps): void {
       issues.push(t('sync.item', { name: nameOf(dir), notes: errText(err) }));
     }
   }
-  const done = t('sync.done', { count: shared.length, vendor });
+  const done = t(issues.length ? 'sync.attempted' : 'sync.done', { count: shared.length, vendor });
   if (issues.length) void vscode.window.showWarningMessage(`${done} ${t('sync.issues', { list: issues.join(t('common.listSep')) })}`);
   else void vscode.window.showInformationMessage(done);
 }

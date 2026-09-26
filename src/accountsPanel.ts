@@ -6,7 +6,7 @@ import { DEFAULT_NAME, claudeJsonPath, readAccountInfo, samePath, type Account }
 import { currentDir, isExplicitConfigDir } from './claudeSettings';
 import type { AccountStore } from './accounts';
 import { EXTERNAL_NAME, labelFor, type LabelStore } from './labels';
-import type { AccountView, FromWebview, PanelMode, PanelState, TabState, ToWebview } from './protocol';
+import type { AccountView, FromWebview, PanelMode, PanelState, RestartInfo, TabState, ToWebview } from './protocol';
 import { isSharedClaudeAccount } from './claudeShare';
 import { getLocale } from './i18n';
 
@@ -23,6 +23,8 @@ export interface PanelSource {
   pendingDir(): string | undefined;
   // Absolute paths of files to watch (claude: claudeJsonPath of each dir; codex: auth.json of each dir + the state file)
   watchTargets(): string[];
+  // codex only
+  restart?(): RestartInfo;
 }
 
 /** Claude data source: appends an "external directory" row when the current dir matches no registered account */
@@ -172,6 +174,7 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
       accounts: source.accounts(),
       switchedTo: mode === 'claude' ? this.switchedTo : undefined,
       pendingDir: source.pendingDir(),
+      restart: source.restart?.(),
     };
   }
 

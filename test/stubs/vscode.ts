@@ -30,3 +30,14 @@ export const workspace = {
     };
   },
 };
+
+export const env: { remoteName: string | undefined } = { remoteName: undefined };
+export const window = {
+  async showInformationMessage(..._args: unknown[]): Promise<string | undefined> { return undefined; },
+  async showWarningMessage(..._args: unknown[]): Promise<string | undefined> { return undefined; },
+  onDidCloseTerminal(_listener: unknown) { return { dispose() {} }; },
+};
+export const commands = {
+  registerCommand(_id: string, _handler: unknown) { return { dispose() {} }; },
+  async executeCommand(..._args: unknown[]): Promise<void> {},
+};
