@@ -567,3 +567,7 @@ Same model as on the Claude side (section 5), with the default directory `~/.cod
 - Codex rows distinguish the effective account from the selected account. While a selection is pending, selecting the effective account again cancels that pending selection. Switch buttons, Enter and double-click use the same rule. Selected accounts do not offer link, unlink or removal actions; host validation remains authoritative.
 - Deleting a linked account directory preserves link targets in the default account, but permanently removes local credentials, per-account memories, backups and other unlinked data. The confirmation states this boundary.
 - Re-link results claim success only for clean reports. Reports with notes or exceptions use an attempted-operation summary and retain the details.
+
+## Status bar account summary
+
+The right side of the VS Code status bar shows the current Claude and Codex account labels. Only vendors with local account configuration are shown; when neither is present, the item is hidden. Hover to see each displayed vendor's identity, plan and configuration directory. Codex shows the effective account and separately identifies any pending selection requiring a restart. Click to open PlanSwap. This display uses local files and remains available offline.

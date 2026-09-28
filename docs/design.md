@@ -150,7 +150,7 @@ The Webview HTML carries a `Content-Security-Policy` meta tag:
 
 ### 5.4 Status bar
 
-- On the left it shows `$(account) Claude: <label>` (the alias for accounts that have one; the localized "External directory" when the current account is an external directory); the first tooltip line is the email ("Not logged in" when there is none), followed by ` · <plan>` when there is a plan; the second line is the directory.
+- On the right it shows the current labels for locally configured Claude and Codex accounts, omitting absent vendors and hiding the item when neither is present. Hover displays each vendor's identity, plan and directory; Codex pending selection is separate from its effective account. See [Status bar account summary](features.md#status-bar-account-summary) and the [StatusBar contract](interfaces.md#srcstatusbarts).
 - A click opens the sidebar view container (command `workbench.view.extension.planswap`).
 
 ### 5.5 Localization (i18n)

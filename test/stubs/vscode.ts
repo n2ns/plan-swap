@@ -33,7 +33,15 @@ export const workspace = {
 
 export const env: { remoteName: string | undefined; language: string } = { remoteName: undefined, language: 'en' };
 export interface StubTerminal { name: string; sent: string[]; shown: number; sendText(text: string): void; show(): void }
+export const StatusBarAlignment = { Left: 1, Right: 2 };
+export const statusBarItems: Array<{ alignment: number; text: string; tooltip: string; command: string; visible: boolean; show(): void; hide(): void; dispose(): void }> = [];
 export const window = {
+  createStatusBarItem(alignment: number) {
+    const item = { alignment, text: '', tooltip: '', command: '', visible: false,
+      show() { this.visible = true; }, hide() { this.visible = false; }, dispose() { this.visible = false; } };
+    statusBarItems.push(item);
+    return item;
+  },
   async showInformationMessage(..._args: unknown[]): Promise<string | undefined> { return undefined; },
   async showWarningMessage(..._args: unknown[]): Promise<string | undefined> { return undefined; },
   async showErrorMessage(..._args: unknown[]): Promise<string | undefined> { return undefined; },

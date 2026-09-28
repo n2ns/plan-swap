@@ -33,7 +33,6 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   const claudeLabels = new LabelStore(state, 'claude.labels');
   await store.syncWithDisk(claudeLabels);
   const codexLabels = new LabelStore(state, 'codex.labels');
-  const statusBar = new StatusBar(store, claudeLabels);
 
   // A Codex init failure is only logged and does not affect Claude: the Codex tab renders as "not enabled, no accounts"
   let codex: { store: CodexAccountStore; labels: LabelStore } | undefined;
@@ -55,6 +54,8 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     codexInitError = err instanceof Error ? err.message : String(err);
     console.error('[planswap] Codex initialization failed:', err);
   }
+
+  const statusBar = new StatusBar(store, claudeLabels, codex);
 
   // Toolbar dependencies: no restart entry when Codex is not initialized
   const tools: ToolDeps = {

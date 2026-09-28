@@ -5,6 +5,7 @@ export type Locale = 'en' | 'zh-cn' | 'es' | 'ja';
 // English is the source of truth for the key set.
 export const en = {
   'panel.loading': 'Loading accounts…',
+  'status.codexPending': 'Pending: {label} (restart required)',
   // Common
   'common.continue': 'Continue',
   'common.delete': 'Delete',
@@ -212,6 +213,7 @@ export type MessageKey = keyof typeof en;
 
 export const zhCn: Record<MessageKey, string> = {
   'panel.loading': '正在加载账号…',
+  'status.codexPending': '待生效：{label}（需要重启）',
   'common.continue': '继续',
   'common.delete': '删除',
   'common.deleteDir': '删除目录',
@@ -394,6 +396,7 @@ export const zhCn: Record<MessageKey, string> = {
 
 export const es: Record<MessageKey, string> = {
   'panel.loading': 'Cargando cuentas…',
+  'status.codexPending': 'Pendiente: {label} (requiere reiniciar)',
   'common.continue': 'Continuar',
   'common.delete': 'Eliminar',
   'common.deleteDir': 'Eliminar directorio',
@@ -560,6 +563,7 @@ export const es: Record<MessageKey, string> = {
 
 export const ja: Record<MessageKey, string> = {
   'panel.loading': 'アカウントを読み込み中…',
+  'status.codexPending': '適用待ち: {label}（再起動が必要）',
   'common.continue': '続行',
   'common.delete': '削除',
   'common.deleteDir': 'ディレクトリを削除',
