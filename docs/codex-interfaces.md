@@ -2,7 +2,7 @@
 
 Purpose: Codex module responsibilities, signatures, state-file and restart contracts, and integration with the shared panel. Implementations must follow these contracts. Shared definitions remain in [Interfaces](interfaces.md); acceptance procedures are in [Manual Verification](manual-verification.md). See [Documentation](README.md) for ownership.
 
-Companion design: docs/codex-design.md (v8). For shared parts (full signatures of `protocol.ts`, `labels.ts`, `accountsPanel.ts`, `i18n.ts`), docs/interfaces.md is authoritative; this document only lists the Codex side. All files: TypeScript strict, ESM imports, Node built-in modules with the `node:` prefix. The host only depends on `vscode` and Node built-ins. User-visible text always goes through `t()` from `src/i18n.ts` (English / Simplified Chinese, see docs/interfaces.md); where this contract quotes a message it gives the English text. The rc marker block is never localized.
+Companion design: docs/codex-design.md (v8). For shared parts (full signatures of `protocol.ts`, `labels.ts`, `accountsPanel.ts`, `i18n.ts`), docs/interfaces.md is authoritative; this document only lists the Codex side. All files: TypeScript strict, ESM imports, Node built-in modules with the `node:` prefix. The host only depends on `vscode` and Node built-ins. User-visible text always goes through `t()` from `src/i18n.ts` (English / Simplified Chinese / Spanish / Japanese, see docs/interfaces.md); where this contract quotes a message it gives the English text. The rc marker block is never localized.
 
 ## src/codex/codexPaths.ts (no vscode import)
 

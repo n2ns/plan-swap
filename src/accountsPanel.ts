@@ -219,7 +219,7 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
       `script-src 'nonce-${nonce}'`,
     ].join('; ');
     return `<!DOCTYPE html>
-<html lang="${getLocale() === 'zh-cn' ? 'zh-CN' : 'en'}">
+<html lang="${getLocale() === 'zh-cn' ? 'zh-CN' : getLocale()}">
 <head>
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="${csp}">

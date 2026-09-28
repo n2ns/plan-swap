@@ -20,8 +20,8 @@ export function resetConfig(): void {
 export const workspace = {
   getConfiguration(section: string) {
     return {
-      get<T>(key: string): T | undefined {
-        return store.get(section)?.get(key) as T | undefined;
+      get<T>(key: string, defaultValue?: T): T | undefined {
+        return (store.get(section)?.get(key) as T | undefined) ?? defaultValue;
       },
       async update(key: string, value: unknown, target: unknown): Promise<void> {
         setConfig(section, key, value);
@@ -31,7 +31,7 @@ export const workspace = {
   },
 };
 
-export const env: { remoteName: string | undefined } = { remoteName: undefined };
+export const env: { remoteName: string | undefined; language: string } = { remoteName: undefined, language: 'en' };
 export interface StubTerminal { name: string; sent: string[]; shown: number; sendText(text: string): void; show(): void }
 export const window = {
   async showInformationMessage(..._args: unknown[]): Promise<string | undefined> { return undefined; },

@@ -25,7 +25,7 @@ Switch between the Claude Code and Codex subscription accounts you own (Claude P
 - **Linked or independent accounts**: reuse the default account's setup, or keep separate settings and session histories.
 - **Display names**: give named accounts labels that are easy to recognize.
 - **Handy tools**: open your rules and settings, update the CLI, check installed versions and reload the editor.
-- **English and Simplified Chinese UI**, switchable in the settings.
+- **English, Simplified Chinese, Spanish and Japanese UI**, switchable in the settings.
 
 ## Requirements
 
@@ -107,7 +107,7 @@ The Tools row and footer let you open rules and settings, check CLI and extensio
 
 ## Language
 
-In extension settings, set `planswap.language` to `auto` (follow your editor), `en` (English) or `zh-cn` (简体中文). The panel and messages update immediately; Command Palette titles and the sidebar name follow the editor's display language.
+In extension settings, set `planswap.language` to `auto` (follow your editor), `en` (English), `zh-cn` (简体中文), `es` (Español) or `ja` (日本語). The panel and messages update immediately; Command Palette titles and the sidebar name follow the editor's display language.
 
 ## Known limitations
 

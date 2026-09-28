@@ -1,6 +1,6 @@
 # Features
 
-Purpose: the detailed user-visible behavior of both Claude and Codex account switching, panel interactions, commands and localization. UI texts are quoted in English; the Chinese UI shows the equivalent `zh-cn` strings (see section 11). Design rationale belongs in [Claude design](design.md) / [Codex design](codex-design.md), signatures in [Interfaces](interfaces.md) / [Codex interfaces](codex-interfaces.md), and test procedures in [Manual Verification](manual-verification.md). See [Documentation](README.md) for ownership.
+Purpose: the detailed user-visible behavior of both Claude and Codex account switching, panel interactions, commands and localization. UI texts are quoted in English; the other supported languages show the equivalent localized strings (see section 11). Design rationale belongs in [Claude design](design.md) / [Codex design](codex-design.md), signatures in [Interfaces](interfaces.md) / [Codex interfaces](codex-interfaces.md), and test procedures in [Manual Verification](manual-verification.md). See [Documentation](README.md) for ownership.
 
 ## 1. Accounts and directories
 
@@ -132,7 +132,7 @@ After clicking the pencil icon after the name of a named account row, the row's 
   - empty after trim: "Enter a display name";
   - more than 32 characters: "Display name can be at most 32 characters";
   - contains a line break: "Display name cannot contain line breaks";
-  - equals the external-directory name (in either language): "Cannot use the reserved name <value>";
+  - equals the external-directory name (in any supported language): "Cannot use the reserved name <value>";
   - same as the account name of another account on this page: "Same as an existing account name";
   - same as the display name of another account on this page: "Same as an existing account's display name".
   Both duplicate checks ignore case. The account itself is excluded from the checks, so entering its own account name or current alias passes; the same name is allowed across the Claude and Codex pages.
@@ -551,15 +551,15 @@ Same model as on the Claude side (section 5), with the default directory `~/.cod
 
 ## 11. Language
 
-- Setting `planswap.language` (scope `application`): `auto` (default) follows the VS Code display language (`zh-cn` when it starts with `zh`, otherwise `en`); `en` English; `zh-cn` 简体中文.
+- Setting `planswap.language` (scope `application`): `auto` (default) follows the VS Code display language (language family `zh` → `zh-cn`, `es` → `es`, `ja` → `ja`, otherwise `en`, including regional variants such as `es-MX`, `es-ES` and `ja-JP`); `en` English; `zh-cn` 简体中文; `es` Español; `ja` 日本語.
 - Upgrading from 0.1.0 - 0.1.3 (named ai-switcher): a user-level `aiSwitcher.language` of `en` / `zh-cn` is copied once to `planswap.language` on activation when the new setting has no user-level value. The old key stays in settings.json (it can no longer be written by the extension); remove it by hand if you like.
 - Changing the setting takes effect immediately, without a reload, for everything rendered at runtime:
   - the sidebar panel re-renders completely in the new language: tabs, section titles, banners, buttons, tooltips, aria-labels, placeholders, the add-section help text, validation messages, the disabled Codex page, the "Tools" row, the footer toolbar titles and the version card;
   - the status bar text and tooltip ("Not logged in", "External directory");
   - notifications, warnings, errors, modal dialogs and their buttons, QuickPick items and placeholders, and error reasons produced by the extension (validation messages, safety-check reasons, pre-check reasons, restart errors).
-- Command titles, command categories, the activity bar container and view names, and the setting's own description are static `package.json` strings resolved by VS Code from `package.nls.json` (English) / `package.nls.zh-cn.json` (Chinese) according to **VS Code's display language**; they do not follow `planswap.language` (platform limitation). Change VS Code's display language to change them.
+- Command titles, command categories, the activity bar container and view names, and the setting's own description are static `package.json` strings resolved by VS Code from `package.nls.json` (English), `package.nls.zh-cn.json` (Simplified Chinese), `package.nls.es.json` (Spanish) and `package.nls.ja.json` (Japanese) according to **VS Code's display language**; they do not follow `planswap.language` (platform limitation). Change VS Code's display language to change them.
 - Never translated: shell commands sent to terminals, file names and paths, setting ids, command ids, terminal names `Claude (<label>)` / `Codex (<label>)`, plan names (`Pro`, `Max 20x`, `Plus`, `API key`, ...), and the rc marker block written to `~/.profile` / `~/.bashrc` (see 10.11).
-- Aliases are user data and are shown as typed in every language. The external-directory name is reserved in both languages ("External directory" and "外部目录" are both rejected as aliases).
+- Aliases are user data and are shown as typed in every language. The external-directory name is reserved in all four languages (every localized name is rejected as an alias).
 
 ### Account action and keyboard semantics
 

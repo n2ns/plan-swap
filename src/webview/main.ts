@@ -32,7 +32,8 @@ type DistributiveOmit<T, K extends keyof any> = T extends unknown ? Omit<T, K> :
 type PageMessage = DistributiveOmit<Exclude<FromWebview, { type: 'ready' } | { type: 'setTab' }>, 'mode'>;
 
 // The host sets the configured language before the first state arrives.
-setLocale(document.documentElement.lang.toLowerCase().startsWith('zh') ? 'zh-cn' : 'en');
+const pageLanguage = document.documentElement.lang.toLowerCase();
+setLocale(pageLanguage === 'zh-cn' || pageLanguage === 'es' || pageLanguage === 'ja' ? pageLanguage : 'en');
 let state: PanelState = {
   active: 'claude',
   claude: { enabled: true, accounts: [] },
@@ -787,7 +788,7 @@ window.addEventListener('message', (e: MessageEvent<ToWebview>) => {
     if (firstState) console.info(`[planswap] first state received: ${(renderStartedAt - startedAt).toFixed(1)}ms since script start`);
     state = msg.state;
     // The host sets <html lang> only once when it creates the webview; keep it in sync on every push
-    document.documentElement.lang = state.locale === 'zh-cn' ? 'zh-CN' : 'en';
+    document.documentElement.lang = state.locale === 'zh-cn' ? 'zh-CN' : state.locale;
     if (state.locale !== getLocale()) applyLocale();
     else if (footerKey !== `${getLocale()}|${footerRestartTitle()}`) renderFooter();
     // No local record yet: adopt the host's tab and remember it

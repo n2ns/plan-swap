@@ -1,6 +1,6 @@
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { setLocale } from '../src/i18n';
+import { setLocale, translationsOf } from '../src/i18n';
 import { EXTERNAL_NAME, LabelStore, labelFor } from '../src/labels';
 import { makeTempHome, MemoryMemento, type TempHome } from './helpers';
 
@@ -165,4 +165,11 @@ describe('labels in zh-cn', () => {
     assert.equal(store.validate('External directory', 'default', []), '不能使用保留名 External directory');
     assert.equal(labelFor(EXTERNAL_NAME, store), '外部目录');
   });
+});
+
+test('external-directory labels are reserved in every supported language', () => {
+  const { store } = make();
+  for (const label of translationsOf('account.external')) {
+    assert.notEqual(store.validate(label, 'work', []), undefined, label);
+  }
 });

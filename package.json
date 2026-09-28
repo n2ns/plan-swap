@@ -154,14 +154,18 @@
           "enum": [
             "auto",
             "en",
-            "zh-cn"
+            "zh-cn",
+            "es",
+            "ja"
           ],
           "default": "auto",
           "scope": "application",
           "enumDescriptions": [
             "%config.language.auto%",
             "%config.language.en%",
-            "%config.language.zhCn%"
+            "%config.language.zhCn%",
+            "%config.language.es%",
+            "%config.language.ja%"
           ],
           "description": "%config.language.description%"
         }

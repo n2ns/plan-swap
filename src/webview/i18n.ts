@@ -1,9 +1,9 @@
-// Webview string tables (English + Simplified Chinese). The host picks the locale and sends it in PanelState.locale.
+// Webview string tables (English, Simplified Chinese, Spanish and Japanese). The host picks the locale and sends it in PanelState.locale.
 import type { PanelState } from '../protocol';
 
 export type Locale = PanelState['locale'];
 
-// English is the source of truth; the zh-cn table must have exactly the same keys
+// English is the source of truth; all tables must have exactly the same keys
 export const en = {
   'panel.loading': 'Loading accounts…',
   'tab.claude': 'Claude',
@@ -198,10 +198,201 @@ export const zhCn: Record<MessageKey, string> = {
   'versions.close': '关闭',
 };
 
-const TABLES: Record<Locale, Record<MessageKey, string>> = { en, 'zh-cn': zhCn };
+export const es: Record<MessageKey, string> = {
+  'panel.loading': 'Cargando cuentas…',
+  'tab.claude': 'Claude',
+  'tab.codex': 'Codex',
+  'tabs.ariaLabel': 'Tipo de cuenta',
+
+  'claude.loginTitle': 'Ejecuta claude en un terminal para iniciar sesión',
+  'codex.loginTitle': 'Ejecuta codex login en un terminal',
+  'claude.terminalTitle': 'Ejecutar claude con esta cuenta en un terminal',
+  'codex.terminalTitle': 'Ejecutar codex con esta cuenta en un terminal',
+  'claude.loginHint': 'Pulsa «Acceder» para iniciar sesión en un terminal, o cambia de cuenta e inicia sesión en el panel de Claude',
+  'codex.loginHint': 'Pulsa «Acceder» para iniciar sesión en un terminal, o cambia de cuenta e inicia sesión en el panel de Codex',
+  'claude.mdTitle': 'Abrir CLAUDE.md global',
+  'codex.mdTitle': 'Abrir AGENTS.md global',
+  'claude.settingsTitle': 'Abrir ajustes de la extensión Claude Code',
+  'codex.settingsTitle': 'Abrir ajustes de la extensión Codex',
+  'claude.syncTitle': 'Volver a vincular todas las cuentas vinculadas a los ajustes, reglas, Skills, historial y sesiones de la cuenta predeterminada, y sincronizar sus servidores MCP',
+  'codex.syncTitle': 'Volver a vincular todas las cuentas vinculadas a los ajustes, reglas, Skills, historial, sesiones y bases de datos de conversaciones de la cuenta predeterminada',
+
+  'account.default': 'Cuenta predeterminada',
+  'account.current': 'Cuenta actual',
+  'account.loggedIn': 'Sesión iniciada',
+  'account.notLoggedIn': 'Sin sesión',
+  'account.sharedBadge': 'Vinculada a los ajustes, reglas, Skills, historial y sesiones de la cuenta predeterminada',
+
+  'list.title': 'Todas las cuentas',
+  'row.rename': 'Renombrar',
+  'row.switch': 'Cambiar a esta cuenta',
+  'row.login': 'Acceder',
+  'row.share': 'Vincular a la cuenta predeterminada: los ajustes, reglas, Skills, historial y sesiones se integran en ella y se comparten desde entonces; el inicio de sesión sigue siendo independiente',
+  'row.unshare': 'Desvincular de la cuenta predeterminada: se eliminan los enlaces y se copia la configuración predeterminada para uso independiente; el historial y las sesiones permanecen en la cuenta predeterminada',
+  'row.remove': 'Quitar cuenta',
+  'rename.ariaLabel': 'Nombre visible',
+  'rename.save': 'Guardar (Enter)',
+  'confirm.text': '¿Quitar {name} de la lista?',
+  'confirm.hint': 'Se te preguntará por separado si quieres eliminar el directorio de la cuenta.',
+  'confirm.remove': 'Quitar',
+  'confirm.cancel': 'Cancelar',
+
+  'validate.labelEmpty': 'Introduce un nombre visible',
+  'validate.labelTooLong': 'El nombre visible admite hasta {max} caracteres',
+  'validate.labelNewline': 'El nombre visible no admite saltos de línea',
+  'validate.labelDuplicate': 'Coincide con el nombre de otra cuenta',
+  'validate.nameChars': 'Solo se admiten letras, números, guiones bajos y guiones',
+  'validate.nameReserved': 'No se puede usar el nombre reservado default',
+  'validate.nameExists': 'Ya existe una cuenta con este nombre',
+
+  'add.title': 'Añadir cuenta',
+  'add.placeholder': 'Nombre de cuenta, p. ej., work',
+  'add.ariaLabel': 'Nombre de la nueva cuenta',
+  'add.button': 'Añadir',
+  'add.shared': 'Vincular ajustes e historial a la cuenta predeterminada',
+  'claude.addHelpShared': 'Se creará {dir}, vinculado a los ajustes, reglas, Skills, historial y sesiones de la cuenta predeterminada',
+  'codex.addHelpShared': 'Se creará {dir}, vinculado a los ajustes, reglas, Skills, historial, sesiones y bases de datos de conversaciones de la cuenta predeterminada (Memories se mantiene separado por cuenta)',
+  'add.help.independent': 'Se creará {dir} con una copia de la configuración predeterminada; desde entonces será independiente',
+  'add.helpIdle': 'Cada cuenta usa su propio directorio de configuración {prefix}<name>',
+
+  'disabled.title': 'Cambio de cuenta de Codex desactivado',
+  'disabled.text': 'Al activarlo, cada cuenta usa su propio directorio CODEX_HOME (por defecto ~/.codex; las demás, ~/.codex-<name>). La extensión escribe un bloque delimitado en ~/.profile y ~/.bashrc que lee el directorio seleccionado de un archivo de estado.',
+  'disabled.restartWsl': 'Cambiar de cuenta requiere reiniciar el servidor WSL del editor; se desconectarán todas las ventanas WSL.',
+  'disabled.restartLocal': 'Cambiar de cuenta requiere reiniciar este editor; se cerrarán todas sus ventanas y terminales integrados.',
+  'disabled.restartRemote': 'Cambiar de cuenta requiere reiniciar el servidor del editor en el entorno remoto.',
+  'disabled.enable': 'Activar cambio de cuenta de Codex',
+
+  'pending.title': '{name} seleccionada; se aplicará al reiniciar el servidor',
+  'pending.titleLocal': '{name} seleccionada; se aplicará al reiniciar el editor',
+  'pending.text': 'Reiniciar el servidor desconecta todas las ventanas WSL (recárgalas o ábrelas de nuevo) y cierra los terminales integrados.',
+  'pending.textLocalManual': 'Cierra por completo este editor y vuelve a abrirlo; no basta con recargar la ventana.',
+  'pending.textRemote': 'Reinicia el servidor del editor en el entorno remoto y vuelve a conectarte.',
+  'pending.restart': 'Reiniciar servidor',
+  'pending.instructions': 'Ver instrucciones',
+
+  'banner.title': 'Cuenta cambiada a {name}',
+  'banner.text': 'Las nuevas sesiones usan la nueva cuenta; las abiertas siguen usando la anterior. Al recargar, todos los paneles empiezan de nuevo con la nueva cuenta.',
+  'banner.dismiss': 'Cerrar aviso',
+
+  'tools.title': 'Herramientas',
+  'tools.settings': 'Ajustes',
+  'tools.sync': 'Revincular',
+  'tools.updateCli': 'Actualizar CLI',
+  'tools.updateCliTitle': 'Actualizar CLI en un terminal',
+
+  'footer.versions': 'Ver versiones de CLI y extensiones',
+  'common.reloadWindow': 'Recargar ventana',
+  'footer.restartExtHost': 'Reiniciar Extension Host',
+  'footer.restartServer': 'Reiniciar servidor WSL',
+  'footer.restartManual': 'Cómo aplicar la cuenta de Codex',
+  'footer.help': 'Guía de uso',
+  'footer.star': 'Star',
+  'footer.version': 'v{version}',
+
+  'versions.title': 'Versiones de CLI y extensiones',
+  'versions.close': 'Cerrar',
+};
+
+export const ja: Record<MessageKey, string> = {
+  'panel.loading': 'アカウントを読み込み中…',
+  'tab.claude': 'Claude',
+  'tab.codex': 'Codex',
+  'tabs.ariaLabel': 'アカウントの種類',
+
+  'claude.loginTitle': 'ターミナルで claude を実行してログイン',
+  'codex.loginTitle': 'ターミナルで codex login を実行',
+  'claude.terminalTitle': 'このアカウントでターミナルから claude を実行',
+  'codex.terminalTitle': 'このアカウントでターミナルから codex を実行',
+  'claude.loginHint': '「ログイン」からターミナルでログインするか、アカウントを切り替えて Claude パネルでログインしてください',
+  'codex.loginHint': '「ログイン」からターミナルでログインするか、アカウントを切り替えて Codex パネルでログインしてください',
+  'claude.mdTitle': 'グローバル CLAUDE.md を開く',
+  'codex.mdTitle': 'グローバル AGENTS.md を開く',
+  'claude.settingsTitle': 'Claude Code 拡張機能の設定を開く',
+  'codex.settingsTitle': 'Codex 拡張機能の設定を開く',
+  'claude.syncTitle': 'すべてのリンク済みアカウントをデフォルトアカウントの設定・ルール・Skills・履歴・セッションに再リンクし、MCP サーバーも同期します',
+  'codex.syncTitle': 'すべてのリンク済みアカウントをデフォルトアカウントの設定・ルール・Skills・履歴・セッション・スレッドデータベースに再リンクします',
+
+  'account.default': 'デフォルトアカウント',
+  'account.current': '現在のアカウント',
+  'account.loggedIn': 'ログイン済み',
+  'account.notLoggedIn': '未ログイン',
+  'account.sharedBadge': 'デフォルトアカウントの設定・ルール・Skills・履歴・セッションにリンク済み',
+
+  'list.title': 'すべてのアカウント',
+  'row.rename': '名前を変更',
+  'row.switch': 'このアカウントに切り替え',
+  'row.login': 'ログイン',
+  'row.share': 'デフォルトアカウントにリンク：設定・ルール・Skills・履歴・セッションをデフォルトアカウントに統合し、以後は共有します。ログインは独立したままです',
+  'row.unshare': 'デフォルトアカウントとのリンクを解除：リンクを削除し、デフォルト設定のコピーを独立して使用します。履歴とセッションはデフォルトアカウントに残ります',
+  'row.remove': 'アカウントを削除',
+  'rename.ariaLabel': '表示名',
+  'rename.save': '保存（Enter）',
+  'confirm.text': '{name} を一覧から削除しますか？',
+  'confirm.hint': 'アカウントのディレクトリも削除するかは、別途確認します。',
+  'confirm.remove': '削除',
+  'confirm.cancel': 'キャンセル',
+
+  'validate.labelEmpty': '表示名を入力してください',
+  'validate.labelTooLong': '表示名は {max} 文字以内で入力してください',
+  'validate.labelNewline': '表示名に改行は使えません',
+  'validate.labelDuplicate': '別のアカウントと名前が重複しています',
+  'validate.nameChars': '使用できるのは英数字・アンダースコア・ハイフンのみです',
+  'validate.nameReserved': '予約名 default は使えません',
+  'validate.nameExists': '同じ名前のアカウントがすでにあります',
+
+  'add.title': 'アカウントを追加',
+  'add.placeholder': 'アカウント名（例：work）',
+  'add.ariaLabel': '新しいアカウント名',
+  'add.button': '追加',
+  'add.shared': 'デフォルトアカウントの設定と履歴にリンク',
+  'claude.addHelpShared': '{dir} を作成し、デフォルトアカウントの設定・ルール・Skills・履歴・セッションにリンクします',
+  'codex.addHelpShared': '{dir} を作成し、デフォルトアカウントの設定・ルール・Skills・履歴・セッション・スレッドデータベースにリンクします（Memories はアカウントごとに独立）',
+  'add.help.independent': '{dir} を作成し、デフォルト設定をコピーします。以後は独立して使用します',
+  'add.helpIdle': 'アカウントごとに専用の設定ディレクトリ {prefix}<name> を使います',
+
+  'disabled.title': 'Codex のアカウント切り替えは無効です',
+  'disabled.text': '有効にすると、アカウントごとに専用の CODEX_HOME ディレクトリを使います（デフォルトは ~/.codex、その他は ~/.codex-<name>）。拡張機能は ~/.profile と ~/.bashrc にマーカーブロックを書き込み、状態ファイルから選択中のディレクトリを読み取ります。',
+  'disabled.restartWsl': '切り替えにはエディタの WSL サーバーの再起動が必要です。すべての WSL ウィンドウが切断されます。',
+  'disabled.restartLocal': '切り替えにはエディタの再起動が必要です。すべてのウィンドウと統合ターミナルが閉じます。',
+  'disabled.restartRemote': '切り替えにはリモート環境でエディタのサーバーを再起動する必要があります。',
+  'disabled.enable': 'Codex の切り替えを有効化',
+
+  'pending.title': '{name} を選択済み。サーバー再起動後に適用',
+  'pending.titleLocal': '{name} を選択済み。エディタ再起動後に適用',
+  'pending.text': '再起動すると、すべての WSL ウィンドウが切断され、統合ターミナルが閉じます。ウィンドウは再読み込みするか、開き直してください。',
+  'pending.textLocalManual': 'エディタを完全に終了してから起動し直してください。ウィンドウの再読み込みだけでは適用されません。',
+  'pending.textRemote': 'リモート環境でエディタのサーバーを再起動し、再接続してください。',
+  'pending.restart': 'サーバーを再起動',
+  'pending.instructions': '手順を表示',
+
+  'banner.title': '{name} に切り替えました',
+  'banner.text': '新規セッションは新しいアカウントを使用します。既存のセッションは以前のアカウントのままです。再読み込みすると、すべてのパネルが新しいアカウントで最初から始まります。',
+  'banner.dismiss': '通知を閉じる',
+
+  'tools.title': 'ツール',
+  'tools.settings': '設定',
+  'tools.sync': '再リンク',
+  'tools.updateCli': 'CLI を更新',
+  'tools.updateCliTitle': 'ターミナルで CLI を更新',
+
+  'footer.versions': 'CLI と拡張機能のバージョンを表示',
+  'common.reloadWindow': 'ウィンドウを再読み込み',
+  'footer.restartExtHost': 'Extension Host を再起動',
+  'footer.restartServer': 'WSL サーバーを再起動',
+  'footer.restartManual': 'Codex アカウントの適用方法',
+  'footer.help': '使い方',
+  'footer.star': 'Star',
+  'footer.version': 'v{version}',
+
+  'versions.title': 'CLI と拡張機能のバージョン',
+  'versions.close': '閉じる',
+};
+
+const TABLES: Record<Locale, Record<MessageKey, string>> = { en, 'zh-cn': zhCn, es, ja };
 
 // Before the first state arrives, guess from the webview's language (it follows the editor's display language)
-let current: Locale = navigator.language.toLowerCase().startsWith('zh') ? 'zh-cn' : 'en';
+const language = navigator.language.toLowerCase().split('-')[0];
+let current: Locale = language === 'zh' ? 'zh-cn' : language === 'es' || language === 'ja' ? language : 'en';
 
 export function getLocale(): Locale {
   return current;

@@ -12,16 +12,18 @@ All files live in `src/`, TypeScript strict, ESM-style imports.
 ## src/i18n.ts (host i18n, no vscode import)
 
 ```ts
-export type Locale = 'en' | 'zh-cn';
+export type Locale = 'en' | 'zh-cn' | 'es' | 'ja';
 export function setLocale(l: Locale): void;
 export function getLocale(): Locale;
 export function t(key: MessageKey, params?: Record<string, string | number>): string; // `{name}` placeholders are replaced from params; unknown placeholders are left as is
 export function translationsOf(key: MessageKey): string[]; // the message in every locale (used to reserve all localized external-directory names)
 export const en: { ... };                                 // English table, the source of truth
 export type MessageKey = keyof typeof en;
-export const zhCn: Record<MessageKey, string>;            // Chinese table, exactly the same keys
+export const zhCn: Record<MessageKey, string>;            // Simplified Chinese, exactly the same keys
+export const es: Record<MessageKey, string>;              // Spanish
+export const ja: Record<MessageKey, string>;              // Japanese
 ```
-- Contains two tables, `en` and `zhCn` (locale `zh-cn`). Because `zhCn` is typed `Record<MessageKey, string>`, it must have exactly the same keys as `en` (key-parity rule, enforced by the type checker). Keys are grouped by prefix (`common.*`, `account.*`, `ext.*`, `name.*`, `label.*`, `claude.*`, `codex.*`, `server.*`, `del.*`, `tools.*`, `mcp.*`, `share.*`, `unshare.*`, `sync.*`).
+- Contains four tables, `en`, `zhCn` (locale `zh-cn`), `es` and `ja`. Each translated table is typed `Record<MessageKey, string>`, so it must have exactly the same keys as `en` (key-parity rule, enforced by the type checker). Keys are grouped by prefix (`common.*`, `account.*`, `ext.*`, `name.*`, `label.*`, `claude.*`, `codex.*`, `server.*`, `del.*`, `tools.*`, `mcp.*`, `share.*`, `unshare.*`, `sync.*`).
 - Has no `vscode` import, so the pure modules (`paths.ts`, `labels.ts`, `claudeShare.ts`, `shareReport.ts`, `codex/codexPaths.ts`, `codex/codexShare.ts`, `codex/codexState.ts`, `codex/codexServer.ts`) can use it for the reasons and errors they return or throw.
 - Every user-visible host string goes through `t()`: messages, errors, warnings, modal text and buttons in `commands.ts`, `codex/codexCommands.ts`, `tools.ts`, `statusBar.ts`, `extension.ts`; reasons returned or thrown by pure modules (`paths.checkSafeToDelete`, the `claudeShare` / `codexShare` errors, `describeShareReport` summaries, `codexPaths.checkCodexSafeToDelete` / `copyCodexSeed` reasons, `codexState.preCheck` reasons and thrown errors, `codexServer.planRestart` errors, `labels.validate` messages); QuickPick labels and placeholders. Terminal names stay `Claude (<label>)` / `Codex (<label>)`.
 - Never localized: the rc marker block text in `codexState.rcBlock()` (written to user files, byte-identical), shell commands, file names, setting ids, command ids.
@@ -29,16 +31,16 @@ export const zhCn: Record<MessageKey, string>;            // Chinese table, exac
 ## src/i18nVscode.ts (imports vscode)
 
 ```ts
-export function resolveLocale(): Locale;                                    // planswap.language: 'en' / 'zh-cn' as is; 'auto' (default) → vscode.env.language starts with 'zh' ? 'zh-cn' : 'en'
+export function resolveLocale(): Locale;                                    // explicit en / zh-cn / es / ja; auto maps VS Code language families zh → zh-cn, es → es, ja → ja, otherwise en
 export function watchLocale(onChange: () => void): vscode.Disposable;      // onDidChangeConfiguration affecting 'planswap.language' → setLocale(resolveLocale()), then onChange()
 export function migrateLegacyLanguage(state: vscode.Memento): Promise<void>; // once (flag 'legacy.languageMigrated' in state = ctx.globalState): aiSwitcher.language globalValue 'en' / 'zh-cn' and planswap.language globalValue undefined → update('language', value, Global); flag set after success; errors only console.error (retried next activation)
 ```
 
 ## package.json static strings and the language setting
 
-- `displayName`, `description`, command titles and categories, view container and view names, configuration titles and descriptions are `%key%` placeholders resolved from `package.nls.json` (English) and `package.nls.zh-cn.json` (Chinese, same keys). VS Code resolves these by its own display language, not by `planswap.language` (platform limitation).
+- `displayName`, `description`, command titles and categories, view container and view names, configuration titles and descriptions are `%key%` placeholders resolved from `package.nls.json` (English), `package.nls.zh-cn.json` (Simplified Chinese), `package.nls.es.json` (Spanish) and `package.nls.ja.json` (Japanese), all with the same keys. VS Code resolves these by its own display language, not by `planswap.language` (platform limitation).
 - English names: displayName "PlanSwap: Claude Code & Codex Account Switcher" (brand "PlanSwap" is permanent; the part after the colon grows as more AI tools are supported), identifier `planswap`; container and view title "PlanSwap"; command categories "Claude Account" / "Codex Account" / "PlanSwap". The Chinese file keeps the Chinese titles ("PlanSwap", "Claude 账号", "Codex 账号", ...).
-- `contributes.configuration`: `planswap.language`, type string, enum `["auto", "en", "zh-cn"]`, default `"auto"`, scope `application`, enumDescriptions: auto = follow the VS Code display language; en = English; zh-cn = 简体中文.
+- `contributes.configuration`: `planswap.language`, type string, enum `["auto", "en", "zh-cn", "es", "ja"]`, default `"auto"`, scope `application`, enumDescriptions: auto = follow the VS Code display language; en = English; zh-cn = 简体中文; es = Español; ja = 日本語.
 
 ## src/paths.ts (data layer, no vscode import)
 
@@ -169,14 +171,14 @@ export class LabelStore {
   remove(name: string): Promise<void>;                         // called when an account is removed, equivalent to set(name, undefined)
   validate(label: string, name: string, existing: Array<{ name: string; label: string }>): string | undefined;
   //   returns a localized error message or undefined: empty after trim 'Enter a display name'; > 32 grapheme clusters (Intl.Segmenter; UTF-16 code units when the host Node lacks it) 'Display name can be at most 32 characters'; contains a line break 'Display name cannot contain line breaks';
-  //   equals EXTERNAL_NAME or any of translationsOf('account.external') ("External directory" / "外部目录") 'Cannot use the reserved name <value>';
+  //   equals EXTERNAL_NAME or any of translationsOf('account.external') (in every supported language) 'Cannot use the reserved name <value>';
   //   after excluding name itself (exact match) from existing: sameName as another account's name 'Same as an existing account name', sameName as another account's label 'Same as an existing account's display name'.
   //   existing only contains accounts of the same vendor (same key); the same name is allowed across Claude and Codex; entering the account's own name passes (set deletes the entry, i.e. clears the alias)
 }
 export function sameName(a: string, b: string): boolean; // case-insensitive equality; used for every duplicate check of account names and aliases
 export function labelFor(name: string, labels: LabelStore): string; // name === EXTERNAL_NAME → t('account.external'); name === 'default' → 'default' (a stored alias is ignored); otherwise labels.get(name) ?? name
 ```
-External-directory rows never have an alias; their `name` is `EXTERNAL_NAME` and their `label` is `labelFor(EXTERNAL_NAME, labels)`, i.e. `t('account.external')` ("External directory" / "外部目录").
+External-directory rows never have an alias; their `name` is `EXTERNAL_NAME` and their `label` is `labelFor(EXTERNAL_NAME, labels)`, i.e. `t('account.external')` (in every supported language).
 
 ## src/protocol.ts (shared by both sides, types only)
 
@@ -210,7 +212,7 @@ export interface TabState {
   restart?: RestartInfo;     // codex only: host-owned wording input for the disabled text, pending banner and footer restart button
 }
 
-export interface PanelState { active: PanelMode; locale: Locale; claude: TabState; codex: TabState } // locale: 'en' | 'zh-cn', filled by the host from getLocale()
+export interface PanelState { active: PanelMode; locale: Locale; claude: TabState; codex: TabState } // locale: 'en' | 'zh-cn' | 'es' | 'ja', filled by the host from getLocale()
 
 export type ToWebview =
   | { type: 'state'; state: PanelState }
@@ -280,10 +282,13 @@ export type Locale = PanelState['locale'];
 export const en: { ... };                                  // English table, the source of truth
 export type MessageKey = keyof typeof en;
 export const zhCn: Record<MessageKey, string>;             // same keys as en (key-parity rule)
+export const es: Record<MessageKey, string>;
+export const ja: Record<MessageKey, string>;
 export function getLocale(): Locale;
 export function setLocale(locale: Locale): void;           // unknown locale falls back to 'en'
 export function t(key: MessageKey, params?: Record<string, string | number>): string; // `{name}` placeholders
 ```
+- The HTML `lang` attribute matches the current locale at startup and after language changes.
 - `main.ts` calls `setLocale(state.locale)` when a `state` message arrives, so `t()` always uses the locale of the most recent state.
 - All Webview strings go through it: tabs, section titles, banners, buttons, titles/tooltips, aria-labels, placeholders, help text, validation messages, version card, disabled Codex page, tools.
 
