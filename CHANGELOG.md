@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.1.6] - 2026-09-28
+
+### Added
+
+- Spanish and Japanese translations for the panel, account messages, commands and settings. Choose a language in `planswap.language`, or use `auto` to follow the editor language.
+- The status bar now shows both Claude and Codex account labels when their local account configuration exists. Hover to see account details and any Codex selection waiting for a restart.
+
+### Changed
+
+- The account status item is now on the right side of the status bar. Services without local account configuration are omitted; the item is hidden when neither is present.
+
+### Fixed
+
+- The panel now shows a loading message while waiting for account data.
+- Opening the add-account form now waits until the panel is ready, including after it has been hidden and reopened.
+
 ## [0.1.5] - 2026-09-27
 
 ### Changed
