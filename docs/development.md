@@ -60,7 +60,7 @@ Frontend assets must all be emitted into `dist/media/`, the Webview's only `loca
 
 ## Automated test coverage
 
-- Tests only cover the pure modules (paths, fileState, labels, claudeSettings, claudeShare, codexPaths, codexShare, codexState, codexServer; `claudeAccountBusy` / `codexAccountBusy` / the migrations take a fake `procRoot`), the two account stores (accounts, codexStore) with an in-memory Memento (`MemoryMemento` in `test/helpers.ts`), i18n key parity, and the pure helpers exported by `commands.ts` (`validateName`, `shQuote`) and `codex/codexCommands.ts` (`validateName`); every test that touches the file system runs under a temporary HOME created by `test/helpers.ts` (`makeTempHome`, which also asserts that the real home is not used). UI behavior is verified with [Manual Verification](manual-verification.md).
+- Tests cover the panel provider readiness/focus lifecycle using in-memory Webview stubs, the pure modules (paths, fileState, labels, claudeSettings, claudeShare, codexPaths, codexShare, codexState, codexServer; `claudeAccountBusy` / `codexAccountBusy` / the migrations take a fake `procRoot`), the two account stores (accounts, codexStore) with an in-memory Memento (`MemoryMemento` in `test/helpers.ts`), i18n key parity, and the pure helpers exported by `commands.ts` (`validateName`, `shQuote`) and `codex/codexCommands.ts` (`validateName`); every test that touches the file system runs under a temporary HOME created by `test/helpers.ts` (`makeTempHome`, which also asserts that the real home is not used). UI behavior is verified with [Manual Verification](manual-verification.md).
 
 ## 1. F5 does not load the extension in VS Code 1.139 (js-debug attach regression)
 
@@ -181,3 +181,9 @@ When ready to apply another selection, save work and fully exit the intended edi
 - Multiple monitors with mixed scaling produced mouse-coordinate offsets. Moving the window between monitors was followed by a user report that dragging worked; this was an observed workaround, not a verified permanent fix. Relevant upstream reports: [WSLg #324](https://github.com/microsoft/wslg/issues/324) and [WSLg #1233](https://github.com/microsoft/wslg/issues/1233).
 
 The current manual switching contract is in [Codex design §5.1](codex-design.md#51-local-desktop-editor-manual-restart), procedures in [Manual Verification](manual-verification.md#codex-in-a-local-linux-desktop-vs-code), and remaining acceptance in [TODO](../TODO.md).
+
+## Panel startup diagnostics
+
+Search for `[planswap]` in the extension host log for activation start/completion, panel document creation, document-ready latency, and account-state read duration/counts. In the Webview developer tools console, the same prefix identifies frontend initialization, first-state wait, and first-card DOM update duration. Host and frontend durations use separate monotonic clocks; do not subtract timestamps across them. DOM update duration is not a browser-paint measurement. These diagnostics contain timings and counts, not account names, emails, paths or credentials.
+
+For a cold-start investigation, record both logs from editor startup through the first visible cards. For a connectivity investigation, also record whether the document reloads and whether another `ready`/first-state sequence occurs. Logging does not itself establish the cause of a delay or an offline failure.

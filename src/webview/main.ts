@@ -17,6 +17,8 @@ declare function acquireVsCodeApi(): {
   getState(): WebviewState | undefined;
   setState(state: WebviewState): void;
 };
+const startedAt = performance.now();
+let receivedState = false;
 const vscode = acquireVsCodeApi();
 const send = (msg: FromWebview): void => vscode.postMessage(msg);
 
@@ -29,6 +31,8 @@ type DistributiveOmit<T, K extends keyof any> = T extends unknown ? Omit<T, K> :
 // Messages sent from a page: all except ready / setTab carry a mode, which Page fills in
 type PageMessage = DistributiveOmit<Exclude<FromWebview, { type: 'ready' } | { type: 'setTab' }>, 'mode'>;
 
+// The host sets the configured language before the first state arrives.
+setLocale(document.documentElement.lang.toLowerCase().startsWith('zh') ? 'zh-cn' : 'en');
 let state: PanelState = {
   active: 'claude',
   claude: { enabled: true, accounts: [] },
@@ -631,6 +635,11 @@ class Page {
   render(): void {
     this.rendering = true;
     try {
+      if (!receivedState) {
+        this.top.replaceChildren(h('p', { role: 'status', 'aria-live': 'polite' }, t('panel.loading')));
+        this.addSection.hidden = true;
+        return;
+      }
       if (!this.tab.enabled) {
         this.top.replaceChildren(this.renderDisabled());
         this.addSection.hidden = true;
@@ -695,7 +704,7 @@ function renderTabs(): void {
 }
 
 const app = document.getElementById('app')!;
-app.append(tabBar, pages.claude.root, pages.codex.root);
+app.replaceChildren(tabBar, pages.claude.root, pages.codex.root);
 
 // Fixed toolbar at the bottom of the panel: shared by both pages, mode is the current tab
 const FOOTER_TOOLS = [
@@ -772,6 +781,10 @@ function render(): void {
 window.addEventListener('message', (e: MessageEvent<ToWebview>) => {
   const msg = e.data;
   if (msg.type === 'state') {
+    const firstState = !receivedState;
+    const renderStartedAt = performance.now();
+    receivedState = true;
+    if (firstState) console.info(`[planswap] first state received: ${(renderStartedAt - startedAt).toFixed(1)}ms since script start`);
     state = msg.state;
     // The host sets <html lang> only once when it creates the webview; keep it in sync on every push
     document.documentElement.lang = state.locale === 'zh-cn' ? 'zh-CN' : 'en';
@@ -781,6 +794,7 @@ window.addEventListener('message', (e: MessageEvent<ToWebview>) => {
     if (!activeTab) setActiveTab(state.active);
     for (const mode of MODES) pages[mode].onState();
     render();
+    if (firstState) console.info(`[planswap] first cards rendered: ${(performance.now() - renderStartedAt).toFixed(1)}ms DOM update`);
   } else if (msg.type === 'addResult') {
     pages[msg.mode].onAddResult(msg.error);
   } else if (msg.type === 'renameResult') {
@@ -798,4 +812,5 @@ window.addEventListener('message', (e: MessageEvent<ToWebview>) => {
 
 applyLocale();
 render();
+console.info(`[planswap] frontend ready: ${(performance.now() - startedAt).toFixed(1)}ms since script start`);
 send({ type: 'ready' });

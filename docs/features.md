@@ -28,7 +28,8 @@ Purpose: the detailed user-visible behavior of both Claude and Codex account swi
 - **Tab bar**: two tab buttons at the top of the panel, Claude / Codex (segmented control style); the selected one is highlighted, and a click switches the page. The Claude page is what this section and sections 3–8 describe; the Codex page is in section 10. The frontend remembers the current tab (in the Webview's own state) and tells the host through a `setTab` message; the host stores it in the memento key `panel.activeTab` (default `claude`); the frontend only adopts the host's pushed `active` when it has no record of its own. The Command Palette's "add account" commands first switch to the corresponding tab and then focus the input.
 - Each page contains, from top to bottom: banner (only when needed), all accounts list (the current account pinned to the first row and highlighted), "Tools" row (see 5.5), add-account section; the add inputs of the two pages keep independent state.
 - Outside the tab pages, a toolbar shared by both pages and a separate extension version line below it are pinned to the bottom of the panel (see 5.5), with the content area scrolling above them; the version card, when expanded, sits directly above the toolbar.
-- The default account row always exists.
+- While the first account state is loading, the panel shows "Loading accounts…" instead of an empty account list or a disabled-Codex message.
+- The default account row always exists once account data is loaded.
 
 ### 2.1 Reload banner
 

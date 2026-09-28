@@ -16,6 +16,8 @@ import { migrateLegacyLanguage, resolveLocale, watchLocale } from './i18nVscode'
 import { migrateLegacyCodex } from './codex/codexState';
 
 export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
+  const startedAt = performance.now();
+  console.info('[planswap] activation started');
   // Resolve the UI locale before anything renders (a language set under the pre-rename key is carried over once)
   await migrateLegacyLanguage(ctx.globalState);
   setLocale(resolveLocale());
@@ -98,6 +100,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
       statusBar.update();
     }),
   );
+  console.info(`[planswap] activation complete: ${(performance.now() - startedAt).toFixed(1)}ms`);
 }
 
 export function deactivate(): void {}

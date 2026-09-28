@@ -59,3 +59,21 @@ export const commands = {
   },
   async executeCommand(..._args: unknown[]): Promise<void> {},
 };
+
+// Webview provider tests use in-memory sources, so no file watchers are created.
+export class EventEmitter<T> {
+  private listeners: Array<(value: T) => void> = [];
+  event = (listener: (value: T) => void) => {
+    this.listeners.push(listener);
+    return { dispose: () => { this.listeners = this.listeners.filter((item) => item !== listener); } };
+  };
+  fire(value: T): void { for (const listener of this.listeners) listener(value); }
+  dispose(): void { this.listeners = []; }
+}
+
+export const Uri = {
+  joinPath(base: { path: string }, ...parts: string[]) {
+    const path = [base.path, ...parts].join('/');
+    return { path, toString: () => path };
+  },
+};

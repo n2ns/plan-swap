@@ -4,6 +4,7 @@ export type Locale = 'en' | 'zh-cn';
 
 // English is the source of truth for the key set.
 export const en = {
+  'panel.loading': 'Loading accounts…',
   // Common
   'common.continue': 'Continue',
   'common.delete': 'Delete',
@@ -210,6 +211,7 @@ export const en = {
 export type MessageKey = keyof typeof en;
 
 export const zhCn: Record<MessageKey, string> = {
+  'panel.loading': '正在加载账号…',
   'common.continue': '继续',
   'common.delete': '删除',
   'common.deleteDir': '删除目录',

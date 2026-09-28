@@ -8,7 +8,7 @@ import type { AccountStore } from './accounts';
 import { EXTERNAL_NAME, labelFor, type LabelStore } from './labels';
 import type { AccountView, FromWebview, PanelMode, PanelState, RestartInfo, TabState, ToWebview } from './protocol';
 import { isSharedClaudeAccount } from './claudeShare';
-import { getLocale } from './i18n';
+import { getLocale, t } from './i18n';
 
 export const VIEW_ID = 'planswap.accounts';
 
@@ -77,6 +77,7 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
   // Focus request received before the panel page is ready
   private pendingFocusAdd?: PanelMode;
   private ready = false;
+  private pageStartedAt = 0;
   private readonly changed = new vscode.EventEmitter<void>();
   // Fires when accounts or watched files change, so the status bar can sync
   readonly onDidChange = this.changed.event;
@@ -139,12 +140,16 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view;
+    this.ready = false;
+    this.pageStartedAt = performance.now();
+    console.info('[planswap] panel document created');
     const media = vscode.Uri.joinPath(this.extensionUri, 'dist', 'media');
     // Set the CSP page before options; the reverse order loads an empty page first and triggers a "missing CSP" warning
     view.webview.html = this.html(view.webview, media);
     view.webview.options = { enableScripts: true, localResourceRoots: [media] };
     view.webview.onDidReceiveMessage((msg: FromWebview) => {
       if (msg.type === 'ready') {
+        console.info(`[planswap] panel ready: ${(performance.now() - this.pageStartedAt).toFixed(1)}ms since document creation/show`);
         this.ready = true;
         this.pushState();
         if (this.pendingFocusAdd) {
@@ -158,7 +163,12 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
       } else void this.handlers[msg.mode]?.(msg);
     });
     view.onDidChangeVisibility(() => {
-      if (view.visible) this.pushState();
+      if (view.visible) {
+        this.pageStartedAt = performance.now();
+        this.pushState();
+      } else {
+        this.ready = false;
+      }
     });
     view.onDidDispose(() => {
       if (this.view === view) {
@@ -186,12 +196,14 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
   }
 
   private pushState(): void {
+    const startedAt = performance.now();
     const state: PanelState = {
       active: this.activeTab,
       locale: getLocale(),
       claude: this.tabState('claude'),
       codex: this.tabState('codex'),
     };
+    console.debug(`[planswap] state read: ${(performance.now() - startedAt).toFixed(1)}ms; claude=${state.claude.accounts.length}, codex=${state.codex.accounts.length}`);
     this.post({ type: 'state', state });
     this.changed.fire();
   }
@@ -216,7 +228,7 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
 <link rel="stylesheet" href="${uri('panel-style.css')}">
 </head>
 <body>
-<div id="app"></div>
+<div id="app"><p role="status" aria-live="polite">${t('panel.loading')}</p></div>
 <script nonce="${nonce}" src="${uri('panel.js')}"></script>
 </body>
 </html>`;

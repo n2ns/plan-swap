@@ -5,6 +5,7 @@ export type Locale = PanelState['locale'];
 
 // English is the source of truth; the zh-cn table must have exactly the same keys
 export const en = {
+  'panel.loading': 'Loading accounts…',
   'tab.claude': 'Claude',
   'tab.codex': 'Codex',
   'tabs.ariaLabel': 'Account type',
@@ -102,6 +103,7 @@ export const en = {
 export type MessageKey = keyof typeof en;
 
 export const zhCn: Record<MessageKey, string> = {
+  'panel.loading': '正在加载账号…',
   'tab.claude': 'Claude',
   'tab.codex': 'Codex',
   'tabs.ariaLabel': '账号类型',
