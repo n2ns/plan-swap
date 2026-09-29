@@ -176,16 +176,15 @@ describe('Windows without Developer Mode', () => {
   test('history is not merged away while files cannot be linked back', () => {
     emulate(false);
     const acc = path.join(home, '.claude-work');
-    fs.mkdirSync(path.join(acc, 'projects'), { recursive: true });
-    ensureClaudeLinks(acc, FAKE_PROC);
-    fs.rmSync(path.join(acc, 'projects'), { recursive: true, force: true });
-    fs.mkdirSync(path.join(acc, 'projects'));
+    fs.mkdirSync(acc);
+    // The projects link makes the account count as shared; history.jsonl could not be linked (Developer Mode off)
+    const first = ensureClaudeLinks(acc, FAKE_PROC);
+    assert.ok(first.noPrivilege?.includes('history.jsonl'));
     fs.writeFileSync(path.join(acc, 'history.jsonl'), '{"a":1}\n');
-    // make the account count as shared through a projects link
-    fs.rmSync(path.join(acc, 'projects'), { recursive: true });
-    ensureClaudeLinks(acc, FAKE_PROC);
-    ensureClaudeLinks(acc, FAKE_PROC);
+    const second = ensureClaudeLinks(acc, FAKE_PROC);
     assert.equal(fs.readFileSync(path.join(acc, 'history.jsonl'), 'utf8'), '{"a":1}\n');
+    assert.equal(fs.readFileSync(path.join(home, '.claude', 'history.jsonl'), 'utf8'), '');
+    assert.equal(second.busy, undefined);
   });
 
   test('an EPERM on a directory junction is an ordinary error, not a Developer Mode hint', () => {

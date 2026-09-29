@@ -31,6 +31,7 @@ import {
   readSelectedDir,
   removeRcBlockFrom,
   removeRcBlocks,
+  removeWindowsState,
   selfCheck,
   writeSelection,
 } from './codexState';
@@ -243,7 +244,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
         enableWindows();
         const result = selfCheck();
         if (!result.ok) {
-          disableWindows();
+          removeWindowsState();
           void vscode.window.showErrorMessage(t('codex.selfCheckFailed', { detail: result.detail }));
         }
       } catch (err) {

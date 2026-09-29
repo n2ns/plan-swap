@@ -84,9 +84,14 @@ export function enableWindows(): void {
   writeSelectedDir(current !== undefined && adoptableUserHome(current) ? current : undefined);
 }
 
-/** Windows disable: removes the user-level CODEX_HOME that PlanSwap wrote and the state file. */
+/** Windows disable: removes the user-level CODEX_HOME that PlanSwap manages and the state file. */
 export function disableWindows(): void {
   setUserCodexHome(undefined);
+  removeWindowsState();
+}
+
+/** Deletes only the state file (enable rollback: enabling never changes the user variable, so nothing else to undo). */
+export function removeWindowsState(): void {
   try {
     fs.unlinkSync(STATE_FILE());
   } catch (e) {
