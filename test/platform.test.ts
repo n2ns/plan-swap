@@ -1,7 +1,8 @@
-// Pure helpers only: no test calls a Windows-only API, and no test writes outside a temporary HOME
+// Pure helpers with injected runners: nothing here calls a real Windows API, and nothing writes outside a temporary HOME
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import * as path from 'node:path';
 import { setLocale } from '../src/i18n';
 import { comparablePath, copyLink, createLink, imageRunning, isSupportedPlatform, parseTasklistCsv, pidAlive } from '../src/platform';
@@ -41,7 +42,9 @@ describe('platform', () => {
 
   test('pidAlive probes without signalling', () => {
     assert.equal(pidAlive(process.pid), true);
-    assert.equal(pidAlive(2 ** 22 + 12345), false);
+    // A pid that certainly no longer exists: a child that has already exited
+    const done = spawnSync(process.execPath, ['-e', '0']);
+    assert.equal(pidAlive(done.pid), false);
   });
 
   test('tasklist parsing and the fail-safe image probe', () => {
@@ -82,5 +85,15 @@ describe('Windows restart guidance', () => {
     assert.match(m.hint, /Start menu/);
     assert.ok(m.required.includes(m.hint));
     assert.ok(m.switchConfirm.includes(m.hint));
+  });
+
+  test('every language substitutes the hint', () => {
+    for (const lang of ['zh-cn', 'es', 'ja'] as const) {
+      setLocale(lang);
+      const m = manualRestartMessages('unknown', undefined, true);
+      assert.ok(m.required.includes(m.hint) && m.switchConfirm.includes(m.hint), lang);
+      assert.ok(!m.required.includes('{hint}'), lang);
+    }
+    setLocale('en');
   });
 });

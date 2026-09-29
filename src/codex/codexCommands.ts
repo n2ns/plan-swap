@@ -319,6 +319,17 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
 
   async function switchTo(account: CodexAccount): Promise<void> {
     if (switching) return;
+    // Switching is only allowed once PlanSwap manages CODEX_HOME (an unreadable rc file counts as not enabled)
+    let enabled = false;
+    try {
+      enabled = isEnabled();
+    } catch {
+      enabled = false;
+    }
+    if (!enabled) {
+      void vscode.window.showWarningMessage(t('codex.notEnabled'));
+      return;
+    }
     switching = true;
     try {
       await doSwitch(account);

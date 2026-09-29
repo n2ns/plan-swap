@@ -127,6 +127,8 @@ export function ensureCodexLinks(dir: string, options: LinkOptions = {}): ShareR
   const def = codexDefaultDir();
   const acc = path.resolve(dir);
   const shared = isSharedCodexAccount(acc);
+  // Merging a file's lines back removes it; without file-link privilege it could not be linked again, so it stays
+  const fileLinks = fileLinksAvailable(acc);
   fs.mkdirSync(def, { recursive: true, mode: 0o700 });
   fs.mkdirSync(acc, { recursive: true, mode: 0o700 });
 
@@ -149,7 +151,7 @@ export function ensureCodexLinks(dir: string, options: LinkOptions = {}): ShareR
       if (ensureDefaultEntry(path.join(def, parent), 'dir')) report.created.push(parent);
     }
     if (kind !== 'link-only' && ensureDefaultEntry(target, kind)) report.created.push(name);
-    if (shared && JSONL_FILES.includes(name) && lstatOrUndefined(link)?.isFile()) {
+    if (shared && fileLinks && JSONL_FILES.includes(name) && lstatOrUndefined(link)?.isFile()) {
       mergeLines(link, target);
     }
     recordLink(report, name, linkEntry(link, target), link, target, !!options.copyConfig);

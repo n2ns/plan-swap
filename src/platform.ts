@@ -39,7 +39,8 @@ export function createLink(target: string, link: string, platform: string = proc
   try {
     fs.symlinkSync(target, link, isDir ? 'junction' : 'file');
   } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'EPERM') {
+    // Only a refused file symlink means "no privilege"; a failed junction is an ordinary error
+    if (!isDir && (e as NodeJS.ErrnoException).code === 'EPERM') {
       throw new LinkPrivilegeError(`cannot create a file symbolic link (${link}); enable Windows Developer Mode or run the editor as administrator`);
     }
     throw e;
@@ -57,6 +58,11 @@ export function fileLinksAvailable(dir: string, platform: string = process.platf
   const link = path.join(dir, `${stamp}.link`);
   try {
     fs.writeFileSync(target, '', { mode: 0o600, flag: 'wx' });
+  } catch {
+    // Cannot even write the probe: nothing is known about links, so do not claim they are refused
+    return true;
+  }
+  try {
     fs.symlinkSync(target, link, 'file');
     return true;
   } catch (e) {
@@ -105,6 +111,31 @@ export function imageRunning(image: string, run: (image: string) => string = def
 
 function defaultTasklist(image: string): string {
   return execFileSync('tasklist', ['/FI', `IMAGENAME eq ${image}`, '/FO', 'CSV', '/NH'], { encoding: 'utf8', timeout: 8000, windowsHide: true });
+}
+
+/**
+ * Windows only: removes the links (symlinks and junctions) inside `dir`, down to `depth` folder levels, before a
+ * recursive delete, so a delete can never descend through a junction into the default account. Real files are left.
+ */
+export function unlinkLinks(dir: string, depth = 3): void {
+  if (!isWindows() || depth <= 0) return;
+  let names: string[];
+  try {
+    names = fs.readdirSync(dir);
+  } catch {
+    return;
+  }
+  for (const name of names) {
+    const p = path.join(dir, name);
+    let st: fs.Stats;
+    try {
+      st = fs.lstatSync(p);
+    } catch {
+      continue;
+    }
+    if (st.isSymbolicLink()) fs.unlinkSync(p);
+    else if (st.isDirectory()) unlinkLinks(p, depth - 1);
+  }
 }
 
 /** Flushes a directory entry to disk after a rename; Windows cannot open directories, so this is a no-op there. */

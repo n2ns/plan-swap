@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { samePath, sameRealPath } from '../paths';
-import { isWindows, pidAlive } from '../platform';
+import { isWindows, pidAlive, unlinkLinks } from '../platform';
 import { t } from '../i18n';
 
 export const CODEX_DEFAULT_NAME = 'default';
@@ -283,11 +283,11 @@ function pidFileAlive(file: string, procRoot: string): boolean {
   if (!isPlainObject(data)) return false;
   const pid = data.pid;
   if (typeof pid !== 'number' || !Number.isInteger(pid) || pid <= 0) return false;
+  // Windows: no start ticks to compare, so a live pid counts, with or without them
+  if (isWindows() && procRoot === '/proc') return pidAlive(pid);
   const identity = data.processIdentity;
   const ticks = toTicks(isPlainObject(identity) ? identity.startTicks : undefined) ?? toTicks(data.processStartTime);
   if (ticks === undefined) return false;
-  // Windows: no start ticks to compare, so a live pid counts
-  if (isWindows() && procRoot === '/proc') return pidAlive(pid);
   // Without procRoot (e.g. no /proc) the daemon cannot be ruled out
   if (!fs.existsSync(procRoot)) return true;
   return procStartTime(pid, procRoot) === ticks;
@@ -321,5 +321,6 @@ export function checkCodexSafeToDelete(dir: string): string | undefined {
 export async function deleteCodexDir(dir: string): Promise<void> {
   const reason = checkCodexSafeToDelete(dir);
   if (reason) throw new Error(reason);
+  unlinkLinks(path.resolve(dir));
   await fs.promises.rm(path.resolve(dir), { recursive: true, force: true });
 }

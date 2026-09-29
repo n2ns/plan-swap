@@ -16,7 +16,7 @@ The [documentation map](docs/README.md) defines each document's responsibility. 
 
 | Task | Read |
 |---|---|
-| Native Windows behavior | [Windows support](docs/design.md#windows-support), [Codex Windows](docs/codex-design.md#9-native-windows). |
+| Native Windows behavior | [Windows support](docs/design.md#windows-support), [Codex Windows](docs/codex-design.md#9a-native-windows). |
 | Claude accounts, sharing, settings or switching | [Claude design](docs/design.md), [Claude/shared interfaces](docs/interfaces.md). |
 | Codex accounts, sharing, rc files or WSL restart | [Codex design](docs/codex-design.md), [Codex interfaces](docs/codex-interfaces.md). |
 | Shared panel, messages, aliases, state or i18n | Relevant modules in [Interfaces](docs/interfaces.md); [Claude design §5](docs/design.md#5-user-interface) for UI rationale. |

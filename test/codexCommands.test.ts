@@ -117,6 +117,18 @@ describe('local selection with manual restart', () => {
     const source = codexPanelSource(store, labels);
     try {
       writeSelectedDir(undefined);
+      // Not enabled: switching is refused with a warning and nothing changes
+      const warnings: unknown[][] = [];
+      const refused = ctx.mock.method(window, 'showWarningMessage', async (...args: unknown[]) => (warnings.push(args), undefined));
+      confirm = true;
+      await handle({ type: 'switch', mode: 'codex', dir: named.dir });
+      assert.deepEqual(warnings, [[t('codex.notEnabled')]]);
+      assert.equal(readSelectedDir(), undefined);
+      refused.mock.restore();
+      ctx.mock.method(window, 'showWarningMessage', async () => confirm ? t('common.continue') : undefined);
+      confirm = false;
+      // Enabled from here on
+      installRcBlocks();
       await handle({ type: 'switch', mode: 'codex', dir: named.dir });
       assert.equal(readSelectedDir(), undefined);
       assert.equal(refreshes, 0);

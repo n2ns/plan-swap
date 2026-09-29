@@ -134,12 +134,15 @@ export function linkEntry(link: string, target: string): 'linked' | 'ok' | 'conf
     return 'linked';
   }
   if (linksTo(link, target)) return 'ok';
-  // Windows with file-link privilege now available: a copy identical to the default is upgraded to a real link
-  if (isWindows() && st.isFile() && fs.existsSync(target) && sameContent(link, target, st, fs.statSync(target)) && fileLinksAvailable(path.dirname(link))) {
+  // Windows with file-link privilege now available: a copied config file identical to the default is upgraded to a real
+  // link (config files only: databases and locks may be open elsewhere)
+  if (isWindows() && COPYABLE_ON_NO_LINK.includes(path.basename(link)) && st.isFile() && fs.existsSync(target) && sameContent(link, target, st, fs.statSync(target)) && fileLinksAvailable(path.dirname(link))) {
     fs.unlinkSync(link);
     createLink(target, link);
     return 'linked';
   }
+  // Windows without file-link privilege: a real config file is the expected state (a copy the user agreed to)
+  if (isWindows() && COPYABLE_ON_NO_LINK.includes(path.basename(link)) && st.isFile() && !fileLinksAvailable(path.dirname(link))) return 'ok';
   return 'conflict';
 }
 
@@ -205,6 +208,8 @@ export function ensureClaudeLinks(dir: string, procRoot = '/proc', options: Link
   const isBusy = (): boolean => (busy ??= claudeAccountBusy(dir, procRoot));
 
   const shared = isSharedClaudeAccount(dir);
+  // Merging a file's lines back removes it; without file-link privilege it could not be linked again, so it stays
+  const fileLinks = fileLinksAvailable(acc);
   for (const { name, kind } of CLAUDE_SHARED_ENTRIES) {
     const target = path.join(def, name);
     if (name === 'settings.json' && !settingsShareable(target)) {
@@ -214,7 +219,7 @@ export function ensureClaudeLinks(dir: string, procRoot = '/proc', options: Link
     if (ensureDefaultEntry(target, kind)) report.created.push(name);
     const link = path.join(acc, name);
     // `claude project purge` rewrites history.jsonl by rename, replacing the link: merge the lines back and relink
-    if (shared && name === 'history.jsonl' && lstatOrUndefined(link)?.isFile()) {
+    if (shared && name === 'history.jsonl' && lstatOrUndefined(link)?.isFile() && fileLinks) {
       if (isBusy()) {
         (report.busy ??= []).push(name);
         continue;
@@ -433,7 +438,10 @@ export function freeName(base: string): string {
 
 export function sameContent(a: string, b: string, sa: fs.Stats, sb: fs.Stats): boolean {
   if (sa.isSymbolicLink() || sb.isSymbolicLink()) {
-    return sa.isSymbolicLink() && sb.isSymbolicLink() && comparablePath(fs.readlinkSync(a)) === comparablePath(fs.readlinkSync(b));
+    if (!sa.isSymbolicLink() || !sb.isSymbolicLink()) return false;
+    const ra = fs.readlinkSync(a);
+    const rb = fs.readlinkSync(b);
+    return ra === rb || (isWindows() && comparablePath(ra) === comparablePath(rb));
   }
   return sa.isFile() && sb.isFile() && sa.size === sb.size && fs.readFileSync(a).equals(fs.readFileSync(b));
 }

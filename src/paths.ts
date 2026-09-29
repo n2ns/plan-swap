@@ -3,7 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { t } from './i18n';
-import { comparablePath } from './platform';
+import { comparablePath, unlinkLinks } from './platform';
 
 export const DEFAULT_NAME = 'default';
 export const NAME_RE = /^[A-Za-z0-9_-]+$/;
@@ -244,5 +244,6 @@ export function checkSafeToDelete(dir: string): string | undefined {
 export async function deleteAccountDir(dir: string): Promise<void> {
   const reason = checkSafeToDelete(dir);
   if (reason) throw new Error(reason);
+  unlinkLinks(path.resolve(dir));
   await fs.promises.rm(path.resolve(dir), { recursive: true, force: true });
 }
