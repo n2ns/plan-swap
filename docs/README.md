@@ -19,6 +19,7 @@ Each document owns a different kind of information. Read the sections relevant t
 | [TODO](../TODO.md) | Open work, evidence still needed, deferred decisions and pending user actions. | A specification of already verified behavior or release history. |
 | [CHANGELOG](../CHANGELOG.md) | User-facing release history. | Current plans or agent instructions. |
 | [Claude usage feasibility](research/claude-usage.md) | Dated upstream evidence, integration boundaries and the proposed user-operated experiment. | Claims of implemented quota collection or completed real-account acceptance. |
+| [Account-read baseline](research/account-read-performance.md) | Reproducible synthetic measurements, layer boundaries and optimization decision. | Real-account workload distribution or complete UI latency. |
 | [Branding candidate notes](branding/candidates/) | Image-generation prompts and candidate design records. | Runtime behavior or coding rules. |
 
 ## Choose documents by task
