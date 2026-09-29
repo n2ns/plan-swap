@@ -406,7 +406,7 @@ describe('migrateCodexToShared', SHARING, () => {
     // new.jsonl, old.jsonl, history.jsonl, session_index.jsonl, skills/mine/SKILL.md, plugins/cache/q/f
     assert.equal(r.moved, 7);   // includes the maintenance lock the default lacked
     assert.equal(r.duplicates, 2);   // same.jsonl, AGENTS.md
-    assert.deepEqual(r.keptBoth, [path.join('sessions', '2026', 'diff.jsonl.from-xn')]);
+    assert.deepEqual(r.keptBoth, ['sessions/2026/diff.jsonl.from-xn']);
     assert.deepEqual(r.backups.sort(), ['config.toml.independent-backup']);
     assert.deepEqual(r.conflicts, []);
     assert.deepEqual(r.refused, []);
