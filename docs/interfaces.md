@@ -156,14 +156,14 @@ export function describeShareReport(r: ShareReportLike): string; // localized on
 
 ```ts
 
-export function currentDir(): string;                         // CLAUDE_CONFIG_DIR from the setting (array and object forms accepted, empty string counts as missing) ?? defaultDir()
+export function currentDir(): string;                         // CLAUDE_CONFIG_DIR from the setting (array and object forms accepted; the rule below) ?? defaultDir()
 export function isExplicitConfigDir(dir: string): boolean;   // true when the setting has a non-empty CLAUDE_CONFIG_DIR and it is samePath(dir); passed as `explicit` to claudeJsonPath / readAccountInfo by every caller that reads or watches account info (panel rows and watchers, status bar, QuickPick, terminal close)
 export async function setConfigDir(dir: string | undefined): Promise<void>; // builds a new array (never mutates the get() result), keeps other entries, removes all CLAUDE_CONFIG_DIR entries; appends {name, value: path.resolve(dir)} when dir is defined and not samePath(defaultDir()); object form converted to an array; await update(..., ConfigurationTarget.Global). Errors are rethrown as is
 export function affectsSetting(e: vscode.ConfigurationChangeEvent): boolean; // e.affectsConfiguration('claudeCode.environmentVariables')
 export function settingEnvNames(): string[]; // names of the setting's entries with a non-empty value (for the environment warnings)
 ```
 
-On win32 the variable name is matched case-insensitively (a hand-written `claude_config_dir` entry sets the directory there too); with several spellings, the one sorting first (upper case) wins, as Node picks it for the child environment, and `setConfigDir` removes every spelling.
+As the Claude extension (2.1.284) reads it: the last entry whose name is `CLAUDE_CONFIG_DIR` (case-insensitive on win32) and whose value is an absolute path string (on win32 with a drive letter or UNC) wins; empty, relative and non-string values are skipped. `setConfigDir` removes every spelling.
 
 ## src/terminalShell.ts (imports vscode)
 

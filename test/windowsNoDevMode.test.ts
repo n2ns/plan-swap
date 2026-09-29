@@ -142,6 +142,61 @@ describe('Windows without Developer Mode', () => {
     assert.ok(!r2.copied?.some((n) => n.endsWith('.sqlite') || n.endsWith('.jsonl')));
   });
 
+  test('Codex databases are never linked on Windows, even with Developer Mode', FILE_SYMLINKS, () => {
+    emulate(true);
+    const acc = path.join(home, '.codex-work');
+    fs.mkdirSync(acc);
+    const r = ensureCodexLinks(acc);
+    for (const db of ['state_5.sqlite', 'thread_history_1.sqlite', 'goals_1.sqlite', 'queue_1.sqlite']) {
+      assert.equal(fs.existsSync(path.join(acc, db)), false, db);
+      assert.ok(!r.linked.includes(db), db);
+    }
+    assert.equal(fs.lstatSync(path.join(acc, 'history.jsonl')).isSymbolicLink(), true);
+    assert.equal(fs.lstatSync(path.join(acc, '.tmp', 'rollout-maintenance.lock')).isSymbolicLink(), true);
+  });
+
+  test('an existing database link is removed with its side files kept aside; a busy one is left as it is', FILE_SYMLINKS, () => {
+    emulate(true);
+    const acc = path.join(home, '.codex-work');
+    fs.mkdirSync(acc);
+    const def = path.join(home, '.codex');
+    fs.writeFileSync(path.join(def, 'state_5.sqlite'), 'default db');
+    // Linked by an earlier version; SQLite on Windows then created a WAL beside the link
+    realSymlink(path.join(def, 'state_5.sqlite'), path.join(acc, 'state_5.sqlite'), 'file');
+    realSymlink(path.join(def, 'goals_1.sqlite'), path.join(acc, 'goals_1.sqlite'), 'file');
+    fs.writeFileSync(path.join(acc, 'state_5.sqlite-wal'), 'wal');
+    fs.writeFileSync(path.join(acc, 'state_5.sqlite-shm'), 'shm');
+    // goals_1's side file is in use: the rename fails and that link stays for the next run
+    fs.writeFileSync(path.join(acc, 'goals_1.sqlite-wal'), 'busy wal');
+    const realRename = fsModule.renameSync;
+    mock.method(fsModule, 'renameSync', ((from: fs.PathLike, to: fs.PathLike) => {
+      if (String(from).endsWith('goals_1.sqlite-wal')) throw Object.assign(new Error('EBUSY: resource busy or locked, rename'), { code: 'EBUSY' });
+      return realRename(from, to);
+    }) as typeof fs.renameSync);
+    const r = ensureCodexLinks(acc);
+    assert.ok(r.refused.includes('state_5.sqlite'));
+    assert.equal(fs.existsSync(path.join(acc, 'state_5.sqlite')), false);
+    assert.equal(fs.readFileSync(path.join(acc, 'state_5.sqlite-wal.windows-link-backup'), 'utf8'), 'wal');
+    assert.equal(fs.readFileSync(path.join(acc, 'state_5.sqlite-shm.windows-link-backup'), 'utf8'), 'shm');
+    assert.equal(fs.readFileSync(path.join(def, 'state_5.sqlite'), 'utf8'), 'default db');
+    assert.ok(r.busy?.includes('goals_1.sqlite'));
+    assert.equal(fs.lstatSync(path.join(acc, 'goals_1.sqlite')).isSymbolicLink(), true);
+    assert.equal(fs.readFileSync(path.join(acc, 'goals_1.sqlite-wal'), 'utf8'), 'busy wal');
+  });
+
+  test('converting keeps the account databases instead of backing them up', FILE_SYMLINKS, () => {
+    emulate(true);
+    const acc = path.join(home, '.codex-work');
+    fs.mkdirSync(acc);
+    fs.writeFileSync(path.join(acc, 'state_5.sqlite'), 'own db');
+    fs.writeFileSync(path.join(acc, 'state_5.sqlite-wal'), 'own wal');
+    const r = migrateCodexToShared(acc, 'work', FAKE_PROC);
+    assert.deepEqual(r.backups, []);
+    assert.equal(fs.readFileSync(path.join(acc, 'state_5.sqlite'), 'utf8'), 'own db');
+    assert.equal(fs.readFileSync(path.join(acc, 'state_5.sqlite-wal'), 'utf8'), 'own wal');
+    assert.equal(fs.lstatSync(path.join(acc, 'sessions')).isSymbolicLink(), true);
+  });
+
   test('without consent nothing is copied', () => {
     emulate(false);
     const acc = path.join(home, '.claude-work');

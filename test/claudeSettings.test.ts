@@ -43,11 +43,13 @@ describe('currentDir (getConfiguredConfigDir)', () => {
     set([{ name: 'CLAUDE_CONFIG_DIR', value: home + '/.claude-1' }, { name: 'CLAUDE_CONFIG_DIR', value: home + '/.claude-2' }]);
     assert.equal(currentDir(), path.join(home, '.claude-2'));
   });
-  test('non-string value is stringified; null / undefined skipped; invalid elements ignored', () => {
+  test('non-string, relative, null / undefined values skipped as the official extension does; invalid elements ignored', () => {
     set([{ name: 'CLAUDE_CONFIG_DIR', value: null }, 'junk', 42, { value: 'no-name' }]);
     assert.equal(currentDir(), def);
     set([{ name: 'CLAUDE_CONFIG_DIR', value: 123 }]);
-    assert.equal(currentDir(), path.resolve('123'));
+    assert.equal(currentDir(), def);
+    set([{ name: 'CLAUDE_CONFIG_DIR', value: home + '/.claude-1' }, { name: 'CLAUDE_CONFIG_DIR', value: 'relative/dir' }]);
+    assert.equal(currentDir(), path.join(home, '.claude-1'));
   });
   test('neither array nor object (e.g. a string) → default directory', () => {
     set('garbage');
@@ -110,14 +112,20 @@ describe('variable name case on Windows', () => {
   const asPlatform = (platform: string): void => { Object.defineProperty(process, 'platform', { value: platform }); };
   after(() => Object.defineProperty(process, 'platform', realPlatform));
 
-  test('a lower-case entry sets the directory on Windows only; the upper-case spelling wins as it does for Node', async () => {
+  test('a lower-case entry counts on Windows only; the last accepted entry of any spelling wins, as in the extension', async () => {
     set([{ name: 'claude_config_dir', value: home + '/.claude-low' }]);
     asPlatform('linux');
     assert.equal(currentDir(), def);
     asPlatform('win32');
-    assert.equal(currentDir(), path.join(home, '.claude-low'));
-    set([{ name: 'claude_config_dir', value: home + '/.claude-low' }, { name: 'CLAUDE_CONFIG_DIR', value: home + '/.claude-up' }]);
-    assert.equal(currentDir(), path.join(home, '.claude-up'));
+    // The extension requires a drive letter or UNC path on Windows; the temporary home has one only on Windows itself
+    const winHome = realPlatform.value === 'win32' ? home : 'C:\\home';
+    set([{ name: 'claude_config_dir', value: winHome + '\\.claude-low' }]);
+    assert.equal(currentDir(), path.win32.resolve(winHome + '\\.claude-low'));
+    set([{ name: 'CLAUDE_CONFIG_DIR', value: winHome + '\\.claude-up' }, { name: 'claude_config_dir', value: winHome + '\\.claude-low' }]);
+    assert.equal(currentDir(), path.win32.resolve(winHome + '\\.claude-low'));
+    // A rooted path without a drive is ignored on Windows
+    set([{ name: 'CLAUDE_CONFIG_DIR', value: '\\no-drive' }]);
+    assert.equal(currentDir(), def);
     // A switch replaces every spelling
     await setConfigDir(home + '/.claude-new');
     assert.deepEqual(last(), [{ name: 'CLAUDE_CONFIG_DIR', value: path.join(home, '.claude-new') }]);

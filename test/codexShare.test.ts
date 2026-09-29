@@ -51,12 +51,15 @@ const newAccount = (name: string): string => {
   return acc;
 };
 const LINK_ONLY = CODEX_SHARED_ENTRIES.filter((e) => e.kind === 'link-only').map((e) => e.name);
+// Windows never links the databases (writes through a linked SQLite database are lost there)
+const linkedHere = (name: string): boolean => !(onWindows && name.endsWith('.sqlite'));
+const LINKED_ENTRIES = CODEX_SHARED_ENTRIES.filter((e) => linkedHere(e.name));
 
 describe('ensureCodexLinks', SHARING, () => {
   test('creates absolute links and empty default entries with modes; link-only targets are not created; idempotent', () => {
     const acc = newAccount('a');
     const r = ensureCodexLinks(acc);
-    for (const { name, kind } of CODEX_SHARED_ENTRIES) {
+    for (const { name, kind } of LINKED_ENTRIES) {
       assert.ok(isLinkTo(path.join(acc, name), path.join(def, name)), name);
       assert.ok(r.linked.includes(name), name);
       assert.equal(r.created.includes(name), kind !== 'link-only', name);
@@ -255,10 +258,11 @@ describe('ensureCodexLinks', SHARING, () => {
   test('a real sqlite db in a shared account is a conflict and stays untouched', () => {
     const acc = newAccount('a');
     ensureCodexLinks(acc);
-    fs.unlinkSync(path.join(acc, 'state_5.sqlite'));
+    fs.rmSync(path.join(acc, 'state_5.sqlite'), { force: true });   // the link (none on Windows)
     write(path.join(acc, 'state_5.sqlite'), 'db');
     const r = ensureCodexLinks(acc);
-    assert.deepEqual(r.conflicts, ['state_5.sqlite']);
+    // Windows does not link databases at all, so an account's own one is expected there
+    assert.deepEqual(r.conflicts, onWindows ? [] : ['state_5.sqlite']);
     assert.equal(read(path.join(acc, 'state_5.sqlite')), 'db');
     assert.ok(!exists(path.join(def, 'state_5.sqlite')));
   });
@@ -436,7 +440,7 @@ describe('migrateCodexToShared', SHARING, () => {
     assert.equal(read(path.join(acc, 'plugins', 'cache', 'openai-curated-remote', 'r')), 'R');
     assert.equal(read(path.join(acc, 'plugins', 'config.json')), 'own plugins');
 
-    for (const e of ['sessions', 'archived_sessions', 'history.jsonl', 'session_index.jsonl', 'config.toml', 'AGENTS.md', 'state_5.sqlite', '.tmp/rollout-maintenance.lock']) {
+    for (const e of ['sessions', 'archived_sessions', 'history.jsonl', 'session_index.jsonl', 'config.toml', 'AGENTS.md', 'state_5.sqlite', '.tmp/rollout-maintenance.lock'].filter(linkedHere)) {
       assert.ok(isLinkTo(path.join(acc, e), path.join(def, e)), e);
     }
     assert.ok(isLinkTo(path.join(acc, 'skills', 'mine'), path.join(def, 'skills', 'mine')));
@@ -446,7 +450,7 @@ describe('migrateCodexToShared', SHARING, () => {
     assert.equal(isSharedCodexAccount(acc), true);
   });
 
-  test('sqlite dbs are backed up with their -wal / -shm files, then linked', () => {
+  test('sqlite dbs are backed up with their -wal / -shm files, then linked', LINUX_ONLY, () => {
     write(path.join(def, 'state_5.sqlite'), 'def db');
     const acc = codexAccountDir('a');
     write(path.join(acc, 'state_5.sqlite'), 'acc db');
@@ -605,7 +609,7 @@ describe('makeCodexIndependent', SHARING, () => {
 
     const r = makeCodexIndependent(acc, 'a', fakeProc({}));
     assert.equal(isSharedCodexAccount(acc), false);
-    for (const { name } of CODEX_SHARED_ENTRIES) assert.ok(r.removed.includes(name), name);
+    for (const { name } of LINKED_ENTRIES) assert.ok(r.removed.includes(name), name);
     assert.ok(r.removed.includes('skills/one'));
     assert.ok(r.removed.includes('plugins/cache/p'));
     assert.ok(!r.removed.includes('skills/mine'));

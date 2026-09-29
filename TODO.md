@@ -13,7 +13,9 @@ is still missing. Remove an item once it is done or decided.
   Consider watching the default `.claude.json` and mirroring automatically.
 - **Claude prompt history "storage v5".** Claude Code 2.1.274 has a feature-flagged history backend that opens
   `history.jsonl` with `O_NOFOLLOW`; when that flag is on for an account, its prompt history is silently not recorded
-  through the link. Not detected or reported by the extension.
+  through the link. Still present in 2.1.284 on Windows too ("history.jsonl is a symlink or not a regular file, which the
+  storage interface never reads or writes through"; the default path reads and appends through the link, retention
+  pruning skips a link). Not detected or reported by the extension.
 - **`claude project purge` in a shared account.** The repair merges lines back into the default `history.jsonl` by
   appending only, so the purged prompts stay in the shared history.
 - **Codex schema-versioned databases.** `state_5.sqlite`, `thread_history_1.sqlite`, `goals_1.sqlite`, `queue_1.sqlite`
@@ -29,7 +31,7 @@ is still missing. Remove an item once it is done or decided.
 
 ## Windows verification
 
-- **Native Windows is implemented but not yet accepted on a real machine.** Run [the Windows checklist](docs/manual-verification.md#native-windows-user-operated). Open questions: where `.claude.json` lives when `CLAUDE_CONFIG_DIR` is set on Windows, whether the Claude extension honors `claudeCode.environmentVariables`, whether the Codex extension host inherits the changed user variable after a fresh start, Codex's default credential store on Windows (keyring accounts read as signed out), whether the Codex extension with `chatgpt.runCodexInWindowsSubsystemForLinux` really runs Codex in WSL and ignores the Windows `CODEX_HOME` (PlanSwap refuses Codex switching then), and rc/state behavior of the `.vsix` under a real Windows editor.
+- **Native Windows is implemented but not yet accepted on a real machine.** Run [the Windows checklist](docs/manual-verification.md#native-windows-user-operated). Settled on 2026-09-30 without real accounts: `<dir>.claude.json` when `CLAUDE_CONFIG_DIR` is set (claude.exe 2.1.284 with temporary folders), the Claude extension 2.1.284 applies `claudeCode.environmentVariables` to the process it starts and follows it host-side (code), Codex honors `CODEX_HOME` including non-ASCII paths (`codex app-server` with a temporary folder), and Codex's default credential store is `file` (upstream `defaults.toml`). Still open: whether the Codex extension host inherits the changed user variable after a fresh start, whether the Codex extension with `chatgpt.runCodexInWindowsSubsystemForLinux` really runs Codex in WSL and ignores the Windows `CODEX_HOME` (PlanSwap refuses Codex switching then), and rc/state behavior of the `.vsix` under a real Windows editor.
 - **Add a CHANGELOG entry** for Windows support when preparing the next release (no `[Unreleased]` heading before then).
 
 ## Deferred features

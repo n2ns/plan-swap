@@ -29,17 +29,24 @@ function isEnvName(name: string): boolean {
   return isWindows() ? name.toUpperCase() === ENV_NAME : name === ENV_NAME;
 }
 
+// A value the official extension accepts as the directory: an absolute path string; on Windows with a drive letter
+// or as a UNC path (a rooted '\x' has no drive and is ignored there)
+function acceptedDir(value: unknown): string | undefined {
+  const p = isWindows() ? path.win32 : path;
+  if (typeof value !== 'string' || !p.isAbsolute(value)) return undefined;
+  if (isWindows() && !/^([A-Za-z]:[\\/]|[\\/]{2}[^\\/]+[\\/]+[^\\/])/.test(value)) return undefined;
+  return p.resolve(value);
+}
+
+// As the official extension (2.1.284) picks it: the last entry of any accepted spelling whose value is accepted;
+// empty, relative and non-string values are skipped
 function getConfiguredConfigDir(): string | undefined {
-  const byName = new Map<string, string>();
+  let found: string | undefined;
   for (const e of readEntries()) {
-    if (!isEnvName(e.name) || e.value === undefined || e.value === null) continue;
-    const v = String(e.value);
-    // The official extension skips empty-string entries; a later non-empty entry overrides earlier ones
-    if (v) byName.set(e.name, v);
+    if (!isEnvName(e.name)) continue;
+    found = acceptedDir(e.value) ?? found;
   }
-  // Several spellings (Windows only): Node passes the child the one that sorts first, i.e. the upper-case one
-  const name = [...byName.keys()].sort()[0];
-  return name === undefined ? undefined : path.resolve(byName.get(name)!);
+  return found;
 }
 
 /** Names of the variables the setting passes to Claude Code with a non-empty value */

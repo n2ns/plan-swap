@@ -141,6 +141,13 @@ export function ensureCodexLinks(dir: string, options: LinkOptions = {}): ShareR
       report.refused.push(name);
       continue;
     }
+    // Windows: databases stay per account (see removeWindowsSqliteLink); a link left from before is removed
+    if (isWindows() && name.endsWith('.sqlite')) {
+      const r = removeWindowsSqliteLink(link, target);
+      if (r === 'removed') report.refused.push(name);
+      else if (r === 'busy') (report.busy ??= []).push(name);
+      continue;
+    }
     const parent = path.dirname(name);
     if (parent !== '.') {
       if (!ensureAccountFolder(acc, def, parent, false)) {
@@ -221,6 +228,34 @@ export function codexAccountBusy(dir: string, procRoot = '/proc'): boolean {
   return false;
 }
 
+/**
+ * Windows: SQLite derives a database's -wal / -shm names from the path it opened, not from a link's target, so a
+ * database opened through a link gets its own WAL beside the link and writes through it are lost (verified on the
+ * GitHub Windows runner, 2026-09-30; Linux follows the link). Databases are therefore never linked there, and an
+ * existing link is removed: its side files are kept as '<file>.windows-link-backup' so a database Codex creates at
+ * that path later never replays them. 'busy' when a side file is in use (renames are undone, nothing changes).
+ */
+export function removeWindowsSqliteLink(link: string, target: string): 'removed' | 'busy' | 'none' {
+  if (!linksTo(link, target)) return 'none';
+  const moved: Array<[string, string]> = [];
+  try {
+    for (const suffix of SQLITE_SIDE_FILES) {
+      const side = link + suffix;
+      if (!lstatOrUndefined(side)) continue;
+      const backup = freeName(`${side}.windows-link-backup`);
+      fs.renameSync(side, backup);
+      moved.push([backup, side]);
+    }
+  } catch {
+    for (const [backup, side] of moved.reverse()) {
+      try { fs.renameSync(backup, side); } catch { /* keep the backup name */ }
+    }
+    return 'busy';
+  }
+  fs.unlinkSync(link);
+  return 'removed';
+}
+
 // Renames an account sqlite db and its -wal / -shm files to '<name>.independent-backup' (+ the same suffixes)
 function backupSqlite(src: string, rel: string, report: MigrateReport): void {
   let base = `${src}.independent-backup`;
@@ -265,7 +300,8 @@ export function migrateCodexToShared(dir: string, accountName: string, procRoot 
     } else if (JSONL_FILES.includes(name)) {
       if (mergeLines(src, dst) > 0) report.moved++;
     } else if (name.endsWith('.sqlite')) {
-      backupSqlite(src, name, report);
+      // Windows: the account keeps its own databases, which are never linked there
+      if (!isWindows()) backupSqlite(src, name, report);
     } else {
       // config.toml stays when it cannot be linked (default has identity keys), so the account keeps its config
       if (name === 'config.toml' && !configShareable(dst)) continue;
@@ -380,6 +416,16 @@ export function makeCodexIndependent(dir: string, accountName: string, procRoot 
   const def = codexDefaultDir();
   const acc = path.resolve(dir);
   const removed: string[] = [];
+  // Windows: database links (from before they were refused there) go first, with their side files kept aside; one
+  // in use stops the conversion before anything else changes
+  if (isWindows()) {
+    for (const { name } of CODEX_SHARED_ENTRIES) {
+      if (!name.endsWith('.sqlite')) continue;
+      const r = removeWindowsSqliteLink(path.join(acc, name), path.join(def, name));
+      if (r === 'busy') throw new Error(t('share.busyCodex', { name: accountName }));
+      if (r === 'removed') removed.push(name);
+    }
+  }
   const unlinkEntries = (config: boolean): void => {
     for (const { name } of CODEX_SHARED_ENTRIES) {
       if (INDEPENDENT_CONFIG_ENTRIES.has(name) !== config) continue;
