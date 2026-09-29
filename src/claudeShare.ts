@@ -151,7 +151,12 @@ export function linkEntry(link: string, target: string): LinkResult {
 export const COPYABLE_ON_NO_LINK: readonly string[] = ['settings.json', 'CLAUDE.md', 'config.toml', 'AGENTS.md', 'hooks.json'];
 
 /** Options of the linking operations. copyConfig: the user agreed to one-time copies where a file link is refused. */
-export interface LinkOptions { copyConfig?: boolean }
+export interface LinkOptions {
+  copyConfig?: boolean;
+  // Extra busy check of the caller (Windows: the account's own PlanSwap terminal is open); ORed with the module's own
+  // busy check before any step that moves, merges or unlinks account files
+  busy?: () => boolean;
+}
 
 /** record() plus the Windows fallback: a refused link of a copyable file becomes a one-time copy of the default file. */
 export function recordLink(report: ShareReport, name: string, result: ReturnType<typeof linkEntry>, link: string, target: string, allowCopy: boolean): void {
