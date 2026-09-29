@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { Memento } from 'vscode';
-import { renameReplacing } from './platform';
+import { renameReplacing, stripBom } from './platform';
 
 export const STATE_JSON = () => path.join(os.homedir(), '.config', 'planswap', 'state.json');
 
@@ -20,7 +20,9 @@ export class FileMemento implements Memento {
   /** Tolerates a missing, half-written or non-object file (treated as empty) */
   private read(): State {
     try {
-      const parsed: unknown = JSON.parse(fs.readFileSync(this.file, 'utf8'));
+      // A byte order mark (the file edited in Notepad or Windows PowerShell 5.1) would otherwise read as empty, and the
+      // next update would drop every account
+      const parsed: unknown = JSON.parse(stripBom(fs.readFileSync(this.file, 'utf8')));
       return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as State) : {};
     } catch {
       return {};

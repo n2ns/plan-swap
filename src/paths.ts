@@ -3,7 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { t } from './i18n';
-import { comparablePath, renameReplacing, stripBom, unlinkLinks } from './platform';
+import { comparablePath, isWindows, renameReplacing, stripBom, unlinkLinks } from './platform';
 
 export const DEFAULT_NAME = 'default';
 export const NAME_RE = /^[A-Za-z0-9_-]+$/;
@@ -33,8 +33,19 @@ export function samePath(a: string, b: string): boolean {
   return comparablePath(a) === comparablePath(b);
 }
 
-// Real path after resolving symlinks; falls back to path.resolve when the path does not exist
-function realPath(p: string): string {
+/**
+ * Real path after resolving links; path.resolve when the path does not exist. On Windows the native call is used: the
+ * JS implementation keeps 8.3 short names (C:\Users\JOHNSM~1), a '\\?\' prefix and the case given, so another spelling
+ * of the same folder would compare unequal. Linux keeps the JS implementation (same result as realpath(3)).
+ */
+export function realPath(p: string): string {
+  if (isWindows()) {
+    try {
+      return fs.realpathSync.native(p);
+    } catch {
+      // fall through to the JS implementation (it copes with some reparse points the native call refuses)
+    }
+  }
   try {
     return fs.realpathSync(p);
   } catch {
@@ -42,9 +53,22 @@ function realPath(p: string): string {
   }
 }
 
-// Whether both point to the same location after resolving symlinks; used when comparing with the default dir
+// The same file-system object: both exist and share device and inode (the NTFS file id needs bigint). Catches every
+// remaining alias, e.g. \\localhost\C$\… on Windows or a bind mount on Linux
+function sameFileId(a: string, b: string): boolean {
+  try {
+    const sa = fs.statSync(a, { bigint: true });
+    const sb = fs.statSync(b, { bigint: true });
+    return sa.ino !== 0n && sa.ino === sb.ino && sa.dev === sb.dev;
+  } catch {
+    return false;
+  }
+}
+
+// Whether both point to the same location after resolving links (or are the same file-system object); used wherever a
+// directory must not be mistaken for another, above all the default account's
 export function sameRealPath(a: string, b: string): boolean {
-  return comparablePath(realPath(a)) === comparablePath(realPath(b));
+  return comparablePath(realPath(a)) === comparablePath(realPath(b)) || sameFileId(a, b);
 }
 
 // Account info file location: without CLAUDE_CONFIG_DIR, Claude Code uses ~/.claude.json (in the home dir, not inside ~/.claude).

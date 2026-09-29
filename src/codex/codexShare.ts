@@ -7,7 +7,7 @@ import { samePath, sameRealPath } from '../paths';
 import { comparablePath, fileLinksAvailable, isWindows } from '../platform';
 import {
   type MergeCtx, type MigrateReport, type ShareReport, copyTree, defaultFolder, emptyReport, freeName, linkEntry, recordLink, type LinkOptions,
-  linksTo, lstatOrUndefined, mergeEntry, mergeLines, moveEntry, realOrResolved, record, sameContent, unlinkChildLinks, unlinkIfLinksTo,
+  linksTo, lstatOrUndefined, mergeEntry, mergeLines, moveEntry, record, sameContent, unlinkChildLinks, unlinkIfLinksTo,
 } from '../claudeShare';
 import { blockedConfigReason, codexDaemonAlive, codexDefaultDir, copyCodexSeed } from './codexPaths';
 
@@ -115,7 +115,7 @@ export function isSharedCodexAccount(dir: string): boolean {
   const link = path.join(path.resolve(dir), MARKER);
   if (!lstatOrUndefined(link)?.isSymbolicLink()) return false;
   const target = path.join(codexDefaultDir(), MARKER);
-  return fs.existsSync(link) && fs.existsSync(target) && comparablePath(realOrResolved(link)) === comparablePath(realOrResolved(target));
+  return fs.existsSync(link) && fs.existsSync(target) && sameRealPath(link, target);
 }
 
 /** Creates/repairs every link of a shared account (idempotent). Never touches the default dir's existing content.

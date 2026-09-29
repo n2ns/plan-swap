@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { NAME_RE, samePath, sameRealPath } from '../paths';
+import { lstatOrUndefined } from '../claudeShare';
 import { shQuote } from '../commands';
 import { accountTerminalShell } from '../terminalShell';
 import { type AccountsPanel, type PanelSource, tildify, viewInfo } from '../accountsPanel';
@@ -215,6 +216,10 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
   const labelOf = (a: CodexAccount): string => labelFor(a.name, labels);
   const isEffective = (a: CodexAccount): boolean => samePath(a.dir, effectiveDir());
   const isSelected = (a: CodexAccount): boolean => samePath(a.dir, readSelectedDir() ?? codexDefaultDir());
+  // Guards before removing or converting also treat another spelling of those directories (8.3 name, '\?\', a link or
+  // alias) as in use
+  const effectiveAlias = (a: CodexAccount): boolean => isEffective(a) || sameRealPath(a.dir, effectiveDir());
+  const selectedAlias = (a: CodexAccount): boolean => isSelected(a) || sameRealPath(a.dir, readSelectedDir() ?? codexDefaultDir());
   // Windows cannot attribute a running codex.exe to an account (see codexAccountBusy), so an open terminal of the
   // account also counts; on Linux the /proc check covers terminals
   const busy = (a: CodexAccount): boolean =>
@@ -466,7 +471,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
   // Converts an independent account to a shared one after a modal confirmation
   async function shareAccount(account: CodexAccount): Promise<void> {
     if (account.name === CODEX_DEFAULT_NAME || isSharedCodexAccount(account.dir)) return;
-    if (isEffective(account) || isSelected(account)) {
+    if (effectiveAlias(account) || selectedAlias(account)) {
       void vscode.window.showWarningMessage(t('share.current', { label: labelOf(account) }));
       return;
     }
@@ -490,7 +495,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
   // Converts a shared account back to an independent one after a modal confirmation; sessions stay in ~/.codex
   async function unshareAccount(account: CodexAccount): Promise<void> {
     if (account.name === CODEX_DEFAULT_NAME || !isSharedCodexAccount(account.dir)) return;
-    if (isEffective(account) || isSelected(account)) {
+    if (effectiveAlias(account) || selectedAlias(account)) {
       void vscode.window.showWarningMessage(t('unshare.current', { label: labelOf(account) }));
       return;
     }
@@ -517,11 +522,11 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     if (account.name === CODEX_DEFAULT_NAME || !store.find(account.name)) return;
     // Re-checked after every modal: another window may have selected the account meanwhile
     const inUse = (): boolean => {
-      if (isEffective(account)) {
+      if (effectiveAlias(account)) {
         void vscode.window.showWarningMessage(t('codex.removeEffective', { label: labelOf(account) }));
         return true;
       }
-      if (isSelected(account)) {
+      if (selectedAlias(account)) {
         void vscode.window.showWarningMessage(t('codex.removeSelected', { label: labelOf(account) }));
         return true;
       }
@@ -634,7 +639,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     }),
     vscode.commands.registerCommand('planswap.codex.addAccount', () => panel.focusAdd(MODE)),
     vscode.commands.registerCommand('planswap.codex.removeAccount', async () => {
-      const a = await pickAccount(store.named().filter((x) => !isEffective(x) && !isSelected(x)), t('codex.pick.remove'));
+      const a = await pickAccount(store.named().filter((x) => !effectiveAlias(x) && !selectedAlias(x)), t('codex.pick.remove'));
       if (a) await removeAccount(a, false);
     }),
     vscode.commands.registerCommand('planswap.codex.openTerminal', async () => {
@@ -657,5 +662,8 @@ export function validateName(name: string, store: CodexAccountStore, labels: Lab
   if (store.all().some((a) => sameName(a.name, name))) return t('name.exists');
   if (store.all().some((a) => sameName(labelFor(a.name, labels), name))) return t('name.dupLabel');
   if (sameRealPath(codexAccountDir(name), codexDefaultDir())) return t('name.sameAsDefaultDir');
+  // scanCodexDirs skips links, so a linked directory must not be registered by adding its name either (sharing would
+  // write links into the folder it points at)
+  if (lstatOrUndefined(codexAccountDir(name))?.isSymbolicLink()) return t('name.dirIsSymlink');
   return undefined;
 }

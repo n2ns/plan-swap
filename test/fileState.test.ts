@@ -22,6 +22,15 @@ describe('FileMemento', () => {
     assert.deepEqual(m.get('accounts', []), []);
     assert.deepEqual(m.keys(), []);
   });
+  test('a file saved with a byte order mark keeps its accounts through the next update', async () => {
+    const file = path.join(tmp.home, '.config', 'planswap', 'bom.json');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, '﻿{"accounts":[{"name":"x","dir":"/tmp/x"}]}');
+    const m = fresh('bom.json');
+    assert.deepEqual(m.get('accounts'), [{ name: 'x', dir: '/tmp/x' }]);
+    await m.update('claude.labels', { x: 'Work' });
+    assert.deepEqual(JSON.parse(read(file)), { accounts: [{ name: 'x', dir: '/tmp/x' }], 'claude.labels': { x: 'Work' } });
+  });
   test('update writes the file atomically with mode 0600 in a 0700 directory and reads back', async () => {
     const m = fresh('b.json');
     await m.update('accounts', [{ name: 'x', dir: '/tmp/x' }]);

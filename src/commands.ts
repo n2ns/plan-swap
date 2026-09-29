@@ -61,6 +61,9 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
     statusBar.update();
   };
   const isCurrent = (a: Account): boolean => samePath(a.dir, currentDir());
+  // Guards before removing or converting also treat another spelling of the current directory (8.3 name, '\?\',
+  // a link or alias) as current
+  const inUse = (a: Account): boolean => isCurrent(a) || sameRealPath(a.dir, currentDir());
   // Display name: the alias if set, otherwise the name
   const labelOf = (a: Account): string => labelFor(a.name, labels);
   const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
@@ -181,7 +184,7 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
   // Converts an independent account to a shared one after a modal confirmation
   async function shareAccount(account: Account): Promise<void> {
     if (account.name === DEFAULT_NAME || isSharedClaudeAccount(account.dir)) return;
-    if (isCurrent(account)) {
+    if (inUse(account)) {
       void vscode.window.showWarningMessage(t('share.current', { label: labelOf(account) }));
       return;
     }
@@ -206,7 +209,7 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
   // Converts a shared account back to an independent one after a modal confirmation; history stays in the default dir
   async function unshareAccount(account: Account): Promise<void> {
     if (account.name === DEFAULT_NAME || !isSharedClaudeAccount(account.dir)) return;
-    if (isCurrent(account)) {
+    if (inUse(account)) {
       void vscode.window.showWarningMessage(t('unshare.current', { label: labelOf(account) }));
       return;
     }
@@ -232,7 +235,7 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
   async function removeAccount(account: Account, confirmed: boolean): Promise<void> {
     if (account.name === DEFAULT_NAME || !store.find(account.name)) return;
     // The current account cannot be deleted; switch to another account first
-    if (isCurrent(account)) {
+    if (inUse(account)) {
       void vscode.window.showWarningMessage(t('claude.removeCurrent', { label: labelOf(account) }));
       return;
     }
@@ -348,7 +351,7 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
     }),
     vscode.commands.registerCommand('planswap.addAccount', () => panel.focusAdd(MODE)),
     vscode.commands.registerCommand('planswap.removeAccount', async () => {
-      const a = await pickAccount(store.named().filter((x) => !isCurrent(x)), t('claude.pick.remove'));
+      const a = await pickAccount(store.named().filter((x) => !inUse(x)), t('claude.pick.remove'));
       if (a) await removeAccount(a, false);
     }),
     vscode.commands.registerCommand('planswap.openTerminal', async () => {

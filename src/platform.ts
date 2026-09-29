@@ -136,14 +136,14 @@ function defaultPowerShell(script: string): string {
  */
 export function unlinkLinks(dir: string, depth = 3): void {
   if (!isWindows() || depth <= 0) return;
-  let names: string[];
+  let entries: fs.Dirent[];
   try {
-    names = fs.readdirSync(dir);
+    entries = fs.readdirSync(dir, { withFileTypes: true });
   } catch {
     return;
   }
-  for (const name of names) {
-    const p = path.join(dir, name);
+  for (const entry of entries) {
+    const p = path.join(dir, entry.name);
     let st: fs.Stats;
     try {
       st = fs.lstatSync(p);
@@ -151,7 +151,33 @@ export function unlinkLinks(dir: string, depth = 3): void {
       continue;
     }
     if (st.isSymbolicLink()) fs.unlinkSync(p);
+    else if (st.isDirectory() && entry.isSymbolicLink()) removeOpaqueReparseDir(p, depth);
     else if (st.isDirectory()) unlinkLinks(p, depth - 1);
+  }
+}
+
+// A reparse point lstat reports as a folder (see isOpaqueReparseDir): rmdir removes the reparse point itself, never the
+// content behind it; a folder that is not empty in its own right (a cloud placeholder) is walked like any other
+function removeOpaqueReparseDir(p: string, depth: number): void {
+  try {
+    fs.rmdirSync(p);
+  } catch {
+    unlinkLinks(p, depth - 1);
+  }
+}
+
+/**
+ * Windows: a directory that the directory listing marks as a reparse point while lstat reports a plain folder, e.g. a
+ * junction to '\\?\Volume{…}\…' or a volume mounted into a folder (libuv reports only drive-letter junctions as links).
+ * Such a folder belongs to another location and must not be moved out of. Always false elsewhere.
+ */
+export function isOpaqueReparseDir(p: string, platform: string = process.platform): boolean {
+  if (platform !== 'win32') return false;
+  try {
+    const name = path.basename(p);
+    return fs.readdirSync(path.dirname(p), { withFileTypes: true }).some((e) => e.name === name && e.isSymbolicLink() && !fs.lstatSync(p).isSymbolicLink());
+  } catch {
+    return false;
   }
 }
 

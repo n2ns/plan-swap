@@ -6,7 +6,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { t } from './i18n';
 import { copySettingsStripped, defaultDir, samePath, sameRealPath, syncMcpServers } from './paths';
 import {
-  comparablePath, JunctionError, LinkPrivilegeError, copyLink, createLink, fileLinksAvailable, isWindows, pidAlive, renameReplacing, type StartTimeProbe,
+  comparablePath, isOpaqueReparseDir, JunctionError, LinkPrivilegeError, copyLink, createLink, fileLinksAvailable, isWindows, pidAlive, renameReplacing, type StartTimeProbe,
   stripBom, windowsStartTimes,
 } from './platform';
 
@@ -68,14 +68,6 @@ export function lstatOrUndefined(p: string): fs.Stats | undefined {
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
     throw e;
-  }
-}
-
-export function realOrResolved(p: string): string {
-  try {
-    return fs.realpathSync(p);
-  } catch {
-    return path.resolve(p);
   }
 }
 
@@ -483,6 +475,11 @@ export function mergeEntry(src: string, dst: string, rel: string, ctx: MergeCtx)
   const ss = fs.lstatSync(src);
   const ds = lstatOrUndefined(dst);
   if (!ss.isDirectory() && !ss.isFile() && !ss.isSymbolicLink()) return;   // sockets, fifos: left in place
+  // Never merge an entry into itself (another spelling of the same folder): the "identical copy" would be the only one
+  if (ds && sameRealPath(src, dst)) return;
+  // Windows reparse points that lstat reports as plain folders (a junction to \\?\Volume{…}, a mount point): moving out
+  // of them would take files from another location; left in place like sockets
+  if (ss.isDirectory() && isOpaqueReparseDir(src)) return;
   if (ss.isDirectory()) {
     if (!ds) fs.mkdirSync(dst, { mode: ss.mode & 0o777 });
     if (!ds || ds.isDirectory()) {
@@ -746,5 +743,5 @@ export function isSharedClaudeAccount(dir: string): boolean {
   const link = path.join(path.resolve(dir), 'projects');
   if (!lstatOrUndefined(link)?.isSymbolicLink()) return false;
   const target = path.join(defaultDir(), 'projects');
-  return fs.existsSync(link) && fs.existsSync(target) && comparablePath(realOrResolved(link)) === comparablePath(realOrResolved(target));
+  return fs.existsSync(link) && fs.existsSync(target) && sameRealPath(link, target);
 }
