@@ -26,7 +26,17 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: xvfb-run -a npm run test:ui
+      - run: sudo apt-get install -y --no-install-recommends openbox
+      - name: Run full-screen UI preview
+        run: |
+          xvfb-run -a bash -e -c '
+            openbox --sm-disable > /tmp/planswap-openbox.log 2>&1 &
+            wm=$!
+            trap "kill $wm 2>/dev/null || true" EXIT
+            sleep 1
+            if ! kill -0 "$wm" 2>/dev/null; then cat /tmp/planswap-openbox.log; exit 1; fi
+            npm run test:ui
+          '
       - name: Upload UI preview results
         if: always()
         uses: actions/upload-artifact@v4

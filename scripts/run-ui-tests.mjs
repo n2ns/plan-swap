@@ -39,6 +39,7 @@ async function runCase(locale, width) {
     return {
       sidebarWidth: rect(sidebar).width, appWidth: rect(app).width,
       viewportWidth: innerWidth, viewportHeight: innerHeight,
+      documentHeight: document.documentElement.scrollHeight, bodyHeight: document.body.scrollHeight,
       zoomScale: visualViewport.scale, devicePixelRatio,
       horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
         || sidebar.scrollWidth > sidebar.clientWidth || app.scrollWidth > app.clientWidth
@@ -56,6 +57,8 @@ async function runCase(locale, width) {
   });
   assert.ok(Math.abs(data.sidebarWidth - width) <= 2, `sidebar width ${data.sidebarWidth} at ${name(locale, width)}`);
   assert.equal(data.zoomScale, 1, `browser zoom changed at ${name(locale, width)}`);
+  assert.ok(data.documentHeight <= data.viewportHeight && data.bodyHeight <= data.viewportHeight,
+    `page extends below the viewport at ${name(locale, width)}`);
   assert.equal(data.horizontalOverflow, false, `horizontal overflow at ${name(locale, width)}`);
   assert.equal(data.codexRows, 3);
   assert.equal(data.claudeRows, 3);
@@ -72,7 +75,7 @@ async function runCase(locale, width) {
   } else {
     assert.ok(data.gridColumns <= 2, `narrow grid did not activate at ${name(locale, width)}`);
   }
-  await page.screenshot({ path: path.join(output, `${name(locale, width)}-codex.png`), fullPage: true });
+  await page.screenshot({ path: path.join(output, `${name(locale, width)}-codex.png`) });
   results.cases.push({ locale, width, mode: 'codex', passed: true, ...data });
   await page.evaluate(({ locale, width }) => window.preview.apply({ locale, width, active: 'claude' }), { locale, width });
   const claude = await page.evaluate(() => {
@@ -146,7 +149,17 @@ try {
   await page.goto(preview.url);
   await page.waitForFunction(() => window.preview?.messages.some((message) => message.type === 'ready')
     && !!document.querySelector('#tab-claude') && window.preview.state()?.codex.accounts.length === 3);
-  results.window = { bounds: bounds.bounds, viewport: await page.evaluate(() => ({ width: innerWidth, height: innerHeight, zoomScale: visualViewport.scale, devicePixelRatio })), viewportEmulation: false };
+  const display = await page.evaluate(() => ({
+    screenWidth: screen.width, screenHeight: screen.height,
+    viewportWidth: innerWidth, viewportHeight: innerHeight,
+    zoomScale: visualViewport.scale, devicePixelRatio,
+  }));
+  assert.equal(bounds.bounds.width, display.screenWidth, 'full-screen window must fill the display width');
+  assert.equal(bounds.bounds.height, display.screenHeight, 'full-screen window must fill the display height');
+  assert.equal(display.viewportWidth, display.screenWidth, 'page must fill the display width');
+  assert.equal(display.viewportHeight, display.screenHeight, 'page must fill the display height');
+  assert.equal(display.zoomScale, 1, 'browser zoom must remain at 100%');
+  results.window = { bounds: bounds.bounds, display, viewportEmulation: false };
   for (const locale of locales) for (const width of widths) await runCase(locale, width);
   await interactions();
   console.log(`UI preview passed: ${results.cases.length} layout cases, 20 Codex screenshots, ${results.interactions.length} interactions`);
