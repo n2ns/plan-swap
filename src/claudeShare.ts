@@ -679,7 +679,7 @@ function copyTreeLink(src: string, dst: string, root: string): void {
   const raw = fs.readlinkSync(src);
   const resolved = path.resolve(path.dirname(src), raw);
   const rel = path.relative(root, resolved);
-  const inside = !path.isAbsolute(raw) && rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+  const inside = !path.isAbsolute(raw) && !rel.startsWith('..') && !path.isAbsolute(rel);
   if (!isWindows()) {
     fs.symlinkSync(inside ? raw : resolved, dst);
     return;

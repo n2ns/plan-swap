@@ -414,6 +414,17 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     const continueLabel = t('common.continue');
     const ok = await vscode.window.showWarningMessage(confirmText, { modal: true }, continueLabel);
     if (ok !== continueLabel) return;
+    // Another window may have removed the account while the confirmation was open.
+    if (!fs.existsSync(account.dir)) {
+      void vscode.window.showErrorMessage(t('account.dirMissing', { dir: account.dir }));
+      panel.refresh();
+      return;
+    }
+    const registered = store.find(account.name);
+    if (!registered || !samePath(registered.dir, account.dir)) {
+      panel.refresh();
+      return;
+    }
     // A shared account is re-linked first; a problem only warns, the switch still happens
     if (account.name !== CODEX_DEFAULT_NAME && isSharedCodexAccount(account.dir)) {
       try {

@@ -10,7 +10,7 @@ import { env, window, commands, setConfig, type StubTerminal } from './stubs/vsc
 import type { AccountsPanel } from '../src/accountsPanel';
 import type { FromWebview, ToWebview } from '../src/protocol';
 import { RC_BEGIN, STATE_FILE, installRcBlocks, rcBlock, rcStatus, readSelectedDir, writeSelectedDir } from '../src/codex/codexState';
-import { CODEX_DEFAULT_NAME, codexAccountDir, readCodexAccountInfo, type CodexAccount } from '../src/codex/codexPaths';
+import { CODEX_DEFAULT_NAME, codexAccountDir, deleteCodexDir, readCodexAccountInfo, type CodexAccount } from '../src/codex/codexPaths';
 import { isSharedCodexAccount } from '../src/codex/codexShare';
 import { labelFor } from '../src/labels';
 import { assertTempHome, inLocale, LINUX_ONLY, makeTempHome, MemoryMemento, read, restoreEnv, type TempHome } from './helpers';
@@ -402,6 +402,33 @@ describe('panel message handlers', () => {
       h.dispose();
     }
   });
+
+  for (const deleteDirectory of [true, false]) {
+    test(`switch: an account removed during confirmation is not selected (delete directory: ${deleteDirectory})`, LINUX_ONLY, async (ctx) => {
+      fs.writeFileSync(bashrc(), 'x=1\n');
+      fs.writeFileSync(profile(), 'p=1\n');
+      installRcBlocks();
+      const a = named(deleteDirectory ? 'switch-deleted' : 'switch-removed');
+      const selected = named('switch-keep');
+      const h = await harness([a, selected]);
+      writeSelectedDir(selected.dir);
+      const errors = ctx.mock.method(window, 'showErrorMessage', async () => undefined);
+      ctx.mock.method(window, 'showWarningMessage', async () => {
+        await h.store.remove(a.name);
+        if (deleteDirectory) await deleteCodexDir(a.dir);
+        return t('common.continue');
+      });
+      try {
+        await h.handle({ type: 'switch', mode: 'codex', dir: a.dir });
+        assert.equal(readSelectedDir(), selected.dir);
+        assert.equal(h.store.find(a.name), undefined);
+        assert.equal(fs.existsSync(a.dir), !deleteDirectory);
+        if (deleteDirectory) assert.equal(errors.mock.calls[0]?.arguments[0], t('account.dirMissing', { dir: a.dir }));
+      } finally {
+        h.dispose();
+      }
+    });
+  }
 
   test('add: a linked account is created and linked; an independent one gets a copy; invalid names are reported', LINUX_ONLY, async () => {
     fs.mkdirSync(def, { recursive: true });

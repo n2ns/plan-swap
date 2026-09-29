@@ -559,6 +559,24 @@ describe('migrateClaudeToShared', SHARING, () => {
 });
 
 describe('copyClaudeIndependent', SHARING, () => {
+  test('relative links to the copied root stay inside the independent account', () => {
+    const agents = path.join(def, 'agents');
+    write(path.join(agents, 'a.md'), 'default');
+    fs.mkdirSync(path.join(agents, 'nested'));
+    fs.symlinkSync('.', path.join(agents, 'self'), 'dir');
+    fs.symlinkSync('..', path.join(agents, 'nested', 'root'), 'dir');
+    const acc = accountDir('solo');
+
+    copyClaudeIndependent(path.join(home, '.claude.json'), acc);
+
+    const copied = path.join(acc, 'agents');
+    for (const link of ['self', path.join('nested', 'root')]) {
+      assert.equal(fs.realpathSync(path.join(copied, link)), fs.realpathSync(copied));
+      fs.writeFileSync(path.join(copied, link, 'a.md'), 'independent');
+      assert.equal(read(path.join(agents, 'a.md')), 'default');
+    }
+  });
+
   test('copies config without overwriting; excludes synced buckets; strips settings', () => {
     write(path.join(def, 'settings.json'), JSON.stringify({ model: 'm', apiKeyHelper: 'x', env: { ANTHROPIC_API_KEY: 'k', A: '1' } }));
     write(path.join(def, 'CLAUDE.md'), 'rules');

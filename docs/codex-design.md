@@ -205,7 +205,7 @@ A switch request that arrives while another switch is in progress (e.g. its moda
 
 1. Return immediately when the target equals both the directory effective in this window and the content of the state file. When it is effective but the state file says otherwise (e.g. another window switched), only the state file is written and the view refreshed: no confirmation, no restart.
 2. Report an error and return when the target directory does not exist.
-3. Modal confirmation (text from section 5, depending on the editor kind).
+3. Modal confirmation (text from section 5, depending on the editor kind). After confirmation, re-check that the target directory exists and the same account name and directory are still registered; if another window removed the account, refresh the panel and stop without changing the selection (report the missing-directory error when the directory is gone).
 4. If the target is a shared account, `ensureCodexLinks` runs first (8.6); a non-empty report or an error only shows the warning "Re-linking X to the default account reported: …". Then write the state file atomically (empty for the default account).
 5. Automatic kinds: restart the server as in section 5; when the checks fail, show the manual method. Manual kinds (including a local desktop editor, 5.1): nothing more (the confirmation already showed the manual method).
 
