@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { t } from './i18n';
 import { copySettingsStripped, defaultDir, samePath, sameRealPath, syncMcpServers } from './paths';
-import { comparablePath, copyLink, createLink, isWindows, pidAlive } from './platform';
+import { comparablePath, LinkPrivilegeError, copyLink, createLink, fileLinksAvailable, isWindows, pidAlive } from './platform';
 
 // Whole-entry links (kind: file needs an empty-file default, dir needs an empty dir)
 export const CLAUDE_SHARED_ENTRIES: ReadonlyArray<{ name: string; kind: 'file' | 'dir' }> = [
@@ -42,6 +42,7 @@ export interface ShareReport {
   created: string[];    // entries created empty in the default dir
   conflicts: string[];  // entries the account has as a real file/dir or a link elsewhere; left untouched
   refused: string[];    // entries refused for safety (e.g. 'settings.json' when the default has identity keys)
+  noPrivilege?: string[]; // single-file entries that could not be linked because Windows refuses file symlinks (Developer Mode off); left independent
   busy?: string[];      // entries whose repair would move or unlink account files, skipped because the account is busy (Claude only)
 }
 
@@ -119,17 +120,24 @@ function ensureDefaultEntry(target: string, kind: 'file' | 'dir'): boolean {
 }
 
 // Links link → target; 'linked' / 'ok' (already linked) / 'conflict' (real entry or link elsewhere, untouched)
-export function linkEntry(link: string, target: string): 'linked' | 'ok' | 'conflict' {
+export function linkEntry(link: string, target: string): 'linked' | 'ok' | 'conflict' | 'noprivilege' {
   const st = lstatOrUndefined(link);
   if (!st) {
-    createLink(target, link);
+    try {
+      createLink(target, link);
+    } catch (e) {
+      // Windows without Developer Mode: a file symlink is refused; the entry stays independent and the rest goes on
+      if (e instanceof LinkPrivilegeError) return 'noprivilege';
+      throw e;
+    }
     return 'linked';
   }
   return linksTo(link, target) ? 'ok' : 'conflict';
 }
 
-export function record(report: ShareReport, name: string, result: 'linked' | 'ok' | 'conflict'): void {
-  if (result === 'linked') report.linked.push(name);
+export function record(report: ShareReport, name: string, result: 'linked' | 'ok' | 'conflict' | 'noprivilege'): void {
+  if (result === 'noprivilege') (report.noPrivilege ??= []).push(name);
+  else if (result === 'linked') report.linked.push(name);
   else if (result === 'conflict') report.conflicts.push(name);
 }
 
@@ -475,6 +483,9 @@ export function migrateClaudeToShared(dir: string, accountName: string, procRoot
   const acc = path.resolve(dir);
   fs.mkdirSync(def, { recursive: true, mode: 0o700 });
   const ctx: MergeCtx = { report, account: accountName };
+  // Without file-link privilege (Windows, Developer Mode off) single files are never moved into the default account:
+  // they could not be linked back, so the account keeps them
+  const fileLinks = fileLinksAvailable(acc);
 
   for (const { name, kind } of CLAUDE_SHARED_ENTRIES) {
     const src = path.join(acc, name);
@@ -486,6 +497,10 @@ export function migrateClaudeToShared(dir: string, accountName: string, procRoot
       const into = defaultFolder(dst);
       if (into) mergeEntry(src, into, name, ctx);
     } else if (st.isFile()) {
+      if (!fileLinks) {
+        (report.noPrivilege ??= []).push(name);
+        continue;
+      }
       if (name === 'history.jsonl') {
         appendHistory(src, dst);
         report.moved++;
@@ -521,6 +536,10 @@ export function migrateClaudeToShared(dir: string, accountName: string, procRoot
       if (excluded.has(child)) continue;
       const src = path.join(accFolder, child);
       if (linksTo(src, path.join(defFolder, child))) continue;
+      if (!fileLinks && lstatOrUndefined(src)?.isFile()) {
+        (report.noPrivilege ??= []).push(`${name}/${child}`);
+        continue;
+      }
       mergeEntry(src, path.join(into, child), `${name}/${child}`, ctx);
     }
   }
@@ -531,6 +550,7 @@ export function migrateClaudeToShared(dir: string, accountName: string, procRoot
   report.conflicts.push(...links.conflicts);
   report.refused.push(...links.refused);
   if (links.busy) report.busy = [...links.busy];
+  if (links.noPrivilege) report.noPrivilege = [...new Set([...(report.noPrivilege ?? []), ...links.noPrivilege])];
   return report;
 }
 

@@ -4,6 +4,9 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
+/** A file symlink cannot be created: Windows without Developer Mode or elevation. */
+export class LinkPrivilegeError extends Error {}
+
 export const isWindows = (): boolean => process.platform === 'win32';
 
 /** Whether the host OS is supported: Linux/WSL as before, plus native Windows. */
@@ -37,9 +40,30 @@ export function createLink(target: string, link: string, platform: string = proc
     fs.symlinkSync(target, link, isDir ? 'junction' : 'file');
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'EPERM') {
-      throw new Error(`cannot create a file symbolic link (${link}); enable Windows Developer Mode or run the editor as administrator`);
+      throw new LinkPrivilegeError(`cannot create a file symbolic link (${link}); enable Windows Developer Mode or run the editor as administrator`);
     }
     throw e;
+  }
+}
+
+/**
+ * Whether single-file links can be created in `dir` (probes with a temporary file symlink, removed again). Always
+ * true off Windows; on Windows false only when the OS refuses the privilege (EPERM). Directory junctions never need it.
+ */
+export function fileLinksAvailable(dir: string, platform: string = process.platform): boolean {
+  if (platform !== 'win32') return true;
+  const stamp = `.planswap-probe-${process.pid}-${Date.now()}`;
+  const target = path.join(dir, `${stamp}.target`);
+  const link = path.join(dir, `${stamp}.link`);
+  try {
+    fs.writeFileSync(target, '', { mode: 0o600, flag: 'wx' });
+    fs.symlinkSync(target, link, 'file');
+    return true;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code !== 'EPERM';
+  } finally {
+    fs.rmSync(link, { force: true });
+    fs.rmSync(target, { force: true });
   }
 }
 

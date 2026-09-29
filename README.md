@@ -122,7 +122,7 @@ In extension settings, set `planswap.language` to `auto` (follow your editor), `
 PlanSwap also runs in a local Windows editor (no remote window). Claude switching works as in WSL (`CLAUDE_CONFIG_DIR` in `claudeCode.environmentVariables`). Differences:
 
 - **Codex** is selected through the per-user environment variable `CODEX_HOME`. Enabling asks for confirmation and refuses when you already set that variable yourself. After a switch, **fully quit the editor and start it again from the Start menu or taskbar**; Reload Window and terminals started before the switch keep the old value. Accounts opened through PlanSwap terminals always get the right value.
-- **Sharing** links folders with directory junctions (no privileges needed). Linking single files (`settings.json`, `history.jsonl`, ...) needs Windows Developer Mode or an elevated editor; without it those entries are reported as failed and stay independent.
+- **Sharing** links folders with directory junctions (no privileges needed). Linking single files (`settings.json`, `history.jsonl`, ...) needs Windows Developer Mode or an elevated editor; without it PlanSwap still links the folders, keeps single files independent per account, never moves an account's files away, and tells you to turn on Developer Mode (Settings > For developers). Turn it on and use Re-link to link files the account does not have yet.
 - **Busy checks** are conservative: a running `codex.exe` or a live Claude session blocks converting an account.
 - Codex in the VS Code extension's *Run in WSL* mode uses the WSL-side `~/.codex`; install PlanSwap in WSL to switch that one.
 - Login tokens are never read or copied; `auth.json` stays read-only. Accounts signed in through the OS keyring instead of `auth.json` show as signed out.

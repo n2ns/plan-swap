@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { t } from '../i18n';
 import { samePath, sameRealPath } from '../paths';
-import { comparablePath, imageRunning, isWindows } from '../platform';
+import { comparablePath, fileLinksAvailable, imageRunning, isWindows } from '../platform';
 import {
   type MergeCtx, type MigrateReport, type ShareReport, copyTree, defaultFolder, emptyReport, freeName, linkEntry,
   linksTo, lstatOrUndefined, mergeEntry, mergeLines, moveEntry, realOrResolved, record, sameContent, unlinkChildLinks, unlinkIfLinksTo,
@@ -238,6 +238,8 @@ export function migrateCodexToShared(dir: string, accountName: string, procRoot 
   const acc = path.resolve(dir);
   fs.mkdirSync(def, { recursive: true, mode: 0o700 });
   const ctx: MergeCtx = { report, account: accountName };
+  // Without file-link privilege (Windows, Developer Mode off) single files stay in the account, see migrateClaudeToShared
+  const fileLinks = fileLinksAvailable(acc);
 
   for (const { name, kind } of CODEX_SHARED_ENTRIES) {
     const parent = path.dirname(name);
@@ -253,6 +255,8 @@ export function migrateCodexToShared(dir: string, accountName: string, procRoot 
       if (into) mergeEntry(src, into, name, ctx);
     } else if (!st.isFile()) {
       continue;
+    } else if (!fileLinks) {
+      (report.noPrivilege ??= []).push(name);
     } else if (JSONL_FILES.includes(name)) {
       if (mergeLines(src, dst) > 0) report.moved++;
     } else if (name.endsWith('.sqlite')) {
@@ -290,6 +294,10 @@ export function migrateCodexToShared(dir: string, accountName: string, procRoot 
       if (excluded.has(child)) continue;
       const src = path.join(accFolder, child);
       if (linksTo(src, path.join(defFolder, child))) continue;
+      if (!fileLinks && lstatOrUndefined(src)?.isFile()) {
+        (report.noPrivilege ??= []).push(`${rel}/${child}`);
+        continue;
+      }
       mergeEntry(src, path.join(into, child), `${rel}/${child}`, ctx);
     }
   }
@@ -299,6 +307,7 @@ export function migrateCodexToShared(dir: string, accountName: string, procRoot 
   report.created.push(...links.created);
   report.conflicts.push(...links.conflicts);
   report.refused.push(...links.refused);
+  if (links.noPrivilege) report.noPrivilege = [...new Set([...(report.noPrivilege ?? []), ...links.noPrivilege])];
   return report;
 }
 
