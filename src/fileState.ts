@@ -5,6 +5,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { Memento } from 'vscode';
+import { renameReplacing } from './platform';
 
 export const STATE_JSON = () => path.join(os.homedir(), '.config', 'planswap', 'state.json');
 
@@ -76,7 +77,7 @@ export class FileMemento implements Memento {
       fs.closeSync(fd);
     }
     try {
-      fs.renameSync(tmp, this.file);
+      renameReplacing(tmp, this.file);
     } catch (e) {
       try { fs.unlinkSync(tmp); } catch { /* ignore */ }
       throw e;

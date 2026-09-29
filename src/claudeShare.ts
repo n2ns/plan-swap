@@ -6,7 +6,8 @@ import { isDeepStrictEqual } from 'node:util';
 import { t } from './i18n';
 import { copySettingsStripped, defaultDir, samePath, sameRealPath, syncMcpServers } from './paths';
 import {
-  comparablePath, LinkPrivilegeError, copyLink, createLink, fileLinksAvailable, isWindows, pidAlive, type StartTimeProbe, windowsStartTimes,
+  comparablePath, LinkPrivilegeError, copyLink, createLink, fileLinksAvailable, isWindows, pidAlive, renameReplacing, type StartTimeProbe,
+  stripBom, windowsStartTimes,
 } from './platform';
 
 // Whole-entry links (kind: file needs an empty-file default, dir needs an empty dir)
@@ -104,7 +105,7 @@ function settingsShareable(file: string): boolean {
   }
   let data: unknown;
   try {
-    data = JSON.parse(text);
+    data = JSON.parse(stripBom(text));
   } catch {
     return false;
   }
@@ -279,7 +280,7 @@ function readSourceJson(file: string): Record<string, unknown> {
   }
   let data: unknown;
   try {
-    data = JSON.parse(text);
+    data = JSON.parse(stripBom(text));
   } catch {
     data = undefined;
   }
@@ -348,7 +349,7 @@ export function mirrorClaudeJson(fromJson: string, dir: string, beforeCommit?: (
     // Refuse to overwrite a write the CLI made in the meantime
     const now = fs.existsSync(real) ? fs.readFileSync(real, 'utf8') : undefined;
     if (now !== before) throw new Error(t('mcp.changed', { file: real }));
-    fs.renameSync(tmp, real);
+    renameReplacing(tmp, real);
   } finally {
     fs.rmSync(tmp, { force: true });
   }
@@ -627,7 +628,13 @@ export function copyTree(src: string, dst: string, existing: 'skip' | 'throw' = 
   } else if (ds) {
     existsError(dst, existing);
   } else if (st.isSymbolicLink()) {
-    copyLink(src, dst);
+    try {
+      copyLink(src, dst);
+    } catch (e) {
+      // Windows without file-link privilege: a link to a file is copied as that file; a dangling one is skipped
+      if (!(e instanceof LinkPrivilegeError)) throw e;
+      if (fs.existsSync(src) && fs.statSync(src).isFile()) fs.copyFileSync(src, dst, fs.constants.COPYFILE_EXCL);
+    }
   } else if (st.isFile()) {
     fs.copyFileSync(src, dst, fs.constants.COPYFILE_EXCL);
     fs.chmodSync(dst, st.mode & 0o777);
@@ -732,5 +739,5 @@ export function isSharedClaudeAccount(dir: string): boolean {
   const link = path.join(path.resolve(dir), 'projects');
   if (!lstatOrUndefined(link)?.isSymbolicLink()) return false;
   const target = path.join(defaultDir(), 'projects');
-  return fs.existsSync(link) && fs.existsSync(target) && realOrResolved(link) === realOrResolved(target);
+  return fs.existsSync(link) && fs.existsSync(target) && comparablePath(realOrResolved(link)) === comparablePath(realOrResolved(target));
 }

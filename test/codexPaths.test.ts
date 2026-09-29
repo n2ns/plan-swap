@@ -169,6 +169,12 @@ describe('copyCodexSeed', () => {
     assert.deepEqual(r.skipped, [{ file: 'config.toml', reason: 'Target already exists' }]);
     assert.equal(read(path.join(dst, 'config.toml')), 'ORIG');
   });
+  test('a byte order mark does not hide a blocked key on the first line', () => {
+    const { src, dst } = fresh('﻿model_provider = "x"\r\n', 'x');
+    const r = copyCodexSeed(src, dst);
+    assert.deepEqual(r.copied, []);
+    assert.equal(r.skipped[0].reason, 'Contains top-level key model_provider; not copied');
+  });
   for (const key of ['forced_login_method', 'forced_chatgpt_workspace_id', 'sqlite_home', 'log_dir', 'model_provider']) {
     test(`blocks top-level key ${key} (with leading whitespace)`, () => {
       const { src, dst } = fresh(`model = "x"\n   ${key} = "v"\n`, 'x');

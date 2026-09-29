@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { CODEX_DIR_BASENAME_RE, codexDefaultDir } from './codexPaths';
 import { samePath } from '../paths';
 import { t } from '../i18n';
-import { fsyncDir, isWindows } from '../platform';
+import { fsyncDir, isWindows, renameReplacing } from '../platform';
 import { getUserCodexHome, setUserCodexHome } from './codexWindows';
 
 export const STATE_FILE = () => path.join(os.homedir(), '.config', 'planswap', 'codex-home');
@@ -34,7 +34,7 @@ export function writeSelectedDir(dir: string | undefined): void {
     fs.closeSync(fd);
   }
   try {
-    fs.renameSync(tmp, file);
+    renameReplacing(tmp, file);
   } catch (e) {
     try { fs.unlinkSync(tmp); } catch { /* ignore */ }
     throw e;

@@ -200,6 +200,13 @@ describe('copySettingsStripped', () => {
     assert.deepEqual(JSON.parse(read(path.join(work, 'settings.json'))), { env: { KEEP: '1' }, model: 'opus', permissions: { allow: ['Bash'] } });
     assertMode(path.join(work, 'settings.json'), '600');
   });
+  test('reads a settings.json saved with a byte order mark', () => {
+    fs.writeFileSync(path.join(def, 'settings.json'), '﻿{"model":"opus","apiKeyHelper":"x"}');
+    const bom = accountDir('bom');
+    ensureAccountDir(bom);
+    assert.equal(copySettingsStripped(def, bom), true);
+    assert.deepEqual(JSON.parse(read(path.join(bom, 'settings.json'))), { model: 'opus' });
+  });
   test('does not overwrite an existing target', () => {
     const work = accountDir('work');
     fs.writeFileSync(path.join(work, 'settings.json'), '{"mine":1}');

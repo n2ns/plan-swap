@@ -148,6 +148,34 @@ export function unlinkLinks(dir: string, depth = 3): void {
   }
 }
 
+const RENAME_RETRY_CODES = ['EPERM', 'EACCES', 'EBUSY'];
+
+/**
+ * fs.renameSync for replacing a file. Windows refuses to replace a file while any handle is open on it (an antivirus
+ * or indexer scan, another editor window reading it, the CLI reading its info file): there the rename is retried for
+ * about a second before the error is thrown. Elsewhere a single rename.
+ */
+export function renameReplacing(src: string, dst: string, platform: string = process.platform, rename: (a: string, b: string) => void = fs.renameSync): void {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      rename(src, dst);
+      return;
+    } catch (e) {
+      if (platform !== 'win32' || attempt >= 8 || !RENAME_RETRY_CODES.includes((e as NodeJS.ErrnoException).code ?? '')) throw e;
+      sleepSync(Math.min(10 * 2 ** attempt, 200));
+    }
+  }
+}
+
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/** Removes a leading UTF-8 byte order mark, which Notepad and Windows PowerShell 5.1 write and JSON.parse rejects. */
+export function stripBom(text: string): string {
+  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+}
+
 /** Flushes a directory entry to disk after a rename; Windows cannot open directories, so this is a no-op there. */
 export function fsyncDir(dir: string): void {
   if (isWindows()) return;

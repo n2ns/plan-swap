@@ -392,6 +392,17 @@ describe('claudeAccountBusy', () => {
   });
 });
 
+describe('isSharedClaudeAccount on Windows', { skip: process.platform !== 'win32' && 'Windows behavior' }, () => {
+  test('a projects junction whose target differs from the default dir only in case still counts as shared', () => {
+    fs.mkdirSync(path.join(def, 'projects'));
+    const acc = accountDir('case');
+    fs.mkdirSync(acc);
+    const upper = path.join(path.dirname(def), path.basename(def).toUpperCase(), 'projects');
+    fs.symlinkSync(upper, path.join(acc, 'projects'), 'junction');
+    assert.equal(isSharedClaudeAccount(acc), true);
+  });
+});
+
 describe('mergeEntry', () => {
   test('a fifo the default lacks is left in place instead of being moved', LINUX_ONLY, () => {
     const src = path.join(home, 'merge-src');

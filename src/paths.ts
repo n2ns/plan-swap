@@ -3,7 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { t } from './i18n';
-import { comparablePath, unlinkLinks } from './platform';
+import { comparablePath, renameReplacing, stripBom, unlinkLinks } from './platform';
 
 export const DEFAULT_NAME = 'default';
 export const NAME_RE = /^[A-Za-z0-9_-]+$/;
@@ -128,7 +128,7 @@ export function copySettingsStripped(fromDir: string, toDir: string): boolean {
   if (!fs.existsSync(src) || fs.existsSync(dst)) return false;
   let data: unknown;
   try {
-    data = JSON.parse(fs.readFileSync(src, 'utf8'));
+    data = JSON.parse(stripBom(fs.readFileSync(src, 'utf8')));
   } catch {
     return false;
   }
@@ -160,7 +160,7 @@ function readJsonObject(file: string): Record<string, unknown> | undefined {
     return undefined;
   }
   try {
-    const data: unknown = JSON.parse(text);
+    const data: unknown = JSON.parse(stripBom(text));
     return isPlainObject(data) ? data : undefined;
   } catch {
     return undefined;
@@ -222,7 +222,7 @@ export function syncMcpServers(fromJson: string, dir: string, beforeCommit?: () 
     // Refuse to overwrite a write the CLI made in the meantime
     const now = fs.existsSync(real) ? fs.readFileSync(real, 'utf8') : undefined;
     if (now !== before) throw new Error(t('mcp.changed', { file: real }));
-    fs.renameSync(tmp, real);
+    renameReplacing(tmp, real);
   } finally {
     fs.rmSync(tmp, { force: true });
   }

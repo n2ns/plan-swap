@@ -163,11 +163,27 @@ function danglingLinkTarget(file: string): string | undefined {
   }
 }
 
-// Runs `<cmd> --version` read-only without a shell; shows "not found" when not installed, otherwise an error summary
-function cliVersion(cmd: string): Promise<string> {
+// Windows: whether `where` finds the command on PATH (any PATHEXT extension: .exe, or npm's .cmd shim). Through a
+// shell a missing command is only an exit code 1, not ENOENT; `where` exits 1 exactly when nothing matches
+function whereFinds(cmd: string): Promise<boolean> {
   return new Promise((resolve) => {
-    // Windows: npm installs .cmd shims that only a shell resolves; cmd is a fixed literal
-    execFile(cmd, ['--version'], { timeout: 8000, shell: isWindows(), windowsHide: true }, (err, stdout) => {
+    execFile('where.exe', [cmd], { timeout: 8000, windowsHide: true }, (err) => {
+      resolve(!err || (err as { code?: unknown }).code !== 1);
+    });
+  });
+}
+
+// Runs `<cmd> --version` read-only; shows "not found" when not installed, otherwise an error summary
+async function cliVersion(cmd: string): Promise<string> {
+  if (isWindows() && !(await whereFinds(cmd))) return t('tools.ver.notFound');
+  return new Promise((resolve) => {
+    // Windows: npm installs .cmd shims that only a shell resolves; the command line is a fixed literal, passed as one
+    // string (arguments next to shell: true are deprecated)
+    const run = (callback: (err: Error | null, stdout: string) => void): void => {
+      if (isWindows()) execFile(`${cmd} --version`, [], { timeout: 8000, shell: true, windowsHide: true }, callback);
+      else execFile(cmd, ['--version'], { timeout: 8000, windowsHide: true }, callback);
+    };
+    run((err, stdout) => {
       if (err) {
         const e = err as NodeJS.ErrnoException & { killed?: boolean };
         if (e.code === 'ENOENT') return resolve(t('tools.ver.notFound'));

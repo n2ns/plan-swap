@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { samePath, sameRealPath } from '../paths';
-import { isWindows, pidAlive, unlinkLinks } from '../platform';
+import { isWindows, pidAlive, stripBom, unlinkLinks } from '../platform';
 import { t } from '../i18n';
 
 export const CODEX_DEFAULT_NAME = 'default';
@@ -200,7 +200,8 @@ function scanValue(s: string, st: ValueState): void {
 export function blockedConfigReason(text: string, roots: readonly string[] = BLOCKED_ROOTS): string | undefined {
   let topLevel = true;
   const st: ValueState = { depth: 0 };
-  for (const raw of text.split(/\r?\n/)) {
+  // A byte order mark would hide a blocked key on the first line
+  for (const raw of stripBom(text).split(/\r?\n/)) {
     if (st.depth > 0 || st.ml) {
       scanValue(raw, st);
       continue;

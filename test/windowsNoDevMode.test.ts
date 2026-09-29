@@ -6,7 +6,7 @@ import * as fs from 'node:fs';
 import fsModule from 'node:fs';
 import * as path from 'node:path';
 import { setLocale } from '../src/i18n';
-import { ensureClaudeLinks, isSharedClaudeAccount, migrateClaudeToShared } from '../src/claudeShare';
+import { copyClaudeIndependent, ensureClaudeLinks, isSharedClaudeAccount, migrateClaudeToShared } from '../src/claudeShare';
 import { ensureCodexLinks, migrateCodexToShared } from '../src/codex/codexShare';
 import { describeShareReport } from '../src/shareReport';
 import { LinkPrivilegeError, copyLink, createLink, fileLinksAvailable } from '../src/platform';
@@ -237,5 +237,23 @@ describe('Windows without Developer Mode', () => {
     const r = ensureClaudeLinks(acc, FAKE_PROC, COPY);
     assert.equal(r.noPrivilege, undefined);
     assert.equal(fs.lstatSync(path.join(acc, 'settings.json')).isSymbolicLink(), true);
+  });
+
+  test('an independent copy turns file links into copies and skips dangling ones', FILE_SYMLINKS, () => {
+    // The default folder holds file links (e.g. from a dotfiles setup), created before the privilege is taken away
+    const agents = path.join(home, '.claude', 'agents');
+    fs.mkdirSync(path.join(agents, 'sub'), { recursive: true });
+    fs.writeFileSync(path.join(home, 'dotfile.md'), 'agent');
+    realSymlink(path.join(home, 'dotfile.md'), path.join(agents, 'linked.md'), 'file');
+    realSymlink(path.join(home, 'missing.md'), path.join(agents, 'dangling.md'), 'file');
+    realSymlink(path.join(agents, 'sub'), path.join(agents, 'dirlink'), 'junction');
+    emulate(false);
+    const acc = path.join(home, '.claude-work');
+    copyClaudeIndependent(path.join(home, '.claude.json'), acc);
+    const copied = path.join(acc, 'agents');
+    assert.equal(fs.lstatSync(path.join(copied, 'linked.md')).isFile(), true);
+    assert.equal(fs.readFileSync(path.join(copied, 'linked.md'), 'utf8'), 'agent');
+    assert.equal(fs.existsSync(path.join(copied, 'dangling.md')), false);
+    assert.equal(fs.lstatSync(path.join(copied, 'dirlink')).isSymbolicLink(), true);
   });
 });

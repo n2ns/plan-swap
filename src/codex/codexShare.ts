@@ -115,7 +115,7 @@ export function isSharedCodexAccount(dir: string): boolean {
   const link = path.join(path.resolve(dir), MARKER);
   if (!lstatOrUndefined(link)?.isSymbolicLink()) return false;
   const target = path.join(codexDefaultDir(), MARKER);
-  return fs.existsSync(link) && fs.existsSync(target) && realOrResolved(link) === realOrResolved(target);
+  return fs.existsSync(link) && fs.existsSync(target) && comparablePath(realOrResolved(link)) === comparablePath(realOrResolved(target));
 }
 
 /** Creates/repairs every link of a shared account (idempotent). Never touches the default dir's existing content.

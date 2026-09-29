@@ -5,7 +5,9 @@ import * as fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import * as path from 'node:path';
 import { setLocale } from '../src/i18n';
-import { comparablePath, copyLink, createLink, isSupportedPlatform, parseStartTimes, pidAlive, windowsStartTimes } from '../src/platform';
+import {
+  comparablePath, copyLink, createLink, isSupportedPlatform, parseStartTimes, pidAlive, renameReplacing, stripBom, windowsStartTimes,
+} from '../src/platform';
 import { getUserCodexHome, parseRegQuery, setUserCodexHome } from '../src/codex/codexWindows';
 import { manualRestartMessages } from '../src/codex/codexCommands';
 import { LINUX_ONLY, makeTempHome, type TempHome } from './helpers';
@@ -45,6 +47,36 @@ describe('platform', () => {
     // A pid that certainly no longer exists: a child that has already exited
     const done = spawnSync(process.execPath, ['-e', '0']);
     assert.equal(pidAlive(done.pid), false);
+  });
+
+  test('renameReplacing retries a refused replace only on Windows', () => {
+    const refusing = (failures: number, code = 'EPERM'): { calls: number; rename: (a: string, b: string) => void } => {
+      const r = {
+        calls: 0,
+        rename: (): void => {
+          if (r.calls++ < failures) throw Object.assign(new Error(code), { code });
+        },
+      };
+      return r;
+    };
+    const twice = refusing(2);
+    renameReplacing('a', 'b', 'win32', twice.rename);
+    assert.equal(twice.calls, 3);
+    const always = refusing(99, 'EBUSY');
+    assert.throws(() => renameReplacing('a', 'b', 'win32', always.rename), /EBUSY/);
+    assert.equal(always.calls, 9);
+    const other = refusing(1, 'ENOENT');
+    assert.throws(() => renameReplacing('a', 'b', 'win32', other.rename), /ENOENT/);
+    assert.equal(other.calls, 1);
+    const linux = refusing(1);
+    assert.throws(() => renameReplacing('a', 'b', 'linux', linux.rename), /EPERM/);
+    assert.equal(linux.calls, 1);
+  });
+
+  test('stripBom removes only a leading byte order mark', () => {
+    assert.equal(stripBom('﻿{"a":1}'), '{"a":1}');
+    assert.equal(stripBom('{"a":"﻿"}'), '{"a":"﻿"}');
+    assert.equal(stripBom(''), '');
   });
 
   test('start-time probe: parsing, validated pids and failure', () => {
