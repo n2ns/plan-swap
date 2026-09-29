@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { t } from './i18n';
-import { claudeJsonName, copySettingsStripped, defaultDir, samePath, sameRealPath, syncMcpServers } from './paths';
+import { claudeJsonName, copySettingsStripped, defaultDir, samePath, sameRealPath, syncMcpServers, unchangedSince } from './paths';
 import {
   comparablePath, isOpaqueReparseDir, JunctionError, LinkPrivilegeError, copyLink, createLink, fileLinksAvailable, isWindows, pidAlive, renameReplacing, type StartTimeProbe,
   stripBom, windowsStartTimes,
@@ -47,7 +47,7 @@ export interface ShareReport {
   refused: string[];    // entries refused for safety (e.g. 'settings.json' when the default has identity keys)
   copied?: string[];    // config files copied once instead of linked (Windows without file-link privilege); they no longer follow the default
   noPrivilege?: string[]; // single-file entries that could not be linked because Windows refuses file symlinks (Developer Mode off); left independent
-  busy?: string[];      // entries whose repair would move or unlink account files, skipped because the account is busy (Claude only)
+  busy?: string[];      // entries whose repair would move or unlink account files, skipped because the account is busy
   failed?: string[];    // folder entries whose junction Windows could not create (not a local NTFS drive); left unlinked
 }
 
@@ -137,8 +137,16 @@ export function linkEntry(link: string, target: string): LinkResult {
   // Windows with file-link privilege now available: a copied config file identical to the default is upgraded to a real
   // link (config files only: databases and locks may be open elsewhere)
   if (isWindows() && COPYABLE_ON_NO_LINK.includes(path.basename(link)) && st.isFile() && fs.existsSync(target) && sameContent(link, target, st, fs.statSync(target)) && fileLinksAvailable(path.dirname(link))) {
-    fs.unlinkSync(link);
-    createLink(target, link);
+    // The link is made under a temporary name and then renamed over the copy, so a failure leaves the copy in place
+    const tmp = `${link}.planswap-${process.pid}.link`;
+    fs.rmSync(tmp, { force: true });
+    createLink(target, tmp);
+    try {
+      renameReplacing(tmp, link);
+    } catch (e) {
+      fs.rmSync(tmp, { force: true });
+      throw e;
+    }
     return 'linked';
   }
   // Windows without file-link privilege: a real config file is the expected state (a copy the user agreed to)
@@ -200,7 +208,9 @@ export function mergeLines(src: string, dst: string): number {
 /** Creates/repairs every link of a shared account (idempotent). Never touches the default dir's existing content;
  *  in a shared account a real history.jsonl (replaced by `claude project purge`) is merged back and relinked.
  *  Also removes links in skills/ or plugins/ whose default child no longer exists. Steps that move or unlink account
- *  files are skipped and reported under busy while claudeAccountBusy(dir, procRoot). dir === default → empty report. */
+ *  files are skipped and reported under busy while claudeAccountBusy(dir, procRoot) or options.busy(). When the default
+ *  settings.json cannot be shared, a settings.json link is replaced by the account's own copy without identity keys.
+ *  dir === default → empty report. */
 export function ensureClaudeLinks(dir: string, procRoot = '/proc', options: LinkOptions = {}): ShareReport {
   const report = emptyReport();
   if (isDefault(dir)) return report;
@@ -211,19 +221,25 @@ export function ensureClaudeLinks(dir: string, procRoot = '/proc', options: Link
 
   // Checked only when a destructive step comes up; a running Claude process may still be writing those files
   let busy: boolean | undefined;
-  const isBusy = (): boolean => (busy ??= claudeAccountBusy(dir, procRoot));
+  const isBusy = (): boolean => (busy ??= claudeAccountBusy(dir, procRoot) || !!options.busy?.());
 
   const shared = isSharedClaudeAccount(dir);
   // Merging a file's lines back removes it; without file-link privilege it could not be linked again, so it stays
   const fileLinks = fileLinksAvailable(acc);
   for (const { name, kind } of CLAUDE_SHARED_ENTRIES) {
     const target = path.join(def, name);
+    const link = path.join(acc, name);
     if (name === 'settings.json' && !settingsShareable(target)) {
+      // A link created while the default settings were still shareable would hand the account the default's login
+      // identity: it is replaced by the account's own copy with the identity keys stripped
+      if (linksTo(link, target)) {
+        fs.unlinkSync(link);
+        copySettingsStripped(def, acc);
+      }
       report.refused.push(name);
       continue;
     }
     if (ensureDefaultEntry(target, kind)) report.created.push(name);
-    const link = path.join(acc, name);
     // `claude project purge` rewrites history.jsonl by rename, replacing the link: merge the lines back and relink
     if (shared && name === 'history.jsonl' && lstatOrUndefined(link)?.isFile() && fileLinks) {
       if (isBusy()) {
@@ -310,14 +326,14 @@ export function mirrorClaudeJson(fromJson: string, dir: string, beforeCommit?: (
   let data: unknown = {};
   if (before !== undefined) {
     try {
-      data = JSON.parse(before);
+      data = JSON.parse(stripBom(before));
     } catch {
       data = undefined;
     }
   }
   if (!isPlainObject(data)) throw new Error(t('mcp.badTarget', { file: real }));
 
-  const mcp = isPlainObject(source.mcpServers) ? source.mcpServers : {};
+  const mcp =isPlainObject(source.mcpServers) ? source.mcpServers : {};
   const currentMcp = data.mcpServers === undefined ? {} : data.mcpServers;
   if (!isDeepStrictEqual(currentMcp, mcp)) {
     data.mcpServers = mcp;
@@ -349,10 +365,8 @@ export function mirrorClaudeJson(fromJson: string, dir: string, beforeCommit?: (
   try {
     fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n', { mode, flag: 'wx' });
     beforeCommit?.();
-    // Refuse to overwrite a write the CLI made in the meantime
-    const now = fs.existsSync(real) ? fs.readFileSync(real, 'utf8') : undefined;
-    if (now !== before) throw new Error(t('mcp.changed', { file: real }));
-    renameReplacing(tmp, real);
+    // Refuse to overwrite a write the CLI made in the meantime, checked again before every rename attempt
+    if (!renameReplacing(tmp, real, undefined, undefined, () => unchangedSince(real, before))) throw new Error(t('mcp.changed', { file: real }));
   } finally {
     fs.rmSync(tmp, { force: true });
   }

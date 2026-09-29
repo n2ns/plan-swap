@@ -78,6 +78,13 @@ export function sameRealPath(a: string, b: string): boolean {
   return comparablePath(realPath(a)) === comparablePath(realPath(b)) || sameFileId(a, b);
 }
 
+/** Whether `inner` lies strictly below `outer` after resolving links (case-insensitive on Windows); a folder that
+ *  contains the default account (e.g. ~/.codex is a link into ~/.codex-foo/…) must never be deleted or listed. */
+export function realPathInside(outer: string, inner: string): boolean {
+  const rel = path.relative(comparablePath(realPath(outer)), comparablePath(realPath(inner)));
+  return rel !== '' && rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel);
+}
+
 // Variables claudeCode.environmentVariables sets (non-empty) or clears (empty) for the Claude Code the editor starts;
 // kept here by the host (setClaudeSettingEnv) so this module needs no vscode import
 let settingEnv: { set: readonly string[]; cleared: readonly string[] } = { set: [], cleared: [] };
@@ -152,7 +159,7 @@ export function readAccountInfo(dir: string, explicit = false): AccountInfo {
   let plan: string | undefined;
   let identity: string | undefined;
   try {
-    const data: unknown = JSON.parse(fs.readFileSync(claudeJsonPath(dir, explicit), 'utf8'));
+    const data: unknown = JSON.parse(stripBom(fs.readFileSync(claudeJsonPath(dir, explicit), 'utf8')));
     const oauth = isPlainObject(data) ? data.oauthAccount : undefined;
     if (isPlainObject(oauth)) {
       email = optString(oauth.emailAddress);
@@ -181,7 +188,7 @@ export function scanAccountDirs(): Account[] {
   return entries
     .filter((e) => e.isDirectory() && DIR_BASENAME_RE.test(e.name))
     .map((e) => ({ name: e.name.slice('.claude-'.length), dir: path.resolve(home, e.name) }))
-    .filter((a) => !sameRealPath(a.dir, def));
+    .filter((a) => !sameRealPath(a.dir, def) && !realPathInside(a.dir, def));
 }
 
 export function copySettingsStripped(fromDir: string, toDir: string): boolean {
@@ -226,6 +233,13 @@ export interface McpSyncResult {
   kept: string[];
 }
 
+/** Whether `file` still has the content `before` (undefined: still missing); the compare step of a
+ *  compare-then-rename, so a write the CLI made meanwhile is never overwritten. */
+export function unchangedSince(file: string, before: string | undefined): boolean {
+  const now = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : undefined;
+  return now === before;
+}
+
 function readJsonObject(file: string): Record<string, unknown> | undefined {
   let text: string;
   try {
@@ -267,14 +281,14 @@ export function syncMcpServers(fromJson: string, dir: string, beforeCommit?: () 
   let data: unknown = {};
   if (before !== undefined) {
     try {
-      data = JSON.parse(before);
+      data = JSON.parse(stripBom(before));
     } catch {
       data = undefined;
     }
   }
   if (!isPlainObject(data)) throw new Error(t('mcp.badTarget', { file: real }));
 
-  const current = isPlainObject(data.mcpServers) ? data.mcpServers : {};
+  const current =isPlainObject(data.mcpServers) ? data.mcpServers : {};
   const merged: Record<string, unknown> = { ...current };
   for (const [name, def] of Object.entries(source)) {
     if (!Object.hasOwn(current, name)) {
@@ -293,10 +307,8 @@ export function syncMcpServers(fromJson: string, dir: string, beforeCommit?: () 
   try {
     fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n', { mode, flag: 'wx' });
     beforeCommit?.();
-    // Refuse to overwrite a write the CLI made in the meantime
-    const now = fs.existsSync(real) ? fs.readFileSync(real, 'utf8') : undefined;
-    if (now !== before) throw new Error(t('mcp.changed', { file: real }));
-    renameReplacing(tmp, real);
+    // Refuse to overwrite a write the CLI made in the meantime, checked again before every rename attempt
+    if (!renameReplacing(tmp, real, undefined, undefined, () => unchangedSince(real, before))) throw new Error(t('mcp.changed', { file: real }));
   } finally {
     fs.rmSync(tmp, { force: true });
   }
@@ -309,7 +321,9 @@ export function checkSafeToDelete(dir: string): string | undefined {
   // Only direct children of the home directory, so a symlinked parent cannot escape the home directory
   if (!samePath(path.dirname(target), home)) return t('del.notHomeChild', { dir: target });
   if (!DIR_BASENAME_RE.test(path.basename(target))) return t('del.badName', { pattern: '.claude-<name>', dir: target });
-  if (sameRealPath(target, defaultDir())) return t('del.isDefault', { dir: target });
+  const def = defaultDir();
+  if (sameRealPath(target, def)) return t('del.isDefault', { dir: target });
+  if (realPathInside(target, def)) return t('del.containsDefault', { default: def, dir: target });
   let st: fs.Stats;
   try {
     st = fs.lstatSync(target);

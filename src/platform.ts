@@ -131,11 +131,12 @@ function defaultPowerShell(script: string): string {
 }
 
 /**
- * Windows only: removes the links (symlinks and junctions) inside `dir`, down to `depth` folder levels, before a
- * recursive delete, so a delete can never descend through a junction into the default account. Real files are left.
+ * Windows only: removes the links (symlinks, junctions and opaque reparse folders) anywhere inside `dir`, walking the
+ * whole tree without following a link, before a recursive delete, so a delete can never descend through a junction
+ * into the default account however deep it sits. Real files are left.
  */
-export function unlinkLinks(dir: string, depth = 3): void {
-  if (!isWindows() || depth <= 0) return;
+export function unlinkLinks(dir: string, platform: string = process.platform): void {
+  if (platform !== 'win32') return;
   let entries: fs.Dirent[];
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -151,18 +152,18 @@ export function unlinkLinks(dir: string, depth = 3): void {
       continue;
     }
     if (st.isSymbolicLink()) fs.unlinkSync(p);
-    else if (st.isDirectory() && entry.isSymbolicLink()) removeOpaqueReparseDir(p, depth);
-    else if (st.isDirectory()) unlinkLinks(p, depth - 1);
+    else if (st.isDirectory() && entry.isSymbolicLink()) removeOpaqueReparseDir(p, platform);
+    else if (st.isDirectory()) unlinkLinks(p, platform);
   }
 }
 
 // A reparse point lstat reports as a folder (see isOpaqueReparseDir): rmdir removes the reparse point itself, never the
 // content behind it; a folder that is not empty in its own right (a cloud placeholder) is walked like any other
-function removeOpaqueReparseDir(p: string, depth: number): void {
+function removeOpaqueReparseDir(p: string, platform: string): void {
   try {
     fs.rmdirSync(p);
   } catch {
-    unlinkLinks(p, depth - 1);
+    unlinkLinks(p, platform);
   }
 }
 
@@ -186,13 +187,17 @@ const RENAME_RETRY_CODES = ['EPERM', 'EACCES', 'EBUSY'];
 /**
  * fs.renameSync for replacing a file. Windows refuses to replace a file while any handle is open on it (an antivirus
  * or indexer scan, another editor window reading it, the CLI reading its info file): there the rename is retried for
- * about a second before the error is thrown. Elsewhere a single rename.
+ * about a second before the error is thrown. Elsewhere a single rename. stillValid runs before every attempt (a
+ * compare-then-rename must not replace a write made during the retries): false stops without renaming and returns false.
  */
-export function renameReplacing(src: string, dst: string, platform: string = process.platform, rename: (a: string, b: string) => void = fs.renameSync): void {
+export function renameReplacing(
+  src: string, dst: string, platform: string = process.platform, rename: (a: string, b: string) => void = fs.renameSync, stillValid?: () => boolean,
+): boolean {
   for (let attempt = 0; ; attempt++) {
+    if (stillValid && !stillValid()) return false;
     try {
       rename(src, dst);
-      return;
+      return true;
     } catch (e) {
       if (platform !== 'win32' || attempt >= 8 || !RENAME_RETRY_CODES.includes((e as NodeJS.ErrnoException).code ?? '')) throw e;
       sleepSync(Math.min(10 * 2 ** attempt, 200));

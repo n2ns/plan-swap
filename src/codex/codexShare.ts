@@ -120,13 +120,18 @@ export function isSharedCodexAccount(dir: string): boolean {
 
 /** Creates/repairs every link of a shared account (idempotent). Never touches the default dir's existing content.
  *  In a shared account a real history.jsonl / session_index.jsonl is merged back into the default file and relinked
- *  (reported under `linked`); a real sqlite db stays a conflict. dir === default → empty report. */
-export function ensureCodexLinks(dir: string, options: LinkOptions = {}): ShareReport {
+ *  (reported under `linked`), except while codexAccountBusy(dir, procRoot) or options.busy(): then the file is left
+ *  untouched and reported under `busy`. A real sqlite db stays a conflict. dir === default → empty report.
+ *  procRoot is for tests. */
+export function ensureCodexLinks(dir: string, options: LinkOptions = {}, procRoot = '/proc'): ShareReport {
   const report = emptyReport();
   if (isDefault(dir)) return report;
   const def = codexDefaultDir();
   const acc = path.resolve(dir);
   const shared = isSharedCodexAccount(acc);
+  // Checked only when a merge-back comes up; a running Codex may still be writing the file it replaced the link with
+  let busy: boolean | undefined;
+  const isBusy = (): boolean => (busy ??= codexAccountBusy(dir, procRoot) || !!options.busy?.());
   // Merging a file's lines back removes it; without file-link privilege it could not be linked again, so it stays
   const fileLinks = fileLinksAvailable(acc);
   fs.mkdirSync(def, { recursive: true, mode: 0o700 });
@@ -159,6 +164,10 @@ export function ensureCodexLinks(dir: string, options: LinkOptions = {}): ShareR
     }
     if (kind !== 'link-only' && ensureDefaultEntry(target, kind)) report.created.push(name);
     if (shared && fileLinks && JSONL_FILES.includes(name) && lstatOrUndefined(link)?.isFile()) {
+      if (isBusy()) {
+        (report.busy ??= []).push(name);
+        continue;
+      }
       mergeLines(link, target);
     }
     recordLink(report, name, linkEntry(link, target), link, target, !!options.copyConfig);
@@ -268,7 +277,7 @@ function backupSqlite(src: string, rel: string, report: MigrateReport): void {
   }
 }
 
-/** Converts an independent account into a shared one (see the contract); ends with ensureCodexLinks(dir).
+/** Converts an independent account into a shared one (see the contract); ends with ensureCodexLinks(dir, options, procRoot).
  *  Throws t('share.busyCodex') when codexAccountBusy(dir, procRoot). */
 export function migrateCodexToShared(dir: string, accountName: string, procRoot = '/proc', options: LinkOptions = {}): MigrateReport {
   const report: MigrateReport = { ...emptyReport(), moved: 0, duplicates: 0, keptBoth: [], backups: [] };
@@ -342,11 +351,12 @@ export function migrateCodexToShared(dir: string, accountName: string, procRoot 
     }
   }
 
-  const links = ensureCodexLinks(dir, options);
+  const links = ensureCodexLinks(dir, options, procRoot);
   report.linked.push(...links.linked);
   report.created.push(...links.created);
   report.conflicts.push(...links.conflicts);
   report.refused.push(...links.refused);
+  if (links.busy) report.busy = [...links.busy];
   if (links.copied) report.copied = [...links.copied];
   if (links.failed) report.failed = [...links.failed];
   if (links.noPrivilege) report.noPrivilege = [...new Set([...(report.noPrivilege ?? []), ...links.noPrivilege])];

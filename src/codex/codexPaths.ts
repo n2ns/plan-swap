@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { samePath, sameRealPath } from '../paths';
+import { realPathInside, samePath, sameRealPath } from '../paths';
 import { isWindows, pidAlive, stripBom, unlinkLinks } from '../platform';
 import { t } from '../i18n';
 
@@ -122,7 +122,7 @@ export function scanCodexDirs(): CodexAccount[] {
   return entries
     .filter((e) => e.isDirectory() && CODEX_DIR_BASENAME_RE.test(e.name))
     .map((e) => ({ name: e.name.slice('.codex-'.length), dir: path.resolve(home, e.name) }))
-    .filter((a) => !sameRealPath(a.dir, def));
+    .filter((a) => !sameRealPath(a.dir, def) && !realPathInside(a.dir, def));
 }
 
 export function ensureCodexDir(dir: string): void {
@@ -320,7 +320,9 @@ export function checkCodexSafeToDelete(dir: string): string | undefined {
   // Only direct children of the home directory, so a symlinked parent cannot escape the home directory
   if (!samePath(path.dirname(target), home)) return t('del.notHomeChild', { dir: target });
   if (!CODEX_DIR_BASENAME_RE.test(path.basename(target))) return t('del.badName', { pattern: '.codex-<name>', dir: target });
-  if (sameRealPath(target, codexDefaultDir())) return t('del.isDefault', { dir: target });
+  const def = codexDefaultDir();
+  if (sameRealPath(target, def)) return t('del.isDefault', { dir: target });
+  if (realPathInside(target, def)) return t('del.containsDefault', { default: def, dir: target });
   let st: fs.Stats;
   try {
     st = fs.lstatSync(target);
