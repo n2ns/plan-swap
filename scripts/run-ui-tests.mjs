@@ -138,7 +138,7 @@ try {
   profile = await mkdtemp(path.join(os.tmpdir(), 'planswap-ui-'));
   preview = await startPreview();
   context = await chromium.launchPersistentContext(profile, {
-    headless: false, viewport: null, args: ['--start-fullscreen'],
+    headless: false, viewport: null, args: ['--start-fullscreen', '--disable-gpu'],
   });
   page = context.pages()[0] ?? await context.newPage();
   const cdp = await context.newCDPSession(page);

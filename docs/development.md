@@ -204,6 +204,8 @@ The exact development dependency is `playwright` 1.63.0. Install its pinned Chro
 
 These checks use synthetic theme colors and a fake host. They verify layout and frontend behavior, not actual VS Code theme injection, host-side account mutations, real login state or usage values. The separate editor smoke suite and user-operated acceptance still apply. Production Webview dependencies and CSP remain unchanged.
 
+The test browser disables GPU acceleration because the hosted Linux runner failed GPU initialization immediately before screenshot capture. This keeps the layout/interaction checks independent of that runner's GPU; it does not validate hardware-accelerated rendering.
+
 ## Synthetic account-read measurements
 
 `npm run perf --silent > report.json` measures Claude account-info reads with isolated synthetic fixtures and reports durations plus read/parse counts. It does not access real accounts or impose a timing threshold. See the [baseline record](research/account-read-performance.md) for measured layers, sample sizes, results and the decision to defer production optimization until relevant workload evidence exists.
