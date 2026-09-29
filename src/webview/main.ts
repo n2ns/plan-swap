@@ -423,7 +423,7 @@ class Page {
       { class: 'disabled-card' },
       h('div', { class: 'disabled-icon' }, h('vscode-icon', { name: 'plug', size: '26' })),
       h('div', { class: 'disabled-title' }, t('disabled.title')),
-      h('div', { class: 'disabled-text' }, `${t('disabled.text')} ${t(DISABLED_RESTART[codexRestart().context])}`),
+      h('div', { class: 'disabled-text' }, `${t(codexRestart().userEnv ? 'disabled.textWin' : 'disabled.text')} ${t(DISABLED_RESTART[codexRestart().context])}`),
       h('div', { class: 'disabled-actions' }, onClick(h('vscode-button', { icon: 'check' }, t('disabled.enable')), () => this.send({ type: 'enable' }))),
     );
   }

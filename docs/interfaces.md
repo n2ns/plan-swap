@@ -232,7 +232,7 @@ export interface AccountView {
 }
 
 export type EditorContext = 'local' | 'wsl' | 'remote';     // from vscode.env.remoteName: undefined → local (including WSLg desktop), 'wsl' → wsl, anything else → remote
-export interface RestartInfo { context: EditorContext; auto: boolean } // auto = the restart action restarts something; false = it only shows manual instructions
+export interface RestartInfo { context: EditorContext; auto: boolean; userEnv?: boolean } // auto = the restart action restarts something; false = it only shows manual instructions; userEnv (native Windows only) = the selection is the per-user CODEX_HOME, so the disabled page uses disabled.textWin instead of the rc-file text
 
 export interface TabState {
   enabled: boolean;          // false when codex is not enabled; always true for claude

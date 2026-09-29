@@ -27,8 +27,9 @@ export interface AccountView {
 
 // Editor connection context: local desktop (including WSLg), WSL remote, or another remote
 export type EditorContext = 'local' | 'wsl' | 'remote';
-// How a new Codex selection takes effect in this window; auto = false means the action only shows instructions
-export interface RestartInfo { context: EditorContext; auto: boolean }
+// How a new Codex selection takes effect in this window; auto = false means the action only shows instructions;
+// userEnv: native Windows, where the selection is the per-user CODEX_HOME variable instead of rc-file blocks
+export interface RestartInfo { context: EditorContext; auto: boolean; userEnv?: boolean }
 
 export interface TabState {
   // false when codex is not enabled (always true for claude)

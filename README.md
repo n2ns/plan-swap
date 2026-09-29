@@ -30,10 +30,10 @@ Switch between the Claude Code and Codex subscription accounts you own (Claude P
 
 ## Requirements
 
-- Antigravity IDE, VSCodium or VS Code, 1.107 or later, used through a **WSL remote window** (see [Supported editors](#supported-editors)).
-- The official Claude Code and/or Codex extensions installed on the WSL side.
-- The corresponding CLI installed in WSL to use terminal sign-in and CLI tools.
-- For Codex switching: `bash` as the login shell.
+- Antigravity IDE, VSCodium or VS Code, 1.107 or later, used through a **WSL remote window** (see [Supported editors](#supported-editors)) or as a local editor on **native Windows** (see [Native Windows](#native-windows)).
+- The official Claude Code and/or Codex extensions installed where the window runs (the WSL side, or Windows).
+- The corresponding CLI installed there to use terminal sign-in and CLI tools.
+- For Codex switching in WSL: `bash` as the login shell.
 
 ## Supported editors
 
@@ -45,6 +45,7 @@ For Claude, new sessions use the selected account; reload the window to update o
 | VSCodium | After your confirmation, PlanSwap restarts the WSL server. Click **Reload Window** in each disconnected window. |
 | VS Code | Close all VS Code windows connected to that WSL distribution, wait a few seconds, then reopen them. |
 | Local Linux desktop editor | The selection is saved and PlanSwap shows instructions: fully exit the editor and relaunch it with `CODEX_HOME` set to the selected account directory. |
+| Native Windows | The selection is saved in your user environment variable `CODEX_HOME`. Fully quit the editor and start it again from the Start menu or taskbar. |
 | Other remote windows | The selection is saved and PlanSwap shows instructions for restarting the remote editor server with `CODEX_HOME` set. |
 
 **Save your work before switching Codex accounts.** Restarting the WSL server disconnects its editor windows and closes integrated terminals and running CLI sessions. Reloading just one window does not replace this restart or a manual relaunch.
@@ -53,12 +54,12 @@ Only Antigravity IDE has been tested end to end. VSCodium and VS Code support ha
 
 ## Install
 
-Open the Extensions view in a **WSL window**, search for **PlanSwap** and click **Install** (the extension runs on the WSL side).
+Open the Extensions view in a **WSL window** (the extension runs on the WSL side) or in a local Windows window, search for **PlanSwap** and click **Install**.
 
 - VS Code: [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=n2ns.planswap)
 - Antigravity IDE, VSCodium: [Open VSX](https://open-vsx.org/extension/n2ns/planswap)
 
-If you already have a `.vsix` file, run **Extensions: Install from VSIX...** in a WSL window and select it.
+If you already have a `.vsix` file, run **Extensions: Install from VSIX...** in a WSL window or a local Windows window and select it.
 
 ## Quick start
 
@@ -132,11 +133,11 @@ PlanSwap also runs in a local Windows editor (no remote window). Claude switchin
 
 ## Privacy
 
-Account management runs locally in your WSL environment. PlanSwap includes no telemetry or analytics and makes no network requests of its own. To show Codex usage limits, it runs the official `codex` CLI with the current account's folder, which asks OpenAI's service as the CLI always does.
+Account management runs locally in your WSL environment or Windows user profile. PlanSwap includes no telemetry or analytics and makes no network requests of its own. To show Codex usage limits, it runs the official `codex` CLI with the current account's folder, which asks OpenAI's service as the CLI always does.
 
-- **Local storage**: account lists, display names and hidden-account records are saved in `~/.config/planswap/state.json` inside each WSL environment. The selected sidebar tab is saved in the editor's extension storage.
+- **Local storage**: account lists, display names and hidden-account records are saved in `~/.config/planswap/state.json` inside each WSL environment (on Windows, `%USERPROFILE%\.config\planswap\state.json`). The selected sidebar tab is saved in the editor's extension storage.
 - **Account information**: email and plan details are read locally for display. PlanSwap never reads the contents of Claude's `.credentials.json`. It reads Codex's `auth.json` locally, but never copies, swaps or rewrites it, or sends raw tokens to the sidebar. Account identifiers used to detect two accounts signed in to the same account stay in memory and are never shown or saved.
-- **Configuration changes**: switching updates the settings that select an account. Enabling Codex switching adds configuration to `~/.profile` and `~/.bashrc` after confirmation. Linking accounts shares settings and history; it never links or copies their login credential files.
+- **Configuration changes**: switching updates the settings that select an account. Enabling Codex switching adds configuration to `~/.profile` and `~/.bashrc` after confirmation (on Windows it sets the user environment variable `CODEX_HOME` instead). Linking accounts shares settings and history; it never links or copies their login credential files.
 - **Deleting accounts**: removing a row does not delete its files unless you separately confirm directory deletion. Deleting the directory permanently removes that account's login and local data. Shared data in the default account is kept.
 
 Sign-in, CLI updates and AI requests are handled by the official Claude Code and Codex clients, which have their own network behavior and privacy policies. User guide and Star links open GitHub in your browser.
@@ -146,8 +147,8 @@ Sign-in, CLI updates and AI requests are handled by the official Claude Code and
 Before uninstalling PlanSwap:
 
 1. Switch Claude back to `default` and reload the window.
-2. If you enabled Codex switching, run **Codex Account: Disable Codex Account Switching** from the Command Palette to remove its shell configuration.
-3. Uninstall PlanSwap from the Extensions view in your WSL window.
+2. If you enabled Codex switching, run **Codex Account: Disable Codex Account Switching** from the Command Palette to remove its shell configuration (on Windows, the user environment variable `CODEX_HOME`).
+3. Uninstall PlanSwap from the Extensions view in the window where you installed it (WSL or Windows).
 
 Your account directories (`~/.claude-<name>` and `~/.codex-<name>`) are kept. To clear PlanSwap's saved account list and display names as well, delete `~/.config/planswap/state.json`. This does not delete the accounts' own files.
 

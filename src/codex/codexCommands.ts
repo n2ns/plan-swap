@@ -104,7 +104,8 @@ export function manualRestartMessages(kind: ServerKind, remoteName: string | und
 export function restartInfo(kind: ServerKind = detectServerKind()): RestartInfo {
   const remoteName = vscode.env.remoteName;
   const context = remoteName === undefined ? 'local' : remoteName === 'wsl' ? 'wsl' : 'remote';
-  return { context, auto: context === 'wsl' && canAutoRestart(kind) };
+  const info: RestartInfo = { context, auto: context === 'wsl' && canAutoRestart(kind) };
+  return isWindows() ? { ...info, userEnv: true } : info;
 }
 
 // Returns false when automatic restart is unsupported or validation failed and the manual alternative was shown
@@ -262,10 +263,10 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
         const result = selfCheck();
         if (!result.ok) {
           removeWindowsState();
-          void vscode.window.showErrorMessage(t('codex.selfCheckFailed', { detail: result.detail }));
+          void vscode.window.showErrorMessage(t('codex.win.selfCheckFailed', { detail: result.detail }));
         }
       } catch (err) {
-        void vscode.window.showErrorMessage(t('codex.writeRcFailed', { error: errText(err) }));
+        void vscode.window.showErrorMessage(t('codex.enableFailed', { error: errText(err) }));
       }
       panel.refresh();
       return;
@@ -316,7 +317,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
 
   async function disable(): Promise<void> {
     const disableLabel = t('codex.disableButton');
-    const ok = await vscode.window.showWarningMessage(t('codex.disableConfirm'), { modal: true }, disableLabel);
+    const ok = await vscode.window.showWarningMessage(t(isWindows() ? 'codex.win.disableConfirm' : 'codex.disableConfirm'), { modal: true }, disableLabel);
     if (ok !== disableLabel) return;
     try {
       if (isWindows()) {

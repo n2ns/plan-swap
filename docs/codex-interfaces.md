@@ -194,7 +194,7 @@ export interface CodexDeps { store: CodexAccountStore; panel: AccountsPanel; lab
 export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[];
 export function validateName(name: string, store: CodexAccountStore, labels: LabelStore): string | undefined; // exported so it can be unit-tested
 export function manualRestartMessages(kind: ServerKind, remoteName: string | undefined): { hint: string; required: string; switchConfirm: string }; // pure localized guidance selector; callers pass vscode.env.remoteName
-export function restartInfo(kind?: ServerKind): RestartInfo; // local/other remote: auto false; WSL: canAutoRestart(kind ?? detectServerKind()); callers that already detected the kind pass it, so one flow calls detectServerKind() once.
+export function restartInfo(kind?: ServerKind): RestartInfo; // userEnv: true on win32; local/other remote: auto false; WSL: canAutoRestart(kind ?? detectServerKind()); callers that already detected the kind pass it, so one flow calls detectServerKind() once.
 export function codexPanelSource(store: CodexAccountStore, labels: LabelStore): PanelSource;
 export async function restartServerInteractive(): Promise<void>; // restart with modal confirmation, shared by the panel banner button, the Command Palette and the footer toolbar (ToolDeps.codexRestart)
 export function codexRunsInWsl(windows?: boolean): boolean; // windows defaults to isWindows(); true only on native Windows with chatgpt.runCodexInWindowsSubsystemForLinux === true (design 9a)

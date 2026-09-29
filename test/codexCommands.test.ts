@@ -77,7 +77,9 @@ describe('local selection with manual restart', () => {
   test('local and other remote connections never advertise automatic restart', () => {
     for (const remoteName of [undefined, 'ssh-remote', 'dev-container']) {
       env.remoteName = remoteName;
-      assert.deepEqual(restartInfo(), { context: remoteName === undefined ? 'local' : 'remote', auto: false });
+      const expected = { context: remoteName === undefined ? 'local' : 'remote', auto: false };
+      // Native Windows also reports that the selection lives in the user environment, not in rc files
+      assert.deepEqual(restartInfo(), process.platform === 'win32' ? { ...expected, userEnv: true } : expected);
     }
     env.remoteName = undefined;
   });

@@ -370,7 +370,7 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
         !readAccountInfo(account.dir, isExplicitConfigDir(account.dir)).loggedIn
       ) {
         void vscode.window.showWarningMessage(
-          t('claude.loginNotLanded', { dir: account.dir }),
+          t(isWindows() ? 'claude.win.loginNotLanded' : 'claude.loginNotLanded', { dir: account.dir }),
         );
       }
     }),
