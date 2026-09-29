@@ -36,7 +36,8 @@ export function codexLoggedIn(dir: string): boolean {
   return fs.existsSync(path.join(dir, 'auth.json'));
 }
 
-export interface CodexAccountInfo { email?: string; plan?: string; loggedIn: boolean }
+// identity: opaque comparison key (user + workspace) for detecting duplicate sign-ins; never displayed, logged or persisted
+export interface CodexAccountInfo { email?: string; plan?: string; loggedIn: boolean; identity?: string }
 
 // Decodes the second JWT segment (base64url) without verifying the signature; any error returns undefined
 export function decodeJwtPayload(jwt: string): Record<string, unknown> | undefined {
@@ -65,6 +66,7 @@ export function readCodexAccountInfo(dir: string): CodexAccountInfo {
   if (!fs.existsSync(file)) return { loggedIn: false };
   let email: string | undefined;
   let plan: string | undefined;
+  let identity: string | undefined;
   try {
     const data: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
     if (isPlainObject(data)) {
@@ -86,13 +88,25 @@ export function readCodexAccountInfo(dir: string): CodexAccountInfo {
           const auth = payload['https://api.openai.com/auth'];
           const planType = isPlainObject(auth) ? auth.chatgpt_plan_type : undefined;
           plan = formatCodexPlan(typeof planType === 'string' ? planType : undefined);
+          identity = codexIdentity(payload);
         }
       }
     }
   } catch {
     // Corrupt JSON or being written: treat as unknown
   }
-  return { email, plan, loggedIn: true };
+  return identity ? { email, plan, loggedIn: true, identity } : { email, plan, loggedIn: true };
+}
+
+// User id (chatgpt_user_id, user_id, then top-level sub) plus workspace id (chatgpt_account_id);
+// both are required and email is never used, so one person in two workspaces is not a duplicate
+function codexIdentity(payload: Record<string, unknown>): string | undefined {
+  const auth = payload['https://api.openai.com/auth'];
+  if (!isPlainObject(auth)) return undefined;
+  const str = (v: unknown): string | undefined => (typeof v === 'string' && v ? v : undefined);
+  const user = str(auth.chatgpt_user_id) ?? str(auth.user_id) ?? str(payload.sub);
+  const workspace = str(auth.chatgpt_account_id);
+  return user && workspace ? `codex:${user}\n${workspace}` : undefined;
 }
 
 export function scanCodexDirs(): CodexAccount[] {

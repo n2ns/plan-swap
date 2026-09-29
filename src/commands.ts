@@ -276,6 +276,9 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
     // The terminal environment carries CLAUDE_CONFIG_DIR; Windows shells have no `env` command
     terminal.sendText(isDefault || isWindows() ? 'claude' : `env CLAUDE_CONFIG_DIR=${shQuote(account.dir)} claude`);
     terminal.show();
+    if (!readAccountInfo(account.dir, isExplicitConfigDir(account.dir)).loggedIn) {
+      void vscode.window.showInformationMessage(t('account.loginTip', { vendor: 'Claude' }));
+    }
   }
 
   // Panel messages

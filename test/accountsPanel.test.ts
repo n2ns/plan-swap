@@ -1,9 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import type * as vscode from 'vscode';
-import { AccountsPanel, type PanelSource } from '../src/accountsPanel';
+import { AccountsPanel, claudePanelSource, type PanelSource } from '../src/accountsPanel';
+import { AccountStore } from '../src/accounts';
+import { LabelStore } from '../src/labels';
+import { readAccountInfo } from '../src/paths';
 import type { FromWebview, ToWebview } from '../src/protocol';
-import { MemoryMemento } from './helpers';
+import { makeTempHome, MemoryMemento } from './helpers';
 import { setLocale, t } from '../src/i18n';
 
 function harness() {
@@ -70,3 +75,24 @@ for (const locale of ['es', 'ja'] as const) {
     } finally { h.panel.dispose(); setLocale('en'); }
   });
 }
+
+test('Claude panel rows show the email but never carry the identity comparison key', async () => {
+  const tmp = makeTempHome('panel-identity');
+  try {
+    const dir = path.join(tmp.home, '.claude-work');
+    fs.mkdirSync(dir);
+    fs.writeFileSync(path.join(dir, '.claude.json'), JSON.stringify({
+      oauthAccount: { emailAddress: 'dummy@example.com', accountUuid: 'dummy-account', organizationUuid: 'dummy-org' },
+    }));
+    const memento = new MemoryMemento();
+    const store = new AccountStore(memento);
+    await memento.update('accounts', [{ name: 'work', dir }]);
+    assert.ok(readAccountInfo(dir).identity, 'the account info has an identity');
+
+    const rows = claudePanelSource(store, new LabelStore(memento, 'claude.labels')).accounts();
+    const row = rows.find((r) => r.dir === dir);
+    assert.equal(row?.email, 'dummy@example.com');
+    assert.equal(row?.loggedIn, true);
+    for (const r of rows) assert.ok(!('identity' in r), `row ${r.name} has no identity`);
+  } finally { tmp.restore(); }
+});

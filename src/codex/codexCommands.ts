@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { NAME_RE, samePath, sameRealPath } from '../paths';
 import { shQuote } from '../commands';
-import { type AccountsPanel, type PanelSource, tildify } from '../accountsPanel';
+import { type AccountsPanel, type PanelSource, tildify, viewInfo } from '../accountsPanel';
 import { labelFor, sameName, type LabelStore, EXTERNAL_NAME } from '../labels';
 import type { AccountView, FromWebview, RestartInfo } from '../protocol';
 import {
@@ -54,6 +54,15 @@ const EDITOR_NAMES: Record<ServerKind, string> = {
   unknown: '', // unused: the unknown kind never names an editor
 };
 const editorName = (kind: ServerKind): string => EDITOR_NAMES[kind];
+
+/**
+ * Native Windows only: the Codex extension can run its CLI inside WSL (chatgpt.runCodexInWindowsSubsystemForLinux).
+ * That Codex reads the WSL-side ~/.codex and never sees the Windows user variable, so switching here would not reach
+ * it; accounts are then managed from a WSL window instead.
+ */
+export function codexRunsInWsl(windows: boolean = isWindows()): boolean {
+  return windows && vscode.workspace.getConfiguration('chatgpt').get<boolean>('runCodexInWindowsSubsystemForLinux', false) === true;
+}
 
 /** Uses the editor connection context, not the kernel, so WSLg desktop windows get local guidance. */
 export function manualRestartMessages(kind: ServerKind, remoteName: string | undefined, windows: boolean = isWindows()): { hint: string; required: string; switchConfirm: string } {
@@ -147,7 +156,7 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore): 
       label: labelFor(a.name, labels),
       dir: a.dir,
       dirLabel: tildify(a.dir),
-      ...readCodexAccountInfo(a.dir),
+      ...viewInfo(readCodexAccountInfo(a.dir)),
       isCurrent: samePath(a.dir, cur),
       isSelected: samePath(a.dir, selected),
       shared: a.name === CODEX_DEFAULT_NAME ? undefined : isSharedCodexAccount(a.dir),
@@ -159,7 +168,7 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore): 
         label: labelFor(EXTERNAL_NAME, labels),
         dir: cur,
         dirLabel: tildify(cur),
-        ...readCodexAccountInfo(cur),
+        ...viewInfo(readCodexAccountInfo(cur)),
         isCurrent: true,
         isSelected: samePath(cur, selected),
       });
@@ -225,6 +234,10 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
   }
 
   async function enable(): Promise<void> {
+    if (codexRunsInWsl()) {
+      void vscode.window.showWarningMessage(t('codex.win.runsInWsl'));
+      return;
+    }
     let check: ReturnType<typeof preCheck>;
     try {
       check = preCheck();
@@ -320,6 +333,10 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
 
   async function switchTo(account: CodexAccount): Promise<void> {
     if (switching) return;
+    if (codexRunsInWsl()) {
+      void vscode.window.showWarningMessage(t('codex.win.runsInWsl'));
+      return;
+    }
     // Switching is only allowed once PlanSwap manages CODEX_HOME (an unreadable rc file counts as not enabled)
     let enabled = false;
     try {
@@ -545,6 +562,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     const cmd = isWindows() ? 'codex' : isDefault ? 'env -u CODEX_HOME codex' : `env CODEX_HOME=${shQuote(account.dir)} codex`;
     terminal.sendText(login ? `${cmd} login` : cmd);
     terminal.show();
+    if (login) void vscode.window.showInformationMessage(t('account.loginTip', { vendor: 'Codex' }));
   }
 
   // Panel messages

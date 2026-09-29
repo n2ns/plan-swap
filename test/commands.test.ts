@@ -273,6 +273,21 @@ describe('panel message handlers (Claude)', () => {
     }
   });
 
+  test('terminal: a sign-in tip is shown only when the account still has to sign in', async (ctx) => {
+    const h = harness();
+    const dir = await add(h, 'tip', false);
+    const infos = ctx.mock.method(window, 'showInformationMessage', async () => undefined);
+    try {
+      await h.handle({ type: 'terminal', mode: 'claude', dir });
+      assert.deepEqual(infos.mock.calls.map((c) => c.arguments[0]), [t('account.loginTip', { vendor: 'Claude' })]);
+      fs.writeFileSync(path.join(dir, '.claude.json'), JSON.stringify({ oauthAccount: { emailAddress: 'tip@example.com' } }));
+      await h.handle({ type: 'terminal', mode: 'claude', dir });
+      assert.equal(infos.mock.callCount(), 1);
+    } finally {
+      h.dispose();
+    }
+  });
+
   test('share and unshare refuse the current account', async (ctx) => {
     const h = harness();
     const solo = await add(h, 'i', false);

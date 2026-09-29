@@ -101,6 +101,43 @@ describe('readCodexAccountInfo', () => {
   });
 });
 
+describe('readCodexAccountInfo identity', () => {
+  const AUTH = 'https://api.openai.com/auth';
+  const mkJwt = (name: string, payload: Record<string, unknown>, extra: Record<string, unknown> = {}): string => {
+    const d = path.join(home, name);
+    fs.mkdirSync(d, { recursive: true });
+    fs.writeFileSync(path.join(d, 'auth.json'), JSON.stringify({ auth_mode: 'chatgpt', ...extra, tokens: { id_token: fakeJwt(payload), access_token: 'FAKE_ACCESS', refresh_token: 'FAKE_REFRESH' } }));
+    return d;
+  };
+  test('chatgpt_user_id + chatgpt_account_id → identity, no token strings', () => {
+    const r = readCodexAccountInfo(mkJwt('.codex-id1', { email: 'u@example.com', sub: 'sub-1', [AUTH]: { chatgpt_user_id: 'user-1', user_id: 'uid-1', chatgpt_account_id: 'ws-1', chatgpt_plan_type: 'team' } }));
+    assert.deepEqual(r, { email: 'u@example.com', plan: 'Team', loggedIn: true, identity: 'codex:user-1\nws-1' });
+    assert.ok(!JSON.stringify(r).includes('FAKE'));
+  });
+  test('falls back to user_id, then top-level sub', () => {
+    assert.equal(readCodexAccountInfo(mkJwt('.codex-id2', { sub: 'sub-2', [AUTH]: { user_id: 'uid-2', chatgpt_account_id: 'ws-2' } })).identity, 'codex:uid-2\nws-2');
+    assert.equal(readCodexAccountInfo(mkJwt('.codex-id3', { sub: 'sub-3', [AUTH]: { chatgpt_user_id: '', chatgpt_account_id: 'ws-3' } })).identity, 'codex:sub-3\nws-3');
+  });
+  test('missing workspace or user → no identity, never falls back to email', () => {
+    assert.equal(readCodexAccountInfo(mkJwt('.codex-id4', { email: 'u@example.com', sub: 'sub-4', [AUTH]: { chatgpt_user_id: 'user-4' } })).identity, undefined);
+    assert.equal(readCodexAccountInfo(mkJwt('.codex-id5', { email: 'u@example.com', [AUTH]: { chatgpt_account_id: 'ws-5' } })).identity, undefined);
+    assert.equal(readCodexAccountInfo(mkJwt('.codex-id6', { email: 'u@example.com', sub: 'sub-6' })).identity, undefined);
+    assert.ok(!('identity' in readCodexAccountInfo(mkJwt('.codex-id7', { email: 'u@example.com' }))));
+  });
+  test('API key mode → no identity', () => {
+    const d = mkJwt('.codex-id8', { sub: 'sub-8', [AUTH]: { chatgpt_user_id: 'user-8', chatgpt_account_id: 'ws-8' } }, { auth_mode: 'apikey', OPENAI_API_KEY: 'sk-fake' });
+    assert.deepEqual(readCodexAccountInfo(d), { email: undefined, plan: 'API key', loggedIn: true });
+  });
+  test('same user in the same workspace matches; different workspace does not', () => {
+    const a = readCodexAccountInfo(mkJwt('.codex-id9a', { [AUTH]: { chatgpt_user_id: 'user-9', chatgpt_account_id: 'ws-a' } })).identity;
+    const a2 = readCodexAccountInfo(mkJwt('.codex-id9c', { [AUTH]: { chatgpt_user_id: 'user-9', chatgpt_account_id: 'ws-a' } })).identity;
+    const b = readCodexAccountInfo(mkJwt('.codex-id9b', { [AUTH]: { chatgpt_user_id: 'user-9', chatgpt_account_id: 'ws-b' } })).identity;
+    assert.ok(a && b);
+    assert.equal(a, a2);
+    assert.notEqual(a, b);
+  });
+});
+
 describe('copyCodexSeed', () => {
   const fresh = (cfg?: string, agents?: string): { src: string; dst: string } => {
     const src = fs.mkdtempSync(path.join(home, 'src-'));

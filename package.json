@@ -104,6 +104,12 @@
         "icon": "$(debug-restart)"
       },
       {
+        "command": "planswap.codex.refreshUsage",
+        "title": "%command.codex.refreshUsage%",
+        "category": "%category.codex%",
+        "icon": "$(refresh)"
+      },
+      {
         "command": "planswap.tools.openClaudeMd",
         "title": "%command.tools.openClaudeMd%",
         "category": "%category.tools%",

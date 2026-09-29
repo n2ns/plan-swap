@@ -2,15 +2,15 @@ import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { codexPanelSource, manualRestartMessages, registerCodexCommands, restartInfo, restartServerInteractive, validateName } from '../src/codex/codexCommands';
+import { codexPanelSource, codexRunsInWsl, manualRestartMessages, registerCodexCommands, restartInfo, restartServerInteractive, validateName } from '../src/codex/codexCommands';
 import { CodexAccountStore } from '../src/codex/codexStore';
 import { setLocale, t } from '../src/i18n';
 import { LabelStore } from '../src/labels';
-import { env, window, commands, type StubTerminal } from './stubs/vscode';
+import { env, window, commands, setConfig, type StubTerminal } from './stubs/vscode';
 import type { AccountsPanel } from '../src/accountsPanel';
 import type { FromWebview, ToWebview } from '../src/protocol';
 import { RC_BEGIN, STATE_FILE, installRcBlocks, rcBlock, rcStatus, readSelectedDir, writeSelectedDir } from '../src/codex/codexState';
-import { CODEX_DEFAULT_NAME, codexAccountDir, type CodexAccount } from '../src/codex/codexPaths';
+import { CODEX_DEFAULT_NAME, codexAccountDir, readCodexAccountInfo, type CodexAccount } from '../src/codex/codexPaths';
 import { isSharedCodexAccount } from '../src/codex/codexShare';
 import { labelFor } from '../src/labels';
 import { assertTempHome, LINUX_ONLY, makeTempHome, MemoryMemento, read, type TempHome } from './helpers';
@@ -552,6 +552,82 @@ describe('panel message handlers', () => {
       ]);
     } finally {
       h.dispose();
+    }
+  });
+
+  test('terminal: a sign-in tip is shown only when the account still has to sign in', async (ctx) => {
+    const a = named('tip');
+    const h = await harness([a]);
+    const infos = ctx.mock.method(window, 'showInformationMessage', async () => undefined);
+    try {
+      await h.handle({ type: 'terminal', mode: 'codex', dir: a.dir });
+      assert.deepEqual(infos.mock.calls.map((c) => c.arguments[0]), [t('account.loginTip', { vendor: 'Codex' })]);
+      fs.writeFileSync(path.join(a.dir, 'auth.json'), '{}');
+      await h.handle({ type: 'terminal', mode: 'codex', dir: a.dir });
+      assert.equal(infos.mock.callCount(), 1);
+    } finally {
+      h.dispose();
+    }
+  });
+
+  test('Windows with Codex run inside WSL: enable and switch are refused with guidance, nothing is written', async (ctx) => {
+    const a = named('wslrun');
+    const h = await harness([a]);
+    const warnings = modal(ctx, () => t('common.continue'));
+    const realPlatform = Object.getOwnPropertyDescriptor(process, 'platform') as PropertyDescriptor;
+    const stateBefore = fs.existsSync(STATE_FILE()) ? read(STATE_FILE()) : undefined;
+    setConfig('chatgpt', 'runCodexInWindowsSubsystemForLinux', true);
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    try {
+      await h.handle({ type: 'enable', mode: 'codex' });
+      await h.handle({ type: 'switch', mode: 'codex', dir: a.dir });
+      assert.deepEqual(warnings.mock.calls.map((c) => c.arguments[0]), [t('codex.win.runsInWsl'), t('codex.win.runsInWsl')]);
+      assert.equal(fs.existsSync(STATE_FILE()) ? read(STATE_FILE()) : undefined, stateBefore);
+    } finally {
+      Object.defineProperty(process, 'platform', realPlatform);
+      setConfig('chatgpt', 'runCodexInWindowsSubsystemForLinux', undefined);
+      h.dispose();
+    }
+  });
+});
+
+describe('codexRunsInWsl', () => {
+  after(() => setConfig('chatgpt', 'runCodexInWindowsSubsystemForLinux', undefined));
+  test('true only on Windows with the Codex extension set to run Codex in WSL', () => {
+    setConfig('chatgpt', 'runCodexInWindowsSubsystemForLinux', undefined);
+    assert.equal(codexRunsInWsl(true), false);
+    setConfig('chatgpt', 'runCodexInWindowsSubsystemForLinux', false);
+    assert.equal(codexRunsInWsl(true), false);
+    setConfig('chatgpt', 'runCodexInWindowsSubsystemForLinux', true);
+    assert.equal(codexRunsInWsl(true), true);
+    assert.equal(codexRunsInWsl(false), false);
+  });
+});
+
+describe('Codex panel rows', () => {
+  test('show the email but never carry the identity comparison key', async () => {
+    const fixture = makeTempHome('codex-panel-identity');
+    try {
+      const b64u = (o: unknown): string => Buffer.from(JSON.stringify(o)).toString('base64url');
+      const payload = { email: 'dummy@example.com', 'https://api.openai.com/auth': { chatgpt_user_id: 'dummy-user', chatgpt_account_id: 'dummy-workspace' } };
+      const dir = path.join(fixture.home, '.codex-work');
+      fs.mkdirSync(dir);
+      fs.writeFileSync(path.join(dir, 'auth.json'), JSON.stringify({
+        auth_mode: 'chatgpt',
+        tokens: { id_token: `${b64u({ alg: 'none' })}.${b64u(payload)}.sig`, access_token: 'FAKE_ACCESS', refresh_token: 'FAKE_REFRESH' },
+      }));
+      const state = new MemoryMemento();
+      const store = new CodexAccountStore(state);
+      await store.add({ name: 'work', dir });
+      assert.ok(readCodexAccountInfo(dir).identity, 'the account info has an identity');
+
+      const rows = codexPanelSource(store, new LabelStore(state, 'codex.labels')).accounts();
+      const row = rows.find((r) => r.dir === dir);
+      assert.equal(row?.email, 'dummy@example.com');
+      assert.equal(row?.loggedIn, true);
+      for (const r of rows) assert.ok(!('identity' in r), `row ${r.name} has no identity`);
+    } finally {
+      fixture.restore();
     }
   });
 });

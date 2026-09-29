@@ -37,7 +37,7 @@ export function claudePanelSource(store: AccountStore, labels: LabelStore): Pane
       label: labelFor(a.name, labels),
       dir: a.dir,
       dirLabel: tildify(a.dir),
-      ...readAccountInfo(a.dir, isExplicitConfigDir(a.dir)),
+      ...viewInfo(readAccountInfo(a.dir, isExplicitConfigDir(a.dir))),
       isCurrent: samePath(a.dir, cur),
       shared: a.name === DEFAULT_NAME ? undefined : isSharedClaudeAccount(a.dir),
     }));
@@ -48,7 +48,7 @@ export function claudePanelSource(store: AccountStore, labels: LabelStore): Pane
         label: labelFor(EXTERNAL_NAME, labels),
         dir: cur,
         dirLabel: tildify(cur),
-        ...readAccountInfo(cur, isExplicitConfigDir(cur)),
+        ...viewInfo(readAccountInfo(cur, isExplicitConfigDir(cur))),
         isCurrent: true,
       });
     }
@@ -255,6 +255,14 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
       );
     }
   }
+}
+
+/**
+ * The account-info fields a row shows. Picked explicitly rather than spread, so fields meant to stay in the host
+ * (the identity comparison key) never reach the Webview.
+ */
+export function viewInfo(info: { email?: string; plan?: string; loggedIn: boolean }): Pick<AccountView, 'email' | 'plan' | 'loggedIn'> {
+  return { email: info.email, plan: info.plan, loggedIn: info.loggedIn };
 }
 
 export function tildify(dir: string): string {

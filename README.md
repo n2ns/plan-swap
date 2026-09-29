@@ -24,6 +24,7 @@ Switch between the Claude Code and Codex subscription accounts you own (Claude P
 - **Keep accounts signed in**: sign in once per account, then switch from the sidebar. Codex switches require a restart (see below).
 - **Linked or independent accounts**: reuse the default account's setup, or keep separate settings and session histories.
 - **Display names**: give named accounts labels that are easy to recognize.
+- **Codex usage limits**: hover the status bar item to see the current Codex account's usage limits and reset times.
 - **Handy tools**: open your rules and settings, update the CLI, check installed versions and reload the editor.
 - **English, Simplified Chinese, Spanish and Japanese UI**, switchable in the settings.
 
@@ -75,6 +76,8 @@ Open **PlanSwap** in the activity bar. The `default` row represents your existin
 2. Add an account, choose linked or independent, then click **Log in** and complete sign-in in the terminal.
 3. Click the switch icon and follow your editor's [restart steps](#supported-editors). Codex uses the selected account after the restart.
 
+**Tip:** signing in a new account does not sign out the others. Each account keeps its sign-in in its own folder, so there is no need to sign out first; signing out ends that account's session. PlanSwap warns you when two accounts are signed in to the same account and workspace, because switching between them gives no separate usage limits.
+
 Use the pencil button to change a named account's display label. Use the refresh button at the top of the panel to rescan accounts and update their displayed information.
 
 ## Linked and independent accounts
@@ -124,15 +127,15 @@ PlanSwap also runs in a local Windows editor (no remote window). Claude switchin
 - **Codex** is selected through the per-user environment variable `CODEX_HOME`. Enabling asks for confirmation and refuses when you already set that variable yourself (a value pointing at one of your `~/.codex-<name>` account folders is adopted). After a switch, **fully quit the editor and start it again from the Start menu or taskbar**; Reload Window and terminals started before the switch keep the old value. Accounts opened through PlanSwap terminals always get the right value.
 - **Sharing** links folders with directory junctions (no privileges needed). Linking single files (`settings.json`, `history.jsonl`, ...) needs Windows Developer Mode or an elevated editor; without it PlanSwap still links the folders, asks in a dialog whether to copy small config files (`settings.json`, `CLAUDE.md`, `config.toml`, `AGENTS.md`, `hooks.json`) once so a shared account starts with them (later edits are not shared; declining leaves them out), keeps history and databases independent, never moves an account's files away, and tells you to turn on Developer Mode (Settings > For developers). Turn it on and use Re-link: missing files are linked and copies still identical to the default become links.
 - **Busy checks** are conservative: a running `codex.exe` or a live Claude session blocks converting an account.
-- Codex in the VS Code extension's *Run in WSL* mode uses the WSL-side `~/.codex`; install PlanSwap in WSL to switch that one.
+- When the Codex extension runs Codex in WSL (`chatgpt.runCodexInWindowsSubsystemForLinux`), it uses the WSL-side `~/.codex`, so PlanSwap refuses Codex switching in the Windows window; manage those accounts from a WSL window, or turn the setting off.
 - Login tokens are never read or copied; `auth.json` stays read-only. Accounts signed in through the OS keyring instead of `auth.json` show as signed out.
 
 ## Privacy
 
-Account management runs locally in your WSL environment. PlanSwap includes no telemetry or analytics and makes no network requests of its own.
+Account management runs locally in your WSL environment. PlanSwap includes no telemetry or analytics and makes no network requests of its own. To show Codex usage limits, it runs the official `codex` CLI with the current account's folder, which asks OpenAI's service as the CLI always does.
 
 - **Local storage**: account lists, display names and hidden-account records are saved in `~/.config/planswap/state.json` inside each WSL environment. The selected sidebar tab is saved in the editor's extension storage.
-- **Account information**: email and plan details are read locally for display. PlanSwap never reads the contents of Claude's `.credentials.json`. It reads Codex's `auth.json` locally, but never copies, swaps or rewrites it, or sends raw tokens to the sidebar.
+- **Account information**: email and plan details are read locally for display. PlanSwap never reads the contents of Claude's `.credentials.json`. It reads Codex's `auth.json` locally, but never copies, swaps or rewrites it, or sends raw tokens to the sidebar. Account identifiers used to detect two accounts signed in to the same account stay in memory and are never shown or saved.
 - **Configuration changes**: switching updates the settings that select an account. Enabling Codex switching adds configuration to `~/.profile` and `~/.bashrc` after confirmation. Linking accounts shares settings and history; it never links or copies their login credential files.
 - **Deleting accounts**: removing a row does not delete its files unless you separately confirm directory deletion. Deleting the directory permanently removes that account's login and local data. Shared data in the default account is kept.
 

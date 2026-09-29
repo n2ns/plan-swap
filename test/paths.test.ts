@@ -155,6 +155,35 @@ describe('readAccountInfo', () => {
     fs.rmSync(path.join(home, '.claude.json'));
     fs.rmSync(path.join(def, '.claude.json'));
   });
+  test('identity from accountUuid + organizationUuid', () => {
+    const d = mk('.claude-id1');
+    fs.writeFileSync(path.join(d, '.claude.json'), JSON.stringify({ oauthAccount: { emailAddress: 'i@example.com', accountUuid: 'acct-1', organizationUuid: 'org-1', organizationType: 'claude_pro' } }));
+    assert.deepEqual(readAccountInfo(d), { email: 'i@example.com', plan: 'Pro', loggedIn: true, identity: 'claude:acct-1\norg-1' });
+  });
+  test('identity requires both uuids as non-empty strings', () => {
+    const d = mk('.claude-id2');
+    const write = (oauth: unknown): void => fs.writeFileSync(path.join(d, '.claude.json'), JSON.stringify({ oauthAccount: oauth }));
+    write({ emailAddress: 'i@example.com', accountUuid: 'acct-2' });
+    assert.deepEqual(readAccountInfo(d), { email: 'i@example.com', plan: undefined, loggedIn: true });
+    write({ emailAddress: 'i@example.com', organizationUuid: 'org-2', accountUuid: '' });
+    assert.equal(readAccountInfo(d).identity, undefined);
+    write({ emailAddress: 'i@example.com', accountUuid: 7, organizationUuid: 'org-2' });
+    assert.equal(readAccountInfo(d).identity, undefined);
+  });
+  test('oauthAccount not an object → no identity', () => {
+    const d = mk('.claude-id3');
+    fs.writeFileSync(path.join(d, '.claude.json'), JSON.stringify({ oauthAccount: 'acct-3', accountUuid: 'acct-3', organizationUuid: 'org-3' }));
+    assert.deepEqual(readAccountInfo(d), { email: undefined, plan: undefined, loggedIn: false });
+  });
+  test('same account in different organizations → different identity', () => {
+    const a = mk('.claude-id4a');
+    const b = mk('.claude-id4b');
+    fs.writeFileSync(path.join(a, '.claude.json'), JSON.stringify({ oauthAccount: { accountUuid: 'acct-4', organizationUuid: 'org-a' } }));
+    fs.writeFileSync(path.join(b, '.claude.json'), JSON.stringify({ oauthAccount: { accountUuid: 'acct-4', organizationUuid: 'org-b' } }));
+    const ia = readAccountInfo(a).identity;
+    assert.ok(ia);
+    assert.notEqual(ia, readAccountInfo(b).identity);
+  });
 });
 
 describe('copySettingsStripped', () => {

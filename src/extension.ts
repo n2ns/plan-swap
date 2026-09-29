@@ -5,16 +5,26 @@ import { AccountsPanel, VIEW_ID, claudePanelSource, type PanelSource } from './a
 import { LabelStore, labelFor } from './labels';
 import { FileMemento } from './fileState';
 import { ensureCodexLinks, isSharedCodexAccount } from './codex/codexShare';
-import { StatusBar } from './statusBar';
+import { REFRESH_USAGE_COMMAND, StatusBar } from './statusBar';
 import { registerCommands } from './commands';
 import { affectsSetting } from './claudeSettings';
 import { CodexAccountStore } from './codex/codexStore';
-import { codexPanelSource, registerCodexCommands, restartServerInteractive } from './codex/codexCommands';
+import { codexPanelSource, codexRunsInWsl, registerCodexCommands, restartServerInteractive } from './codex/codexCommands';
 import { registerToolCommands, runTool, type ToolDeps } from './tools';
 import { setLocale, t } from './i18n';
 import { isSupportedPlatform } from './platform';
 import { migrateLegacyLanguage, resolveLocale, watchLocale } from './i18nVscode';
-import { migrateLegacyCodex } from './codex/codexState';
+import { effectiveDir, migrateLegacyCodex } from './codex/codexState';
+import { CodexUsageMonitor } from './codex/codexUsageMonitor';
+import { findBundledCodex, readCodexUsageWithFallback } from './codex/codexUsage';
+import { readCodexAccountInfo } from './codex/codexPaths';
+import { IdentityWarnings, claudeIdentity, codexIdentity, type IdentitySource } from './identityWarnings';
+
+// The Codex extension, whose bundled codex binary answers the usage query when the CLI is not on PATH
+const CODEX_EXTENSION_ID = 'openai.chatgpt';
+// While the window is focused, usage limits are re-checked once they are older than the stale interval
+const USAGE_TICK_MS = 60_000;
+const USAGE_FIRST_CHECK_MS = 5_000;
 
 export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   const startedAt = performance.now();
@@ -58,6 +68,38 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
 
   const statusBar = new StatusBar(store, claudeLabels, codex);
 
+  // Usage limits of this window's effective Codex account for the status bar tooltip. Only the focused window
+  // queries, so several open windows do not all start codex; nothing runs when Codex runs inside WSL (Windows)
+  const version = String(ctx.extension.packageJSON.version ?? '0');
+  const usage = codex
+    ? new CodexUsageMonitor(effectiveDir, (s) => statusBar.setCodexUsage(s), {
+      // API-key accounts have no ChatGPT usage limits (and the tooltip hides them): nothing is started for them
+      read: async (dir) => readCodexAccountInfo(dir).plan === 'API key'
+        ? { ok: false, reason: 'notLoggedIn' }
+        : readCodexUsageWithFallback(dir, () => {
+          const ext = vscode.extensions.getExtension(CODEX_EXTENSION_ID);
+          return ext && findBundledCodex(ext.extensionPath);
+        }, { clientVersion: version }),
+    })
+    : undefined;
+  if (usage) statusBar.setCodexUsage(usage.current());
+  const checkUsage = (): void => {
+    if (usage && vscode.window.state.focused && !codexRunsInWsl()) void usage.refreshIfStale();
+  };
+  const firstUsageCheck = setTimeout(checkUsage, USAGE_FIRST_CHECK_MS);
+  const usageTick = setInterval(checkUsage, USAGE_TICK_MS);
+
+  // Two registered accounts signed in to the same identity are pointed out once per situation
+  const identitySources: IdentitySource[] = [
+    { vendor: 'Claude', accounts: () => store.all().map((a) => ({ dir: a.dir, label: labelFor(a.name, claudeLabels) })), identityOf: claudeIdentity },
+  ];
+  if (codex) {
+    const c = codex;
+    identitySources.push({ vendor: 'Codex', accounts: () => c.store.all().map((a) => ({ dir: a.dir, label: labelFor(a.name, codexLabels) })), identityOf: codexIdentity });
+  }
+  const identityWarnings = new IdentityWarnings(identitySources);
+  identityWarnings.check();
+
   // Toolbar dependencies: no restart entry when Codex is not initialized
   const tools: ToolDeps = {
     codexRestart: codex ? restartServerInteractive : undefined,
@@ -77,7 +119,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     const notify = () => void vscode.window.showErrorMessage(t('ext.codexUnavailable', { error: codexInitError ?? '' }));
     // Toolbar messages are handled as usual (runTool reports "not initialized" for restartServer)
     panel.setHandler('codex', (msg) => (msg.type === 'tool' ? runTool('codex', msg.tool, tools) : notify()));
-    for (const id of ['enable', 'disable', 'switchAccount', 'addAccount', 'removeAccount', 'openTerminal', 'restartServer']) {
+    for (const id of ['enable', 'disable', 'switchAccount', 'addAccount', 'removeAccount', 'openTerminal', 'restartServer', 'refreshUsage']) {
       ctx.subscriptions.push(vscode.commands.registerCommand(`planswap.codex.${id}`, notify));
     }
   }
@@ -89,9 +131,29 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     ...registerCommands({ store, panel, statusBar, labels: claudeLabels, codex, tools }),
     ...(codex ? registerCodexCommands({ store: codex.store, panel, labels: codexLabels, tools }) : []),
     ...registerToolCommands(tools),
-    // Account info file changes only push panel state; keep the status bar email in sync here
-    panel.onDidChange(() => statusBar.update()),
+    // Account info file changes only push panel state; keep the status bar email in sync here, re-check usage when the
+    // effective account's auth.json changed (sign-in, re-login), and look for accounts signed in to the same identity
+    panel.onDidChange(() => {
+      statusBar.update();
+      if (usage && !codexRunsInWsl()) void usage.refreshIfAuthChanged();
+      identityWarnings.check();
+    }),
+    { dispose: () => { clearTimeout(firstUsageCheck); clearInterval(usageTick); } },
+    vscode.window.onDidChangeWindowState((e) => {
+      if (e.focused) checkUsage();
+    }),
+    ...(usage
+      ? [vscode.commands.registerCommand(REFRESH_USAGE_COMMAND, async () => {
+        if (codexRunsInWsl()) {
+          void vscode.window.showWarningMessage(t('codex.win.runsInWsl'));
+          return;
+        }
+        await usage.refresh();
+      })]
+      : []),
     vscode.workspace.onDidChangeConfiguration((e) => {
+      // The Codex extension's run-in-WSL switch changes what the Codex section of the tooltip can say
+      if (e.affectsConfiguration('chatgpt.runCodexInWindowsSubsystemForLinux')) statusBar.update();
       if (!affectsSetting(e)) return;
       panel.refresh();
       statusBar.update();

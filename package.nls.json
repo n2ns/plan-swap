@@ -15,6 +15,7 @@
   "command.codex.removeAccount": "Delete Codex Account",
   "command.codex.openTerminal": "Run codex in Terminal with Codex Account",
   "command.codex.restartServer": "Apply Codex Account: Restart or Show Instructions",
+  "command.codex.refreshUsage": "Refresh Codex Usage Limits",
   "command.tools.openClaudeMd": "Open Global CLAUDE.md",
   "category.tools": "PlanSwap",
   "command.tools.openAgentsMd": "Open Global AGENTS.md",

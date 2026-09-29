@@ -10,7 +10,8 @@ export const NAME_RE = /^[A-Za-z0-9_-]+$/;
 export const DIR_BASENAME_RE = /^\.claude-[A-Za-z0-9_-]+$/;
 
 export interface Account { name: string; dir: string }
-export interface AccountInfo { email?: string; plan?: string; loggedIn: boolean }
+// identity: opaque comparison key (account + organization) for detecting duplicate sign-ins; never displayed, logged or persisted
+export interface AccountInfo { email?: string; plan?: string; loggedIn: boolean; identity?: string }
 
 const STRIP_ENV_KEYS = ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CONFIG_DIR'];
 const STRIP_TOP_KEYS = ['apiKeyHelper', 'forceLoginMethod', 'forceLoginOrgUUID', 'enabledPlugins', 'extraKnownMarketplaces', 'additionalMarketplaces'];
@@ -87,17 +88,22 @@ function optString(v: unknown): string | undefined {
 export function readAccountInfo(dir: string, explicit = false): AccountInfo {
   let email: string | undefined;
   let plan: string | undefined;
+  let identity: string | undefined;
   try {
     const data: unknown = JSON.parse(fs.readFileSync(claudeJsonPath(dir, explicit), 'utf8'));
     const oauth = isPlainObject(data) ? data.oauthAccount : undefined;
     if (isPlainObject(oauth)) {
       email = optString(oauth.emailAddress);
       plan = formatClaudePlan(optString(oauth.organizationType), optString(oauth.organizationRateLimitTier));
+      const account = optString(oauth.accountUuid);
+      const org = optString(oauth.organizationUuid);
+      if (account && org) identity = `claude:${account}\n${org}`;
     }
   } catch {
     // File missing or being written by the CLI (partial JSON): treat as unknown
   }
-  return { email, plan, loggedIn: !!email || fs.existsSync(path.join(dir, '.credentials.json')) };
+  const loggedIn = !!email || fs.existsSync(path.join(dir, '.credentials.json'));
+  return identity ? { email, plan, loggedIn, identity } : { email, plan, loggedIn };
 }
 
 export function scanAccountDirs(): Account[] {

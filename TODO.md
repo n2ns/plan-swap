@@ -25,10 +25,11 @@ is still missing. Remove an item once it is done or decided.
   shared sessions with its own quota. Revisit if Codex adds a memory location option.
 - **Refusal reasons are not specific.** When `settings.json` / `config.toml` is not shared for safety, the report only
   names the file, not the identity key that caused it.
+- **Codex usage limits in the status bar** are implemented but not yet accepted with real accounts, on WSL or Windows (`codex.cmd` fallback, the binary bundled with the Codex extension when `codex` is not on PATH). Run [the usage checks](docs/manual-verification.md#usage-limits-sign-in-tip-and-duplicate-sign-ins); re-verify the `codex app-server` protocol facts ([Codex design §2](docs/codex-design.md#2-background-facts-verified)) after CLI upgrades.
 
 ## Windows verification
 
-- **Native Windows is implemented but not yet accepted on a real machine.** Run [the Windows checklist](docs/manual-verification.md#native-windows-user-operated). Open questions: where `.claude.json` lives when `CLAUDE_CONFIG_DIR` is set on Windows, whether the Claude extension honors `claudeCode.environmentVariables`, whether the Codex extension host inherits the changed user variable after a fresh start, Codex's default credential store on Windows (keyring accounts read as signed out), and rc/state behavior of the `.vsix` under a real Windows editor.
+- **Native Windows is implemented but not yet accepted on a real machine.** Run [the Windows checklist](docs/manual-verification.md#native-windows-user-operated). Open questions: where `.claude.json` lives when `CLAUDE_CONFIG_DIR` is set on Windows, whether the Claude extension honors `claudeCode.environmentVariables`, whether the Codex extension host inherits the changed user variable after a fresh start, Codex's default credential store on Windows (keyring accounts read as signed out), whether the Codex extension with `chatgpt.runCodexInWindowsSubsystemForLinux` really runs Codex in WSL and ignores the Windows `CODEX_HOME` (PlanSwap refuses Codex switching then), and rc/state behavior of the `.vsix` under a real Windows editor.
 - **Add a CHANGELOG entry** for Windows support when preparing the next release (no `[Unreleased]` heading before then).
 - **Windows CI** is not set up. `npm test` passes on a local Windows machine without Developer Mode (Linux-only, file-symlink and case-sensitivity tests skipped, see [Development](docs/development.md#verification-and-release-boundaries)); a run with Developer Mode on, where the `FILE_SYMLINKS` tests execute, is still unverified.
 

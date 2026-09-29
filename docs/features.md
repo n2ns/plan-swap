@@ -18,6 +18,7 @@ Purpose: the detailed user-visible behavior of both Claude and Codex account swi
   - The value does not correspond to any registered account (e.g. set by hand) → an "External directory" ("外部目录") row is appended to the list and marked current (pinned to the first row and highlighted).
 - Email and plan come from `oauthAccount` in the account info file (usually `<dir>/.claude.json`, see section 6): the email is `emailAddress`; the plan is formatted from `organizationType` and `organizationRateLimitTier` (`claude_max` → `Max`, `claude_pro` → `Pro`, `claude_team`/`team` → `Team`, `claude_enterprise`/`enterprise` → `Enterprise`, other values lose the `claude_` prefix and are capitalized; a trailing `_<n>x` of the tier becomes `<n>x`; combined as e.g. `Max 20x`; nothing is shown when both are empty). Read-only, never copied. A missing, half-written or unparsable file counts as "unknown" without an error.
 - Signed-in state: an email is the primary criterion; without an email, an existing `.credentials.json` also counts as signed in (only the file's existence is checked, its content is never read).
+- **Same sign-in warning**: when two registered accounts of a vendor (default included) are signed in to the same account and organization/workspace, a warning names them: "{vendor} accounts {labels} are signed in to the same account and workspace. Switching between them does not give separate usage limits; sign one of them in with a different account." It appears once per situation per window session, at activation or when account info changes. Claude compares `oauthAccount.accountUuid` + `organizationUuid`; Codex see 10.1. Nothing of this comparison is shown or stored ([Claude design 6.8](design.md#68-accounts-signed-in-to-the-same-identity)).
 - **Shared and independent accounts**: every named account is either **shared** (everything except its login identity is symlinked to the default account's directory, so settings, rules, history and sessions carry over when you switch, e.g. because one account ran out of quota) or **independent** (the default account's configuration is copied once when the account is created; history and sessions stay separate). The choice is made when adding (see 2.5); an independent account can later be converted into a shared one (see 4.6), not the other way round. The mode is never stored: an account is shared when its `projects` entry is a symlink resolving to the default directory's `projects` (details in section 5). User-facing term: the UI calls a shared account a "linked account" ("链接账号"); the code and these documents keep "shared" as the internal term.
 - **Account display names (aliases)**: every named account can have an alias; the default row and the external-directory row cannot (the default account is always shown as `default`, and an alias stored for it by an earlier version is ignored). Aliases are stored by account name in the state file under `claude.labels` (`Record<account name, alias>`); no entry means not set (the account name itself is shown). Aliases are display-only (sidebar, status bar, QuickPick, messages, terminal names); the directory and internal name do not change, and logic still uses the internal name and directory. How to set one: see 2.7; removing an account also clears its alias.
 
@@ -141,7 +142,7 @@ After clicking the pencil icon after the name of a named account row, the row's 
 
 ## 3. Status bar
 
-- On the left it shows `$(account) Claude: <display name of the current account>` (the alias for accounts that have one); when the current account is an external directory it shows `Claude: External directory` (localized).
+- On the right it shows `$(account) Claude: <display name of the current account>` (the alias for accounts that have one); when the current account is an external directory it shows `Claude: External directory` (localized).
 - The first tooltip line is the email ("Not logged in" when there is none), followed by ` · <plan>` when there is a plan; the second line is the directory.
 - A click opens the "PlanSwap" sidebar.
 - It updates at the same times as the sidebar (see section 6), and also immediately when `planswap.language` changes.
@@ -235,7 +236,7 @@ Flow:
 2. Send the command:
    - non-default account: `env CLAUDE_CONFIG_DIR='<absolute path>' claude`, which bypasses a possible `export CLAUDE_CONFIG_DIR` in rc files such as `~/.bashrc`; the terminal env parameter is a second safeguard.
    - default account: no variable is injected; `claude` is sent directly.
-3. Show the terminal. The first run in a new directory goes through Claude Code's first-run onboarding; under WSL sign-in uses paste code.
+3. Show the terminal. The first run in a new directory goes through Claude Code's first-run onboarding; under WSL sign-in uses paste code. When the account is not signed in, the information message "Sign in to Claude in the terminal. Your other accounts stay signed in: each keeps its own sign-in in its own directory, so there is no need to sign out first. Signing out ends that account's session." is shown.
 4. When a terminal created by this extension closes, the panel and the status bar are refreshed; if it was neither the default account nor the external directory and the account is still not signed in (the same state the panel rows use: no email in its account info file and no `.credentials.json`, whose existence only is checked), the message "Login did not land in this directory: no login info found under <dir>. Check whether ~/.bashrc or similar overrides CLAUDE_CONFIG_DIR, or reopen the terminal and log in again." is shown.
 
 Prerequisite: a `claude` command on PATH.
@@ -372,14 +373,14 @@ When they pass, it is deleted with Node's `fs.rm(dir, { recursive: true, force: 
 
 ## 9. Platform guard
 
-- When activated on a non-Linux platform, only the warning "PlanSwap only supports WSL/Linux." is shown once; the sidebar, status bar and commands are not registered.
+- When activated on a platform other than Linux (WSL) or native Windows, only the warning "PlanSwap only supports WSL/Linux and Windows." is shown once; the sidebar, status bar and commands are not registered.
 - The extension declares `extensionKind: ["workspace"]`, so in a WSL window it is installed and runs on the WSL side.
 
 ## 10. Codex account switching
 
-Independent of Claude account switching. The implementation is based on `docs/codex-design.md` (design) and `docs/codex-interfaces.md` (module contract). This extension only reads each account directory's `auth.json` and only decodes the payload of its `tokens.id_token` to display the email and plan; it never copies, links, swaps, caches or outputs any token or `auth.json`. The contents of `~/.codex` are only changed for shared accounts (10.12): missing shared entries are created empty there as link targets, and converting an account moves its files in without overwriting existing ones.
+Independent of Claude account switching. The implementation is based on `docs/codex-design.md` (design) and `docs/codex-interfaces.md` (module contract). This extension only reads each account directory's `auth.json` and only decodes the payload of its `tokens.id_token` to display the email and plan and to compare identities (10.1); it never copies, links, swaps, caches or outputs any token or `auth.json`. Usage limits are asked from the official `codex` CLI run with the account's `CODEX_HOME` (see [Status bar account summary](#status-bar-account-summary)). The contents of `~/.codex` are only changed for shared accounts (10.12): missing shared entries are created empty there as link targets, and converting an account moves its files in without overwriting existing ones.
 
-If the Codex part fails to initialize on activation (e.g. an rc file is unreadable), this is only logged and Claude is not affected: the Codex page renders as "not enabled, no accounts"; account actions on the Codex page and the 7 `planswap.codex.*` commands then show "Codex account switching is unavailable: <reason>", while the toolbar and the "Tools" row work as usual (see 5.5).
+If the Codex part fails to initialize on activation (e.g. an rc file is unreadable), this is only logged and Claude is not affected: the Codex page renders as "not enabled, no accounts"; account actions on the Codex page and the 8 `planswap.codex.*` commands then show "Codex account switching is unavailable: <reason>", while the toolbar and the "Tools" row work as usual (see 5.5).
 
 ### 10.1 Accounts and directories
 
@@ -397,6 +398,7 @@ If the Codex part fails to initialize on activation (e.g. an rc file is unreadab
   - otherwise only the second part of the `tokens.id_token` JWT is decoded (base64url, no signature check), taking `email` and `https://api.openai.com/auth`.`chatgpt_plan_type` from the payload; the plan is capitalized (`plus` → `Plus`, `pro` → `Pro`, `team` → `Team`, etc.), `prolite` → `Pro Lite`;
   - when the JSON is damaged or being written, email and plan are unknown but the account still counts as signed in;
   - the raw `access_token`/`refresh_token`/`id_token` are never stored, cached or output.
+- Same sign-in warning (see 1): Codex compares the user id (`chatgpt_user_id`, else `user_id`, else `sub`) plus the workspace (`chatgpt_account_id`) from the same payload, only when both exist; never the email (one email can belong to several workspaces) and never in API key mode.
 - Every named Codex account is shared or independent, as on the Claude side (see 1); the marker is `sessions` (a symlink resolving to `~/.codex/sessions`), and the entries are listed in 10.12.
 - Each account's display name (alias) is stored by account name in the state file under `codex.labels`, with the same rules as on the Claude side (see 1 and 2.7); the aliases of both sides are independent, and the same name is allowed across Claude and Codex.
 
@@ -414,7 +416,7 @@ If the Codex part fails to initialize on activation (e.g. an rc file is unreadab
 
 ### 10.3 Commands
 
-Seven commands appear in the Command Palette in the category "Codex Account" ("Codex 账号"). Commands that need an account first show a QuickPick (each item shows the display name, "Logged in"/"Not logged in", and the directory); when there is nothing to pick, "No accounts to choose from." is shown. Messages and terminal names always use the display name.
+Eight commands appear in the Command Palette in the category "Codex Account" ("Codex 账号"). Commands that need an account first show a QuickPick (each item shows the display name, "Logged in"/"Not logged in", and the directory); when there is nothing to pick, "No accounts to choose from." is shown. Messages and terminal names always use the display name.
 
 | Command id | Title | Entry points and flow |
 |---|---|---|
@@ -424,9 +426,12 @@ Seven commands appear in the Command Palette in the category "Codex Account" ("C
 | `planswap.codex.addAccount` | Add Codex Account | Opens the panel, switches to the Codex tab and focuses the add input → 10.7 |
 | `planswap.codex.removeAccount` | Delete Codex Account | Panel trash button via inline confirmation, Command Palette QuickPick (without the effective and the selected account) → 10.8 |
 | `planswap.codex.openTerminal` | Run codex in Terminal with Codex Account | Panel terminal/sign-in button, Command Palette QuickPick (also the external directory when it is current) → 10.9 |
+| `planswap.codex.refreshUsage` | Refresh Codex Usage Limits | Command Palette, the tooltip's "Refresh usage" link → queries the effective account's usage limits now (see [Status bar account summary](#status-bar-account-summary)) |
 | `planswap.codex.restartServer` | Apply Codex Account: Restart or Show Instructions | Button of the "takes effect after restart" banner, footer toolbar, Command Palette → WSL Antigravity / VSCodium: modal confirmation "Restart {editor}'s WSL server: all WSL windows disconnect and prompt to reload, all extensions restart, and integrated terminals close. Continue?", then restart as in 10.6 step 5; everywhere else (WSL VS Code / unrecognized editor, local Linux, other remotes): the context's manual warning (e.g. "This editor's WSL server cannot be restarted automatically. {hint}") directly, without a modal |
 
 ### 10.4 Enable
+
+On native Windows with the Codex extension setting `chatgpt.runCodexInWindowsSubsystemForLinux` on, enabling and switching (10.6) are refused with "The Codex extension runs Codex inside WSL here (chatgpt.runCodexInWindowsSubsystemForLinux), so it ignores the Windows CODEX_HOME. Open a WSL window and manage Codex accounts there, or turn that setting off." ([Codex design 9a](codex-design.md#9a-native-windows)).
 
 1. Pre-checks; if any fails, an error lists all reasons and the flow returns:
    - the basename of the extension host's `SHELL` is `bash`;
@@ -493,6 +498,7 @@ Manual warnings and switch confirmations use `vscode.env.remoteName`. A non-WSL 
 - Create a terminal named `Codex (<account name>)` and send:
   - non-default account: `env CODEX_HOME='<absolute path>' codex`; ` login` is appended when signed out.
   - default account: `env -u CODEX_HOME codex`, which overrides both sources: an rc file export and inheritance from the server's cached environment.
+- With ` login`, the sign-in tip of 4.4 step 3 is shown ("Sign in to Codex in the terminal. …").
 - When a terminal created by this extension closes, the view is refreshed. Prerequisite: a `codex` command on PATH.
 
 ### 10.10 Refresh triggers
@@ -571,3 +577,12 @@ Same model as on the Claude side (section 5), with the default directory `~/.cod
 ## Status bar account summary
 
 The right side of the VS Code status bar shows the current Claude and Codex account labels. Only vendors with local account configuration are shown; when neither is present, the item is hidden. Hover to see each displayed vendor's identity, plan and configuration directory. Codex shows the effective account and separately identifies any pending selection requiring a restart. Click to open PlanSwap. This display uses local files and remains available offline.
+
+The Codex part of the tooltip also shows the **usage limits of the effective Codex account** ([Codex design 8.7](codex-design.md#87-usage-limits)):
+
+- one line per limit window, e.g. "5h: 42% used, resets 14:30" and "7d: 10% used, resets Oct 3, 09:00" (the time alone when it is today; localized), "Usage limit reached" when a limit is hit, and "Checked {time}";
+- "Checking usage limits…" while a query runs; "Usage limits unavailable: the codex command was not found." / "…: the sign-in has expired; sign in to this account again." / "…: codex did not answer in time." / "…: <detail>" when it fails;
+- a "Refresh usage" link, which runs `planswap.codex.refreshUsage`;
+- nothing for signed-out and API key accounts; on native Windows with Codex run inside WSL, the note "Codex runs inside WSL here (chatgpt.runCodexInWindowsSubsystemForLinux); switch its accounts from a WSL window." instead.
+
+PlanSwap asks the official `codex` CLI (`codex app-server` with the account's `CODEX_HOME`), which contacts OpenAI's service; it uses `codex` from PATH or, when there is none, the binary bundled with the Codex extension (`openai.chatgpt`) for this OS and architecture. It checks a few seconds after activation, then at most every 15 minutes and only while the window is focused, right after the effective account's `auth.json` changes (a sign-in, re-login or sign-out), and on demand. API key accounts are never queried. Results are kept in memory only.

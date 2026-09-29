@@ -23,7 +23,7 @@ export const zhCn: Record<MessageKey, string>;            // Simplified Chinese,
 export const es: Record<MessageKey, string>;              // Spanish
 export const ja: Record<MessageKey, string>;              // Japanese
 ```
-- Contains four tables, `en`, `zhCn` (locale `zh-cn`), `es` and `ja`. Each translated table is typed `Record<MessageKey, string>`, so it must have exactly the same keys as `en` (key-parity rule, enforced by the type checker). Keys are grouped by prefix (`common.*`, `account.*`, `ext.*`, `name.*`, `label.*`, `claude.*`, `codex.*`, `server.*`, `del.*`, `tools.*`, `mcp.*`, `share.*`, `unshare.*`, `sync.*`).
+- Contains four tables, `en`, `zhCn` (locale `zh-cn`), `es` and `ja`. Each translated table is typed `Record<MessageKey, string>`, so it must have exactly the same keys as `en` (key-parity rule, enforced by the type checker). Keys are grouped by prefix (`common.*`, `account.*`, `ext.*`, `name.*`, `label.*`, `claude.*`, `codex.*`, `server.*`, `del.*`, `tools.*`, `mcp.*`, `share.*`, `unshare.*`, `sync.*`, `status.*`, `identity.*`).
 - Has no `vscode` import, so the pure modules (`paths.ts`, `labels.ts`, `claudeShare.ts`, `shareReport.ts`, `codex/codexPaths.ts`, `codex/codexShare.ts`, `codex/codexState.ts`, `codex/codexServer.ts`) can use it for the reasons and errors they return or throw.
 - Every user-visible host string goes through `t()`: messages, errors, warnings, modal text and buttons in `commands.ts`, `codex/codexCommands.ts`, `tools.ts`, `statusBar.ts`, `extension.ts`; reasons returned or thrown by pure modules (`paths.checkSafeToDelete`, the `claudeShare` / `codexShare` errors, `describeShareReport` summaries, `codexPaths.checkCodexSafeToDelete` / `copyCodexSeed` reasons, `codexState.preCheck` reasons and thrown errors, `codexServer.planRestart` errors, `labels.validate` messages); QuickPick labels and placeholders. Terminal names stay `Claude (<label>)` / `Codex (<label>)`.
 - Never localized: the rc marker block text in `codexState.rcBlock()` (written to user files, byte-identical), shell commands, file names, setting ids, command ids.
@@ -60,7 +60,7 @@ export const NAME_RE = /^[A-Za-z0-9_-]+$/;
 export const DIR_BASENAME_RE = /^\.claude-[A-Za-z0-9_-]+$/;
 
 export interface Account { name: string; dir: string }          // dir is always an absolute path after path.resolve
-export interface AccountInfo { email?: string; plan?: string; loggedIn: boolean } // plan is the formatted plan text (e.g. "Max 20x")
+export interface AccountInfo { email?: string; plan?: string; loggedIn: boolean; identity?: string } // plan is the formatted plan text (e.g. "Max 20x"); identity is an opaque comparison key, never displayed, logged, persisted or sent to the Webview (rows are built through viewInfo)
 
 export function defaultDir(): string;                 // path.resolve(process.env.CLAUDE_CONFIG_DIR?.trim() || path.join(os.homedir(), '.claude'))
 export function accountDir(name: string): string;     // path.resolve(os.homedir(), '.claude-' + name)
@@ -68,7 +68,7 @@ export function samePath(a: string, b: string): boolean; // strictly equal after
 export function sameRealPath(a: string, b: string): boolean; // compares after resolving symlinks; falls back to path.resolve when a path does not exist
 export function claudeJsonPath(dir: string, explicit?: boolean): string;  // account info file: ~/.claude.json when explicit is false (default), process.env.CLAUDE_CONFIG_DIR is not set and dir is ~/.claude, otherwise <dir>/.claude.json; callers pass explicit = claudeSettings.isExplicitConfigDir(dir)
 export function formatClaudePlan(orgType?: string, tier?: string): string | undefined; // organizationType → name (claude_max→Max, claude_pro→Pro, claude_team/team→Team, claude_enterprise/enterprise→Enterprise, others lose the claude_ prefix and are capitalized); a trailing /_(\d+)x$/ of tier → "<n>x"; both combined as "Max 20x", only one → only that one, both empty → undefined
-export function readAccountInfo(dir: string, explicit?: boolean): AccountInfo; // synchronous; reads oauthAccount from claudeJsonPath(dir, explicit): email = emailAddress, plan = formatClaudePlan(organizationType, organizationRateLimitTier); never throws on parse failure / missing file; loggedIn = has email || <dir>/.credentials.json exists (email is the primary criterion)
+export function readAccountInfo(dir: string, explicit?: boolean): AccountInfo; // synchronous; reads oauthAccount from claudeJsonPath(dir, explicit): email = emailAddress, plan = formatClaudePlan(organizationType, organizationRateLimitTier); never throws on parse failure / missing file; loggedIn = has email || <dir>/.credentials.json exists (email is the primary criterion); identity only when oauthAccount.accountUuid and organizationUuid are both non-empty strings (design.md 6.8)
 export function scanAccountDirs(): Account[];          // scans real directories (not symlinks) under os.homedir() whose basename matches DIR_BASENAME_RE, excluding sameRealPath(defaultDir()); name = basename without '.claude-'
 export function copySettingsStripped(fromDir: string, toDir: string): boolean; // used by claudeShare.copyClaudeIndependent; stripped keys in design.md 6.2 step 5; returns false when the source is missing or the target already has settings.json; writes with mode 0o600
 export function ensureAccountDir(dir: string): void;   // mkdir recursive, mode 0o700
@@ -77,6 +77,27 @@ export function syncMcpServers(fromJson: string, dir: string, beforeCommit?: () 
 export function checkSafeToDelete(dir: string): string | undefined; // returns the refusal reason (localized via t()), undefined when safe; rules in design.md 6.3 step 6
 export async function deleteAccountDir(dir: string): Promise<void>; // checkSafeToDelete first, throw Error(reason) when unsafe; fs.promises.rm recursive force
 ```
+
+## src/identity.ts (pure, no vscode import)
+
+```ts
+export function sameIdentityGroups<T extends { identity?: string }>(entries: readonly T[]): T[][]; // groups of ≥ 2 entries sharing an identity; entries without one ignored; members in input order, groups ordered by their first member
+export function identityGroupsKey(groups: ReadonlyArray<ReadonlyArray<{ dir: string }>>): string; // order-insensitive key built from the sorted directories only (never identity values)
+```
+
+## src/identityWarnings.ts (imports vscode)
+
+```ts
+export type Vendor = 'Claude' | 'Codex';
+export interface IdentitySource { vendor: Vendor; accounts(): Array<{ dir: string; label: string }>; identityOf(dir: string): string | undefined } // registered accounts (default + named), label via labelFor
+export const claudeIdentity: (dir: string) => string | undefined; // readAccountInfo(dir, isExplicitConfigDir(dir)).identity
+export const codexIdentity: (dir: string) => string | undefined;  // readCodexAccountInfo(dir).identity
+export class IdentityWarnings {
+  constructor(sources: IdentitySource[], warn?: (message: string) => void); // warn defaults to showWarningMessage
+  check(): void;
+}
+```
+- `check()` groups each source's accounts with `sameIdentityGroups` and warns `t('identity.duplicate', { vendor, labels })` (labels joined with `common.nameSep`) for every group whose `identityGroupsKey([group])` was not present at the previous check; the warned set is replaced by the current groups, so a resolved group that recurs is warned again. A throwing source is skipped. State is in memory only; identity values never leave the process. Called at activation and on every account-info change. Design in design.md 6.8.
 
 ## src/claudeShare.ts (shared vs independent Claude accounts, no vscode import)
 
@@ -261,6 +282,7 @@ export interface PanelSource {
 }
 export function claudePanelSource(store: AccountStore, labels: LabelStore): PanelSource; // maps store.all() (label via labelFor(name, labels), email/plan via readAccountInfo, shared via isSharedClaudeAccount for named rows); when currentDir() does not correspond to any account, appends a current row with kind='external' (name EXTERNAL_NAME, label labelFor(EXTERNAL_NAME, labels)); enabled always true; pendingDir always undefined
 export function tildify(dir: string): string;  // replaces the home directory with ~
+export function viewInfo(info: { email?: string; plan?: string; loggedIn: boolean }): Pick<AccountView, 'email' | 'plan' | 'loggedIn'>; // picks only these fields; both sources build rows with ...viewInfo(read…Info(dir)), so the host-only identity key never reaches the Webview
 
 export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposable {
   constructor(extensionUri: vscode.Uri, sources: { claude: PanelSource; codex: PanelSource }, memento: vscode.Memento); // single instance; syncs file watchers immediately in the constructor
@@ -327,11 +349,15 @@ export function t(key: MessageKey, params?: Record<string, string | number>): st
 export class StatusBar implements vscode.Disposable {
   constructor(store: AccountStore, labels: LabelStore, codex?: { store: CodexAccountStore; labels: LabelStore });
   update(): void;   // right-aligned; shows configured vendors only, with current labels and per-vendor identity/directory tooltips; Codex also reports a pending selection; click opens PlanSwap
+  setCodexUsage(state: CodexUsageState | undefined): void; // stores the CodexUsageMonitor state and re-renders; undefined hides the usage lines
   dispose(): void;
+}
+export const REFRESH_USAGE_COMMAND = 'planswap.codex.refreshUsage';
+export function usageLines(state: CodexUsageState | undefined): string[]; // plain-text tooltip lines (windows, limit reached, checking / checked, unavailable); empty for a signed-out result
 }
 ```
 
-The status bar shows a vendor when its effective configuration directory or a registered account directory exists. Claude also recognizes its resolved `.claude.json` file. It does not require network access or a signed-in account. When neither vendor is present, the item is hidden. Codex initialization failure omits Codex without affecting Claude. Codex identity comes from `effectiveDir()`, never from the pending selection.
+The status bar shows a vendor when its effective configuration directory or a registered account directory exists. Claude also recognizes its resolved `.claude.json` file. It does not require network access or a signed-in account. When neither vendor is present, the item is hidden. Codex initialization failure omits Codex without affecting Claude. Codex identity comes from `effectiveDir()`, never from the pending selection. The tooltip is a `MarkdownString` with `isTrusted = { enabledCommands: [REFRESH_USAGE_COMMAND] }`; every line is added with `appendText` (escaped), and only the "Refresh usage" link is markdown. The Codex section adds `usageLines` only for a signed-in, non-API-key account and not when `codexRunsInWsl()` (then `status.codexRunsInWsl` instead); behavior in [Codex design 8.7](codex-design.md#87-usage-limits).
 
 ## src/commands.ts
 
@@ -368,7 +394,7 @@ export function shQuote(s: string): string;
 - After a successful switch, call `panel.setSwitchedTo(label)` and `statusBar.update()`; when `!panel.visible`, also show a notification with a "Reload Window" button.
 - The current account cannot be removed (refused with a hint to switch first), nor an account with a running Claude process (`claudeAccountBusy(dir, procRoot)` before the confirmation → `showWarningMessage(t('share.busy'))`); deleting the directory is always confirmed with a modal and only done through `deleteAccountDir`.
 - Behavior details in design.md section 6.
-- This module keeps its own set of "terminals created by this extension" and registers `onDidCloseTerminal`: on a match it calls `panel.refresh()` and `statusBar.update()`, and when the account is neither `default` nor `EXTERNAL_NAME` and `readAccountInfo(dir, isExplicitConfigDir(dir)).loggedIn` is false, shows the warning `t('claude.loginNotLanded', { dir })`; this disposable is also in the returned array.
+- This module keeps its own set of "terminals created by this extension" and registers `onDidCloseTerminal`: on a match it calls `panel.refresh()` and `statusBar.update()`, and when the account is neither `default` nor `EXTERNAL_NAME` and `readAccountInfo(dir, isExplicitConfigDir(dir)).loggedIn` is false, shows the warning `t('claude.loginNotLanded', { dir })`; this disposable is also in the returned array. Opening a terminal for an account whose `readAccountInfo(...).loggedIn` is false shows `showInformationMessage(t('account.loginTip', { vendor: 'Claude' }))`.
 
 ## src/extension.ts
 
@@ -376,7 +402,7 @@ export function shQuote(s: string): string;
 export async function activate(ctx: vscode.ExtensionContext): Promise<void>;
 export function deactivate(): void; // no deferred restart work
 ```
-`await migrateLegacyLanguage(ctx.globalState)` → `setLocale(resolveLocale())` first, so every string below is localized → platform guard (non-linux: `showWarningMessage` once with the localized "PlanSwap only supports WSL/Linux.", then return) → `state = new FileMemento()` → `await state.importOnce(ctx.globalState)` → `new AccountStore(state)` → `claudeLabels = new LabelStore(state, 'claude.labels')` → `await store.syncWithDisk(claudeLabels)` → `codexLabels = new LabelStore(state, 'codex.labels')` → `migrateLegacyCodex()` in its own try/catch (on error: `showWarningMessage(t('ext.codexLegacyFailed', { error }))`, continue) → Codex initialization (`new CodexAccountStore(state)` + `syncWithDisk(codexLabels)` + `codexPanelSource(codexStore, codexLabels)`, `codex = { store: codexStore, labels: codexLabels }`; on failure only `console.error`, remember `codexInitError`, and the Codex page degrades to `{ accounts: () => [], enabled: () => false, pendingDir: () => undefined, watchTargets: () => [] }`) → `new StatusBar(store, claudeLabels, codex)` → assemble `tools: ToolDeps = { codexRestart: codex ? restartServerInteractive : undefined, postVersions: (items) => panel.post({ type: 'versions', items }), claudeDirs: () => store.named().map(a => a.dir), codexDirs: codex ? () => codex.store.named().map(a => a.dir) : undefined, codexShareOps: codex ? { isShared: isSharedCodexAccount, refresh: ensureCodexLinks } : undefined, labelOf: (mode, dir) => labelFor of store.findByDir(dir) / codex.store.findByDir(dir) with claudeLabels / codexLabels, else path.basename(dir) }` → `new AccountsPanel(ctx.extensionUri, { claude: claudePanelSource(store, claudeLabels), codex: codexSource }, ctx.globalState)`, `registerWebviewViewProvider(VIEW_ID, panel)` → if `codexInitError`: `panel.setHandler('codex', msg => msg.type === 'tool' ? runTool('codex', msg.tool, tools) : showErrorMessage("Codex account switching is unavailable: <reason>"))`, and the 7 `planswap.codex.*` commands are registered to show the same error → `registerCommands({ store, panel, statusBar, labels: claudeLabels, codex, tools })`, (when Codex is healthy) `registerCodexCommands({ store, panel, labels: codexLabels, tools })`, `registerToolCommands(tools)` → `panel.onDidChange` → `statusBar.update()` → `onDidChangeConfiguration(affectsSetting)` → `panel.refresh()` + `statusBar.update()` → `watchLocale(() => { panel.refresh(); statusBar.update(); })` → everything pushed to `ctx.subscriptions`.
+`await migrateLegacyLanguage(ctx.globalState)` → `setLocale(resolveLocale())` first, so every string below is localized → platform guard (`!isSupportedPlatform()`, i.e. not linux / win32: `showWarningMessage` once with the localized "PlanSwap only supports WSL/Linux and Windows.", then return) → `state = new FileMemento()` → `await state.importOnce(ctx.globalState)` → `new AccountStore(state)` → `claudeLabels = new LabelStore(state, 'claude.labels')` → `await store.syncWithDisk(claudeLabels)` → `codexLabels = new LabelStore(state, 'codex.labels')` → `migrateLegacyCodex()` in its own try/catch (on error: `showWarningMessage(t('ext.codexLegacyFailed', { error }))`, continue) → Codex initialization (`new CodexAccountStore(state)` + `syncWithDisk(codexLabels)` + `codexPanelSource(codexStore, codexLabels)`, `codex = { store: codexStore, labels: codexLabels }`; on failure only `console.error`, remember `codexInitError`, and the Codex page degrades to `{ accounts: () => [], enabled: () => false, pendingDir: () => undefined, watchTargets: () => [] }`) → `new StatusBar(store, claudeLabels, codex)` → assemble `tools: ToolDeps = { codexRestart: codex ? restartServerInteractive : undefined, postVersions: (items) => panel.post({ type: 'versions', items }), claudeDirs: () => store.named().map(a => a.dir), codexDirs: codex ? () => codex.store.named().map(a => a.dir) : undefined, codexShareOps: codex ? { isShared: isSharedCodexAccount, refresh: ensureCodexLinks } : undefined, labelOf: (mode, dir) => labelFor of store.findByDir(dir) / codex.store.findByDir(dir) with claudeLabels / codexLabels, else path.basename(dir) }` → `new AccountsPanel(ctx.extensionUri, { claude: claudePanelSource(store, claudeLabels), codex: codexSource }, ctx.globalState)`, `registerWebviewViewProvider(VIEW_ID, panel)` → if `codexInitError`: `panel.setHandler('codex', msg => msg.type === 'tool' ? runTool('codex', msg.tool, tools) : showErrorMessage("Codex account switching is unavailable: <reason>"))`, and the 8 `planswap.codex.*` commands are registered to show the same error → `registerCommands({ store, panel, statusBar, labels: claudeLabels, codex, tools })`, (when Codex is healthy) `registerCodexCommands({ store, panel, labels: codexLabels, tools })`, `registerToolCommands(tools)` → `panel.onDidChange` → `statusBar.update()` + `identityWarnings.check()` (+ the Codex usage re-check below) → `onDidChangeConfiguration(affectsSetting)` → `panel.refresh()` + `statusBar.update()` → `watchLocale(() => { panel.refresh(); statusBar.update(); })` → `new IdentityWarnings(sources)` (Claude, plus Codex when initialized) and `check()` → when Codex is initialized, the `CodexUsageMonitor` wiring of [Codex interfaces](codex-interfaces.md#srcextensionts) → everything pushed to `ctx.subscriptions`.
 
 ## src/tools.ts (tools: footer toolbar and per-page "Tools" row, 2026-09-26)
 
@@ -424,7 +450,7 @@ Tool behavior (all texts via `t()`):
 
 ### package.json
 
-Commands (category "PlanSwap", 7 in total): `planswap.tools.openClaudeMd` (Open Global CLAUDE.md, `$(symbol-ruler)`), `planswap.tools.openAgentsMd` (Open Global AGENTS.md, `$(symbol-ruler)`), `planswap.tools.openSettings` (Open Extension Settings, `$(settings-gear)`), `planswap.tools.reloadWindow` (Reload Window, `$(refresh)`), `planswap.tools.restartExtHost` (Restart Extension Host, `$(debug-restart)`), `planswap.tools.cliVersions` (Show CLI and Extension Versions, `$(info)`), `planswap.tools.sync` (Re-link Accounts to the Default Account, `$(sync)`). Together with the 5 "Claude Account" and 7 "Codex Account" commands, `contributes.commands` has 19 entries. Titles and categories are `%key%` placeholders in `package.json`.
+Commands (category "PlanSwap", 7 in total): `planswap.tools.openClaudeMd` (Open Global CLAUDE.md, `$(symbol-ruler)`), `planswap.tools.openAgentsMd` (Open Global AGENTS.md, `$(symbol-ruler)`), `planswap.tools.openSettings` (Open Extension Settings, `$(settings-gear)`), `planswap.tools.reloadWindow` (Reload Window, `$(refresh)`), `planswap.tools.restartExtHost` (Restart Extension Host, `$(debug-restart)`), `planswap.tools.cliVersions` (Show CLI and Extension Versions, `$(info)`), `planswap.tools.sync` (Re-link Accounts to the Default Account, `$(sync)`). Together with the 5 "Claude Account" and 8 "Codex Account" commands, `contributes.commands` has 20 entries. Titles and categories are `%key%` placeholders in `package.json`.
 
 ## Shared and independent accounts (2026-09-26)
 

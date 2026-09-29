@@ -34,10 +34,32 @@ export const workspace = {
 export const env: { remoteName: string | undefined; language: string } = { remoteName: undefined, language: 'en' };
 export interface StubTerminal { name: string; sent: string[]; shown: number; sendText(text: string): void; show(): void }
 export const StatusBarAlignment = { Left: 1, Right: 2 };
-export const statusBarItems: Array<{ alignment: number; text: string; tooltip: string; command: string; visible: boolean; show(): void; hide(): void; dispose(): void }> = [];
+
+/** Like vscode.MarkdownString: appendText escapes markdown syntax, appendMarkdown appends as is */
+export class MarkdownString {
+  isTrusted?: boolean | { readonly enabledCommands: readonly string[] };
+  constructor(public value = '', public supportThemeIcons = false) {}
+  appendText(text: string): this {
+    this.value += text.replace(/[\\`*_{}[\]()#+\-.!|<>~]/g, '\\$&');
+    return this;
+  }
+  appendMarkdown(markdown: string): this {
+    this.value += markdown;
+    return this;
+  }
+}
+
+/** Tooltip as the reader sees it: markdown escapes removed and line breaks restored (for assertions) */
+export function tooltipText(tooltip: string | MarkdownString): string {
+  if (typeof tooltip === 'string') return tooltip;
+  return tooltip.value.replace(/ {2}\n/g, '\n').replace(/\\(.)/g, '$1');
+}
+
+export const statusBarItems: Array<{ alignment: number; text: string; tooltip: string | MarkdownString; command: string; visible: boolean; show(): void; hide(): void; dispose(): void }> = [];
 export const window = {
+  state: { focused: true },
   createStatusBarItem(alignment: number) {
-    const item = { alignment, text: '', tooltip: '', command: '', visible: false,
+    const item: (typeof statusBarItems)[number] = { alignment, text: '', tooltip: '', command: '', visible: false,
       show() { this.visible = true; }, hide() { this.visible = false; }, dispose() { this.visible = false; } };
     statusBarItems.push(item);
     return item;
