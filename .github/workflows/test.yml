@@ -28,6 +28,8 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: sudo apt-get install -y --no-install-recommends openbox
       - name: Run full-screen UI preview
+        env:
+          DEBUG: pw:browser
         run: |
           xvfb-run -a bash -e -c '
             openbox --sm-disable > /tmp/planswap-openbox.log 2>&1 &
