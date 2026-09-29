@@ -23,6 +23,7 @@
   "command.tools.reloadWindow": "ウィンドウを再読み込み",
   "command.tools.restartExtHost": "Extension Host を再起動",
   "command.tools.cliVersions": "CLI と拡張機能のバージョンを表示",
+  "command.tools.diagnostics": "診断レポートをプレビュー",
   "command.tools.sync": "アカウントをデフォルトアカウントに再リンク",
   "viewContainer.title": "PlanSwap",
   "view.name": "PlanSwap",

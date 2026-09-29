@@ -146,6 +146,12 @@
         "icon": "$(info)"
       },
       {
+        "command": "planswap.tools.diagnostics",
+        "title": "%command.tools.diagnostics%",
+        "category": "%category.tools%",
+        "icon": "$(pulse)"
+      },
+      {
         "command": "planswap.tools.sync",
         "title": "%command.tools.sync%",
         "category": "%category.tools%",

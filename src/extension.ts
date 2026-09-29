@@ -14,6 +14,7 @@ import { affectsSetting, settingEnvNames } from './claudeSettings';
 import { CodexAccountStore } from './codex/codexStore';
 import { codexPanelSource, codexRunsInWsl, registerCodexCommands, restartServerInteractive } from './codex/codexCommands';
 import { registerToolCommands, runTool, type TerminalCheck, type ToolDeps } from './tools';
+import { registerDiagnosticsCommand } from './diagnosticsCommand';
 import type { PanelMode } from './protocol';
 import { setLocale, t } from './i18n';
 import { isSupportedPlatform } from './platform';
@@ -155,6 +156,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
       ? registerCodexCommands({ store: codex.store, panel, labels: codexLabels, tools, provideTerminalCheck: (check) => { terminalChecks.codex = check; } })
       : []),
     ...registerToolCommands(tools),
+    registerDiagnosticsCommand({ store, codexStore: codex?.store, extensionVersion: version }),
     // Account info file changes only push panel state; keep the status bar email in sync here, re-check usage when the
     // effective account's auth.json changed (sign-in, re-login), and look for accounts signed in to the same identity
     panel.onDidChange(() => {

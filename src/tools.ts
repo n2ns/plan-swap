@@ -218,7 +218,7 @@ function extVersion(id: string): string {
   return typeof version === 'string' ? version : t('tools.ver.notFound');
 }
 
-async function collectVersions(): Promise<Array<{ label: string; value: string }>> {
+export async function collectVersions(): Promise<Array<{ label: string; value: string }>> {
   const [claudeCli, codexCli] = await Promise.all([cliVersion('claude'), cliVersion('codex')]);
   return [
     { label: 'Claude Code CLI', value: claudeCli },

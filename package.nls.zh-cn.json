@@ -23,6 +23,7 @@
   "command.tools.reloadWindow": "重新加载窗口",
   "command.tools.restartExtHost": "重启扩展宿主",
   "command.tools.cliVersions": "显示 CLI 与插件版本",
+  "command.tools.diagnostics": "预览诊断报告",
   "command.tools.sync": "重新链接账号到默认账号",
   "viewContainer.title": "PlanSwap",
   "view.name": "PlanSwap",

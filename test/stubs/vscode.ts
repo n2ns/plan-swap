@@ -1,5 +1,6 @@
 // Minimal vscode module stub: esbuild aliases 'vscode' to this file; tests import it directly to control the configuration
 export const ConfigurationTarget = { Global: 1, Workspace: 2, WorkspaceFolder: 3 } as const;
+export const version = '1.107.0';
 
 export interface UpdateRecord { section: string; key: string; value: unknown; target: unknown }
 
@@ -18,6 +19,7 @@ export function resetConfig(): void {
 }
 
 export const workspace = {
+  async openTextDocument(options: { language: string; content: string }) { return options; },
   getConfiguration(section: string) {
     return {
       get<T>(key: string, defaultValue?: T): T | undefined {
@@ -31,9 +33,10 @@ export const workspace = {
   },
 };
 
-export const env: { remoteName: string | undefined; language: string; openExternal(uri: { toString(): string }): Promise<boolean> } = {
+export const env: { remoteName: string | undefined; language: string; clipboard: { writeText(text: string): Promise<void> }; openExternal(uri: { toString(): string }): Promise<boolean> } = {
   remoteName: undefined,
   language: 'en',
+  clipboard: { async writeText(_text: string) {} },
   async openExternal() { return true; },
 };
 export interface StubTerminal { name: string; sent: string[]; shown: number; sendText(text: string): void; show(): void }
@@ -62,6 +65,7 @@ export function tooltipText(tooltip: string | MarkdownString): string {
 export const statusBarItems: Array<{ alignment: number; text: string; tooltip: string | MarkdownString; command: string; visible: boolean; show(): void; hide(): void; dispose(): void }> = [];
 export const window = {
   state: { focused: true },
+  async showTextDocument<T>(document: T): Promise<T> { return document; },
   createStatusBarItem(alignment: number) {
     const item: (typeof statusBarItems)[number] = { alignment, text: '', tooltip: '', command: '', visible: false,
       show() { this.visible = true; }, hide() { this.visible = false; }, dispose() { this.visible = false; } };

@@ -23,6 +23,7 @@
   "command.tools.reloadWindow": "Recargar ventana",
   "command.tools.restartExtHost": "Reiniciar Extension Host",
   "command.tools.cliVersions": "Ver versiones de CLI y extensiones",
+  "command.tools.diagnostics": "Vista previa del informe de diagnóstico",
   "command.tools.sync": "Volver a vincular las cuentas a la cuenta predeterminada",
   "viewContainer.title": "PlanSwap",
   "view.name": "PlanSwap",

@@ -591,3 +591,11 @@ PlanSwap asks the official `codex` CLI (`codex app-server` with the account's `C
 ### Codex account usage observations
 
 Signed-in ChatGPT account rows show their last observed usage windows and a localized collection date/time, explicitly marked as not live. This helps compare previously used accounts before switching. Only the effective account is queried; an account without an observation has no usage line. Use **Refresh Codex Usage Limits** to update the effective account. Observations remain available after reopening the editor, expire after 24 hours, and hide individual windows after their reset time. A changed sign-in file hides old values until the account is queried again. Claude rows and API-key accounts have no usage observations. See [Codex design 8.7](codex-design.md#87-usage-limits) for storage and scheduling.
+
+## Diagnostics report
+
+Run **Preview Diagnostics Report** in the PlanSwap tools category of the Command Palette. An untitled Markdown document shows the report in the configured PlanSwap language. After previewing it, choose **Copy report** in the notification to put that report on the clipboard; dismissing the notification leaves the clipboard unchanged. Nothing is uploaded automatically.
+
+The report contains PlanSwap/editor/CLI/official-extension versions, platform and connection type, anonymous account references and named-account counts, Claude credential-override variable names (never their values), and Codex switching state, pre-check status and restart guidance. Named accounts use numbered references consistent within the report; aliases, account names, directories, emails, identity identifiers and raw errors are omitted. Unrecognized version output is reported as unknown. Claude's configured account is not proof of the official extension's live login identity. Windows run-in-WSL mode omits local account and switching-state lines and directs the user to a WSL window; the report cannot inspect that side's accounts.
+
+Collection is read-only: CLI probes only request versions, account references come from local configuration, and Codex enable checks do not install rc blocks, change environment variables or restart anything. The report is a troubleshooting snapshot, not a real-account acceptance test.
