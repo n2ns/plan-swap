@@ -24,7 +24,8 @@ describe('FileMemento', () => {
   });
   test('a file saved with a byte order mark keeps its accounts through the next update', async () => {
     const file = path.join(tmp.home, '.config', 'planswap', 'bom.json');
-    fs.mkdirSync(path.dirname(file), { recursive: true });
+    // 0700 as FileMemento creates it: later tests in this file check the folder's mode
+    fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
     fs.writeFileSync(file, '﻿{"accounts":[{"name":"x","dir":"/tmp/x"}]}');
     const m = fresh('bom.json');
     assert.deepEqual(m.get('accounts'), [{ name: 'x', dir: '/tmp/x' }]);

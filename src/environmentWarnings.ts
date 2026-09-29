@@ -16,13 +16,18 @@ const FEDERATION_VARS = ['ANTHROPIC_FEDERATION_RULE_ID', 'ANTHROPIC_ORGANIZATION
 
 /**
  * The override variables Claude Code started by this editor would see: set (non-empty) in the extension host
- * environment, or passed by claudeCode.environmentVariables (settingNames). Names only; values are never read out.
+ * environment (unless the setting clears it with an empty entry), or passed by claudeCode.environmentVariables. Names only; values are never read out.
  * Names compare case-insensitively on Windows.
  */
-export function claudeCredentialOverrides(env: NodeJS.ProcessEnv, settingNames: readonly string[], platform: string = process.platform): string[] {
+export function claudeCredentialOverrides(
+  env: NodeJS.ProcessEnv, setting: { set: readonly string[]; cleared?: readonly string[] }, platform: string = process.platform,
+): string[] {
   const norm = (n: string): string => (platform === 'win32' ? n.toUpperCase() : n);
-  const fromSetting = new Set(settingNames.map(norm));
-  const isSet = (name: string): boolean => fromSetting.has(norm(name)) || Object.keys(env).some((k) => norm(k) === norm(name) && !!env[k]);
+  const fromSetting = new Set(setting.set.map(norm));
+  // An empty entry in the setting replaces the inherited value with '' for Claude Code
+  const cleared = new Set((setting.cleared ?? []).map(norm));
+  const isSet = (name: string): boolean =>
+    fromSetting.has(norm(name)) || (!cleared.has(norm(name)) && Object.keys(env).some((k) => norm(k) === norm(name) && !!env[k]));
   const found: string[] = CLAUDE_OVERRIDE_VARS.filter(isSet);
   if (FEDERATION_VARS.every(isSet)) found.push(FEDERATION_VARS[0]);
   return found;

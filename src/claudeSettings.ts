@@ -49,9 +49,12 @@ function getConfiguredConfigDir(): string | undefined {
   return found;
 }
 
-/** Names of the variables the setting passes to Claude Code with a non-empty value */
-export function settingEnvNames(): string[] {
-  return readEntries().filter((e) => e.value !== undefined && e.value !== null && String(e.value) !== '').map((e) => e.name);
+/** Names the setting passes to Claude Code: set (non-empty value) and cleared (empty value; the official extension then
+ *  passes '' instead of the inherited value). The last entry of a name decides, as it does for the extension */
+export function settingEnvNames(): { set: string[]; cleared: string[] } {
+  const last = new Map<string, boolean>();
+  for (const e of readEntries()) last.set(e.name, e.value !== undefined && e.value !== null && String(e.value) !== '');
+  return { set: [...last].filter(([, v]) => v).map(([n]) => n), cleared: [...last].filter(([, v]) => !v).map(([n]) => n) };
 }
 
 export function currentDir(): string {

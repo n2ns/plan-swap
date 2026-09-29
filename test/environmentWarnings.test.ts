@@ -4,14 +4,16 @@ import { claudeCredentialOverrides, oneDriveHome } from '../src/environmentWarni
 
 describe('claudeCredentialOverrides', () => {
   test('names variables that outrank the per-account sign-in, from the environment or the setting', () => {
-    assert.deepEqual(claudeCredentialOverrides({ PATH: '/bin', HOME: '/h' }, [], 'linux'), []);
-    assert.deepEqual(claudeCredentialOverrides({ ANTHROPIC_API_KEY: 'k', ANTHROPIC_PROFILE: '' }, ['CLAUDE_CODE_OAUTH_TOKEN'], 'linux'), ['ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN']);
+    assert.deepEqual(claudeCredentialOverrides({ PATH: '/bin', HOME: '/h' }, { set: [] }, 'linux'), []);
+    assert.deepEqual(claudeCredentialOverrides({ ANTHROPIC_API_KEY: 'k', ANTHROPIC_PROFILE: '' }, { set: ['CLAUDE_CODE_OAUTH_TOKEN'] }, 'linux'), ['ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN']);
     // Federation counts only with both variables
-    assert.deepEqual(claudeCredentialOverrides({ ANTHROPIC_FEDERATION_RULE_ID: 'r' }, [], 'linux'), []);
-    assert.deepEqual(claudeCredentialOverrides({ ANTHROPIC_FEDERATION_RULE_ID: 'r' }, ['ANTHROPIC_ORGANIZATION_ID'], 'linux'), ['ANTHROPIC_FEDERATION_RULE_ID']);
+    assert.deepEqual(claudeCredentialOverrides({ ANTHROPIC_FEDERATION_RULE_ID: 'r' }, { set: [] }, 'linux'), []);
+    assert.deepEqual(claudeCredentialOverrides({ ANTHROPIC_FEDERATION_RULE_ID: 'r' }, { set: ['ANTHROPIC_ORGANIZATION_ID'] }, 'linux'), ['ANTHROPIC_FEDERATION_RULE_ID']);
+    // An empty entry in the setting clears the inherited variable for Claude Code
+    assert.deepEqual(claudeCredentialOverrides({ ANTHROPIC_API_KEY: 'k' }, { set: [], cleared: ['ANTHROPIC_API_KEY'] }, 'linux'), []);
     // Names are case-insensitive on Windows only
-    assert.deepEqual(claudeCredentialOverrides({ anthropic_api_key: 'k' }, ['claude_code_use_bedrock'], 'linux'), []);
-    assert.deepEqual(claudeCredentialOverrides({ anthropic_api_key: 'k' }, ['claude_code_use_bedrock'], 'win32'), ['CLAUDE_CODE_USE_BEDROCK', 'ANTHROPIC_API_KEY']);
+    assert.deepEqual(claudeCredentialOverrides({ anthropic_api_key: 'k' }, { set: ['claude_code_use_bedrock'] }, 'linux'), []);
+    assert.deepEqual(claudeCredentialOverrides({ anthropic_api_key: 'k' }, { set: ['claude_code_use_bedrock'] }, 'win32'), ['CLAUDE_CODE_USE_BEDROCK', 'ANTHROPIC_API_KEY']);
   });
 });
 

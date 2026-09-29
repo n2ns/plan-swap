@@ -563,6 +563,18 @@ describe('selfCheck (real bash -i -l, clean environment)', LINUX_ONLY, () => {
     assert.ok(!r.detail.includes('cannot set terminal process group'));
     assert.ok(!r.detail.includes('no job control in this shell'));
   });
+  test('login-shell output such as a sudo hint is never taken for the value', () => {
+    removeRcBlocks();
+    const saved = read(profile);
+    fs.writeFileSync(profile, 'echo \'To run a command as administrator (user "root"), use "sudo <command>".\'\necho \'See "man sudo_root" for details.\'\n' + saved);
+    try {
+      const r = inCleanEnv(selfCheck);
+      assert.equal(r.ok, false);
+      assert.match(r.detail, /CODEX_HOME in the login shell is ""/);
+    } finally {
+      fs.writeFileSync(profile, saved);
+    }
+  });
 });
 
 describe('codexState in zh-cn', LINUX_ONLY, () => {

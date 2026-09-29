@@ -20,7 +20,8 @@ export function decodeEnvOutput(out: string): string | undefined {
 }
 
 /**
- * A user-level environment variable (the raw registry value), or undefined when unset or empty. Read through .NET and
+ * A user-level environment variable, or undefined when unset or empty (a REG_EXPAND_SZ value comes back expanded with
+ * this process's environment; PlanSwap itself only writes REG_SZ). Read through .NET and
  * printed as base64 of its UTF-8 bytes: without a console (the extension host) `reg query` prints the ANSI code page,
  * which garbles non-ASCII paths such as a Chinese user name.
  */

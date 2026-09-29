@@ -165,6 +165,18 @@ export function copySettingsStripped(fromDir: string, toDir: string): boolean {
   return true;
 }
 
+/** Windows: the on-disk name of an existing folder that is `dir` except for letter case (the same folder there, e.g.
+ *  '.claude-Work' for '.claude-work'); undefined when there is none or the spelling matches. Always undefined elsewhere. */
+export function caseVariantOf(dir: string): string | undefined {
+  if (!isWindows()) return undefined;
+  const want = path.basename(dir);
+  try {
+    return fs.readdirSync(path.dirname(dir)).find((n) => n !== want && n.toLowerCase() === want.toLowerCase());
+  } catch {
+    return undefined;
+  }
+}
+
 export function ensureAccountDir(dir: string): void {
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
 }

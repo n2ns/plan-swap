@@ -412,6 +412,8 @@ export function migrateLegacyCodex(): boolean {
 }
 
 const STDERR_NOISE = ['cannot set terminal process group', 'no job control in this shell'];
+// Prefix of the self-check's output line, so nothing else a login shell prints is taken for the value
+const SELF_CHECK_MARK = '__PLANSWAP_CODEX_HOME__=';
 
 // Windows: writes a marker into a scratch user variable (never CODEX_HOME itself), reads it back through the registry, then
 // removes it. A failed removal is reported; it only leaves that harmless scratch variable behind
@@ -443,15 +445,15 @@ export function selfCheck(): { ok: boolean; detail: string } {
   try {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'planswap-codex-'));
     writeSelectedDir(tmpDir);
-    const r = spawnSync('bash', ['-i', '-l', '-c', 'printf %s "$CODEX_HOME"'], {
+    const r = spawnSync('bash', ['-i', '-l', '-c', `printf '\\n${SELF_CHECK_MARK}%s\\n' "$CODEX_HOME"`], {
       timeout: 10000,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     if (r.error) return { ok: false, detail: t('codex.self.bashFailed', { error: r.error.message }) };
-    // /etc/profile.d may print a motd etc. to stdout in a login shell; only take the last line
-    const lines = (r.stdout ?? '').trimEnd().split('\n');
-    const out = (lines[lines.length - 1] ?? '').trim();
+    // A login shell may print a motd or hints (Ubuntu's "sudo_root" note) to stdout; only the marked line is the value
+    const marked = (r.stdout ?? '').split('\n').filter((l) => l.startsWith(SELF_CHECK_MARK)).pop();
+    const out = marked === undefined ? '' : marked.slice(SELF_CHECK_MARK.length).trim();
     let real = tmpDir;
     try { real = fs.realpathSync(tmpDir); } catch { /* ignore */ }
     if (out === tmpDir || out === real) return { ok: true, detail: `CODEX_HOME=${out}` };

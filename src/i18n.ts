@@ -66,6 +66,7 @@ export const en = {
   'name.dupLabel': "Same as an existing account's display name",
   'name.sameAsDefaultDir': 'This account directory is the same as the default account directory',
   'name.dirIsSymlink': 'This account directory is a symbolic link',
+  'name.dirCaseDiffers': 'A folder {dir} already exists in your home folder; Windows treats it as the same folder as this name. Use the name with the same letter case, or remove that folder first.',
 
   // Display name validation (labels.validate)
   'label.empty': 'Enter a display name',
@@ -307,6 +308,7 @@ export const zhCn: Record<MessageKey, string> = {
   'name.dupLabel': '与已有账号的显示名相同',
   'name.sameAsDefaultDir': '该账号目录与默认账号目录相同',
   'name.dirIsSymlink': '该账号目录是符号链接',
+  'name.dirCaseDiffers': '用户目录中已存在文件夹 {dir}，Windows 会把它和这个名字视为同一个文件夹。请使用大小写相同的名字，或先删除该文件夹。',
 
   'label.empty': '请输入显示名',
   'label.tooLong': '显示名最多 {max} 个字符',
@@ -524,6 +526,7 @@ export const es: Record<MessageKey, string> = {
   'name.dupLabel': 'Coincide con el nombre visible de otra cuenta',
   'name.sameAsDefaultDir': 'Este directorio coincide con el de la cuenta predeterminada',
   'name.dirIsSymlink': 'Este directorio es un enlace simbólico',
+  'name.dirCaseDiffers': 'Ya existe la carpeta {dir} en tu carpeta de usuario; Windows la considera la misma carpeta que este nombre. Usa el nombre con las mismas mayúsculas y minúsculas o elimina antes esa carpeta.',
   'label.empty': 'Introduce un nombre visible',
   'label.tooLong': 'El nombre visible admite hasta {max} caracteres',
   'label.newline': 'El nombre visible no admite saltos de línea',
@@ -727,6 +730,7 @@ export const ja: Record<MessageKey, string> = {
   'name.dupLabel': '既存のアカウントの表示名と重複しています',
   'name.sameAsDefaultDir': '既定のアカウントと同じディレクトリです',
   'name.dirIsSymlink': 'このディレクトリはシンボリックリンクです',
+  'name.dirCaseDiffers': 'ユーザーフォルダーに {dir} が既にあり、Windows ではこの名前と同じフォルダーとして扱われます。大文字と小文字が同じ名前を使うか、先にそのフォルダーを削除してください。',
   'label.empty': '表示名を入力してください',
   'label.tooLong': '表示名は {max} 文字以内にしてください',
   'label.newline': '表示名に改行は使えません',

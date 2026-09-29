@@ -25,7 +25,7 @@ The following facts come from the official documentation and the source code of 
 2. The official extension setting `claudeCode.environmentVariables`:
    - scope `machine`, schema is an array of `{ "name": string, "value": string }`; the parser in the source also accepts the object form `{ KEY: value }` and converts non-string values to strings.
    - The extension reads this setting fresh every time it starts a claude process to build the environment (the extension host's `process.env` as the base, with the setting entries layered on top), so a change takes effect for new sessions immediately.
-   - An entry whose `name` is `CLAUDE_CONFIG_DIR` and whose `value` is an empty string is skipped.
+   - An entry whose `name` is `CLAUDE_CONFIG_DIR` is used only when its `value` is an absolute path string (on Windows with a drive letter or UNC); empty, relative and non-string values are skipped, and the last usable entry wins (extension 2.1.284).
    - The official extension never writes this setting itself, so there is no write race with this extension.
 3. The official extension has a built-in watcher for `CLAUDE_CONFIG_DIR` changes: after a change and a settling period of about 1 second it calls `refreshEveryHost`, refreshing the account display and usage of every panel. Note: at that point every panel header (including panels still running a process of the old account) shows the new account, which does not match the account actually used by that panel's process until a reload.
 4. Open sessions hold their old process and do not follow a switch; only new sessions use the new account. Transcripts of old sessions live in `projects/` of the old account directory and cannot be found in the new directory after a reload, so the effect of a reload is "all panels start over with the new account", not "old sessions move to the new account". Old sessions can be resumed after switching back.
@@ -65,7 +65,7 @@ An account is a directory:
 - On activation and on refresh, `~/.claude-*` directories are scanned (basename matches `^\.claude-[A-Za-z0-9_-]+$`, a real directory and not a symlink, and not pointing to the default directory after resolving symlinks); those not in the list are added automatically, so the list is not empty if the state file is lost. A directory whose name equals, ignoring case, the name or display name of a registered account (including `default`) is skipped. Before scanning, named entries whose directory no longer exists are removed from the list and their alias is cleared (not added to `ignoredDirs`).
 - The state file key `ignoredDirs` records directories of accounts that were removed while keeping their directory; automatic scanning skips them; adding an account with the same name again removes it from the ignore list.
 - The single source of truth for the current account is the `CLAUDE_CONFIG_DIR` entry in `claudeCode.environmentVariables`:
-  - Reading accepts both the array and the object form; non-string values are converted to strings; an empty `value` counts as no entry.
+  - Reading accepts both the array and the object form and follows the rule above (last absolute-path string wins; empty, relative and non-string values are skipped).
   - Entry present with a non-empty value → the current directory is that value (compared after `path.resolve`).
   - No entry → the current account is the default account.
   - The value is not in the account list (set by hand) → the panel shows it as an "External directory" row that can be switched away from.

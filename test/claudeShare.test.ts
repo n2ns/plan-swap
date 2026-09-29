@@ -9,7 +9,7 @@ import {
   makeClaudeIndependent, mergeEntry, migrateClaudeToShared, mirrorClaudeJson, type MigrateReport, windowsSessionsBusy,
 } from '../src/claudeShare';
 import { accountDir, deleteAccountDir } from '../src/paths';
-import { assertTempHome, makeTempHome, assertMode, LINUX_ONLY, SHARING, read, snapshot, type TempHome } from './helpers';
+import { assertTempHome, makeTempHome, assertMode, LINUX_ONLY, onWindows, SHARING, read, snapshot, type TempHome } from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -484,7 +484,7 @@ describe('migrateClaudeToShared', SHARING, () => {
     const r = migrateClaudeToShared(acc, 'xn', fakeProc({}));
     assert.equal(r.moved, 5);   // new.jsonl, only.jsonl, lnk, skills/mine/SKILL.md, history.jsonl
     assert.equal(r.duplicates, 2);   // same.jsonl, CLAUDE.md
-    assert.deepEqual(r.keptBoth, [path.join('projects', 'p', 'memory', 'MEMORY.md.from-xn-2')]);
+    assert.deepEqual(r.keptBoth, ['projects/p/memory/MEMORY.md.from-xn-2']);
     assert.deepEqual(r.backups, ['settings.json.independent-backup']);
     assert.deepEqual(r.conflicts, []);
 
@@ -586,6 +586,24 @@ describe('copyClaudeIndependent', SHARING, () => {
 
     // Second run copies nothing new
     assert.deepEqual(copyClaudeIndependent(path.join(home, '.claude.json'), acc).copied, []);
+  });
+});
+
+describe('copyTree relative links', SHARING, () => {
+  test('a link inside the copied tree points into the copy; one leading outside still reaches its target', () => {
+    const src = path.join(home, 'dotfiles', 'agents');
+    write(path.join(src, 'shared', 'a.md'), 'inside');
+    write(path.join(home, 'dotfiles', 'common', 'b.md'), 'outside');
+    fs.symlinkSync(path.join('shared', 'a.md'), path.join(src, 'in.md'), 'file');
+    fs.symlinkSync(path.join('..', 'common', 'b.md'), path.join(src, 'out.md'), 'file');
+    const dst = path.join(home, 'copy', 'agents');
+    fs.mkdirSync(path.dirname(dst));
+    copyTree(src, dst);
+    assert.equal(read(path.join(dst, 'in.md')), 'inside');
+    assert.equal(read(path.join(dst, 'out.md')), 'outside');
+    // The inside link resolves into the copy, not back into the source
+    assert.equal(fs.realpathSync(path.join(dst, 'in.md')), fs.realpathSync(path.join(dst, 'shared', 'a.md')));
+    if (!onWindows) assert.equal(fs.readlinkSync(path.join(dst, 'in.md')), path.join('shared', 'a.md'));
   });
 });
 

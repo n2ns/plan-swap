@@ -264,7 +264,7 @@ function backupSqlite(src: string, rel: string, report: MigrateReport): void {
   for (const suffix of ['', ...SQLITE_SIDE_FILES]) {
     if (!lstatOrUndefined(src + suffix)) continue;
     fs.renameSync(src + suffix, base + suffix);
-    report.backups.push(path.join(path.dirname(rel), path.basename(base + suffix)));
+    report.backups.push(path.posix.join(path.posix.dirname(rel), path.basename(base + suffix)));
   }
 }
 
@@ -318,7 +318,7 @@ export function migrateCodexToShared(dir: string, accountName: string, procRoot 
       } else {
         const backup = freeName(`${src}.independent-backup`);
         fs.renameSync(src, backup);
-        report.backups.push(path.join(parent, path.basename(backup)));
+        report.backups.push(path.posix.join(parent, path.basename(backup)));
       }
     }
   }

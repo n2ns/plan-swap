@@ -161,7 +161,8 @@ function comparable(p: string, platform: NodeJS.Platform): string {
 
 // Whether a file of that name exists in a PATH directory (Windows fallback only)
 function onPath(file: string): boolean {
-  const dirs = (process.env.PATH ?? '').split(path.delimiter).filter(Boolean);
+  // Windows PATH entries may be quoted ("C:\Program Files\nodejs"); cmd.exe accepts that, so the check must too
+  const dirs = (process.env.PATH ?? '').split(path.delimiter).map((d) => d.replace(/^"(.*)"$/, '$1')).filter(Boolean);
   return dirs.some((d) => {
     try {
       return fs.statSync(path.join(d, file)).isFile();

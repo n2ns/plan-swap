@@ -337,6 +337,15 @@ describe('readCodexUsage', () => {
       assert.equal(f.children[1]!.killed, 0);
     });
 
+    test('a quoted PATH entry still finds codex.cmd', async () => {
+      fs.writeFileSync(path.join(shimDir, 'codex.cmd'), '');
+      process.env.PATH = `"${shimDir}"`;
+      const f = fakeSpawn(server((id) => ({ id, result: LIMITS })), { enoent: (n) => n === 1, exitOnStdinEnd: true });
+      const r = await readCodexUsage(acct, { ...base(f.spawn), platform: 'win32' });
+      assert.equal(r.ok, true);
+      assert.equal(f.calls.length, 2);
+    });
+
     test('ENOENT from the retry too → cliMissing', async () => {
       process.env.PATH = shimDir;
       const f = fakeSpawn(() => undefined, { enoent: () => true });

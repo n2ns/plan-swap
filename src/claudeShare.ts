@@ -483,7 +483,7 @@ export function mergeEntry(src: string, dst: string, rel: string, ctx: MergeCtx)
   if (ss.isDirectory()) {
     if (!ds) fs.mkdirSync(dst, { mode: ss.mode & 0o777 });
     if (!ds || ds.isDirectory()) {
-      for (const child of fs.readdirSync(src)) mergeEntry(path.join(src, child), path.join(dst, child), path.join(rel, child), ctx);
+      for (const child of fs.readdirSync(src)) mergeEntry(path.join(src, child), path.join(dst, child), `${rel}/${child}`, ctx);
       removeIfEmpty(src);
       return;
     }
@@ -498,7 +498,8 @@ export function mergeEntry(src: string, dst: string, rel: string, ctx: MergeCtx)
   }
   const kept = freeName(`${dst}.from-${ctx.account}`);
   moveEntry(src, kept);
-  ctx.report.keptBoth.push(path.join(path.dirname(rel), path.basename(kept)));
+  // Report names use / on every platform, like the other entries of a report
+  ctx.report.keptBoth.push(path.posix.join(path.posix.dirname(rel), path.basename(kept)));
 }
 
 // The default folder to merge into (a link to a folder is followed; created 0700 when missing); undefined when not a folder
@@ -617,23 +618,25 @@ export function migrateClaudeToShared(dir: string, accountName: string, procRoot
   return report;
 }
 
-/** Recursive copy of the folder src to dst: links copied verbatim (never followed), files with their mode and
- *  timestamps, sockets and FIFOs skipped. Nothing is overwritten: an entry that already exists at the target is
- *  skipped ('skip') or fails with EEXIST ('throw'). Written without fs.cpSync, which aborts the whole process instead
- *  of throwing when a directory cannot be read; here every problem surfaces as an ordinary error. */
-export function copyTree(src: string, dst: string, existing: 'skip' | 'throw' = 'skip'): void {
+/** Recursive copy of the folder src to dst: links are recreated, never followed (a relative link into the copied tree
+ *  stays relative so it points into the copy; any other relative link becomes absolute so it still reaches its target
+ *  from the new place), files with their mode and timestamps, sockets and FIFOs skipped. Nothing is overwritten: an
+ *  entry that already exists at the target is skipped ('skip') or fails with EEXIST ('throw'). Written without
+ *  fs.cpSync, which aborts the whole process instead of throwing when a directory cannot be read; here every problem
+ *  surfaces as an ordinary error. root: the top folder of the copy (set by the recursion). */
+export function copyTree(src: string, dst: string, existing: 'skip' | 'throw' = 'skip', root = src): void {
   const st = fs.lstatSync(src);
   const ds = lstatOrUndefined(dst);
   if (st.isDirectory()) {
     if (!ds) fs.mkdirSync(dst, { mode: st.mode & 0o777 });
     else if (!ds.isDirectory() || existing === 'throw') return existsError(dst, existing);
-    for (const name of fs.readdirSync(src)) copyTree(path.join(src, name), path.join(dst, name), existing);
+    for (const name of fs.readdirSync(src)) copyTree(path.join(src, name), path.join(dst, name), existing, root);
     fs.utimesSync(dst, st.atime, st.mtime);
   } else if (ds) {
     existsError(dst, existing);
   } else if (st.isSymbolicLink()) {
     try {
-      copyLink(src, dst);
+      copyTreeLink(src, dst, root);
     } catch (e) {
       // Windows without file-link privilege: a link to a file is copied as that file; a dangling one is skipped
       if (!(e instanceof LinkPrivilegeError)) throw e;
@@ -644,6 +647,20 @@ export function copyTree(src: string, dst: string, existing: 'skip' | 'throw' = 
     fs.chmodSync(dst, st.mode & 0o777);
     fs.utimesSync(dst, st.atime, st.mtime);
   }
+}
+
+// The link src recreated at dst for copyTree (see there); root is the top of the copied tree
+function copyTreeLink(src: string, dst: string, root: string): void {
+  const raw = fs.readlinkSync(src);
+  const resolved = path.resolve(path.dirname(src), raw);
+  const rel = path.relative(root, resolved);
+  const inside = !path.isAbsolute(raw) && rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+  if (!isWindows()) {
+    fs.symlinkSync(inside ? raw : resolved, dst);
+    return;
+  }
+  // Windows links are created with absolute targets (junctions require them): an inside link points into the copy
+  createLink(inside ? path.resolve(path.dirname(dst), raw) : resolved, dst);
 }
 
 function existsError(dst: string, existing: 'skip' | 'throw'): void {

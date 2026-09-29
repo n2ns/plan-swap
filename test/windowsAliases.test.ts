@@ -6,7 +6,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { setLocale, t } from '../src/i18n';
-import { accountDir, checkSafeToDelete, defaultDir, deleteAccountDir, sameRealPath, scanAccountDirs } from '../src/paths';
+import { accountDir, caseVariantOf, checkSafeToDelete, defaultDir, deleteAccountDir, sameRealPath, scanAccountDirs } from '../src/paths';
 import { migrateClaudeToShared } from '../src/claudeShare';
 import { isOpaqueReparseDir } from '../src/platform';
 import { makeTempHome, onWindows, type TempHome } from './helpers';
@@ -55,6 +55,15 @@ describe('another spelling of the default Claude folder', WINDOWS, () => {
       assert.equal(r.duplicates, 0, spelling);
       assert.equal(fs.readFileSync(path.join(work, 'projects', 'p', 's.jsonl'), 'utf8'), 'session', spelling);
     }
+  });
+});
+
+describe('account folders differing only in case', WINDOWS, () => {
+  test('a kept .claude-Work is found for the name "work"; the exact spelling is not a variant', () => {
+    fs.mkdirSync(path.join(home, '.claude-Work'));
+    assert.equal(caseVariantOf(accountDir('work')), '.claude-Work');
+    assert.equal(caseVariantOf(accountDir('Work')), undefined);
+    assert.equal(caseVariantOf(accountDir('other')), undefined);
   });
 });
 
