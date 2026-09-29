@@ -183,6 +183,22 @@ function loginStatus(a: AccountView): HTMLElement | null {
   return null;
 }
 
+function usageHistory(a: AccountView): HTMLElement | null {
+  if (!a.usage) return null;
+  const time = new Date(a.usage.checkedAt).toLocaleString(getLocale());
+  return h('div', { class: 'row-usage' },
+    h('div', { class: 'usage-values' }, ...a.usage.windows.map((w) => {
+      const minutes = w.windowMinutes;
+      const duration = minutes === undefined ? t('usage.window')
+        : minutes % 1440 === 0 ? t('usage.days', { n: minutes / 1440 })
+          : minutes % 60 === 0 ? t('usage.hours', { n: minutes / 60 })
+            : t('usage.minutes', { n: minutes });
+      return h('div', {}, t('usage.used', { duration, percent: w.usedPercent }));
+    })),
+    h('div', { class: 'usage-time' }, t('usage.observed', { time })),
+  );
+}
+
 /** One tab page: its own add section, adding state, confirmingDir and inline-rename state */
 class Page {
   readonly text: (typeof TEXT)[PanelMode];
@@ -639,6 +655,7 @@ class Page {
         loginStatus(a),
         // The current account gets an extra line with its directory
         a.isCurrent && h('div', { class: 'row-dir' }, a.dirLabel),
+        this.mode === 'codex' && usageHistory(a),
         h('div', { class: 'row-foot' }, tags, actions),
         !a.loggedIn && !a.isCurrent && h('div', { class: 'row-hint' }, t(`${this.mode}.loginHint`)),
         editing && this.renameError && h('div', { class: 'row-error', role: 'alert' }, this.renameError),

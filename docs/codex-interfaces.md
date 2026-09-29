@@ -153,6 +153,18 @@ export function authFileStamp(dir: string): string; // `${mtimeMs}:${size}` of <
 The stamp is taken when each query ends, so rewrites Codex makes during the query (token refresh) do not count as a change.
 State lives in memory only; it is never persisted.
 
+## src/codex/codexUsageHistory.ts (imports vscode only for the Memento type)
+
+```ts
+export const USAGE_HISTORY_MAX_AGE_MS = 24 * 60 * 60_000;
+export class CodexUsageHistory {
+  constructor(state: Memento, now?: () => number, stamp?: (dir: string) => string);
+  get(dir: string): CodexUsage | undefined; // recent observation with unchanged auth metadata; reset windows omitted
+  record(dir: string, result: UsageResult): Promise<void>; // success replaces this directory; auth failure clears; other failures keep
+}
+```
+Storage is `codex.usageHistory`: entries `{ dir, stamp, usage }`. The directory is compared with `samePath`; identity keys and credentials are never persisted. Age, stamp and reset checks happen on read. Expired entries are pruned on recording. See [design 8.7](codex-design.md#87-usage-limits) for display rules.
+
 ## src/codex/codexStore.ts (imports vscode only for the Memento type)
 
 Same shape as `AccountStore` in `src/accounts.ts`, with the keys `codex.accounts` and `codex.ignoredDirs`, the default account `{ name: CODEX_DEFAULT_NAME, dir: codexDefaultDir() }`, and scanning via `scanCodexDirs()`. Class name `CodexAccountStore`, methods: `named() all() find(name) findByDir(dir) add(a) remove(name) unignore(dir) syncWithDisk(labels?)`. `unignore(dir: string): Promise<void>` removes `dir` from `codex.ignoredDirs` (called after `deleteCodexDir` succeeds, so a recreated directory is discovered again). `syncWithDisk(labels?: LabelStore): Promise<void>` first prunes named entries whose directory no longer exists (`!fs.existsSync(dir)`; their alias is cleared with `labels?.remove(name)`, and the directory is not added to `codex.ignoredDirs`), then registers scanned directories, skipping names equal (`sameName`, case-insensitive) to `default`, to the name of a remaining registered Codex account or, with `labels`, to its `labelFor(a.name, labels)` (callers pass the Codex `LabelStore`); it saves only when something changed.
@@ -167,7 +179,7 @@ Single instance, signatures in docs/interfaces.md. The Codex side only provides 
 
 ```ts
 // src/codex/codexCommands.ts
-export function codexPanelSource(store: CodexAccountStore, labels: LabelStore): PanelSource;
+export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, history?: CodexUsageHistory): PanelSource;
 //   accounts(): maps store.all() (kind, name, label via labelFor(a.name, labels), dir, dirLabel, ...readCodexAccountInfo(dir), isCurrent = samePath(dir, effectiveDir()), shared = isSharedCodexAccount(dir) for named rows, undefined for default);
 //              when effectiveDir() does not correspond to any account, appends a current row with kind='external' (name EXTERNAL_NAME, label labelFor(EXTERNAL_NAME, labels), also using readCodexAccountInfo).
 //   enabled(): rcStatus() reports hasBlock and not broken for both files (errors → false).
@@ -197,7 +209,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[];
 export function validateName(name: string, store: CodexAccountStore, labels: LabelStore): string | undefined; // exported so it can be unit-tested
 export function manualRestartMessages(kind: ServerKind, remoteName: string | undefined, windows?: boolean): { hint: string; required: string; switchConfirm: string }; // pure localized guidance selector; callers pass vscode.env.remoteName; windows defaults to isWindows() and is a test seam
 export function restartInfo(kind?: ServerKind): RestartInfo; // userEnv: true on win32; local/other remote: auto false; WSL: canAutoRestart(kind ?? detectServerKind()); callers that already detected the kind pass it, so one flow calls detectServerKind() once.
-export function codexPanelSource(store: CodexAccountStore, labels: LabelStore): PanelSource;
+export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, history?: CodexUsageHistory): PanelSource;
 export async function restartServerInteractive(): Promise<void>; // restart with modal confirmation, shared by the panel banner button, the Command Palette and the footer toolbar (ToolDeps.codexRestart)
 export function codexRunsInWsl(windows?: boolean): boolean; // windows defaults to isWindows(); true only on native Windows with chatgpt.runCodexInWindowsSubsystemForLinux === true (design 9a)
 ```
@@ -209,12 +221,14 @@ The Codex panel source computes current and selected registered-row indices with
 
 ## src/extension.ts
 
-See docs/interfaces.md: before the Codex store is created, `migrateLegacyCodex()` runs in its own try/catch (an error only shows the localized warning `ext.codexLegacyFailed`, Codex initialization continues). A single `AccountsPanel` whose `sources.codex` is `codexPanelSource(codexStore, codexLabels)`; when Codex initialization fails it degrades to an empty source (`enabled: () => false`), Claude is not affected, and `tool` messages of the Codex page still go through `runTool('codex', …)`. Otherwise, `extension.ts` owns per-vendor `terminalChecks`; `ToolDeps.accountBusy` reads them, `codexShareOps.refresh` forwards `LinkOptions`, and `registerCodexCommands(... provideTerminalCheck ...)` publishes the Codex terminal check so toolbar Re-link obeys the same Windows terminal-busy rule as add and switch.
+See docs/interfaces.md: before the Codex store is created, `migrateLegacyCodex()` runs in its own try/catch (an error only shows the localized warning `ext.codexLegacyFailed`, Codex initialization continues). A single `AccountsPanel` whose `sources.codex` is `codexPanelSource(codexStore, codexLabels, usageHistory)`; when Codex initialization fails it degrades to an empty source (`enabled: () => false`), Claude is not affected, and `tool` messages of the Codex page still go through `runTool('codex', …)`. Otherwise, `extension.ts` owns per-vendor `terminalChecks`; `ToolDeps.accountBusy` reads them, `codexShareOps.refresh` forwards `LinkOptions`, and `registerCodexCommands(... provideTerminalCheck ...)` publishes the Codex terminal check so toolbar Re-link obeys the same Windows terminal-busy rule as add and switch.
 
-Usage limits (design 8.7), only when Codex is initialized: `usage = new CodexUsageMonitor(effectiveDir, (s) => statusBar.setCodexUsage(s), { read: (dir) => readCodexAccountInfo(dir).plan === 'API key' ? { ok: false, reason: 'notLoggedIn' } /* nothing started */ : readCodexUsageWithFallback(dir, () => findBundledCodex(<extensionPath of openai.chatgpt>), { clientVersion: <extension version> }) })`; `checkUsage()` = `refreshIfStale()` when `vscode.window.state.focused` and not `codexRunsInWsl()`, run 5 s after activation, every 60 s and on regaining focus (the 15-minute stale interval limits the actual queries); `panel.onDidChange` (account-info changes) → `refreshIfAuthChanged()` unless `codexRunsInWsl()`; `planswap.codex.refreshUsage` → the `codex.win.runsInWsl` warning when `codexRunsInWsl()`, otherwise `refresh()`. A change of `chatgpt.runCodexInWindowsSubsystemForLinux` re-renders the status bar. The timers are cleared on dispose.
+Usage limits (design 8.7), only when Codex is initialized: `usage = new CodexUsageMonitor(effectiveDir, (s) => { statusBar.setCodexUsage(s); if (!s.checking) panel.refresh(); }, { read: (dir) => readCodexAccountInfo(dir).plan === 'API key' ? { ok: false, reason: 'notLoggedIn' } /* nothing started */ : readCodexUsageWithFallback(dir, () => findBundledCodex(<extensionPath of openai.chatgpt>), { clientVersion: <extension version> }) })`; `checkUsage()` = `refreshIfStale()` when `vscode.window.state.focused` and not `codexRunsInWsl()`, run 5 s after activation, every 60 s and on regaining focus (the 15-minute stale interval limits the actual queries); `panel.onDidChange` (account-info changes) → `refreshIfAuthChanged()` unless `codexRunsInWsl()`; `planswap.codex.refreshUsage` → the `codex.win.runsInWsl` warning when `codexRunsInWsl()`, otherwise `refresh()`. A change of `chatgpt.runCodexInWindowsSubsystemForLinux` re-renders the status bar. The timers are cleared on dispose.
 
 ## package.json
 
 - `viewsContainers.activitybar[0].title` and the view name are both "PlanSwap" (`%key%` placeholders; "PlanSwap" in `package.nls.zh-cn.json`).
 - `views.planswap` has a single view `{ type: 'webview', id: 'planswap.accounts', name: <"PlanSwap"> }`; Codex is a tab inside that view and has no view id of its own.
 - `commands` contains 8 `planswap.codex.*` entries (including `planswap.codex.refreshUsage`, "Refresh Codex Usage Limits") (category "Codex Account", "Codex 账号" in Chinese; titles from `package.nls*.json`); the refresh button in `view/title` has `when: view == planswap.accounts`, and the existing `planswap.refresh` refreshes both stores and both pages.
+
+The activation wiring also creates `CodexUsageHistory(state)` and passes it to `codexPanelSource`. Each completed usage read records its result before returning to the monitor; storage failures leave the live tooltip usable. The monitor callback refreshes the panel after a result. A separate 60-second timer refreshes historical observations for expiry and is disposed with the usage timers. Rows receive history only when signed in, not using an API key and not in Windows run-in-WSL mode.

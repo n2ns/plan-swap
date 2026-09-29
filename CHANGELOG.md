@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Codex account rows show their last observed usage with a collection time and a "not live" label. Observations survive editor restarts, hide after a sign-in file change, and expire after a reset or 24 hours; accounts without an observation show no usage estimate.
+
+### Fixed
+
+- Replaced the retired Marketplace badge in the README and updated its environment badge to include Windows.
+
 ## [0.2.0] - 2026-09-30
 
 ### Added

@@ -20,7 +20,8 @@ import { isSupportedPlatform } from './platform';
 import { migrateLegacyLanguage, resolveLocale, watchLocale } from './i18nVscode';
 import { effectiveDir, migrateLegacyCodex } from './codex/codexState';
 import { CodexUsageMonitor } from './codex/codexUsageMonitor';
-import { findBundledCodex, readCodexUsageWithFallback } from './codex/codexUsage';
+import { CodexUsageHistory } from './codex/codexUsageHistory';
+import { findBundledCodex, readCodexUsageWithFallback, type UsageResult } from './codex/codexUsage';
 import { readCodexAccountInfo } from './codex/codexPaths';
 import { IdentityWarnings, claudeIdentity, codexIdentity, type IdentitySource } from './identityWarnings';
 
@@ -50,6 +51,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   const claudeLabels = new LabelStore(state, 'claude.labels');
   await store.syncWithDisk(claudeLabels);
   const codexLabels = new LabelStore(state, 'codex.labels');
+  const usageHistory = new CodexUsageHistory(state);
 
   // A Codex init failure is only logged and does not affect Claude: the Codex tab renders as "not enabled, no accounts"
   let codex: { store: CodexAccountStore; labels: LabelStore } | undefined;
@@ -65,7 +67,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   try {
     const codexStore = new CodexAccountStore(state);
     await codexStore.syncWithDisk(codexLabels);
-    codexSource = codexPanelSource(codexStore, codexLabels);
+    codexSource = codexPanelSource(codexStore, codexLabels, usageHistory);
     codex = { store: codexStore, labels: codexLabels };
   } catch (err) {
     codexInitError = err instanceof Error ? err.message : String(err);
@@ -78,14 +80,22 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   // queries, so several open windows do not all start codex; nothing runs when Codex runs inside WSL (Windows)
   const version = String(ctx.extension.packageJSON.version ?? '0');
   const usage = codex
-    ? new CodexUsageMonitor(effectiveDir, (s) => statusBar.setCodexUsage(s), {
+    ? new CodexUsageMonitor(effectiveDir, (s) => {
+      statusBar.setCodexUsage(s);
+      if (!s.checking) panel.refresh();
+    }, {
       // API-key accounts have no ChatGPT usage limits (and the tooltip hides them): nothing is started for them
-      read: async (dir) => readCodexAccountInfo(dir).plan === 'API key'
+      read: async (dir) => {
+        const result: UsageResult = readCodexAccountInfo(dir).plan === 'API key'
         ? { ok: false, reason: 'notLoggedIn' }
-        : readCodexUsageWithFallback(dir, () => {
+        : await readCodexUsageWithFallback(dir, () => {
           const ext = vscode.extensions.getExtension(CODEX_EXTENSION_ID);
           return ext && findBundledCodex(ext.extensionPath);
-        }, { clientVersion: version }),
+        }, { clientVersion: version });
+        // A cache write failure must not turn a successful official query into a usage error.
+        try { await usageHistory.record(dir, result); } catch { /* the live tooltip still works */ }
+        return result;
+      },
     })
     : undefined;
   if (usage) statusBar.setCodexUsage(usage.current());
@@ -124,6 +134,8 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   };
 
   const panel = new AccountsPanel(ctx.extensionUri, { claude: claudePanelSource(store, claudeLabels), codex: codexSource }, ctx.globalState);
+  // Re-render expiry even when no query is due, including accounts other than the effective one.
+  const historyTick = setInterval(() => panel.refresh(), USAGE_TICK_MS);
   // On init failure, Codex actions in the panel and Command Palette show a clear message instead of silently doing nothing
   if (codexInitError) {
     const notify = () => void vscode.window.showErrorMessage(t('ext.codexUnavailable', { error: codexInitError ?? '' }));
@@ -150,7 +162,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
       if (usage && !codexRunsInWsl()) void usage.refreshIfAuthChanged();
       identityWarnings.check();
     }),
-    { dispose: () => { clearTimeout(firstUsageCheck); clearInterval(usageTick); } },
+    { dispose: () => { clearTimeout(firstUsageCheck); clearInterval(usageTick); clearInterval(historyTick); } },
     vscode.window.onDidChangeWindowState((e) => {
       if (e.focused) checkUsage();
     }),
@@ -165,7 +177,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
       : []),
     vscode.workspace.onDidChangeConfiguration((e) => {
       // The Codex extension's run-in-WSL switch changes what the Codex section of the tooltip can say
-      if (e.affectsConfiguration('chatgpt.runCodexInWindowsSubsystemForLinux')) statusBar.update();
+      if (e.affectsConfiguration('chatgpt.runCodexInWindowsSubsystemForLinux')) { statusBar.update(); panel.refresh(); }
       if (!affectsSetting(e)) return;
       setClaudeSettingEnv(settingEnvNames());
       panel.refresh();

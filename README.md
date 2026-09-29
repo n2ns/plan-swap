@@ -9,8 +9,8 @@ Switch between the Claude Code and Codex subscription accounts you own (Claude P
 > **WSL/Linux and native Windows.** macOS is not supported. See [Native Windows](#native-windows).
 
 [![VS Code](https://img.shields.io/badge/VS_Code-1.107%2B-007ACC?style=flat)](https://code.visualstudio.com/)
-[![WSL](https://img.shields.io/badge/Environment-WSL-0078D4?style=flat)](#requirements)
-[![VS Marketplace](https://img.shields.io/visual-studio-marketplace/v/n2ns.planswap?style=flat&label=VS%20Marketplace&cacheSeconds=10800)](https://marketplace.visualstudio.com/items?itemName=n2ns.planswap)
+[![Environment: WSL and Windows](https://img.shields.io/badge/Environment-WSL%20%7C%20Windows-0078D4?style=flat)](#requirements)
+[![Install from VS Marketplace](https://img.shields.io/badge/VS_Marketplace-Install-007ACC?style=flat)](https://marketplace.visualstudio.com/items?itemName=n2ns.planswap)
 [![Open VSX](https://img.shields.io/open-vsx/v/n2ns/planswap?style=flat&label=Open%20VSX&cacheSeconds=10800)](https://open-vsx.org/extension/n2ns/planswap)
 [![License](https://img.shields.io/github/license/n2ns/planswap?style=flat&cacheSeconds=10800)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/n2ns/planswap?style=flat&logo=github&cacheSeconds=10800)](https://github.com/n2ns/planswap/stargazers)

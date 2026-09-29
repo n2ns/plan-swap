@@ -208,6 +208,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit && tsc --noEmit -p src/webview && tsc --noEmit -p test",
     "test": "node scripts/run-tests.mjs",
+    "test:integration": "npm run build && node scripts/run-integration.mjs",
     "build": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
     "vscode:prepublish": "npm run typecheck && npm run build",
@@ -216,6 +217,7 @@
   "devDependencies": {
     "@types/node": "22.20.4",
     "@types/vscode": "1.107.0",
+    "@vscode/test-electron": "3.1.0",
     "@vscode/vsce": "4.0.0",
     "esbuild": "0.28.2",
     "typescript": "7.0.2"

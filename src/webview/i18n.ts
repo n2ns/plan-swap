@@ -5,6 +5,12 @@ export type Locale = PanelState['locale'];
 
 // English is the source of truth; all tables must have exactly the same keys
 export const en = {
+  'usage.observed': 'Last observed: {time} · not live',
+  'usage.used': '{duration}: {percent}% used',
+  'usage.window': 'Limit',
+  'usage.days': '{n}d',
+  'usage.hours': '{n}h',
+  'usage.minutes': '{n}m',
   'panel.loading': 'Loading accounts…',
   'tab.claude': 'Claude',
   'tab.codex': 'Codex',
@@ -105,6 +111,12 @@ export const en = {
 export type MessageKey = keyof typeof en;
 
 export const zhCn: Record<MessageKey, string> = {
+  'usage.observed': '采集于 {time} · 非实时',
+  'usage.used': '{duration}：已用 {percent}%',
+  'usage.window': '额度',
+  'usage.days': '{n}天',
+  'usage.hours': '{n}小时',
+  'usage.minutes': '{n}分钟',
   'panel.loading': '正在加载账号…',
   'tab.claude': 'Claude',
   'tab.codex': 'Codex',
@@ -203,6 +215,12 @@ export const zhCn: Record<MessageKey, string> = {
 };
 
 export const es: Record<MessageKey, string> = {
+  'usage.observed': 'Última consulta: {time} · no en tiempo real',
+  'usage.used': '{duration}: {percent}% usado',
+  'usage.window': 'Límite',
+  'usage.days': '{n} d',
+  'usage.hours': '{n} h',
+  'usage.minutes': '{n} min',
   'panel.loading': 'Cargando cuentas…',
   'tab.claude': 'Claude',
   'tab.codex': 'Codex',
@@ -300,6 +318,12 @@ export const es: Record<MessageKey, string> = {
 };
 
 export const ja: Record<MessageKey, string> = {
+  'usage.observed': '取得日時: {time} · リアルタイムではありません',
+  'usage.used': '{duration}: {percent}% 使用済み',
+  'usage.window': '利用枠',
+  'usage.days': '{n}日',
+  'usage.hours': '{n}時間',
+  'usage.minutes': '{n}分',
   'panel.loading': 'アカウントを読み込み中…',
   'tab.claude': 'Claude',
   'tab.codex': 'Codex',

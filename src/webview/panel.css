@@ -213,6 +213,7 @@ body {
     'avatar title'
     'sub sub'
     'dir dir'
+    'usage usage'
     'foot foot'
     'hint hint'
     'error error';
@@ -318,6 +319,9 @@ body {
 .row-sub { grid-area: sub; margin-top: 2px; color: var(--muted); font-size: 0.88em; min-width: 0; overflow-wrap: anywhere; }
 .row-sub.ok { display: flex; align-items: center; gap: 5px; }
 .row-sub.ok::before { content: ''; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
+.row-usage { grid-area: usage; min-width: 0; margin-top: 5px; font-size: 0.82em; overflow-wrap: anywhere; }
+.usage-values { display: flex; flex-wrap: wrap; gap: 2px 10px; }
+.usage-time { color: var(--muted); margin-top: 2px; }
 /* Directory of the current row: monospace, secondary color */
 .row-dir { grid-area: dir; margin-top: 2px; color: var(--muted); font-size: 0.82em; font-family: var(--vscode-editor-font-family); min-width: 0; overflow-wrap: anywhere; }
 .row-foot { grid-area: foot; margin-top: 4px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; min-width: 0; }
@@ -338,6 +342,7 @@ body {
       'avatar title tags actions'
       '. sub sub actions'
       '. dir dir actions'
+      '. usage usage actions'
       '. hint hint actions'
       '. error error actions';
   }

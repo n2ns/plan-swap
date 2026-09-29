@@ -43,6 +43,7 @@ import { type ServerKind, canAutoRestart, detectServerKind, executeRestart, plan
 import type { CodexAccountStore } from './codexStore';
 import { runTool, type TerminalCheck, type ToolDeps } from '../tools';
 import { t } from '../i18n';
+import type { CodexUsageHistory } from './codexUsageHistory';
 
 export interface CodexDeps {
   store: CodexAccountStore;
@@ -156,7 +157,7 @@ export async function restartServerInteractive(): Promise<void> {
 }
 
 /** Data source of the Codex panel tab */
-export function codexPanelSource(store: CodexAccountStore, labels: LabelStore): PanelSource {
+export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, history?: CodexUsageHistory): PanelSource {
   const accounts = (): AccountView[] => {
     const cur = effectiveDir();
     const selected = readSelectedDir() ?? codexDefaultDir();
@@ -185,6 +186,11 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore): 
         isCurrent: true,
         isSelected: findSameDir([cur], selected) === 0,
       });
+    }
+    if (!codexRunsInWsl()) {
+      for (const row of rows) {
+        if (row.loggedIn && row.plan !== 'API key') row.usage = history?.get(row.dir);
+      }
     }
     return rows;
   };
