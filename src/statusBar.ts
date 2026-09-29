@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as fs from 'node:fs';
-import { claudeJsonPath, readAccountInfo, samePath } from './paths';
+import { claudeJsonPath, findSameDir, readAccountInfo, samePath } from './paths';
 import { currentDir, isExplicitConfigDir } from './claudeSettings';
 import type { AccountStore } from './accounts';
 import { EXTERNAL_NAME, labelFor, type LabelStore } from './labels';
@@ -105,7 +105,7 @@ export class StatusBar implements vscode.Disposable {
       text.push(`Codex: ${label}`);
       const lines = [`Codex: ${label}`, identity, codexDir];
       const selected = readSelectedDir() ?? codexDefaultDir();
-      if (!samePath(selected, codexDir)) {
+      if (findSameDir([selected], codexDir) !== 0) {
         const pendingAccount = this.codex.store.findByDir(selected);
         const pending = pendingAccount ? labelFor(pendingAccount.name, this.codex.labels) : selected;
         lines.push(t('status.codexPending', { label: pending }));

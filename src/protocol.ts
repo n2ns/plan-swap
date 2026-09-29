@@ -41,6 +41,8 @@ export interface TabState {
   pendingDir?: string;
   // codex only: labels of the restart actions (pending banner, footer toolbar, disabled page)
   restart?: RestartInfo;
+  // Prefix of a new account folder for the add help, in the platform's spelling (~/.claude- / ~\.claude-)
+  dirPrefix?: string;
 }
 
 export interface PanelState {

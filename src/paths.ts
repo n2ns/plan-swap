@@ -21,7 +21,14 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
 }
 
 export function defaultDir(): string {
-  return path.resolve(process.env.CLAUDE_CONFIG_DIR?.trim() || path.join(os.homedir(), '.claude'));
+  return path.resolve(configDirFromEnv() ?? path.join(os.homedir(), '.claude'));
+}
+
+// CLAUDE_CONFIG_DIR of the extension host, used as is like Claude Code does (surrounding spaces included; they are warned
+// about at activation); blank counts as unset (Claude Code would resolve it against its own working folder)
+function configDirFromEnv(): string | undefined {
+  const v = process.env.CLAUDE_CONFIG_DIR;
+  return v && v.trim() ? v : undefined;
 }
 
 export function accountDir(name: string): string {
@@ -71,12 +78,43 @@ export function sameRealPath(a: string, b: string): boolean {
   return comparablePath(realPath(a)) === comparablePath(realPath(b)) || sameFileId(a, b);
 }
 
+// Variables claudeCode.environmentVariables sets (non-empty) or clears (empty) for the Claude Code the editor starts;
+// kept here by the host (setClaudeSettingEnv) so this module needs no vscode import
+let settingEnv: { set: readonly string[]; cleared: readonly string[] } = { set: [], cleared: [] };
+
+export function setClaudeSettingEnv(names: { set: readonly string[]; cleared: readonly string[] }): void {
+  settingEnv = names;
+}
+
+// Whether Claude Code started by this editor sees a non-empty `name`: the setting first, then the host environment
+function claudeSeesSet(name: string): boolean {
+  const norm = (n: string): string => (isWindows() ? n.toUpperCase() : n);
+  if (settingEnv.set.some((n) => norm(n) === norm(name))) return true;
+  if (settingEnv.cleared.some((n) => norm(n) === norm(name))) return false;
+  return !!process.env[name];
+}
+
+/** File name of the account info file: Claude Code (2.1.284) names it '.claude-custom-oauth.json' while
+ *  CLAUDE_CODE_CUSTOM_OAUTH_URL is set, '.claude.json' otherwise (its local / staging variants exist only in
+ *  development builds). */
+export function claudeJsonName(): string {
+  return claudeSeesSet('CLAUDE_CODE_CUSTOM_OAUTH_URL') ? '.claude-custom-oauth.json' : '.claude.json';
+}
+
+/** Index of `dir` in `dirs`: an entry with the same spelling first (samePath), otherwise one that is another spelling of
+ *  the same folder (sameRealPath: an 8.3 name, '\\?\', a link to it); -1 when none. Marks the current / selected row
+ *  so another spelling does not show up as an extra "external" row. */
+export function findSameDir(dirs: readonly string[], dir: string): number {
+  const exact = dirs.findIndex((d) => samePath(d, dir));
+  return exact >= 0 ? exact : dirs.findIndex((d) => sameRealPath(d, dir));
+}
+
 // Account info file location: without CLAUDE_CONFIG_DIR, Claude Code uses ~/.claude.json (in the home dir, not inside ~/.claude).
 // explicit: CLAUDE_CONFIG_DIR is set to dir for the processes that use it (e.g. by the setting), so <dir>/.claude.json is used
 export function claudeJsonPath(dir: string, explicit = false): string {
   const home = os.homedir();
-  if (!explicit && !process.env.CLAUDE_CONFIG_DIR?.trim() && samePath(dir, path.join(home, '.claude'))) return path.join(home, '.claude.json');
-  return path.join(dir, '.claude.json');
+  if (!explicit && configDirFromEnv() === undefined && samePath(dir, path.join(home, '.claude'))) return path.join(home, claudeJsonName());
+  return path.join(dir, claudeJsonName());
 }
 
 const CLAUDE_PLAN_NAMES: Record<string, string> = {
@@ -217,7 +255,7 @@ export function syncMcpServers(fromJson: string, dir: string, beforeCommit?: () 
   const source = readJsonObject(fromJson)?.mcpServers;
   if (!isPlainObject(source) || Object.keys(source).length === 0) return result;
 
-  const file = path.join(path.resolve(dir), '.claude.json');
+  const file = path.join(path.resolve(dir), claudeJsonName());
   let real = file;
   let before: string | undefined;
   let mode = 0o600;

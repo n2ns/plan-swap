@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import * as os from 'node:os';
-import { DEFAULT_NAME, claudeJsonPath, readAccountInfo, samePath, type Account } from './paths';
+import { DEFAULT_NAME, claudeJsonPath, findSameDir, readAccountInfo, samePath, type Account } from './paths';
 import { currentDir, isExplicitConfigDir } from './claudeSettings';
 import type { AccountStore } from './accounts';
 import { EXTERNAL_NAME, labelFor, type LabelStore } from './labels';
@@ -32,14 +32,16 @@ export interface PanelSource {
 export function claudePanelSource(store: AccountStore, labels: LabelStore): PanelSource {
   const accounts = (): AccountView[] => {
     const cur = currentDir();
-    const rows: AccountView[] = store.all().map((a) => ({
+    const all = store.all();
+    const curIdx = findSameDir(all.map((a) => a.dir), cur);
+    const rows: AccountView[] = all.map((a, i) => ({
       kind: a.name === DEFAULT_NAME ? 'default' : 'named',
       name: a.name,
       label: labelFor(a.name, labels),
       dir: a.dir,
       dirLabel: tildify(a.dir),
       ...viewInfo(readAccountInfo(a.dir, isExplicitConfigDir(a.dir))),
-      isCurrent: samePath(a.dir, cur),
+      isCurrent: i === curIdx,
       shared: a.name === DEFAULT_NAME ? undefined : isSharedClaudeAccount(a.dir),
     }));
     if (!rows.some((r) => r.isCurrent)) {
@@ -193,6 +195,8 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
       switchedTo: mode === 'claude' ? this.switchedTo : undefined,
       pendingDir: source.pendingDir(),
       restart: source.restart?.(),
+      // New account folders as the platform writes them: ~/.claude- on Linux, ~\.claude- on Windows
+      dirPrefix: tildify(path.join(os.homedir(), mode === 'claude' ? '.claude-' : '.codex-')),
     };
   }
 

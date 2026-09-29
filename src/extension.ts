@@ -2,10 +2,11 @@ import * as vscode from 'vscode';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { AccountStore } from './accounts';
-import { claudeCredentialOverrides, oneDriveHome } from './environmentWarnings';
+import { claudeCredentialOverrides, oneDriveHome, pathVarsWithSpaces } from './environmentWarnings';
 import { AccountsPanel, VIEW_ID, claudePanelSource, type PanelSource } from './accountsPanel';
 import { LabelStore, labelFor } from './labels';
 import { FileMemento } from './fileState';
+import { setClaudeSettingEnv } from './paths';
 import { ensureCodexLinks, isSharedCodexAccount } from './codex/codexShare';
 import { REFRESH_USAGE_COMMAND, StatusBar } from './statusBar';
 import { registerCommands } from './commands';
@@ -40,6 +41,8 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   }
   // Account lists, ignore lists and aliases live in ~/.config/planswap/state.json so they follow the WSL distribution (or the Windows user profile);
   // globalState is stored on the client and would be shared by every distro. Existing globalState data is imported once
+  // The account info file name depends on what the Claude Code setting passes (custom OAuth URL)
+  setClaudeSettingEnv(settingEnvNames());
   const state = new FileMemento();
   await state.importOnce(ctx.globalState);
   const store = new AccountStore(state);
@@ -158,6 +161,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
       // The Codex extension's run-in-WSL switch changes what the Codex section of the tooltip can say
       if (e.affectsConfiguration('chatgpt.runCodexInWindowsSubsystemForLinux')) statusBar.update();
       if (!affectsSetting(e)) return;
+      setClaudeSettingEnv(settingEnvNames());
       panel.refresh();
       statusBar.update();
     }),
@@ -187,6 +191,8 @@ function showEnvironmentWarnings(state: FileMemento): void {
   const overrides = claudeCredentialOverrides(process.env, settingEnvNames());
   if (overrides.length) warn(`claudeEnv:${overrides.join(',')}`, t('warn.claudeEnvOverride', { names: overrides.join(', ') }));
   if (oneDriveHome(os.homedir(), process.env)) warn('oneDriveHome', t('warn.oneDriveHome', { home: os.homedir() }));
+  const spaced = pathVarsWithSpaces(process.env);
+  if (spaced.length) warn(`pathSpaces:${spaced.join(',')}`, t('warn.pathSpaces', { names: spaced.join(', ') }));
 }
 
 export function deactivate(): void {}

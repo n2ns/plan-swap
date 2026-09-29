@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { claudeCredentialOverrides, oneDriveHome } from '../src/environmentWarnings';
+import { claudeCredentialOverrides, oneDriveHome, pathVarsWithSpaces } from '../src/environmentWarnings';
 
 describe('claudeCredentialOverrides', () => {
   test('names variables that outrank the per-account sign-in, from the environment or the setting', () => {
@@ -14,6 +14,14 @@ describe('claudeCredentialOverrides', () => {
     // Names are case-insensitive on Windows only
     assert.deepEqual(claudeCredentialOverrides({ anthropic_api_key: 'k' }, { set: ['claude_code_use_bedrock'] }, 'linux'), []);
     assert.deepEqual(claudeCredentialOverrides({ anthropic_api_key: 'k' }, { set: ['claude_code_use_bedrock'] }, 'win32'), ['CLAUDE_CODE_USE_BEDROCK', 'ANTHROPIC_API_KEY']);
+  });
+});
+
+describe('pathVarsWithSpaces', () => {
+  test('names folder variables with surrounding spaces; blank and clean values are fine', () => {
+    assert.deepEqual(pathVarsWithSpaces({ CLAUDE_CONFIG_DIR: '/a ', CODEX_HOME: ' /b', PATH: ' x ' }), ['CLAUDE_CONFIG_DIR', 'CODEX_HOME']);
+    assert.deepEqual(pathVarsWithSpaces({ CLAUDE_CONFIG_DIR: '/a', CODEX_HOME: '   ' }), []);
+    assert.deepEqual(pathVarsWithSpaces({}), []);
   });
 });
 

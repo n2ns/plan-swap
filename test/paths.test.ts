@@ -6,7 +6,7 @@ import { setLocale, t } from '../src/i18n';
 import {
   accountDir, checkSafeToDelete, claudeJsonPath, copySettingsStripped, defaultDir, deleteAccountDir,
   ensureAccountDir, formatClaudePlan, readAccountInfo, samePath, sameRealPath, scanAccountDirs,
-  syncMcpServers,
+  findSameDir, setClaudeSettingEnv, syncMcpServers,
 } from '../src/paths';
 import { assertTempHome, makeTempHome, assertMode, FILE_SYMLINKS, read, type TempHome } from './helpers';
 
@@ -82,6 +82,41 @@ describe('defaultDir / accountDir / claudeJsonPath', () => {
     process.env.CLAUDE_CONFIG_DIR = '   ';
     assert.equal(defaultDir(), def);
     delete process.env.CLAUDE_CONFIG_DIR;
+  });
+  test('CLAUDE_CONFIG_DIR is used as is, surrounding spaces included, as Claude Code does', () => {
+    process.env.CLAUDE_CONFIG_DIR = path.join(home, 'with space ');
+    assert.equal(defaultDir(), path.resolve(path.join(home, 'with space ')));
+    delete process.env.CLAUDE_CONFIG_DIR;
+  });
+  test('the info file is .claude-custom-oauth.json while Claude Code sees CLAUDE_CODE_CUSTOM_OAUTH_URL', () => {
+    const acc = accountDir('oauth');
+    assert.equal(claudeJsonPath(acc), path.join(acc, '.claude.json'));
+    process.env.CLAUDE_CODE_CUSTOM_OAUTH_URL = 'https://auth.example';
+    try {
+      assert.equal(claudeJsonPath(acc), path.join(acc, '.claude-custom-oauth.json'));
+      assert.equal(claudeJsonPath(def), path.join(home, '.claude-custom-oauth.json'));
+      // The setting can clear the inherited variable for Claude Code, or set it
+      setClaudeSettingEnv({ set: [], cleared: ['CLAUDE_CODE_CUSTOM_OAUTH_URL'] });
+      assert.equal(claudeJsonPath(acc), path.join(acc, '.claude.json'));
+    } finally {
+      delete process.env.CLAUDE_CODE_CUSTOM_OAUTH_URL;
+    }
+    setClaudeSettingEnv({ set: ['CLAUDE_CODE_CUSTOM_OAUTH_URL'], cleared: [] });
+    assert.equal(claudeJsonPath(acc), path.join(acc, '.claude-custom-oauth.json'));
+    setClaudeSettingEnv({ set: [], cleared: [] });
+  });
+  test('findSameDir prefers the same spelling and falls back to another spelling of the folder', () => {
+    const a = path.join(home, 'find-a');
+    const b = path.join(home, 'find-b');
+    const alias = path.join(home, 'find-alias');
+    fs.mkdirSync(a);
+    fs.mkdirSync(b);
+    fs.symlinkSync(b, alias, 'junction');
+    assert.equal(findSameDir([a, b], b), 1);
+    assert.equal(findSameDir([a, b], alias), 1);
+    assert.equal(findSameDir([alias, b], b), 1);
+    assert.equal(findSameDir([a], b), -1);
+    assert.equal(findSameDir([a], path.join(home, 'missing')), -1);
   });
   test('CLAUDE_CONFIG_DIR takes effect with trailing slash removed', () => {
     process.env.CLAUDE_CONFIG_DIR = path.join(home, '.claude-x') + '/';

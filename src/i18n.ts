@@ -56,6 +56,7 @@ export const en = {
   'common.dontShowAgain': 'Don\'t Show Again',
   'warn.claudeEnvOverride': 'Claude Code started by this editor sees {names}, which it uses instead of the sign-in stored in the selected account folder. Switching Claude accounts in PlanSwap does not change the credential it uses until {names} is removed from the environment and from claudeCode.environmentVariables.',
   'warn.oneDriveHome': 'Your home folder {home} is inside OneDrive. OneDrive sync has corrupted Claude Code\'s .claude.json through concurrent writes, and every PlanSwap account folder lives there too. Consider moving the profile out of OneDrive or excluding the .claude* and .codex* folders from sync.',
+  'warn.pathSpaces': '{names} has spaces at the start or end of its value. Claude Code and Codex use the value as is, so they work in a folder whose name starts or ends with a space, which Windows programs and PlanSwap may not be able to open. Remove the spaces from the variable.',
   'ext.codexLegacyFailed': 'Cannot migrate the Codex switching setup of an earlier version (ai-switcher): {error}',
 
   // Account name validation (add account)
@@ -299,6 +300,7 @@ export const zhCn: Record<MessageKey, string> = {
   'common.dontShowAgain': '不再提示',
   'warn.claudeEnvOverride': '此编辑器启动的 Claude Code 能看到 {names}，它会用它代替所选账号目录中保存的登录。在从环境变量和 claudeCode.environmentVariables 中移除 {names} 之前，在 PlanSwap 中切换 Claude 账号不会改变实际使用的凭据。',
   'warn.oneDriveHome': '你的用户目录 {home} 位于 OneDrive 中。OneDrive 同步曾因并发写入损坏 Claude Code 的 .claude.json，而 PlanSwap 的所有账号目录也在这里。建议把用户目录移出 OneDrive，或将 .claude* 和 .codex* 目录排除在同步之外。',
+  'warn.pathSpaces': '{names} 的值开头或结尾有空格。Claude Code 和 Codex 会原样使用该值，也就是使用一个名字以空格开头或结尾的文件夹，Windows 程序和 PlanSwap 可能无法打开它。请删除变量值中的这些空格。',
   'ext.codexLegacyFailed': '无法迁移旧版本（ai-switcher）的 Codex 切换配置：{error}',
 
   'name.empty': '请输入账号名',
@@ -518,6 +520,7 @@ export const es: Record<MessageKey, string> = {
   'common.dontShowAgain': 'No volver a mostrar',
   'warn.claudeEnvOverride': 'Claude Code iniciado por este editor ve {names}, que usa en lugar del inicio de sesión guardado en la carpeta de la cuenta seleccionada. Cambiar de cuenta de Claude en PlanSwap no cambia la credencial que usa hasta que se quite {names} del entorno y de claudeCode.environmentVariables.',
   'warn.oneDriveHome': 'Tu carpeta de usuario {home} está dentro de OneDrive. La sincronización de OneDrive ha dañado el .claude.json de Claude Code por escrituras simultáneas, y todas las carpetas de cuentas de PlanSwap están ahí. Considera sacar el perfil de OneDrive o excluir de la sincronización las carpetas .claude* y .codex*.',
+  'warn.pathSpaces': '{names} tiene espacios al principio o al final de su valor. Claude Code y Codex usan el valor tal cual, es decir, una carpeta cuyo nombre empieza o termina con un espacio, que los programas de Windows y PlanSwap quizá no puedan abrir. Quita esos espacios de la variable.',
   'ext.codexLegacyFailed': 'No se pudo migrar la configuración de cambio de cuenta de Codex de una versión anterior (ai-switcher): {error}',
   'name.empty': 'Introduce un nombre de cuenta',
   'name.invalid': 'Solo se permiten letras, números, guiones bajos y guiones',
@@ -722,6 +725,7 @@ export const ja: Record<MessageKey, string> = {
   'common.dontShowAgain': '今後表示しない',
   'warn.claudeEnvOverride': 'このエディターから起動した Claude Code には {names} が見えており、選択中のアカウントフォルダーに保存されたログインの代わりにそれを使います。環境と claudeCode.environmentVariables から {names} を取り除くまで、PlanSwap で Claude アカウントを切り替えても使われる認証情報は変わりません。',
   'warn.oneDriveHome': 'ユーザーフォルダー {home} は OneDrive 内にあります。OneDrive の同期は同時書き込みによって Claude Code の .claude.json を破損させたことがあり、PlanSwap のすべてのアカウントフォルダーもそこにあります。プロファイルを OneDrive の外に移すか、.claude* と .codex* フォルダーを同期対象から外すことを検討してください。',
+  'warn.pathSpaces': '{names} の値の先頭または末尾に空白があります。Claude Code と Codex は値をそのまま使うため、名前が空白で始まる、または終わるフォルダーを使いますが、Windows のプログラムや PlanSwap はそれを開けない場合があります。変数の値から空白を取り除いてください。',
   'ext.codexLegacyFailed': '旧バージョン（ai-switcher）の Codex 切り替え設定を移行できません: {error}',
   'name.empty': 'アカウント名を入力してください',
   'name.invalid': '英数字、アンダースコア、ハイフンのみ使用できます',

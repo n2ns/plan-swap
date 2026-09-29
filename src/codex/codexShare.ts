@@ -220,7 +220,7 @@ export function codexAccountBusy(dir: string, procRoot = '/proc'): boolean {
       continue;
     }
     const entry = environ.split('\0').find((e) => e.startsWith('CODEX_HOME='));
-    const value = entry?.slice('CODEX_HOME='.length).trim();
+    const value = entry?.slice('CODEX_HOME='.length);
     if (forDefault ? !value || samePath(value, def) || sameRealPath(value, def) : !!value && (samePath(value, dir) || sameRealPath(value, dir))) {
       return true;
     }
@@ -310,8 +310,7 @@ export function migrateCodexToShared(dir: string, accountName: string, procRoot 
         // The default has none: the account's file becomes the shared one, unless it carries identity keys
         if (name === 'config.toml' && !configShareable(src)) continue;
         fs.mkdirSync(path.dirname(dst), { recursive: true, mode: 0o700 });
-        moveEntry(src, dst);
-        report.moved++;
+        if (moveEntry(src, dst)) report.moved++;
       } else if (fs.existsSync(dst) && sameContent(src, dst, st, fs.statSync(dst))) {
         fs.unlinkSync(src);
         report.duplicates++;

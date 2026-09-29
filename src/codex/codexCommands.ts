@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { NAME_RE, caseVariantOf, samePath, sameRealPath } from '../paths';
+import { NAME_RE, caseVariantOf, findSameDir, samePath, sameRealPath } from '../paths';
 import { lstatOrUndefined } from '../claudeShare';
 import { shQuote } from '../commands';
 import { accountTerminalShell } from '../terminalShell';
@@ -153,15 +153,18 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore): 
   const accounts = (): AccountView[] => {
     const cur = effectiveDir();
     const selected = readSelectedDir() ?? codexDefaultDir();
-    const rows: AccountView[] = store.all().map((a) => ({
+    const all = store.all();
+    const curIdx = findSameDir(all.map((a) => a.dir), cur);
+    const selIdx = findSameDir(all.map((a) => a.dir), selected);
+    const rows: AccountView[] = all.map((a, i) => ({
       kind: a.name === CODEX_DEFAULT_NAME ? 'default' : 'named',
       name: a.name,
       label: labelFor(a.name, labels),
       dir: a.dir,
       dirLabel: tildify(a.dir),
       ...viewInfo(readCodexAccountInfo(a.dir)),
-      isCurrent: samePath(a.dir, cur),
-      isSelected: samePath(a.dir, selected),
+      isCurrent: i === curIdx,
+      isSelected: i === selIdx,
       shared: a.name === CODEX_DEFAULT_NAME ? undefined : isSharedCodexAccount(a.dir),
     }));
     if (!rows.some((r) => r.isCurrent)) {
@@ -173,7 +176,7 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore): 
         dirLabel: tildify(cur),
         ...viewInfo(readCodexAccountInfo(cur)),
         isCurrent: true,
-        isSelected: samePath(cur, selected),
+        isSelected: findSameDir([cur], selected) === 0,
       });
     }
     return rows;
@@ -191,7 +194,7 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore): 
     },
     pendingDir: () => {
       const selected = readSelectedDir() ?? codexDefaultDir();
-      if (samePath(selected, effectiveDir())) return undefined;
+      if (findSameDir([selected], effectiveDir()) === 0) return undefined;
       const account = store.findByDir(selected);
       return account ? labelFor(account.name, labels) : selected;
     },

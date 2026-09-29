@@ -43,7 +43,8 @@ let state: PanelState = {
 // Tab remembered by the frontend; wins over the host's active (the host only decides when there is no local record yet)
 let activeTab: PanelMode | undefined = vscode.getState()?.tab;
 
-// Per-mode constants that are never translated (directory prefixes, file names); translated text lives in i18n.ts
+// Per-mode constants that are never translated (directory prefixes until the host sends its own, file names);
+// translated text lives in i18n.ts
 const TEXT = {
   claude: { dirPrefix: '~/.claude-', mdLabel: 'CLAUDE.md' },
   codex: { dirPrefix: '~/.codex-', mdLabel: 'AGENTS.md' },
@@ -245,6 +246,11 @@ class Page {
     return state[this.mode];
   }
 
+  // The host's spelling of a new account folder (backslashes on Windows); the fixed one before the first state arrives
+  private dirPrefix(): string {
+    return this.tab.dirPrefix ?? this.text.dirPrefix;
+  }
+
   private send(msg: PageMessage): void {
     send({ ...msg, mode: this.mode });
   }
@@ -404,7 +410,7 @@ class Page {
     this.addHelp.className = error ? 'help error' : 'help';
     const createKey = this.addShared.checked ? (`${this.mode}.addHelpShared` as const) : 'add.help.independent';
     this.addHelp.textContent =
-      error ?? (name ? t(createKey, { dir: this.text.dirPrefix + name }) : t('add.helpIdle', { prefix: this.text.dirPrefix }));
+      error ?? (name ? t(createKey, { dir: this.dirPrefix() + name }) : t('add.helpIdle', { prefix: this.dirPrefix() }));
   }
 
   private submitAdd(): void {

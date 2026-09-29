@@ -6,7 +6,7 @@ import * as fs from 'node:fs';
 import fsModule from 'node:fs';
 import * as path from 'node:path';
 import { setLocale } from '../src/i18n';
-import { copyClaudeIndependent, ensureClaudeLinks, isSharedClaudeAccount, migrateClaudeToShared } from '../src/claudeShare';
+import { copyClaudeIndependent, ensureClaudeLinks, isSharedClaudeAccount, migrateClaudeToShared, moveEntry } from '../src/claudeShare';
 import { ensureCodexLinks, migrateCodexToShared } from '../src/codex/codexShare';
 import { describeShareReport } from '../src/shareReport';
 import { LinkPrivilegeError, copyLink, createLink, fileLinksAvailable } from '../src/platform';
@@ -195,6 +195,18 @@ describe('Windows without Developer Mode', () => {
     assert.equal(fs.readFileSync(path.join(acc, 'state_5.sqlite'), 'utf8'), 'own db');
     assert.equal(fs.readFileSync(path.join(acc, 'state_5.sqlite-wal'), 'utf8'), 'own wal');
     assert.equal(fs.lstatSync(path.join(acc, 'sessions')).isSymbolicLink(), true);
+  });
+
+  test('a dangling link that cannot be recreated on another volume stays in place', FILE_SYMLINKS, () => {
+    const acc = path.join(home, '.claude-work');
+    fs.mkdirSync(path.join(acc, 'agents'), { recursive: true });
+    realSymlink(path.join(home, 'gone'), path.join(acc, 'agents', 'dangling'), 'file');
+    emulate(false);
+    // Every rename crosses volumes, as from a V: account into a C: default through a junction
+    mock.method(fsModule, 'renameSync', (() => { throw Object.assign(new Error('EXDEV: cross-device link not permitted'), { code: 'EXDEV' }); }) as typeof fs.renameSync);
+    assert.equal(moveEntry(path.join(acc, 'agents', 'dangling'), path.join(home, '.claude', 'dangling')), false);
+    assert.equal(fs.lstatSync(path.join(acc, 'agents', 'dangling')).isSymbolicLink(), true);
+    assert.equal(fs.existsSync(path.join(home, '.claude', 'dangling')), false);
   });
 
   test('without consent nothing is copied', () => {

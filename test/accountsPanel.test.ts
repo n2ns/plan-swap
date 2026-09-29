@@ -45,6 +45,17 @@ test('add account waits for the first document and sends state before focus', as
   } finally { h.panel.dispose(); }
 });
 
+test('each tab carries the new-folder prefix in the platform spelling', () => {
+  const h = harness();
+  try {
+    h.receive({ type: 'ready' });
+    const msg = h.messages[0];
+    assert.ok(msg?.type === 'state');
+    assert.equal(msg.state.claude.dirPrefix, `~${path.sep}.claude-`);
+    assert.equal(msg.state.codex.dirPrefix, `~${path.sep}.codex-`);
+  } finally { h.panel.dispose(); }
+});
+
 test('add account waits for the replacement document after hiding the panel', async () => {
   const h = harness();
   try {

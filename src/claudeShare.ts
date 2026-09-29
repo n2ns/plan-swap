@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { t } from './i18n';
-import { copySettingsStripped, defaultDir, samePath, sameRealPath, syncMcpServers } from './paths';
+import { claudeJsonName, copySettingsStripped, defaultDir, samePath, sameRealPath, syncMcpServers } from './paths';
 import {
   comparablePath, isOpaqueReparseDir, JunctionError, LinkPrivilegeError, copyLink, createLink, fileLinksAvailable, isWindows, pidAlive, renameReplacing, type StartTimeProbe,
   stripBom, windowsStartTimes,
@@ -293,7 +293,7 @@ export function mirrorClaudeJson(fromJson: string, dir: string, beforeCommit?: (
   if (isDefault(dir)) return { changed };
   const source = readSourceJson(fromJson);
 
-  const file = path.join(path.resolve(dir), '.claude.json');
+  const file = path.join(path.resolve(dir), claudeJsonName());
   let real = file;
   let before: string | undefined;
   let mode = 0o600;
@@ -421,7 +421,7 @@ export function claudeAccountBusy(dir: string, procRoot = '/proc'): boolean {
       continue;
     }
     const entry = environ.split('\0').find((e) => e.startsWith('CLAUDE_CONFIG_DIR='));
-    const value = entry?.slice('CLAUDE_CONFIG_DIR='.length).trim();
+    const value = entry?.slice('CLAUDE_CONFIG_DIR='.length);
     if (forDefault ? !value || samePath(value, def) || sameRealPath(value, def) : !!value && (samePath(value, dir) || sameRealPath(value, dir))) {
       return true;
     }
@@ -430,16 +430,23 @@ export function claudeAccountBusy(dir: string, procRoot = '/proc'): boolean {
 }
 
 // Moves a file, link or folder without following symlinks; falls back to copy + delete across file systems
-export function moveEntry(src: string, dst: string): void {
+// false: a link that cannot be recreated on the other volume (Windows refuses the file link a dangling link becomes
+// without Developer Mode) stays where it is; the caller reports nothing as moved
+export function moveEntry(src: string, dst: string): boolean {
   try {
     fs.renameSync(src, dst);
-    return;
+    return true;
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code !== 'EXDEV') throw e;
   }
   const st = fs.lstatSync(src);
   if (st.isSymbolicLink()) {
-    copyLink(src, dst);
+    try {
+      copyLink(src, dst);
+    } catch (e) {
+      if (e instanceof LinkPrivilegeError) return false;
+      throw e;
+    }
     fs.unlinkSync(src);
   } else if (st.isDirectory()) {
     copyTree(src, dst, 'throw');
@@ -450,6 +457,7 @@ export function moveEntry(src: string, dst: string): void {
     fs.utimesSync(dst, st.atime, st.mtime);
     fs.unlinkSync(src);
   }
+  return true;
 }
 
 // First free name among base, base-2, base-3 …
@@ -488,8 +496,7 @@ export function mergeEntry(src: string, dst: string, rel: string, ctx: MergeCtx)
       return;
     }
   } else if (!ds) {
-    moveEntry(src, dst);
-    ctx.report.moved++;
+    if (moveEntry(src, dst)) ctx.report.moved++;
     return;
   } else if (sameContent(src, dst, ss, ds)) {
     fs.unlinkSync(src);
@@ -497,7 +504,7 @@ export function mergeEntry(src: string, dst: string, rel: string, ctx: MergeCtx)
     return;
   }
   const kept = freeName(`${dst}.from-${ctx.account}`);
-  moveEntry(src, kept);
+  if (!moveEntry(src, kept)) return;
   // Report names use / on every platform, like the other entries of a report
   ctx.report.keptBoth.push(path.posix.join(path.posix.dirname(rel), path.basename(kept)));
 }
@@ -573,8 +580,7 @@ export function migrateClaudeToShared(dir: string, accountName: string, procRoot
         if (!ds) {
           // The default has none: the account's file becomes the shared one, unless it carries identity keys
           if (name === 'settings.json' && !settingsShareable(src)) continue;
-          moveEntry(src, dst);
-          report.moved++;
+          if (moveEntry(src, dst)) report.moved++;
         } else if (fs.existsSync(dst) && sameContent(src, dst, st, fs.statSync(dst))) {
           fs.unlinkSync(src);
           report.duplicates++;

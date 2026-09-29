@@ -34,6 +34,18 @@ export function claudeCredentialOverrides(
 }
 
 /**
+ * CLAUDE_CONFIG_DIR / CODEX_HOME values with spaces at the start or end. The CLIs use such a value as is (a folder
+ * whose name ends in a space), which Windows programs outside the NT namespace cannot even open, so it is almost
+ * certainly a typo. Blank values are ignored (they count as unset).
+ */
+export function pathVarsWithSpaces(env: NodeJS.ProcessEnv): string[] {
+  return ['CLAUDE_CONFIG_DIR', 'CODEX_HOME'].filter((name) => {
+    const v = env[name];
+    return !!v && v.trim() !== '' && v !== v.trim();
+  });
+}
+
+/**
  * Windows: the OneDrive folder that contains the home directory (and with it ~/.claude, ~/.claude.json and every
  * account folder), or undefined. OneDrive sync has corrupted .claude.json through concurrent writes.
  */
