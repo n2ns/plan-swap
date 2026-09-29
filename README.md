@@ -50,7 +50,7 @@ For Claude, new sessions use the selected account; reload the window to update o
 
 **Save your work before switching Codex accounts.** Restarting the WSL server disconnects its editor windows and closes integrated terminals and running CLI sessions. Reloading just one window does not replace this restart or a manual relaunch.
 
-Only Antigravity IDE has been tested end to end. VSCodium and VS Code support has not yet been verified end to end in those editors.
+Only Antigravity IDE in WSL has been tested end to end. VSCodium, VS Code and native Windows support have not yet been verified end to end in their real editor environments.
 
 ## Install
 
@@ -130,7 +130,7 @@ PlanSwap also runs in a local Windows editor (no remote window). Claude switchin
 - **Codex** is selected through the per-user environment variable `CODEX_HOME`. Enabling asks for confirmation and refuses when you already set that variable yourself (a value pointing at one of your `~/.codex-<name>` account folders is adopted). After a switch, **fully quit the editor and start it again from the Start menu or taskbar**; Reload Window and terminals started before the switch keep the old value. Accounts opened through PlanSwap terminals always get the right value.
 - **Sharing** links folders with directory junctions (no privileges needed). Linking single files (`settings.json`, `history.jsonl`, ...) needs Windows Developer Mode or an elevated editor; without it PlanSwap still links the folders, asks in a dialog whether to copy small config files (`settings.json`, `CLAUDE.md`, `config.toml`, `AGENTS.md`, `hooks.json`) once so a shared account starts with them (later edits are not shared; declining leaves them out), keeps history and databases independent, never moves an account's files away, and tells you to turn on Developer Mode; the dialog has an **Open Developer Settings** button that opens that page of Windows Settings. Turn it on and use Re-link: missing files are linked and copies still identical to the default become links. Codex's thread databases (`*.sqlite`) are never linked on Windows, because SQLite there loses writes made through a linked database; each account keeps its own, while sessions, history and configuration are still shared.
 - **Busy checks** cannot tell which account a running Claude or Codex process belongs to. PlanSwap refuses to convert an account (or remove a Claude account) while its own PlanSwap terminal is open, while a Claude session recorded in its unshared folder is still running, or while its Codex daemon runs. Close an account's sessions yourself before converting or removing it.
-- When the Codex extension runs Codex in WSL (`chatgpt.runCodexInWindowsSubsystemForLinux`), it uses the WSL-side `~/.codex`, so PlanSwap refuses Codex switching in the Windows window; manage those accounts from a WSL window, or turn the setting off.
+- When `chatgpt.runCodexInWindowsSubsystemForLinux` is enabled, PlanSwap treats Codex as WSL-run and refuses Codex switching in the Windows window; manage those accounts from a WSL window, or turn the setting off. The Codex extension's behavior with this setting remains part of the native Windows acceptance checklist.
 - Login tokens are never read or copied; `auth.json` stays read-only. Accounts signed in through the OS keyring instead of `auth.json` show as signed out.
 
 ## Privacy

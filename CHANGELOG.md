@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.2.0] - 2026-09-30
+
+### Added
+
+- Native Windows support for local VS Code-compatible editors. Claude accounts use `CLAUDE_CONFIG_DIR`; PlanSwap selects Codex accounts through the per-user `CODEX_HOME` variable, with a full editor restart required to apply a selection. Real-editor Windows acceptance remains pending.
+- Codex usage limits in the status bar tooltip, with reset times, automatic refresh and a manual **Refresh Codex Usage Limits** command.
+- Warnings when two registered accounts use the same Claude or Codex identity, when detected Claude environment or editor-setting credentials override per-account sign-in, and when a Windows home folder is under OneDrive.
+
+### Changed
+
+- On Windows, linked accounts use directory junctions. When file links are unavailable, PlanSwap can copy small configuration files once, reports the entries it could not link, and offers to open Developer Settings. Codex databases remain independent on Windows to avoid SQLite write loss through file links.
+- PlanSwap account terminals on Windows use Windows PowerShell when the editor's default terminal profile is WSL, so the selected Windows account environment is preserved.
+- **Re-link** is shown in the sidebar only when that provider has at least one linked account; the Command Palette action remains available.
+- Opening a signed-out account terminal now explains that signing in does not sign out other accounts.
+
+### Fixed
+
+- Improved Windows handling for non-ASCII paths, case-insensitive names, alternate path spellings, UTF-8 BOM files, temporary file replacement failures and pre-existing `CODEX_HOME` values.
+- Account deletion and conversion flows now repeat current-account and busy checks after their primary confirmations, protect default-account directories reached through links or alternate paths, and preserve files when links cannot be recreated safely.
+- Account discovery now applies its changes over freshly re-read state, while atomic writers use exclusive temporary files and re-check targets before replacement retries.
+- Repeated sidebar state updates no longer drop keyboard focus or interrupt input-method composition; inline delete confirmations and rename controls now restore focus reliably.
+- Fixed several linked-account repairs, including Claude settings that later gain identity keys, skipping Codex history merge-back while an account is busy, deep nested links during account-directory deletion and Windows database-link migration.
+
 ## [0.1.6] - 2026-09-28
 
 ### Added
