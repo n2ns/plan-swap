@@ -6,7 +6,7 @@ import { CODEX_DIR_BASENAME_RE, codexDefaultDir } from './codexPaths';
 import { samePath } from '../paths';
 import { t } from '../i18n';
 import { fsyncDir, isWindows, renameReplacing } from '../platform';
-import { getUserCodexHome, setUserCodexHome } from './codexWindows';
+import { SELF_CHECK_NAME, type Runner, getUserCodexHome, getUserEnv, setUserCodexHome, setUserEnv } from './codexWindows';
 
 export const STATE_FILE = () => path.join(os.homedir(), '.config', 'planswap', 'codex-home');
 
@@ -84,9 +84,11 @@ export function enableWindows(): void {
   writeSelectedDir(current !== undefined && adoptableUserHome(current) ? current : undefined);
 }
 
-/** Windows disable: removes the user-level CODEX_HOME that PlanSwap manages and the state file. */
-export function disableWindows(): void {
-  setUserCodexHome(undefined);
+/** Windows disable: removes the state file and the user-level CODEX_HOME when it still holds a value PlanSwap sets (an
+ *  account directory ~/.codex-<name>); a value the user put there in the meantime is left alone. */
+export function disableWindows(run?: Runner): void {
+  const current = getUserCodexHome(run);
+  if (current !== undefined && adoptableUserHome(current)) setUserCodexHome(undefined, run);
   removeWindowsState();
 }
 
@@ -411,39 +413,26 @@ export function migrateLegacyCodex(): boolean {
 
 const STDERR_NOISE = ['cannot set terminal process group', 'no job control in this shell'];
 
-// Windows: writes a sentinel into the user environment, reads it back through the registry, then restores the old value.
-// A failed restore is reported instead of being swallowed, since it would leave CODEX_HOME pointing at a deleted directory
-function selfCheckWindows(): { ok: boolean; detail: string } {
-  let tmpDir: string | undefined;
-  let previous: string | undefined;
+// Windows: writes a marker into a scratch user variable (never CODEX_HOME itself), reads it back through the registry, then
+// removes it. A failed removal is reported; it only leaves that harmless scratch variable behind
+export function selfCheckWindows(run?: Runner): { ok: boolean; detail: string } {
+  const marker = `planswap-${process.pid}-${Date.now()}`;
   let result: { ok: boolean; detail: string };
-  let restored = false;
   try {
-    previous = getUserCodexHome();
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'planswap-codex-'));
-    setUserCodexHome(tmpDir);
-    const out = getUserCodexHome();
-    result = out !== undefined && samePathLoose(out, tmpDir)
-      ? { ok: true, detail: `CODEX_HOME=${out}` }
-      : { ok: false, detail: t('codex.self.mismatch', { actual: out ?? '', expected: tmpDir, stderr: '' }) };
+    setUserEnv(SELF_CHECK_NAME, marker, run);
+    const out = getUserEnv(SELF_CHECK_NAME, run);
+    result = out === marker
+      ? { ok: true, detail: `${SELF_CHECK_NAME}=${out}` }
+      : { ok: false, detail: t('codex.self.mismatch', { actual: out ?? '', expected: marker, stderr: '' }) };
   } catch (e) {
     result = { ok: false, detail: t('codex.self.error', { error: e instanceof Error ? e.message : String(e) }) };
   }
   try {
-    setUserCodexHome(previous);
-    restored = true;
+    setUserEnv(SELF_CHECK_NAME, undefined, run);
   } catch (e) {
     result = { ok: false, detail: t('codex.self.error', { error: e instanceof Error ? e.message : String(e) }) };
-  }
-  // The sentinel directory stays when the variable could not be restored, so a leftover value still resolves
-  if (tmpDir && restored) {
-    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
   }
   return result;
-}
-
-function samePathLoose(a: string, b: string): boolean {
-  return path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase();
 }
 
 export function selfCheck(): { ok: boolean; detail: string } {

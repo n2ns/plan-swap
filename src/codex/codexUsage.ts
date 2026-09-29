@@ -28,6 +28,7 @@ export interface UsageChild extends EventEmitter {
   stdout: Readable | null;
   exitCode: number | null;
   signalCode: NodeJS.Signals | null;
+  pid?: number;
   kill(signal?: NodeJS.Signals): boolean;
 }
 
@@ -46,6 +47,14 @@ export interface UsageOptions {
   graceMs?: number;
   /** Platform override for tests; default process.platform */
   platform?: NodeJS.Platform;
+  /** Ends the process tree of a child started through cmd.exe (Windows codex.cmd fallback); default taskkill /T /F */
+  killTree?: (pid: number) => void;
+}
+
+// kill() on a child started through cmd.exe ends only cmd.exe; taskkill /T also ends the codex it started. Only the
+// pid of the child this module started is ever passed
+function taskkillTree(pid: number): void {
+  childProcess.execFile('taskkill', ['/T', '/F', '/PID', String(pid)], { windowsHide: true }, () => undefined);
 }
 
 const DEFAULT_COMMAND = 'codex';
@@ -188,8 +197,8 @@ export async function readCodexUsage(dir: string, options: UsageOptions = {}): P
   const command = options.command ?? DEFAULT_COMMAND;
   let a = await run(command);
   // npm installs a codex.cmd shim, which spawn without a shell neither finds nor may start. The command and arguments
-  // are fixed literals (no user input reaches the command line), so running the shim through cmd.exe is safe. With a
-  // shell, kill() reaches cmd.exe only; the app server itself ends when its stdin closes.
+  // are fixed literals (no user input reaches the command line), so running the shim through cmd.exe is safe. The app
+  // server ends when its stdin closes; if it does not, the whole cmd.exe tree is ended (kill() would reach cmd.exe only).
   if (a.kind === 'enoent' && platform === 'win32' && options.command === undefined && onPath('codex.cmd')) {
     a = await run('codex.cmd', { shell: true });
   }
@@ -293,7 +302,9 @@ function attempt(
       }
       if (child.exitCode === null && child.signalCode === null) {
         const kill = setTimeout(() => {
-          if (child.exitCode === null && child.signalCode === null) child.kill();
+          if (child.exitCode !== null || child.signalCode !== null) return;
+          if (platform === 'win32' && spawnOptions.shell && child.pid !== undefined) (options.killTree ?? taskkillTree)(child.pid);
+          else child.kill();
         }, options.graceMs ?? 1000);
         kill.unref?.();
         child.once('exit', () => clearTimeout(kill));

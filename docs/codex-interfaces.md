@@ -86,7 +86,7 @@ Note: selfCheck must first back up the original state file content (which may no
 
 ## src/codex/codexWindows.ts (no vscode import)
 
-- `ENV_NAME`, `Runner`, `parseRegQuery(out)`, `getUserCodexHome(run?)` (reads `HKCU\Environment`; failure → undefined), `setUserCodexHome(value | undefined, run?)` (PowerShell `SetEnvironmentVariable(..., 'User')`, value passed through `PLANSWAP_CODEX_HOME`).
+- `ENV_NAME`, `SELF_CHECK_NAME` (`PLANSWAP_SELF_CHECK`), `Runner`, `decodeEnvOutput(out)`, `getUserEnv(name, run?)` (PowerShell `GetEnvironmentVariable(name, 'User')` printed as base64 UTF-8, independent of the console code page; unset, empty or failure → undefined), `setUserEnv(name, value | undefined, run?)` (PowerShell `SetEnvironmentVariable(..., 'User')`, name and value passed through `PLANSWAP_ENV_NAME` / `PLANSWAP_ENV_VALUE`, never on the command line), `getUserCodexHome(run?)` / `setUserCodexHome(value, run?)` (the same for `CODEX_HOME`). `codexState` exports `selfCheckWindows(run?)` and `disableWindows(run?)` (see Codex design 9a).
 - `codexState` adds `writeSelection(dir)` (elsewhere the state file only; on Windows it throws `codex.notEnabled` unless the state file exists, sets the user variable first, then writes the state file and restores the variable if that fails), `isEnabled()`, `enableWindows()` (keeps an existing file; adopts a `~/.codex-<name>` variable), `disableWindows()` (removes variable and state file), `removeWindowsState()` (enable rollback: state file only); `preCheck` and `selfCheck` branch on Windows. `codexCommands.manualRestartMessages(kind, remoteName, windows?)` returns the quit-and-relaunch guidance for a local Windows editor.
 
 ## src/codex/codexServer.ts (no vscode import)
@@ -124,7 +124,7 @@ export interface UsageWindow { usedPercent: number; windowMinutes?: number; rese
 export interface CodexUsage { windows: UsageWindow[]; limitReached: boolean; checkedAt: number /* ms epoch */ } // primary then secondary, only those present; usedPercent clamped 0..100
 export type UsageFailure = 'notLoggedIn' | 'authExpired' | 'cliMissing' | 'timeout' | 'failed';
 export type UsageResult = { ok: true; usage: CodexUsage } | { ok: false; reason: UsageFailure; detail?: string };
-export interface UsageOptions { spawn?: UsageSpawn; command?: string; timeoutMs?: number /* 15000 */; now?: () => number; clientVersion?: string; graceMs?: number /* 1000 */; platform?: NodeJS.Platform } // test seams; spawn is a fake in tests
+export interface UsageOptions { spawn?: UsageSpawn; command?: string; timeoutMs?: number /* 15000 */; now?: () => number; clientVersion?: string; graceMs?: number /* 1000 */; platform?: NodeJS.Platform; killTree?: (pid: number) => void } // test seams; spawn is a fake in tests
 export function parseRateLimits(result: unknown, now: number): CodexUsage | undefined; // prefers rateLimitsByLimitId.codex over rateLimits; primary/secondary (usedPercent, windowDurationMins, resetsAt); rateLimitReachedType → limitReached; nothing usable → undefined
 export async function readCodexUsage(dir: string, options?: UsageOptions): Promise<UsageResult>;
 export function findBundledCodex(extensionPath: string, platform?: NodeJS.Platform, arch?: string): string | undefined; // <ext>/bin/<windows|linux>-<x86_64|aarch64>/codex[.exe] for this OS and architecture only
@@ -132,7 +132,7 @@ export async function readCodexUsageWithFallback(dir: string, fallback: () => st
 ```
 - No `<dir>/auth.json` → `{ ok: false, reason: 'notLoggedIn' }` without starting anything.
 - Starts `codex app-server` (env `CODEX_HOME=<dir>`; on Windows, when `codex` is not found, `codex.cmd` through the shell as the single fixed command line `codex.cmd app-server` with no separate arguments; ENOENT → `cliMissing`), sends `initialize` (`clientInfo` name `planswap`, `clientVersion`) and `initialized`, requires the reported `codexHome` to equal `dir` (case-insensitive on Windows, otherwise `failed`), then `account/rateLimits/read`. A 401 / Unauthorized error → `authExpired` (checked first); otherwise an authentication-required error → `notLoggedIn`; other errors, an unparsable result or an early exit → `failed` with a short `detail` (server message/code or exit code, truncated); `timeoutMs` for the whole operation → `timeout`. Raw protocol lines are never returned or logged.
-- Always ends the child it started: closes stdin, then kills only that child after `graceMs` (through the Windows shell fallback the kill reaches `cmd.exe` only; the app server ends when its stdin closes).
+- Always ends the child it started: closes stdin, then kills only that child after `graceMs` (through the Windows shell fallback `kill()` would reach `cmd.exe` only, so that child's tree is ended with `taskkill /T /F /PID <its pid>`, injectable as `UsageOptions.killTree`).
 
 ## src/codex/codexUsageMonitor.ts (no vscode import)
 

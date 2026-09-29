@@ -6,6 +6,9 @@ import { execFileSync } from 'node:child_process';
 
 /** A file symlink cannot be created: Windows without Developer Mode or elevation. */
 export class LinkPrivilegeError extends Error {}
+/** A directory junction cannot be created on Windows, e.g. the account folder is not on a local NTFS volume (a network
+ *  share, FAT32 / exFAT media); junctions need no privilege, so this is a property of the drive. */
+export class JunctionError extends Error {}
 
 export const isWindows = (): boolean => process.platform === 'win32';
 
@@ -42,6 +45,10 @@ export function createLink(target: string, link: string, platform: string = proc
     // Only a refused file symlink means "no privilege"; a failed junction is an ordinary error
     if (!isDir && (e as NodeJS.ErrnoException).code === 'EPERM') {
       throw new LinkPrivilegeError(`cannot create a file symbolic link (${link}); enable Windows Developer Mode or run the editor as administrator`);
+    }
+    // An existing entry is an ordinary conflict for the caller, not a property of the drive
+    if (isDir && (e as NodeJS.ErrnoException).code !== 'EEXIST') {
+      throw new JunctionError(`cannot create a directory junction (${link}): ${(e as Error).message}`);
     }
     throw e;
   }

@@ -313,6 +313,7 @@ export function migrateCodexToShared(dir: string, accountName: string, procRoot 
   report.conflicts.push(...links.conflicts);
   report.refused.push(...links.refused);
   if (links.copied) report.copied = [...links.copied];
+  if (links.failed) report.failed = [...links.failed];
   if (links.noPrivilege) report.noPrivilege = [...new Set([...(report.noPrivilege ?? []), ...links.noPrivilege])];
   return report;
 }

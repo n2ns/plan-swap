@@ -324,6 +324,19 @@ describe('readCodexUsage', () => {
       assert.equal(f.calls[1]?.options.env?.CODEX_HOME, path.resolve(acct));
     });
 
+    test('a shim child that does not exit is ended as a tree by its own pid, not by kill()', async () => {
+      fs.writeFileSync(path.join(shimDir, 'codex.cmd'), '');
+      process.env.PATH = shimDir;
+      const f = fakeSpawn(() => undefined, { enoent: (n) => n === 1 });
+      const trees: number[] = [];
+      const spawn: UsageOptions['spawn'] = (c, a, o) => Object.assign(f.spawn(c, a, o), { pid: 4242 });
+      const r = await readCodexUsage(acct, { ...base(spawn), platform: 'win32', timeoutMs: 30, killTree: (pid) => trees.push(pid) });
+      assert.deepEqual(r, { ok: false, reason: 'timeout' });
+      await settle();
+      assert.deepEqual(trees, [4242]);
+      assert.equal(f.children[1]!.killed, 0);
+    });
+
     test('ENOENT from the retry too → cliMissing', async () => {
       process.env.PATH = shimDir;
       const f = fakeSpawn(() => undefined, { enoent: () => true });

@@ -8,7 +8,7 @@ import { setLocale } from '../src/i18n';
 import {
   comparablePath, copyLink, createLink, isSupportedPlatform, parseStartTimes, pidAlive, renameReplacing, stripBom, windowsStartTimes,
 } from '../src/platform';
-import { getUserCodexHome, parseRegQuery, setUserCodexHome } from '../src/codex/codexWindows';
+import { decodeEnvOutput, getUserCodexHome, getUserEnv, setUserCodexHome, setUserEnv } from '../src/codex/codexWindows';
 import { manualRestartMessages } from '../src/codex/codexCommands';
 import { LINUX_ONLY, makeTempHome, type TempHome } from './helpers';
 
@@ -94,11 +94,16 @@ describe('platform', () => {
 });
 
 describe('codexWindows', () => {
-  test('parseRegQuery reads REG_SZ and REG_EXPAND_SZ values', () => {
-    const out = '\r\nHKEY_CURRENT_USER\\Environment\r\n    CODEX_HOME    REG_SZ    C:\\Users\\a b\\.codex-work\r\n\r\n';
-    assert.equal(parseRegQuery(out), 'C:\\Users\\a b\\.codex-work');
-    assert.equal(parseRegQuery(out.replace('REG_SZ', 'REG_EXPAND_SZ')), 'C:\\Users\\a b\\.codex-work');
-    assert.equal(parseRegQuery('ERROR: The system was unable to find the specified registry key or value.'), undefined);
+  test('getUserEnv decodes base64 UTF-8 output, so non-ASCII paths survive any code page', () => {
+    const value = 'C:\\Users\\张三 b\\.codex-work';
+    const b64 = Buffer.from(value, 'utf8').toString('base64');
+    assert.equal(decodeEnvOutput(b64 + '\r\n'), value);
+    assert.equal(decodeEnvOutput('\r\n'), undefined);
+    let call: { file: string; args: string[]; env?: Record<string, string> } | undefined;
+    assert.equal(getUserEnv('CODEX_HOME', (file, args, env) => ((call = { file, args, env }), b64)), value);
+    assert.equal(call?.file, 'powershell.exe');
+    assert.ok(!call?.args.join(' ').includes('CODEX_HOME'));
+    assert.deepEqual(call?.env, { PLANSWAP_ENV_NAME: 'CODEX_HOME' });
   });
 
   test('getUserCodexHome treats a failing query as unset', () => {
@@ -111,8 +116,18 @@ describe('codexWindows', () => {
     setUserCodexHome(undefined, (file, args, env) => (calls.push({ file, args, env }), ''));
     assert.equal(calls[0].file, 'powershell.exe');
     assert.ok(!calls[0].args.join(' ').includes('.codex-a'));
-    assert.deepEqual(calls[0].env, { PLANSWAP_CODEX_HOME: 'C:\\x\\.codex-a' });
-    assert.deepEqual(calls[1].env, { PLANSWAP_CODEX_HOME: '' });
+    assert.deepEqual(calls[0].env, { PLANSWAP_ENV_NAME: 'CODEX_HOME', PLANSWAP_ENV_VALUE: 'C:\\x\\.codex-a' });
+    assert.deepEqual(calls[1].env, { PLANSWAP_ENV_NAME: 'CODEX_HOME', PLANSWAP_ENV_VALUE: '' });
+  });
+
+  test('other variables are read and written by name', () => {
+    let named: Record<string, string> | undefined;
+    const b64 = Buffer.from('C:\\t\\x').toString('base64');
+    assert.equal(getUserEnv('PLANSWAP_SELF_CHECK', (_f, _a, e) => ((named = e), b64)), 'C:\\t\\x');
+    assert.deepEqual(named, { PLANSWAP_ENV_NAME: 'PLANSWAP_SELF_CHECK' });
+    let env: Record<string, string> | undefined;
+    setUserEnv('PLANSWAP_SELF_CHECK', undefined, (_f, _a, e) => ((env = e), ''));
+    assert.deepEqual(env, { PLANSWAP_ENV_NAME: 'PLANSWAP_SELF_CHECK', PLANSWAP_ENV_VALUE: '' });
   });
 });
 

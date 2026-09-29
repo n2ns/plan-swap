@@ -6,7 +6,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { t } from './i18n';
 import { copySettingsStripped, defaultDir, samePath, sameRealPath, syncMcpServers } from './paths';
 import {
-  comparablePath, LinkPrivilegeError, copyLink, createLink, fileLinksAvailable, isWindows, pidAlive, renameReplacing, type StartTimeProbe,
+  comparablePath, JunctionError, LinkPrivilegeError, copyLink, createLink, fileLinksAvailable, isWindows, pidAlive, renameReplacing, type StartTimeProbe,
   stripBom, windowsStartTimes,
 } from './platform';
 
@@ -48,6 +48,7 @@ export interface ShareReport {
   copied?: string[];    // config files copied once instead of linked (Windows without file-link privilege); they no longer follow the default
   noPrivilege?: string[]; // single-file entries that could not be linked because Windows refuses file symlinks (Developer Mode off); left independent
   busy?: string[];      // entries whose repair would move or unlink account files, skipped because the account is busy (Claude only)
+  failed?: string[];    // folder entries whose junction Windows could not create (not a local NTFS drive); left unlinked
 }
 
 export interface MigrateReport extends ShareReport {
@@ -123,8 +124,11 @@ function ensureDefaultEntry(target: string, kind: 'file' | 'dir'): boolean {
   return true;
 }
 
-// Links link → target; 'linked' / 'ok' (already linked) / 'conflict' (real entry or link elsewhere, untouched)
-export function linkEntry(link: string, target: string): 'linked' | 'ok' | 'conflict' | 'noprivilege' {
+export type LinkResult = 'linked' | 'ok' | 'conflict' | 'noprivilege' | 'failed';
+
+// Links link → target; 'linked' / 'ok' (already linked) / 'conflict' (real entry or link elsewhere, untouched) /
+// 'noprivilege' (Windows refuses a file symlink) / 'failed' (Windows cannot create a junction on this drive)
+export function linkEntry(link: string, target: string): LinkResult {
   const st = lstatOrUndefined(link);
   if (!st) {
     try {
@@ -132,6 +136,7 @@ export function linkEntry(link: string, target: string): 'linked' | 'ok' | 'conf
     } catch (e) {
       // Windows without Developer Mode: a file symlink is refused; the entry stays independent and the rest goes on
       if (e instanceof LinkPrivilegeError) return 'noprivilege';
+      if (e instanceof JunctionError) return 'failed';
       throw e;
     }
     return 'linked';
@@ -167,8 +172,9 @@ export function recordLink(report: ShareReport, name: string, result: ReturnType
   record(report, name, result);
 }
 
-export function record(report: ShareReport, name: string, result: 'linked' | 'ok' | 'conflict' | 'noprivilege'): void {
+export function record(report: ShareReport, name: string, result: LinkResult): void {
   if (result === 'noprivilege') (report.noPrivilege ??= []).push(name);
+  else if (result === 'failed') (report.failed ??= []).push(name);
   else if (result === 'linked') report.linked.push(name);
   else if (result === 'conflict') report.conflicts.push(name);
 }
@@ -608,6 +614,7 @@ export function migrateClaudeToShared(dir: string, accountName: string, procRoot
   report.conflicts.push(...links.conflicts);
   report.refused.push(...links.refused);
   if (links.busy) report.busy = [...links.busy];
+  if (links.failed) report.failed = [...links.failed];
   if (links.copied) report.copied = [...links.copied];
   if (links.noPrivilege) report.noPrivilege = [...new Set([...(report.noPrivilege ?? []), ...links.noPrivilege])];
   return report;

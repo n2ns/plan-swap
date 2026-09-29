@@ -239,6 +239,24 @@ describe('Windows without Developer Mode', () => {
     assert.equal(fs.lstatSync(path.join(acc, 'settings.json')).isSymbolicLink(), true);
   });
 
+  test('a drive without junction support reports the folders instead of aborting the run', () => {
+    emulate(false);
+    // Emulate a network share / FAT volume: every junction is refused (Windows reports ERROR_INVALID_FUNCTION)
+    const withFiles = fsModule.symlinkSync;
+    mock.method(fsModule, 'symlinkSync', ((target: fs.PathLike, link: fs.PathLike, type?: string) => {
+      if (type === 'junction') throw Object.assign(new Error('EISDIR: illegal operation on a directory, symlink'), { code: 'EISDIR' });
+      return withFiles(target, link, type as fs.symlink.Type | undefined);
+    }) as typeof fs.symlinkSync);
+    const acc = path.join(home, '.claude-work');
+    fs.mkdirSync(acc);
+    const r = ensureClaudeLinks(acc, FAKE_PROC);
+    assert.ok(r.failed?.includes('projects'));
+    assert.ok(r.failed?.includes('sessions'));
+    assert.deepEqual(r.linked, []);
+    assert.match(describeShareReport(r), /local NTFS drive/);
+    assert.equal(isSharedClaudeAccount(acc), false);
+  });
+
   test('an independent copy turns file links into copies and skips dangling ones', FILE_SYMLINKS, () => {
     // The default folder holds file links (e.g. from a dotfiles setup), created before the privilege is taken away
     const agents = path.join(home, '.claude', 'agents');

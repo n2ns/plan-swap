@@ -10,6 +10,7 @@ export interface ShareReportLike {
   backups?: string[];
   busy?: string[];
   noPrivilege?: string[];
+  failed?: string[];
   copied?: string[];
 }
 
@@ -25,6 +26,7 @@ export function describeShareReport(r: ShareReportLike): string {
   if (r.refused.length) parts.push(t('share.r.refused', { list: list(r.refused) }));
   if (r.copied?.length) parts.push(t('share.r.copiedNoLink', { list: list(r.copied) }));
   if (r.noPrivilege?.length) parts.push(t('share.r.needsDevMode', { list: list(r.noPrivilege) }));
+  if (r.failed?.length) parts.push(t('share.r.junctionFailed', { list: list(r.failed) }));
   if (r.busy?.length) parts.push(t('share.r.busy', { list: list(r.busy) }));
   return parts.join(t('common.listSep'));
 }

@@ -5,8 +5,9 @@ import * as path from 'node:path';
 import { setLocale } from '../src/i18n';
 import {
   RC_BEGIN, RC_END, STATE_FILE, effectiveDir, installRcBlocks, preCheck, rcBlock, rcStatus, readSelectedDir,
-  migrateLegacyCodex, removeRcBlockFrom, removeRcBlocks, selfCheck, writeSelectedDir,
+  migrateLegacyCodex, removeRcBlockFrom, removeRcBlocks, selfCheck, writeSelectedDir, disableWindows, selfCheckWindows,
 } from '../src/codex/codexState';
+import type { Runner } from '../src/codex/codexWindows';
 import { assertTempHome, makeTempHome, assertMode, LINUX_ONLY, read, type TempHome } from './helpers';
 
 let tmp: TempHome;
@@ -67,6 +68,46 @@ describe('state file', () => {
     process.env.CODEX_HOME = '';
     assert.equal(effectiveDir(), path.join(home, '.codex'));
     delete process.env.CODEX_HOME;
+  });
+});
+
+// In-memory HKCU\Environment behind the reg / powershell.exe runner of codexWindows
+function fakeUserEnv(initial: Record<string, string> = {}, fail: { set?: boolean } = {}): { vars: Map<string, string>; run: Runner } {
+  const vars = new Map(Object.entries(initial));
+  const run: Runner = (_file, _args, env) => {
+    const name = env?.PLANSWAP_ENV_NAME ?? '';
+    // A read passes only the name; it prints the value as base64 of its UTF-8 bytes
+    if (env && !('PLANSWAP_ENV_VALUE' in env)) return Buffer.from(vars.get(name) ?? '', 'utf8').toString('base64') + '\r\n';
+    if (fail.set) throw new Error('powershell refused');
+    if (env?.PLANSWAP_ENV_VALUE) vars.set(name, env.PLANSWAP_ENV_VALUE);
+    else vars.delete(name);
+    return '';
+  };
+  return { vars, run };
+}
+
+describe('Windows user environment', () => {
+  test('the self-check writes, reads back and removes a scratch variable; CODEX_HOME is never touched', () => {
+    const env = fakeUserEnv({ CODEX_HOME: 'C:\\mine' });
+    const r = selfCheckWindows(env.run);
+    assert.equal(r.ok, true, r.detail);
+    assert.match(r.detail, /^PLANSWAP_SELF_CHECK=planswap-/);
+    assert.deepEqual([...env.vars], [['CODEX_HOME', 'C:\\mine']]);
+    assert.equal(selfCheckWindows(fakeUserEnv({}, { set: true }).run).ok, false);
+  });
+
+  test('disable removes CODEX_HOME only while it points at an account directory', () => {
+    writeSelectedDir(path.join(home, '.codex-a'));
+    const managed = fakeUserEnv({ CODEX_HOME: path.join(home, '.codex-a') });
+    disableWindows(managed.run);
+    assert.equal(managed.vars.has('CODEX_HOME'), false);
+    assert.equal(fs.existsSync(STATE_FILE()), false);
+    // The user replaced the value after enabling: it stays, the state file still goes
+    writeSelectedDir(path.join(home, '.codex-a'));
+    const mine = fakeUserEnv({ CODEX_HOME: 'D:\\my-codex' });
+    disableWindows(mine.run);
+    assert.equal(mine.vars.get('CODEX_HOME'), 'D:\\my-codex');
+    assert.equal(fs.existsSync(STATE_FILE()), false);
   });
 });
 
