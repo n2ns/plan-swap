@@ -12,7 +12,7 @@ import { describeShareReport } from '../src/shareReport';
 import { LinkPrivilegeError, copyLink, createLink, fileLinksAvailable } from '../src/platform';
 import { deleteAccountDir } from '../src/paths';
 import { askCopyFallback } from '../src/linkPolicy';
-import { window } from './stubs/vscode';
+import { env, window } from './stubs/vscode';
 import { FILE_SYMLINKS, makeTempHome, type TempHome } from './helpers';
 
 let tmp: TempHome;
@@ -228,9 +228,28 @@ describe('Windows without Developer Mode', () => {
     assert.deepEqual(await askCopyFallback(home, 'Claude'), { copyConfig: false });
     assert.deepEqual(await askCopyFallback(home, 'Codex'), { copyConfig: false });
     assert.match(String(seen[2][0]), /config\.toml, AGENTS\.md, hooks\.json/);
-    assert.deepEqual(seen[0].slice(1), [{ modal: true }, 'Copy files', 'Skip']);
+    assert.deepEqual(seen[0].slice(1), [{ modal: true }, 'Copy files', 'Open Developer Settings', 'Skip']);
     assert.match(String(seen[0][0]), /Switching accounts still works/);
     assert.match(String(seen[0][0]), /settings\.json, CLAUDE\.md/);
+  });
+
+  test('the settings button opens Windows Settings > For developers and copies nothing', async () => {
+    emulate(false);
+    mock.method(window, 'showWarningMessage', async () => 'Open Developer Settings');
+    const opened: string[] = [];
+    mock.method(env, 'openExternal', async (uri: { toString(): string }) => (opened.push(uri.toString()), true));
+    assert.deepEqual(await askCopyFallback(home, 'Claude'), { copyConfig: false });
+    assert.deepEqual(opened, ['ms-settings:developers']);
+  });
+
+  test('when the settings cannot be opened, the way there is explained', async () => {
+    emulate(false);
+    const warnings: unknown[] = [];
+    mock.method(window, 'showWarningMessage', async (...args: unknown[]) => (warnings.push(args[0]), warnings.length === 1 ? 'Open Developer Settings' : undefined));
+    mock.method(env, 'openExternal', async () => false);
+    await askCopyFallback(home, 'Codex');
+    assert.match(String(warnings[1]), /System > For developers/);
+    assert.match(String(warnings[1]), /Windows 10: Update & Security > For developers/);
   });
 
   test('no question when file links work', FILE_SYMLINKS, async () => {

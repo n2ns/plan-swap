@@ -31,7 +31,11 @@ export const workspace = {
   },
 };
 
-export const env: { remoteName: string | undefined; language: string } = { remoteName: undefined, language: 'en' };
+export const env: { remoteName: string | undefined; language: string; openExternal(uri: { toString(): string }): Promise<boolean> } = {
+  remoteName: undefined,
+  language: 'en',
+  async openExternal() { return true; },
+};
 export interface StubTerminal { name: string; sent: string[]; shown: number; sendText(text: string): void; show(): void }
 export const StatusBarAlignment = { Left: 1, Right: 2 };
 
@@ -102,6 +106,9 @@ export class EventEmitter<T> {
 }
 
 export const Uri = {
+  parse(value: string) {
+    return { scheme: value.split(':')[0], toString: () => value };
+  },
   joinPath(base: { path: string }, ...parts: string[]) {
     const path = [base.path, ...parts].join('/');
     return { path, toString: () => path };
