@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { t } from './i18n';
 import { copySettingsStripped, defaultDir, samePath, sameRealPath, syncMcpServers } from './paths';
+import { comparablePath, copyLink, createLink, isWindows, pidAlive } from './platform';
 
 // Whole-entry links (kind: file needs an empty-file default, dir needs an empty dir)
 export const CLAUDE_SHARED_ENTRIES: ReadonlyArray<{ name: string; kind: 'file' | 'dir' }> = [
@@ -77,7 +78,7 @@ export function linksTo(link: string, target: string): boolean {
   const st = lstatOrUndefined(link);
   if (!st?.isSymbolicLink()) return false;
   const to = path.resolve(path.dirname(link), fs.readlinkSync(link));
-  return to === path.resolve(target) || (fs.existsSync(link) && sameRealPath(link, target));
+  return comparablePath(to) === comparablePath(target) || (fs.existsSync(link) && sameRealPath(link, target));
 }
 
 function isDefault(dir: string): boolean {
@@ -121,7 +122,7 @@ function ensureDefaultEntry(target: string, kind: 'file' | 'dir'): boolean {
 export function linkEntry(link: string, target: string): 'linked' | 'ok' | 'conflict' {
   const st = lstatOrUndefined(link);
   if (!st) {
-    fs.symlinkSync(target, link);
+    createLink(target, link);
     return 'linked';
   }
   return linksTo(link, target) ? 'ok' : 'conflict';
@@ -218,7 +219,7 @@ export function ensureClaudeLinks(dir: string, procRoot = '/proc'): ShareReport 
       const link = path.join(accFolder, child);
       if (!lstatOrUndefined(link)?.isSymbolicLink()) continue;
       const to = path.resolve(accFolder, fs.readlinkSync(link));
-      if (path.dirname(to) !== defFolder || lstatOrUndefined(to)) continue;
+      if (comparablePath(path.dirname(to)) !== comparablePath(defFolder) || lstatOrUndefined(to)) continue;
       if (isBusy()) (report.busy ??= []).push(`${name}/${child}`);
       else fs.unlinkSync(link);
     }
@@ -313,6 +314,17 @@ export function mirrorClaudeJson(fromJson: string, dir: string, beforeCommit?: (
   return { changed };
 }
 
+// pid of a live process recorded in a session file; undefined when unreadable, invalid or not running
+function sessionPid(file: string): number | undefined {
+  try {
+    const data: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const pid = isPlainObject(data) ? data.pid : undefined;
+    return typeof pid === 'number' && Number.isInteger(pid) && pid > 0 && pidAlive(pid) ? pid : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** true when a Claude process is running with this config dir: a <dir>/sessions/*.json whose pid is alive and whose
  *  /proc/<pid>/environ has CLAUDE_CONFIG_DIR=<dir> (for the default dir: unset or the default). Without procRoot
  *  (e.g. no /proc) a session file counts as busy. procRoot is for tests. */
@@ -324,6 +336,9 @@ export function claudeAccountBusy(dir: string, procRoot = '/proc'): boolean {
   } catch {
     return false;
   }
+  // Windows has no /proc and an environment cannot be read from another process: a live session pid in the
+  // account's own sessions folder counts as busy
+  if (isWindows() && procRoot === '/proc') return files.some((f) => sessionPid(path.join(sessions, f)) !== undefined);
   // A live session cannot be ruled out without procRoot
   if (files.length > 0 && !fs.existsSync(procRoot)) return true;
   const def = defaultDir();
@@ -363,7 +378,7 @@ export function moveEntry(src: string, dst: string): void {
   }
   const st = fs.lstatSync(src);
   if (st.isSymbolicLink()) {
-    fs.symlinkSync(fs.readlinkSync(src), dst);
+    copyLink(src, dst);
     fs.unlinkSync(src);
   } else if (st.isDirectory()) {
     copyTree(src, dst, 'throw');
@@ -384,7 +399,7 @@ export function freeName(base: string): string {
 
 export function sameContent(a: string, b: string, sa: fs.Stats, sb: fs.Stats): boolean {
   if (sa.isSymbolicLink() || sb.isSymbolicLink()) {
-    return sa.isSymbolicLink() && sb.isSymbolicLink() && fs.readlinkSync(a) === fs.readlinkSync(b);
+    return sa.isSymbolicLink() && sb.isSymbolicLink() && comparablePath(fs.readlinkSync(a)) === comparablePath(fs.readlinkSync(b));
   }
   return sa.isFile() && sb.isFile() && sa.size === sb.size && fs.readFileSync(a).equals(fs.readFileSync(b));
 }
@@ -534,7 +549,7 @@ export function copyTree(src: string, dst: string, existing: 'skip' | 'throw' = 
   } else if (ds) {
     existsError(dst, existing);
   } else if (st.isSymbolicLink()) {
-    fs.symlinkSync(fs.readlinkSync(src), dst);
+    copyLink(src, dst);
   } else if (st.isFile()) {
     fs.copyFileSync(src, dst, fs.constants.COPYFILE_EXCL);
     fs.chmodSync(dst, st.mode & 0o777);

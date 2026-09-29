@@ -8,7 +8,7 @@ Purpose: Claude account-switching design, shared sidebar architecture, implement
 ## 1. Goals and scope
 
 - Goal: in VS Code (WSL remote window), switch between two or more Claude Code accounts from a sidebar panel; after a switch, new sessions of the official Claude Code extension use the selected account.
-- Runtime environment: WSL / Linux only. Native Windows and macOS are not supported.
+- Runtime environment: WSL / Linux and native Windows (see [Windows support](#windows-support)). macOS is not supported.
 - User environment: only claude.ai subscription sign-in (OAuth), no API key; WSL is opened from VS Code, using the claude CLI and the official Claude Code extension.
 - Non-goals:
   - Never read or write `.credentials.json`; never copy or cache any token.
@@ -31,7 +31,7 @@ The following facts come from the official documentation and the source code of 
 4. Open sessions hold their old process and do not follow a switch; only new sessions use the new account. Transcripts of old sessions live in `projects/` of the old account directory and cannot be found in the new directory after a reload, so the effect of a reload is "all panels start over with the new account", not "old sessions move to the new account". Old sessions can be resumed after switching back.
 5. Reasons for not using `claudeCode.claudeProcessWrapper`: the linux-x64 extension ships its own binary, so no wrapper is needed; the official documentation states that in wrapper mode new sessions default to Manual permission mode and do not restore plan mode; in the source `sessionConfigHome` takes a different branch in wrapper mode. The wrapper calling convention is undocumented (Issue #10491 is closed).
 6. Under WSL2 the browser sign-in callback often fails; the official documentation says the "paste code" flow is used then, which is normal. After switching to a signed-out directory, the official panel shows its sign-in screen automatically.
-7. Claude Code on the WSL side and on the Windows side are two independent installations with separate credentials; this extension only runs on the WSL side and never reads across into `/mnt/c`.
+7. Claude Code on the WSL side and on the Windows side are two independent installations with separate credentials; in a WSL window this extension only runs on the WSL side and never reads across into `/mnt/c`. A local Windows editor runs the extension natively against the Windows profile, see [Windows support](#windows-support).
 8. The directory the official extension uses for its `ide/` lock files only follows the extension host process's `process.env.CLAUDE_CONFIG_DIR`, not the value in `claudeCode.environmentVariables` (source: `ey$()` calls `uX()`). Consequence: when `claude` is run in a terminal for a non-default account, the CLI looks for lock files in `~/.claude-<name>/ide/` while they are in `~/.claude/ide/`, so the `/ide` integration of the terminal CLI is expected not to work. The native panel passes the MCP configuration directly at startup and does not use lock-file discovery, so it is not affected.
 9. When a machine-scope setting is written with `ConfigurationTarget.Global` in a WSL remote window, VS Code stores it in the remote Machine settings (`toEditableConfigurationTarget` in `configurationService.ts`) and also reads the remote value. Preconditions: the official extension is installed on the WSL side (otherwise the key is not registered and `update` throws); `update` also throws when the remote settings.json has a syntax error.
 
@@ -292,8 +292,20 @@ Goal: when one account runs out of quota, switch to another and keep working wit
 
 ## 8. Platform guard
 
-- On `activate`, if `process.platform !== "linux"`, show the warning "PlanSwap only supports WSL/Linux." once (localized) and do not register the Webview view, the status bar or commands.
+- On `activate`, if `isSupportedPlatform()` is false (anything but `linux` and `win32`), show the warning "PlanSwap only supports WSL/Linux and Windows." once (localized) and do not register the Webview view, the status bar or commands.
 - `package.json` declares `extensionKind: ["workspace"]`, so in a WSL window the extension is installed and runs on the WSL side.
+
+### Windows support
+
+Researched 2026-09-29 from the official Claude Code docs (authentication, settings, VS Code), the Codex docs and `openai/codex` issues, and existing switchers (account-switcher-for-claude-code, claude-account-switcher-windows, codex-switch, codex-profiles). Two facts are not verified on a real Windows machine and are tracked in [TODO](../TODO.md): where Claude Code puts `.claude.json` when `CLAUDE_CONFIG_DIR` is set on Windows (the existing `claudeJsonPath` rule is reused), and whether the Claude extension honors `claudeCode.environmentVariables` for `CLAUDE_CONFIG_DIR` (open upstream reports [#30538](https://github.com/anthropics/claude-code/issues/30538), [#34888](https://github.com/anthropics/claude-code/issues/34888)).
+
+- **Location.** A local Windows editor runs the workspace extension natively; `os.homedir()` is `%USERPROFILE%`, so `~/.claude`, `~/.claude-<name>`, `~/.codex-<name>` and `~/.config/planswap/` are Windows paths. Windows credentials for Claude are `<dir>\.credentials.json`, so one directory per account keeps logins apart, exactly as on Linux.
+- **Paths.** `samePath` / `sameRealPath` compare case-insensitively on Windows (`platform.comparablePath`); the "direct child of home" deletion guard uses the same comparison.
+- **Links.** `platform.createLink`: directories become junctions (no privilege, absolute targets only, which is what sharing always used); files become symlinks, which need Developer Mode or elevation. `EPERM` is turned into an error naming that requirement, and the share report lists the entry as failed, so the account keeps its own file. `copyLink` resolves relative targets before recreating a link.
+- **Busy checks** cannot read another process's environment. Claude: a live pid in the account's own `sessions/*.json` (signal 0 probe, never a kill). Codex: the daemon pid file with a live pid, or any running `codex.exe` (`tasklist`; a failing probe counts as running). Both are conservative.
+- **Terminals** get `CLAUDE_CONFIG_DIR` / `CODEX_HOME` through `createTerminal({ env })` only; there is no `env ...` command prefix (`null` removes `CODEX_HOME` for the default account).
+- **CLI versions** run through a shell on Windows so `.cmd` shims resolve (fixed literals `claude` / `codex`).
+- **Server restart** is never attempted on Windows: `executeRestart` still refuses off Linux and `detectServerKind` reports `unknown`.
 
 ## 9. Code structure
 

@@ -3,6 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { t } from './i18n';
+import { comparablePath } from './platform';
 
 export const DEFAULT_NAME = 'default';
 export const NAME_RE = /^[A-Za-z0-9_-]+$/;
@@ -26,8 +27,9 @@ export function accountDir(name: string): string {
   return path.resolve(os.homedir(), '.claude-' + name);
 }
 
+// Case-insensitive on Windows
 export function samePath(a: string, b: string): boolean {
-  return path.resolve(a) === path.resolve(b);
+  return comparablePath(a) === comparablePath(b);
 }
 
 // Real path after resolving symlinks; falls back to path.resolve when the path does not exist
@@ -41,7 +43,7 @@ function realPath(p: string): string {
 
 // Whether both point to the same location after resolving symlinks; used when comparing with the default dir
 export function sameRealPath(a: string, b: string): boolean {
-  return realPath(a) === realPath(b);
+  return comparablePath(realPath(a)) === comparablePath(realPath(b));
 }
 
 // Account info file location: without CLAUDE_CONFIG_DIR, Claude Code uses ~/.claude.json (in the home dir, not inside ~/.claude).
@@ -225,7 +227,7 @@ export function checkSafeToDelete(dir: string): string | undefined {
   const home = path.resolve(os.homedir());
   const target = path.resolve(dir);
   // Only direct children of the home directory, so a symlinked parent cannot escape the home directory
-  if (path.dirname(target) !== home) return t('del.notHomeChild', { dir: target });
+  if (!samePath(path.dirname(target), home)) return t('del.notHomeChild', { dir: target });
   if (!DIR_BASENAME_RE.test(path.basename(target))) return t('del.badName', { pattern: '.claude-<name>', dir: target });
   if (sameRealPath(target, defaultDir())) return t('del.isDefault', { dir: target });
   let st: fs.Stats;

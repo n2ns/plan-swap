@@ -78,3 +78,13 @@ Performed by the user with an installed build. Local switching saves selection a
 7. **Cold start**: verify each launch route separately; selection alone does not establish terminal/desktop-icon environment propagation.
 8. **WSL and Claude regression**: preserve the existing supported WSL restart flow and Claude settings/reload behavior. Agents never execute real restart operations.
 9. **Native Linux**: before claiming native desktop coverage, repeat the manual flow in a native desktop session or VM. The WSLg evidence alone does not establish this.
+
+## Native Windows (user-operated)
+
+Run on a Windows machine with the local editor, throwaway accounts and a real login for each vendor. Agents never run these steps.
+
+1. **Claude**: add a named account, switch, open its terminal (`claude`), sign in, and confirm the panel shows the email. Confirm the Claude extension itself uses the selected directory after **Reload Window** (upstream reports say it may ignore the setting), and note where `.claude.json` is written.
+2. **Shared account**: with Developer Mode off, add a shared account; folders must be junctions, single files reported as failed. Repeat with Developer Mode on; files must link.
+3. **Codex enable/disable**: enable, check `reg query HKCU\Environment /v CODEX_HOME` is unchanged or absent for the default account; disable removes it. With a hand-set `CODEX_HOME`, enable must refuse.
+4. **Codex switch**: switch to a named account, fully quit all editor windows, start the editor from the Start menu, confirm the Codex extension and its terminal use the new directory. Switch back to default; the variable must disappear.
+5. **Busy checks**: with `codex.exe` running, converting an account must be refused; with a live Claude session in the account, likewise.

@@ -1,6 +1,6 @@
 {
   "displayName": "PlanSwap：Claude Code 与 Codex 账号切换器",
-  "description": "在侧边栏一键切换你订阅的 Claude Code 与 Codex 套餐账号（Pro、Max、Plus…），仅支持 WSL/Linux。",
+  "description": "在侧边栏一键切换你订阅的 Claude Code 与 Codex 套餐账号（Pro、Max、Plus…），支持 WSL/Linux 和 Windows。",
   "command.switchAccount": "切换账号",
   "category.claude": "Claude 账号",
   "command.addAccount": "添加账号（聚焦侧边栏输入框）",

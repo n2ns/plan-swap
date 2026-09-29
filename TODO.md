@@ -26,6 +26,12 @@ is still missing. Remove an item once it is done or decided.
 - **Refusal reasons are not specific.** When `settings.json` / `config.toml` is not shared for safety, the report only
   names the file, not the identity key that caused it.
 
+## Windows verification
+
+- **Native Windows is implemented but not yet accepted on a real machine.** Run [the Windows checklist](docs/manual-verification.md#native-windows-user-operated). Open questions: where `.claude.json` lives when `CLAUDE_CONFIG_DIR` is set on Windows, whether the Claude extension honors `claudeCode.environmentVariables`, whether the Codex extension host inherits the changed user variable after a fresh start, Codex's default credential store on Windows (keyring accounts read as signed out), and rc/state behavior of the `.vsix` under a real Windows editor.
+- **Add a CHANGELOG entry** for Windows support when preparing the next release (no `[Unreleased]` heading before then).
+- **Windows CI** is not set up; unit tests run on Linux with injected runners.
+
 ## Deferred features
 
 - **Command Palette entry for "Share with the default account".** The conversion is only available from the panel row.

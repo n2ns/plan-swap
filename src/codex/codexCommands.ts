@@ -21,7 +21,10 @@ import { describeShareReport } from '../shareReport';
 import {
   STATE_FILE,
   effectiveDir,
+  disableWindows,
+  enableWindows,
   installRcBlocks,
+  isEnabled,
   preCheck,
   rcBlock,
   rcStatus,
@@ -29,8 +32,9 @@ import {
   removeRcBlockFrom,
   removeRcBlocks,
   selfCheck,
-  writeSelectedDir,
+  writeSelection,
 } from './codexState';
+import { isWindows } from '../platform';
 import { type ServerKind, canAutoRestart, detectServerKind, executeRestart, planRestart } from './codexServer';
 import type { CodexAccountStore } from './codexStore';
 import { runTool, type ToolDeps } from '../tools';
@@ -50,7 +54,15 @@ const EDITOR_NAMES: Record<ServerKind, string> = {
 const editorName = (kind: ServerKind): string => EDITOR_NAMES[kind];
 
 /** Uses the editor connection context, not the kernel, so WSLg desktop windows get local guidance. */
-export function manualRestartMessages(kind: ServerKind, remoteName: string | undefined): { hint: string; required: string; switchConfirm: string } {
+export function manualRestartMessages(kind: ServerKind, remoteName: string | undefined, windows: boolean = isWindows()): { hint: string; required: string; switchConfirm: string } {
+  if (remoteName === undefined && windows) {
+    const hint = t('codex.manualRestartHintWin');
+    return {
+      hint,
+      required: t('codex.manualRestartRequiredWin', { hint }),
+      switchConfirm: t('codex.switchConfirmManualWin', { hint }),
+    };
+  }
   if (remoteName === undefined) {
     const hint = t('codex.manualRestartHintLocal');
     return {
@@ -158,7 +170,7 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore): 
     // (start marker without end marker) counts as not enabled so the Enable button leads to preCheck's repair guidance
     enabled: () => {
       try {
-        return rcStatus().every((s) => s.hasBlock && !s.broken);
+        return isEnabled();
       } catch {
         return false;
       }
@@ -223,6 +235,22 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       return;
     }
     const writeLabel = t('codex.enableButton');
+    if (isWindows()) {
+      const okWin = await vscode.window.showWarningMessage(t('codex.win.enableConfirm'), { modal: true, detail: t('codex.win.enableDetail') }, writeLabel);
+      if (okWin !== writeLabel) return;
+      try {
+        enableWindows();
+        const result = selfCheck();
+        if (!result.ok) {
+          disableWindows();
+          void vscode.window.showErrorMessage(t('codex.selfCheckFailed', { detail: result.detail }));
+        }
+      } catch (err) {
+        void vscode.window.showErrorMessage(t('codex.writeRcFailed', { error: errText(err) }));
+      }
+      panel.refresh();
+      return;
+    }
     const ok = await vscode.window.showWarningMessage(t('codex.enableConfirm'), { modal: true, detail: rcBlock() }, writeLabel);
     if (ok !== writeLabel) return;
     // Snapshot before writing: rollback only removes blocks from files newly written this time, never the user's existing blocks
@@ -272,11 +300,15 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     const ok = await vscode.window.showWarningMessage(t('codex.disableConfirm'), { modal: true }, disableLabel);
     if (ok !== disableLabel) return;
     try {
-      removeRcBlocks();
-      try {
-        fs.unlinkSync(STATE_FILE());
-      } catch (e) {
-        if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+      if (isWindows()) {
+        disableWindows();
+      } else {
+        removeRcBlocks();
+        try {
+          fs.unlinkSync(STATE_FILE());
+        } catch (e) {
+          if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+        }
       }
     } catch (err) {
       void vscode.window.showErrorMessage(t('codex.disableFailed', { error: errText(err) }));
@@ -307,7 +339,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     // is brought back in line; no confirmation and no restart
     if (isEffective(account)) {
       try {
-        writeSelectedDir(account.name === CODEX_DEFAULT_NAME ? undefined : account.dir);
+        writeSelection(account.name === CODEX_DEFAULT_NAME ? undefined : account.dir);
       } catch (err) {
         void vscode.window.showErrorMessage(t('codex.writeStateFailed', { error: errText(err) }));
         return;
@@ -334,7 +366,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       }
     }
     try {
-      writeSelectedDir(account.name === CODEX_DEFAULT_NAME ? undefined : account.dir);
+      writeSelection(account.name === CODEX_DEFAULT_NAME ? undefined : account.dir);
     } catch (err) {
       void vscode.window.showErrorMessage(t('codex.writeStateFailed', { error: errText(err) }));
       return;
@@ -489,9 +521,13 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
 
   function openTerminal(account: CodexAccount, login: boolean): void {
     const isDefault = account.name === CODEX_DEFAULT_NAME;
-    const terminal = vscode.window.createTerminal({ name: `Codex (${labelOf(account)})` });
+    // Windows shells have no `env` command: the terminal environment carries the variable instead (null removes it)
+    const terminal = vscode.window.createTerminal({
+      name: `Codex (${labelOf(account)})`,
+      env: isWindows() ? { CODEX_HOME: isDefault ? null : account.dir } : undefined,
+    });
     terminals.set(terminal, account);
-    const cmd = isDefault ? 'env -u CODEX_HOME codex' : `env CODEX_HOME=${shQuote(account.dir)} codex`;
+    const cmd = isWindows() ? 'codex' : isDefault ? 'env -u CODEX_HOME codex' : `env CODEX_HOME=${shQuote(account.dir)} codex`;
     terminal.sendText(login ? `${cmd} login` : cmd);
     terminal.show();
   }

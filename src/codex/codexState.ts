@@ -4,6 +4,8 @@ import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { codexDefaultDir } from './codexPaths';
 import { t } from '../i18n';
+import { fsyncDir, isWindows } from '../platform';
+import { getUserCodexHome, setUserCodexHome } from './codexWindows';
 
 export const STATE_FILE = () => path.join(os.homedir(), '.config', 'planswap', 'codex-home');
 
@@ -36,11 +38,37 @@ export function writeSelectedDir(dir: string | undefined): void {
     try { fs.unlinkSync(tmp); } catch { /* ignore */ }
     throw e;
   }
-  const dfd = fs.openSync(dirName, 'r');
+  fsyncDir(dirName);
+}
+
+/**
+ * Writes the selected directory and, on Windows when management is enabled (the state file existed), mirrors it into
+ * the user-level CODEX_HOME so a freshly started editor picks it up. Elsewhere the rc blocks read the state file.
+ */
+export function writeSelection(dir: string | undefined): void {
+  const managed = isWindows() && fs.existsSync(STATE_FILE());
+  writeSelectedDir(dir);
+  if (managed) setUserCodexHome(dir === undefined ? undefined : path.resolve(dir));
+}
+
+/** Whether PlanSwap manages CODEX_HOME. Windows: the state file exists; elsewhere: both rc files carry a block. */
+export function isEnabled(): boolean {
+  if (isWindows()) return fs.existsSync(STATE_FILE());
+  return rcStatus().every((s) => s.hasBlock && !s.broken);
+}
+
+/** Windows enable: refuses when the user already sets CODEX_HOME (never overwritten), else creates the state file. */
+export function enableWindows(): void {
+  writeSelectedDir(undefined);
+}
+
+/** Windows disable: removes the user-level CODEX_HOME that PlanSwap wrote and the state file. */
+export function disableWindows(): void {
+  setUserCodexHome(undefined);
   try {
-    fs.fsyncSync(dfd);
-  } finally {
-    fs.closeSync(dfd);
+    fs.unlinkSync(STATE_FILE());
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
   }
 }
 
@@ -126,6 +154,11 @@ export interface PreCheck { ok: boolean; reasons: string[] }
 
 export function preCheck(): PreCheck {
   const reasons: string[] = [];
+  if (isWindows()) {
+    // An existing state file means PlanSwap already owns the variable
+    if (!fs.existsSync(STATE_FILE()) && getUserCodexHome() !== undefined) reasons.push(t('codex.pre.winUserEnv'));
+    return { ok: reasons.length === 0, reasons };
+  }
   const shell = process.env.SHELL ?? '';
   if (path.basename(shell) !== 'bash') {
     reasons.push(t('codex.pre.notBash', { shell: shell || t('codex.pre.shellUnset') }));
@@ -348,7 +381,33 @@ export function migrateLegacyCodex(): boolean {
 
 const STDERR_NOISE = ['cannot set terminal process group', 'no job control in this shell'];
 
+// Windows: writes a sentinel into the user environment, reads it back through the registry, then restores the old value
+function selfCheckWindows(): { ok: boolean; detail: string } {
+  let tmpDir: string | undefined;
+  let previous: string | undefined;
+  try {
+    previous = getUserCodexHome();
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'planswap-codex-'));
+    setUserCodexHome(tmpDir);
+    const out = getUserCodexHome();
+    if (out !== undefined && samePathLoose(out, tmpDir)) return { ok: true, detail: `CODEX_HOME=${out}` };
+    return { ok: false, detail: t('codex.self.mismatch', { actual: out ?? '', expected: tmpDir, stderr: '' }) };
+  } catch (e) {
+    return { ok: false, detail: t('codex.self.error', { error: e instanceof Error ? e.message : String(e) }) };
+  } finally {
+    try { setUserCodexHome(previous); } catch { /* ignore */ }
+    if (tmpDir) {
+      try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+  }
+}
+
+function samePathLoose(a: string, b: string): boolean {
+  return path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase();
+}
+
 export function selfCheck(): { ok: boolean; detail: string } {
+  if (isWindows()) return selfCheckWindows();
   const file = STATE_FILE();
   const backup = readText(file);
   let tmpDir: string | undefined;

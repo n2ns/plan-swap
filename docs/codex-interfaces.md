@@ -84,6 +84,11 @@ export function selfCheck(): { ok: boolean; detail: string };      // creates a 
 ```
 Note: selfCheck must first back up the original state file content (which may not exist) and restore it afterwards through writeSelectedDir (content trimmed and path-resolved, mode 0600; deleting the file if it did not exist).
 
+## src/codex/codexWindows.ts (no vscode import)
+
+- `ENV_NAME`, `Runner`, `parseRegQuery(out)`, `getUserCodexHome(run?)` (reads `HKCU\Environment`; failure → undefined), `setUserCodexHome(value | undefined, run?)` (PowerShell `SetEnvironmentVariable(..., 'User')`, value passed through `PLANSWAP_CODEX_HOME`).
+- `codexState` adds `writeSelection(dir)` (state file plus, on Windows when managed, the user variable), `isEnabled()`, `enableWindows()`, `disableWindows()`; `preCheck` and `selfCheck` branch on Windows. `codexCommands.manualRestartMessages(kind, remoteName, windows?)` returns the quit-and-relaunch guidance for a local Windows editor.
+
 ## src/codex/codexServer.ts (no vscode import)
 
 ```ts

@@ -33,6 +33,7 @@ import type { FromWebview } from './protocol';
 import type { CodexAccountStore } from './codex/codexStore';
 import { runTool, type ToolDeps } from './tools';
 import { t } from './i18n';
+import { isWindows } from './platform';
 
 export interface Deps {
   store: AccountStore;
@@ -268,7 +269,8 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
       env: isDefault ? undefined : { CLAUDE_CONFIG_DIR: account.dir },
     });
     terminals.set(terminal, account);
-    terminal.sendText(isDefault ? 'claude' : `env CLAUDE_CONFIG_DIR=${shQuote(account.dir)} claude`);
+    // The terminal environment carries CLAUDE_CONFIG_DIR; Windows shells have no `env` command
+    terminal.sendText(isDefault || isWindows() ? 'claude' : `env CLAUDE_CONFIG_DIR=${shQuote(account.dir)} claude`);
     terminal.show();
   }
 

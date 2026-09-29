@@ -1,7 +1,8 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { sameRealPath } from '../paths';
+import { samePath, sameRealPath } from '../paths';
+import { isWindows, pidAlive } from '../platform';
 import { t } from '../i18n';
 
 export const CODEX_DEFAULT_NAME = 'default';
@@ -285,6 +286,8 @@ function pidFileAlive(file: string, procRoot: string): boolean {
   const identity = data.processIdentity;
   const ticks = toTicks(isPlainObject(identity) ? identity.startTicks : undefined) ?? toTicks(data.processStartTime);
   if (ticks === undefined) return false;
+  // Windows: no start ticks to compare, so a live pid counts
+  if (isWindows() && procRoot === '/proc') return pidAlive(pid);
   // Without procRoot (e.g. no /proc) the daemon cannot be ruled out
   if (!fs.existsSync(procRoot)) return true;
   return procStartTime(pid, procRoot) === ticks;
@@ -300,7 +303,7 @@ export function checkCodexSafeToDelete(dir: string): string | undefined {
   const home = path.resolve(os.homedir());
   const target = path.resolve(dir);
   // Only direct children of the home directory, so a symlinked parent cannot escape the home directory
-  if (path.dirname(target) !== home) return t('del.notHomeChild', { dir: target });
+  if (!samePath(path.dirname(target), home)) return t('del.notHomeChild', { dir: target });
   if (!CODEX_DIR_BASENAME_RE.test(path.basename(target))) return t('del.badName', { pattern: '.codex-<name>', dir: target });
   if (sameRealPath(target, codexDefaultDir())) return t('del.isDefault', { dir: target });
   let st: fs.Stats;

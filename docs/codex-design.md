@@ -251,6 +251,17 @@ Same model as on the Claude side (design.md 6.7), implemented in `src/codex/code
 - After adding or removing an account; after a terminal closes; when the refresh button is clicked.
 - When `planswap.language` changes (the whole panel re-renders in the new language).
 
+## 9a. Native Windows
+
+Local Windows editors have no rc files and no WSL server. Selection is persisted in the per-user environment variable `CODEX_HOME` (`HKCU\Environment`):
+
+- Enable (`planswap.codex.enable`): refused when the user already has a user-level `CODEX_HOME` and PlanSwap does not own it yet; otherwise, after a modal confirmation, the state file `~/.config/planswap/codex-home` is created (its existence means "managed"). A self-check writes a sentinel value, reads it back with `reg query`, and restores the previous value; failure rolls the enablement back.
+- Switch: the state file is written, then `CODEX_HOME` is set (or removed for the default account) through `[Environment]::SetEnvironmentVariable(..., 'User')` in `powershell.exe`, which also broadcasts the change to Explorer. The value is passed in a child environment variable, never in the command line.
+- Restart: not automatic. Running editors and their terminals keep the environment they were started with, so the user must quit every editor window and start the editor again from the Start menu or taskbar (a `code` launch from a terminal inherits that terminal's old value). This follows the same principle as [section 2, fact 20](#2-background-facts-verified) for local desktop editors.
+- Disable removes the user-level variable and the state file.
+- `auth.json` remains read-only; accounts stored in the OS keyring instead of `auth.json` (`cli_auth_credentials_store = keyring`/`auto`) read as signed out. The Codex extension's *Run in WSL* mode reads the WSL-side `~/.codex`; use PlanSwap inside WSL for that mode.
+- Not verified on real Windows: that the extension host inherits the changed variable after a fresh start, and Codex's default credential store there; see [TODO](../TODO.md).
+
 ## 10. Code structure
 
 Codex module responsibilities and signatures are maintained in [Codex interfaces](codex-interfaces.md); shared protocol, labels, panel and localization contracts are in [Interfaces](interfaces.md). The repository map is in [Development](development.md#repository-layout).

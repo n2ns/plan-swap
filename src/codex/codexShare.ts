@@ -4,6 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { t } from '../i18n';
 import { samePath, sameRealPath } from '../paths';
+import { comparablePath, imageRunning, isWindows } from '../platform';
 import {
   type MergeCtx, type MigrateReport, type ShareReport, copyTree, defaultFolder, emptyReport, freeName, linkEntry,
   linksTo, lstatOrUndefined, mergeEntry, mergeLines, moveEntry, realOrResolved, record, sameContent, unlinkChildLinks, unlinkIfLinksTo,
@@ -172,7 +173,7 @@ export function ensureCodexLinks(dir: string): ShareReport {
       const link = path.join(accFolder, child);
       if (!lstatOrUndefined(link)?.isSymbolicLink()) continue;
       const to = path.resolve(accFolder, fs.readlinkSync(link));
-      if (path.dirname(to) === defFolder && !lstatOrUndefined(to)) fs.unlinkSync(link);
+      if (comparablePath(path.dirname(to)) === comparablePath(defFolder) && !lstatOrUndefined(to)) fs.unlinkSync(link);
     }
   }
   return report;
@@ -183,6 +184,8 @@ export function ensureCodexLinks(dir: string): ShareReport {
  *  Unreadable /proc entries are skipped; an unreadable procRoot counts as busy. procRoot is for tests. */
 export function codexAccountBusy(dir: string, procRoot = '/proc'): boolean {
   if (codexDaemonAlive(path.resolve(dir))) return true;
+  // Windows has no /proc and cannot read another process's environment: any running codex.exe counts as busy
+  if (isWindows() && procRoot === '/proc') return imageRunning('codex.exe');
   let pids: string[];
   try {
     pids = fs.readdirSync(procRoot).filter((p) => /^\d+$/.test(p));

@@ -4,9 +4,9 @@
 
 # PlanSwap: Claude Code & Codex Account Switcher
 
-Switch between the Claude Code and Codex subscription accounts you own (Claude Pro / Max, ChatGPT Plus / Pro…) from a VS Code sidebar, without signing out and back in. Built for VS Code WSL remote windows.
+Switch between the Claude Code and Codex subscription accounts you own (Claude Pro / Max, ChatGPT Plus / Pro…) from a VS Code sidebar, without signing out and back in. Built for VS Code WSL remote windows and native Windows.
 
-> **WSL/Linux only.** Native Windows and macOS are not supported.
+> **WSL/Linux and native Windows.** macOS is not supported. See [Native Windows](#native-windows).
 
 [![VS Code](https://img.shields.io/badge/VS_Code-1.107%2B-007ACC?style=flat)](https://code.visualstudio.com/)
 [![WSL](https://img.shields.io/badge/Environment-WSL-0078D4?style=flat)](#requirements)
@@ -116,6 +116,16 @@ In extension settings, set `planswap.language` to `auto` (follow your editor), `
 - **Continuing another account's session can fail**, particularly between Codex accounts in different ChatGPT organizations. Avoid opening the same session from two accounts at once.
 - **Some shared settings need a refresh.** After changing the default setup, use **Re-link**. If PlanSwap reports conflicting files, resolve them manually. Deleting Claude prompt history from a linked account does not necessarily remove it from the shared history.
 - **MCP connections may need sign-in again for each account.** Claude MCP settings copied from the default account can include API keys stored in those settings; choose account setups accordingly.
+
+## Native Windows
+
+PlanSwap also runs in a local Windows editor (no remote window). Claude switching works as in WSL (`CLAUDE_CONFIG_DIR` in `claudeCode.environmentVariables`). Differences:
+
+- **Codex** is selected through the per-user environment variable `CODEX_HOME`. Enabling asks for confirmation and refuses when you already set that variable yourself. After a switch, **fully quit the editor and start it again from the Start menu or taskbar**; Reload Window and terminals started before the switch keep the old value. Accounts opened through PlanSwap terminals always get the right value.
+- **Sharing** links folders with directory junctions (no privileges needed). Linking single files (`settings.json`, `history.jsonl`, ...) needs Windows Developer Mode or an elevated editor; without it those entries are reported as failed and stay independent.
+- **Busy checks** are conservative: a running `codex.exe` or a live Claude session blocks converting an account.
+- Codex in the VS Code extension's *Run in WSL* mode uses the WSL-side `~/.codex`; install PlanSwap in WSL to switch that one.
+- Login tokens are never read or copied; `auth.json` stays read-only. Accounts signed in through the OS keyring instead of `auth.json` show as signed out.
 
 ## Privacy
 

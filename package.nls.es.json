@@ -1,6 +1,6 @@
 {
   "displayName": "PlanSwap: selector de cuentas de Claude Code y Codex",
-  "description": "Cambia entre tus cuentas de Claude Code y Codex (Pro, Max, Plus…) desde la barra lateral. Solo WSL/Linux.",
+  "description": "Cambia entre tus cuentas de Claude Code y Codex (Pro, Max, Plus…) desde la barra lateral. Para WSL/Linux y Windows.",
   "command.switchAccount": "Cambiar de cuenta",
   "category.claude": "Cuenta de Claude",
   "command.addAccount": "Añadir cuenta (abrir campo en la barra lateral)",

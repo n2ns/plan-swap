@@ -42,6 +42,12 @@ export function migrateLegacyLanguage(state: vscode.Memento): Promise<void>; // 
 - English names: displayName "PlanSwap: Claude Code & Codex Account Switcher" (brand "PlanSwap" is permanent; the part after the colon grows as more AI tools are supported), identifier `planswap`; container and view title "PlanSwap"; command categories "Claude Account" / "Codex Account" / "PlanSwap". The Chinese file keeps the Chinese titles ("PlanSwap", "Claude 账号", "Codex 账号", ...).
 - `contributes.configuration`: `planswap.language`, type string, enum `["auto", "en", "zh-cn", "es", "ja"]`, default `"auto"`, scope `application`, enumDescriptions: auto = follow the VS Code display language; en = English; zh-cn = 简体中文; es = Español; ja = 日本語.
 
+## src/platform.ts (no vscode import)
+
+- `isWindows()`, `isSupportedPlatform(platform?)` (linux, win32), `comparablePath(p, platform?)` (`path.resolve`, lower-cased on win32 for comparison only).
+- `createLink(target, link, platform?)`: `fs.symlinkSync`, or on win32 a junction for directories and a file symlink otherwise (`EPERM` → an Error naming Developer Mode). `copyLink(src, dst, platform?)` recreates a link, resolving relative targets on win32.
+- `pidAlive(pid)` (signal 0), `parseTasklistCsv(out)`, `imageRunning(image, run?)` (a failing probe counts as running), `fsyncDir(dir)` (no-op on win32).
+
 ## src/paths.ts (data layer, no vscode import)
 
 Paths are absolute after `path.resolve`, without `~` or a trailing slash. Use `samePath` for path equality and `sameRealPath` when protecting the default directory from aliasing through symlinks. Obtain the Claude default through `defaultDir()` rather than hard-coding `~/.claude`. Every account-info reader and watcher uses `claudeJsonPath(dir, isExplicitConfigDir(dir))`; parsing a missing or half-written `.claude.json` must not throw.

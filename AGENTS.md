@@ -4,9 +4,9 @@ Project instructions for AI coding agents working on PlanSwap. Cross-project pre
 
 ## Project scope
 
-PlanSwap is a WSL-only VS Code extension with independent Claude Code and Codex account switching in one localized sidebar. Claude switching writes `CLAUDE_CONFIG_DIR` in `claudeCode.environmentVariables`. Codex switching selects `CODEX_HOME` through rc marker blocks and requires an editor WSL server restart (automatic only for Antigravity and VSCodium; manual guidance for VS Code and unrecognized editors). Named accounts are shared with the default account or independent; login identities stay separate.
+PlanSwap is a WSL and native Windows VS Code extension with independent Claude Code and Codex account switching in one localized sidebar. Claude switching writes `CLAUDE_CONFIG_DIR` in `claudeCode.environmentVariables`. Codex switching selects `CODEX_HOME` through rc marker blocks and requires an editor WSL server restart (automatic only for Antigravity and VSCodium; manual guidance for VS Code and unrecognized editors). On native Windows it selects `CODEX_HOME` through the per-user environment variable and needs a full editor restart (manual guidance only). Named accounts are shared with the default account or independent; login identities stay separate.
 
-- WSL/Linux only: on non-linux platforms, activation warns and returns. Never read across into `/mnt/c` or add Windows/macOS branches.
+- Supported platforms: Linux (WSL) and native Windows (`process.platform === 'win32'`, see [Windows support](docs/design.md#windows-support)); on any other platform activation warns and returns. Never read across into `/mnt/c` (WSL) or the Windows profile from WSL, and add no macOS branches. Platform differences live in `src/platform.ts` and `src/codex/codexWindows.ts`; never signal the editor process on Windows.
 - All repository docs, code comments and test names are written in English. User-visible strings use the i18n tables.
 - Keep Claude and Codex behavior independent when changing shared modules.
 
@@ -16,6 +16,7 @@ The [documentation map](docs/README.md) defines each document's responsibility. 
 
 | Task | Read |
 |---|---|
+| Native Windows behavior | [Windows support](docs/design.md#windows-support), [Codex Windows](docs/codex-design.md#9-native-windows). |
 | Claude accounts, sharing, settings or switching | [Claude design](docs/design.md), [Claude/shared interfaces](docs/interfaces.md). |
 | Codex accounts, sharing, rc files or WSL restart | [Codex design](docs/codex-design.md), [Codex interfaces](docs/codex-interfaces.md). |
 | Shared panel, messages, aliases, state or i18n | Relevant modules in [Interfaces](docs/interfaces.md); [Claude design §5](docs/design.md#5-user-interface) for UI rationale. |
