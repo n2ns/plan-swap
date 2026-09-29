@@ -473,7 +473,7 @@ body {
 .confirm-hint { color: var(--muted); font-size: 0.85em; overflow-wrap: anywhere; }
 .confirm-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
 
-/* ---------- Page tools: four small text buttons, at least 96px each; they wrap when they do not fit (2+1 or stacked) and stretch to fill the line ---------- */
+/* ---------- Page tools: four small text buttons (three without Re-link), at least 96px each; they wrap when they do not fit (2+1 or stacked) and stretch to fill the line ---------- */
 .page-tools-row { display: flex; flex-wrap: wrap; gap: var(--gap); min-width: 0; }
 .page-tools-row vscode-button {
   flex: 1 1 auto;
@@ -482,6 +482,7 @@ body {
   --vsc-border-left-radius: 6px;
   --vsc-border-right-radius: 6px;
 }
+.page-tools-row vscode-button[hidden] { display: none; }
 .page-tools-row vscode-button::part(base) { width: 100%; justify-content: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---------- Add account ---------- */

@@ -182,7 +182,7 @@ Subsequent cold starts (source-derived, pending user verification):
   - The terminal icon of signed-in accounts runs `env CODEX_HOME='<dir>' codex`.
   - The current account cannot be removed.
   - The add section has the shared checkbox (help line for a valid name, checked: `codex.addHelpShared` "Will create ~/.codex-<name> linked to the default account's settings, rules, skills, history, sessions and thread databases (memories stay per account)"); shared rows have the `link` badge and independent rows that are not current have the "Link to the default account: …" button (the host also refuses the selected account, 8.6), as on the Claude page.
-  - The "Tools" row has `AGENTS.md` (opens `<effectiveDir()>/AGENTS.md`), the Codex extension settings (`chatgpt.`), "Re-link" (re-links every shared Codex account, 8.6), and "Update CLI" (opens a terminal and runs `env -u CODEX_HOME codex update`; see features.md section 5.5).
+  - The "Tools" row has `AGENTS.md` (opens `<effectiveDir()>/AGENTS.md`), the Codex extension settings (`chatgpt.`), "Re-link" (re-links every shared Codex account, 8.6; shown only while one exists), and "Update CLI" (opens a terminal and runs `env -u CODEX_HOME codex update`; see features.md section 5.5).
 
 ## 8. Commands and flows
 

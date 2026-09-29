@@ -168,6 +168,7 @@ class Page {
   private readonly addHelp = h('div', { class: 'help' });
   private readonly addTitle = h('span');
   private tools: HTMLElement;
+  private syncButton!: HTMLElement;
   private readonly addSection: HTMLElement;
   private adding = false;
   // Add error from the host (addResult); kept across re-renders until the input is edited or a new result arrives
@@ -602,10 +603,12 @@ class Page {
     return row;
   }
 
-  // Page tools, including CLI updates (shown even when Codex is not enabled)
+  // Page tools, including CLI updates (shown even when Codex is not enabled); Re-link only when the page has a linked account
   private renderTools(): HTMLElement {
     const btn = (icon: string, label: string, title: string, tool: ToolId): HTMLElement =>
       onClick(h('vscode-button', { secondary: true, icon, title }, label), () => this.send({ type: 'tool', tool }));
+    this.syncButton = btn('sync', t('tools.sync'), t(`${this.mode}.syncTitle`), 'sync');
+    this.updateSyncButton();
     return h(
       'section',
       { class: 'section page-tools' },
@@ -615,10 +618,15 @@ class Page {
         { class: 'page-tools-row' },
         btn('symbol-ruler', this.text.mdLabel, t(`${this.mode}.mdTitle`), 'openGlobalMd'),
         btn('settings-gear', t('tools.settings'), t(`${this.mode}.settingsTitle`), 'openSettings'),
-        btn('sync', t('tools.sync'), t(`${this.mode}.syncTitle`), 'sync'),
+        this.syncButton,
         btn('cloud-download', t('tools.updateCli'), t('tools.updateCliTitle'), 'updateCli'),
       ),
     );
+  }
+
+  // Re-link only acts on linked accounts, so it is hidden while the page has none
+  private updateSyncButton(): void {
+    this.syncButton.hidden = !this.tab.accounts.some((a) => a.kind === 'named' && a.shared === true);
   }
 
   private renderList(): HTMLElement {
@@ -636,6 +644,7 @@ class Page {
   render(): void {
     this.rendering = true;
     try {
+      this.updateSyncButton();
       if (!receivedState) {
         this.top.replaceChildren(h('p', { role: 'status', 'aria-live': 'polite' }, t('panel.loading')));
         this.addSection.hidden = true;

@@ -20,8 +20,8 @@ export const en = {
   'codex.mdTitle': 'Open global AGENTS.md',
   'claude.settingsTitle': 'Open Claude Code extension settings',
   'codex.settingsTitle': 'Open Codex extension settings',
-  'claude.syncTitle': "Re-link every linked account to the default account's settings, rules, skills, history and sessions, and mirror its MCP servers",
-  'codex.syncTitle': "Re-link every linked account to the default account's settings, rules, skills, history, sessions and thread databases",
+  'claude.syncTitle': 'Re-link linked accounts to the default account and sync its MCP servers',
+  'codex.syncTitle': 'Re-link linked accounts to the default account',
 
   'account.default': 'Default account',
   'account.current': 'Current account',
@@ -118,8 +118,8 @@ export const zhCn: Record<MessageKey, string> = {
   'codex.mdTitle': '打开全局 AGENTS.md',
   'claude.settingsTitle': '打开 Claude Code 插件设置',
   'codex.settingsTitle': '打开 Codex 插件设置',
-  'claude.syncTitle': '把所有链接账号重新链接到默认账号的设置、规则、技能、会话历史和会话记录，并同步默认账号的 MCP 服务器',
-  'codex.syncTitle': '把所有链接账号重新链接到默认账号的设置、规则、技能、会话历史、会话记录和会话数据库',
+  'claude.syncTitle': '将链接账号重新链接到默认账号，并同步 MCP 服务器',
+  'codex.syncTitle': '将链接账号重新链接到默认账号',
 
   'account.default': '默认账号',
   'account.current': '当前账号',
@@ -214,8 +214,8 @@ export const es: Record<MessageKey, string> = {
   'codex.mdTitle': 'Abrir AGENTS.md global',
   'claude.settingsTitle': 'Abrir ajustes de la extensión Claude Code',
   'codex.settingsTitle': 'Abrir ajustes de la extensión Codex',
-  'claude.syncTitle': 'Volver a vincular todas las cuentas vinculadas a los ajustes, reglas, Skills, historial y sesiones de la cuenta predeterminada, y sincronizar sus servidores MCP',
-  'codex.syncTitle': 'Volver a vincular todas las cuentas vinculadas a los ajustes, reglas, Skills, historial, sesiones y bases de datos de conversaciones de la cuenta predeterminada',
+  'claude.syncTitle': 'Volver a vincular las cuentas vinculadas a la cuenta predeterminada y sincronizar sus servidores MCP',
+  'codex.syncTitle': 'Volver a vincular las cuentas vinculadas a la cuenta predeterminada',
 
   'account.default': 'Cuenta predeterminada',
   'account.current': 'Cuenta actual',
@@ -309,8 +309,8 @@ export const ja: Record<MessageKey, string> = {
   'codex.mdTitle': 'グローバル AGENTS.md を開く',
   'claude.settingsTitle': 'Claude Code 拡張機能の設定を開く',
   'codex.settingsTitle': 'Codex 拡張機能の設定を開く',
-  'claude.syncTitle': 'すべてのリンク済みアカウントをデフォルトアカウントの設定・ルール・Skills・履歴・セッションに再リンクし、MCP サーバーも同期します',
-  'codex.syncTitle': 'すべてのリンク済みアカウントをデフォルトアカウントの設定・ルール・Skills・履歴・セッション・スレッドデータベースに再リンクします',
+  'claude.syncTitle': 'リンク済みアカウントをデフォルトアカウントに再リンクし、MCP サーバーを同期します',
+  'codex.syncTitle': 'リンク済みアカウントをデフォルトアカウントに再リンクします',
 
   'account.default': 'デフォルトアカウント',
   'account.current': '現在のアカウント',

@@ -98,7 +98,7 @@ You can change an existing account's mode after switching away from it and closi
 - **Link to the default account** moves its settings and history into the shared setup. Conflicting files are kept for you to merge manually; review the result reported by PlanSwap.
 - **Unlink from the default account** gives it a separate copy of the default configuration and keeps its sign-in. Shared history and sessions remain with the default account, so the unlinked account starts with an empty history.
 
-Use **Re-link** in the Tools row to refresh shared settings and repair links. It only affects linked accounts on the selected tab.
+Use **Re-link** in the Tools row to refresh shared settings and repair links. It appears only when the selected tab has a linked account.
 
 ## Tools
 
