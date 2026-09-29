@@ -5,6 +5,7 @@ export type Locale = 'en' | 'zh-cn' | 'es' | 'ja';
 // English is the source of truth for the key set.
 export const en = {
   'panel.loading': 'Loading accounts…',
+  'panel.actionFailed': 'PlanSwap could not complete the action: {error}',
   'status.codexPending': 'Pending: {label} (restart required)',
   'status.codexRunsInWsl': 'Codex runs inside WSL here (chatgpt.runCodexInWindowsSubsystemForLinux); switch its accounts from a WSL window.',
   'status.usageChecking': 'Checking usage limits…',
@@ -255,6 +256,7 @@ export type MessageKey = keyof typeof en;
 
 export const zhCn: Record<MessageKey, string> = {
   'panel.loading': '正在加载账号…',
+  'panel.actionFailed': 'PlanSwap 未能完成该操作：{error}',
   'status.codexPending': '待生效：{label}（需要重启）',
   'status.codexRunsInWsl': '此处 Codex 在 WSL 中运行（chatgpt.runCodexInWindowsSubsystemForLinux），请在 WSL 窗口中切换其账号。',
   'status.usageChecking': '正在查询用量额度…',
@@ -480,6 +482,7 @@ export const zhCn: Record<MessageKey, string> = {
 
 export const es: Record<MessageKey, string> = {
   'panel.loading': 'Cargando cuentas…',
+  'panel.actionFailed': 'PlanSwap no pudo completar la acción: {error}',
   'status.codexPending': 'Pendiente: {label} (requiere reiniciar)',
   'status.codexRunsInWsl': 'Aquí Codex se ejecuta dentro de WSL (chatgpt.runCodexInWindowsSubsystemForLinux); cambia sus cuentas desde una ventana de WSL.',
   'status.usageChecking': 'Consultando los límites de uso…',
@@ -689,6 +692,7 @@ export const es: Record<MessageKey, string> = {
 
 export const ja: Record<MessageKey, string> = {
   'panel.loading': 'アカウントを読み込み中…',
+  'panel.actionFailed': 'PlanSwap は操作を完了できませんでした: {error}',
   'status.codexPending': '適用待ち: {label}（再起動が必要）',
   'status.codexRunsInWsl': 'ここでは Codex が WSL 内で実行されています（chatgpt.runCodexInWindowsSubsystemForLinux）。アカウントの切り替えは WSL ウィンドウで行ってください。',
   'status.usageChecking': '使用量の上限を確認中…',

@@ -13,7 +13,8 @@ import { registerCommands } from './commands';
 import { affectsSetting, settingEnvNames } from './claudeSettings';
 import { CodexAccountStore } from './codex/codexStore';
 import { codexPanelSource, codexRunsInWsl, registerCodexCommands, restartServerInteractive } from './codex/codexCommands';
-import { registerToolCommands, runTool, type ToolDeps } from './tools';
+import { registerToolCommands, runTool, type TerminalCheck, type ToolDeps } from './tools';
+import type { PanelMode } from './protocol';
 import { setLocale, t } from './i18n';
 import { isSupportedPlatform } from './platform';
 import { migrateLegacyLanguage, resolveLocale, watchLocale } from './i18nVscode';
@@ -104,10 +105,13 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   }
   const identityWarnings = new IdentityWarnings(identitySources);
   identityWarnings.check();
-  showEnvironmentWarnings(state);
+  void showEnvironmentWarnings(state);
 
+  // "Account terminal open" checks of the two command modules (Windows busy signal), filled in when they register
+  const terminalChecks: Partial<Record<PanelMode, TerminalCheck>> = {};
   // Toolbar dependencies: no restart entry when Codex is not initialized
   const tools: ToolDeps = {
+    accountBusy: (mode, dir) => terminalChecks[mode]?.(dir) ?? false,
     codexRestart: codex ? restartServerInteractive : undefined,
     postVersions: (items) => panel.post({ type: 'versions', items }),
     claudeDirs: () => store.named().map((a) => a.dir),
@@ -134,8 +138,10 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     panel,
     vscode.window.registerWebviewViewProvider(VIEW_ID, panel),
     statusBar,
-    ...registerCommands({ store, panel, statusBar, labels: claudeLabels, codex, tools }),
-    ...(codex ? registerCodexCommands({ store: codex.store, panel, labels: codexLabels, tools }) : []),
+    ...registerCommands({ store, panel, statusBar, labels: claudeLabels, codex, tools, provideTerminalCheck: (check) => { terminalChecks.claude = check; } }),
+    ...(codex
+      ? registerCodexCommands({ store: codex.store, panel, labels: codexLabels, tools, provideTerminalCheck: (check) => { terminalChecks.codex = check; } })
+      : []),
     ...registerToolCommands(tools),
     // Account info file changes only push panel state; keep the status bar email in sync here, re-check usage when the
     // effective account's auth.json changed (sign-in, re-login), and look for accounts signed in to the same identity
@@ -177,22 +183,32 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
 // state.json key: ids of environment warnings the user chose never to see again
 const DISMISSED_KEY = 'warnings.dismissed';
 
-// Conditions outside PlanSwap that defeat account separation or endanger the account folders, shown once per window
-// until dismissed for good. An id carries the variable names, so a newly set variable is pointed out again
-function showEnvironmentWarnings(state: FileMemento): void {
+/**
+ * Conditions outside PlanSwap that defeat account separation or endanger the account folders, shown once per window
+ * until dismissed for good. An id carries the variable names, so a newly set variable is pointed out again. The promise
+ * settles once every shown warning was answered (tests await it; activation does not).
+ */
+export async function showEnvironmentWarnings(
+  state: vscode.Memento,
+  env: NodeJS.ProcessEnv = process.env,
+  home: string = os.homedir(),
+  setting: { set: readonly string[]; cleared?: readonly string[] } = settingEnvNames(),
+): Promise<void> {
   const dismissed = (): string[] => state.get<string[]>(DISMISSED_KEY, []);
+  const shown: Array<Thenable<void>> = [];
   const warn = (id: string, message: string): void => {
     if (dismissed().includes(id)) return;
     const never = t('common.dontShowAgain');
-    void vscode.window.showWarningMessage(message, never).then(async (picked) => {
+    shown.push(vscode.window.showWarningMessage(message, never).then(async (picked) => {
       if (picked === never) await state.update(DISMISSED_KEY, [...new Set([...dismissed(), id])]);
-    });
+    }));
   };
-  const overrides = claudeCredentialOverrides(process.env, settingEnvNames());
+  const overrides = claudeCredentialOverrides(env, setting);
   if (overrides.length) warn(`claudeEnv:${overrides.join(',')}`, t('warn.claudeEnvOverride', { names: overrides.join(', ') }));
-  if (oneDriveHome(os.homedir(), process.env)) warn('oneDriveHome', t('warn.oneDriveHome', { home: os.homedir() }));
-  const spaced = pathVarsWithSpaces(process.env);
+  if (oneDriveHome(home, env)) warn('oneDriveHome', t('warn.oneDriveHome', { home }));
+  const spaced = pathVarsWithSpaces(env);
   if (spaced.length) warn(`pathSpaces:${spaced.join(',')}`, t('warn.pathSpaces', { names: spaced.join(', ') }));
+  await Promise.all(shown);
 }
 
 export function deactivate(): void {}

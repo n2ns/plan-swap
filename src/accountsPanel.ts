@@ -150,7 +150,13 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
     // Set the CSP page before options; the reverse order loads an empty page first and triggers a "missing CSP" warning
     view.webview.html = this.html(view.webview, media);
     view.webview.options = { enableScripts: true, localResourceRoots: [media] };
-    view.webview.onDidReceiveMessage((msg: FromWebview) => {
+    view.webview.onDidReceiveMessage((raw: unknown) => {
+      // The webview is untrusted input: malformed messages are dropped before any handler runs
+      const msg = checkMessage(raw);
+      if (!msg) {
+        console.warn('[planswap] ignored a malformed panel message');
+        return;
+      }
       if (msg.type === 'ready') {
         console.info(`[planswap] panel ready: ${(performance.now() - this.pageStartedAt).toFixed(1)}ms since document creation/show`);
         this.ready = true;
@@ -161,9 +167,8 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
           this.post({ type: 'focusAdd', mode });
         }
       } else if (msg.type === 'setTab') {
-        // The webview is untrusted input: only the known modes reach the memento
-        if (msg.mode === 'claude' || msg.mode === 'codex') void this.memento.update(ACTIVE_TAB_KEY, msg.mode);
-      } else void this.handlers[msg.mode]?.(msg);
+        void this.memento.update(ACTIVE_TAB_KEY, msg.mode);
+      } else void this.dispatch(msg);
     });
     view.onDidChangeVisibility(() => {
       if (view.visible) {
@@ -179,6 +184,17 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
         this.ready = false;
       }
     });
+  }
+
+  /** Runs the vendor handler of a checked message; a failure is logged and shown instead of an unhandled rejection. */
+  async dispatch(msg: FromWebview): Promise<void> {
+    if (!('mode' in msg)) return;
+    try {
+      await this.handlers[msg.mode]?.(msg);
+    } catch (err) {
+      console.error(`[planswap] panel action ${msg.type} failed:`, err);
+      void vscode.window.showErrorMessage(t('panel.actionFailed', { error: err instanceof Error ? err.message : String(err) }));
+    }
   }
 
   dispose(): void {
@@ -261,6 +277,38 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
       );
     }
   }
+}
+
+// String fields each message type must carry (besides type and mode); a type missing here is not accepted
+const MESSAGE_FIELDS: Record<FromWebview['type'], readonly string[]> = {
+  ready: [],
+  setTab: [],
+  switch: ['dir'],
+  terminal: ['dir'],
+  remove: ['dir'],
+  add: ['name'],
+  share: ['dir'],
+  unshare: ['dir'],
+  rename: ['dir', 'label'],
+  reload: [],
+  dismissBanner: [],
+  enable: [],
+  restartServer: [],
+  tool: ['tool'],
+};
+
+/**
+ * Checks a message from the webview (untrusted input) against the protocol: a known type, a known mode (every type but
+ * 'ready'), and string values for its string fields. Returns the message, or undefined when it is malformed.
+ */
+export function checkMessage(raw: unknown): FromWebview | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined;
+  const msg = raw as Record<string, unknown>;
+  if (typeof msg.type !== 'string' || !Object.hasOwn(MESSAGE_FIELDS, msg.type)) return undefined;
+  const type = msg.type as FromWebview['type'];
+  if (type !== 'ready' && msg.mode !== 'claude' && msg.mode !== 'codex') return undefined;
+  if (!MESSAGE_FIELDS[type].every((f) => typeof msg[f] === 'string')) return undefined;
+  return raw as FromWebview;
 }
 
 /**

@@ -1,13 +1,13 @@
 import * as vscode from 'vscode';
 import * as fs from 'node:fs';
-import { claudeJsonPath, findSameDir, readAccountInfo, samePath } from './paths';
+import { claudeJsonPath, findSameDir, readAccountInfo } from './paths';
 import { currentDir, isExplicitConfigDir } from './claudeSettings';
 import type { AccountStore } from './accounts';
 import { EXTERNAL_NAME, labelFor, type LabelStore } from './labels';
 import { getLocale, t, type Locale } from './i18n';
 import type { CodexAccountStore } from './codex/codexStore';
 import { codexDefaultDir, readCodexAccountInfo } from './codex/codexPaths';
-import { effectiveDir, readSelectedDir } from './codex/codexState';
+import { effectiveDir, isEnabled, readSelectedDir } from './codex/codexState';
 import { codexRunsInWsl } from './codex/codexCommands';
 import type { CodexUsageState } from './codex/codexUsageMonitor';
 import type { UsageWindow } from './codex/codexUsage';
@@ -87,7 +87,7 @@ export class StatusBar implements vscode.Disposable {
     const hasClaude = fs.existsSync(dir) || fs.existsSync(claudeJsonPath(dir, explicit)) ||
       this.store.named().some((account) => fs.existsSync(account.dir));
     if (hasClaude) {
-      const account = this.store.findByDir(dir);
+      const account = sameDirAccount(this.store.all(), dir);
       const label = labelFor(account ? account.name : EXTERNAL_NAME, this.labels);
       const info = readAccountInfo(dir, explicit);
       const identity = info.email ?? t(info.loggedIn ? 'common.loggedIn' : 'common.notLoggedIn');
@@ -96,17 +96,20 @@ export class StatusBar implements vscode.Disposable {
     }
     const codexDir = effectiveDir();
     if (this.codex && (fs.existsSync(codexDir) || this.codex.store.all().some((account) => fs.existsSync(account.dir)))) {
-      const account = this.codex.store.findByDir(codexDir);
+      const all = this.codex.store.all();
+      const account = sameDirAccount(all, codexDir);
       const label = labelFor(account ? account.name : EXTERNAL_NAME, this.codex.labels);
       const info = readCodexAccountInfo(codexDir);
       const apiKey = info.plan === 'API key';
       const identity = apiKey ? 'API key' :
-        [info.email ?? t('common.notLoggedIn'), info.plan].filter(Boolean).join(' · ');
+        [info.email ?? t(info.loggedIn ? 'common.loggedIn' : 'common.notLoggedIn'), info.plan].filter(Boolean).join(' · ');
       text.push(`Codex: ${label}`);
       const lines = [`Codex: ${label}`, identity, codexDir];
       const selected = readSelectedDir() ?? codexDefaultDir();
-      if (findSameDir([selected], codexDir) !== 0) {
-        const pendingAccount = this.codex.store.findByDir(selected);
+      // A selection is only pending while PlanSwap manages CODEX_HOME (as on the panel, an unreadable rc file counts as
+      // not enabled)
+      if (codexSwitchingEnabled() && findSameDir([selected], codexDir) !== 0) {
+        const pendingAccount = sameDirAccount(all, selected);
         const pending = pendingAccount ? labelFor(pendingAccount.name, this.codex.labels) : selected;
         lines.push(t('status.codexPending', { label: pending }));
       }
@@ -125,6 +128,19 @@ export class StatusBar implements vscode.Disposable {
 
   dispose(): void {
     this.item.dispose();
+  }
+}
+
+// The registered account of dir, matched like the panel rows (another spelling of the folder counts as the same)
+function sameDirAccount<T extends { dir: string }>(accounts: T[], dir: string): T | undefined {
+  return accounts[findSameDir(accounts.map((a) => a.dir), dir)];
+}
+
+function codexSwitchingEnabled(): boolean {
+  try {
+    return isEnabled();
+  } catch {
+    return false;
   }
 }
 

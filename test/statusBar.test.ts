@@ -9,7 +9,7 @@ import { LabelStore } from '../src/labels';
 import { setLocale } from '../src/i18n';
 import { makeTempHome, MemoryMemento } from './helpers';
 import { MarkdownString, statusBarItems, StatusBarAlignment, tooltipText } from './stubs/vscode';
-import { writeSelectedDir } from '../src/codex/codexState';
+import { installRcBlocks, writeSelectedDir } from '../src/codex/codexState';
 import type { CodexUsageState } from '../src/codex/codexUsageMonitor';
 
 before(() => setLocale('en'));
@@ -45,6 +45,8 @@ test('Codex status keeps effective account and reports pending selection with al
   await store.add({ name: 'work', dir: selected });
   await state.update('codex.labels', { work: 'Work alias' });
   writeSelectedDir(selected);
+  // A pending selection is only reported while Codex switching is enabled (Windows: the state file above)
+  if (process.platform !== 'win32') installRcBlocks();
   const bar = new StatusBar(new AccountStore(state), new LabelStore(state, 'claude.labels'),
     { store, labels: new LabelStore(state, 'codex.labels') });
   try {

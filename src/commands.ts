@@ -9,6 +9,7 @@ import {
   defaultDir,
   deleteAccountDir,
   ensureAccountDir,
+  findSameDir,
   readAccountInfo,
   samePath,
   sameRealPath,
@@ -22,7 +23,6 @@ import {
   lstatOrUndefined,
   makeClaudeIndependent,
   migrateClaudeToShared,
-  mirrorClaudeJson,
 } from './claudeShare';
 import { describeShareReport } from './shareReport';
 import { currentDir, isExplicitConfigDir, setConfigDir } from './claudeSettings';
@@ -32,7 +32,7 @@ import type { StatusBar } from './statusBar';
 import { labelFor, sameName, type LabelStore, EXTERNAL_NAME } from './labels';
 import type { FromWebview } from './protocol';
 import type { CodexAccountStore } from './codex/codexStore';
-import { runTool, type ToolDeps } from './tools';
+import { mirrorClaudeJsonInto, runTool, type TerminalCheck, type ToolDeps } from './tools';
 import { t } from './i18n';
 import { isWindows } from './platform';
 import { askCopyFallback } from './linkPolicy';
@@ -48,6 +48,8 @@ export interface Deps {
   tools: ToolDeps;
   // Root of the process tree for the busy checks; tests pass a fake, product code leaves the default /proc
   procRoot?: string;
+  // Receives this module's "account terminal open" check, so the toolbar's Re-link can treat such an account as busy
+  provideTerminalCheck?: (check: TerminalCheck) => void;
 }
 
 export function registerCommands(deps: Deps): vscode.Disposable[] {
@@ -70,8 +72,11 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
   const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
   // Windows cannot attribute a running Claude process to an account (see windowsSessionsBusy), so an open terminal of
   // the account also counts; on Linux the /proc check covers terminals
-  const busy = (a: Account): boolean =>
-    claudeAccountBusy(a.dir, procRoot) || (isWindows() && [...terminals.values()].some((x) => x.name === a.name));
+  const terminalOpen: TerminalCheck = (dir) => isWindows() && [...terminals.values()].some((x) => samePath(x.dir, dir));
+  deps.provideTerminalCheck?.(terminalOpen);
+  const busy = (a: Account): boolean => claudeAccountBusy(a.dir, procRoot) || terminalOpen(a.dir);
+  // Passed to the linking steps, which OR it with their own process check
+  const linkBusy = (a: Account): (() => boolean) => () => terminalOpen(a.dir);
 
   async function pickAccount(accounts: Account[], placeHolder: string): Promise<Account | undefined> {
     if (accounts.length === 0) {
@@ -156,8 +161,10 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
     // Linking or copying failures only warn and do not block
     try {
       if (shared) {
-        const report = ensureClaudeLinks(account.dir, '/proc', linkOptions);
-        mirrorClaudeJson(defaultJson(), account.dir);
+        // The folder may already exist (kept from an earlier removal, its terminal possibly still open)
+        const report = ensureClaudeLinks(account.dir, '/proc', { ...linkOptions, busy: linkBusy(account) });
+        // An existing folder that could not be linked stays independent: it only gains the default MCP servers
+        mirrorClaudeJsonInto(defaultJson(), account.dir);
         const notes = describeShareReport(report);
         if (notes) void vscode.window.showWarningMessage(t('share.addNotes', { name, notes }));
       } else {
@@ -174,8 +181,8 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
   // Re-links a shared account and mirrors the default account's info file; returns a warning text or undefined
   function refreshShared(account: Account): string | undefined {
     try {
-      const notes = describeShareReport(ensureClaudeLinks(account.dir, procRoot));
-      mirrorClaudeJson(defaultJson(), account.dir);
+      const notes = describeShareReport(ensureClaudeLinks(account.dir, procRoot, { busy: linkBusy(account) }));
+      mirrorClaudeJsonInto(defaultJson(), account.dir);
       return notes || undefined;
     } catch (err) {
       return errText(err);
@@ -192,14 +199,19 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
     const ok = t('share.confirmButton');
     const picked = await vscode.window.showWarningMessage(t('share.confirm', { label: labelOf(account), dir: account.dir }), { modal: true }, ok);
     if (picked !== ok) return;
+    // Re-checked after the modal: another window may have switched to the account meanwhile
+    if (inUse(account)) {
+      void vscode.window.showWarningMessage(t('share.current', { label: labelOf(account) }));
+      return;
+    }
     if (busy(account)) {
       void vscode.window.showWarningMessage(t('share.busy', { name: labelOf(account) }));
       return;
     }
     const linkOptions = await askCopyFallback(account.dir, 'Claude');
     try {
-      const report = migrateClaudeToShared(account.dir, account.name, procRoot, labelOf(account), linkOptions);
-      mirrorClaudeJson(defaultJson(), account.dir);
+      const report = migrateClaudeToShared(account.dir, account.name, procRoot, labelOf(account), { ...linkOptions, busy: linkBusy(account) });
+      mirrorClaudeJsonInto(defaultJson(), account.dir);
       void vscode.window.showInformationMessage(t('share.done', { label: labelOf(account), summary: describeShareReport(report) || t('share.nothingElse') }));
     } catch (err) {
       void vscode.window.showErrorMessage(t('share.failed', { label: labelOf(account), error: errText(err) }));
@@ -217,6 +229,10 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
     const ok = t('unshare.confirmButton');
     const picked = await vscode.window.showWarningMessage(t('unshare.confirm', { label: labelOf(account), dir: account.dir }), { modal: true }, ok);
     if (picked !== ok) return;
+    if (inUse(account)) {
+      void vscode.window.showWarningMessage(t('unshare.current', { label: labelOf(account) }));
+      return;
+    }
     if (busy(account)) {
       void vscode.window.showWarningMessage(t('share.busy', { name: labelOf(account) }));
       return;
@@ -235,24 +251,29 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
   // confirmed: the panel already did an inline confirmation; Command Palette entries need a modal confirmation
   async function removeAccount(account: Account, confirmed: boolean): Promise<void> {
     if (account.name === DEFAULT_NAME || !store.find(account.name)) return;
-    // The current account cannot be deleted; switch to another account first
-    if (inUse(account)) {
-      void vscode.window.showWarningMessage(t('claude.removeCurrent', { label: labelOf(account) }));
-      return;
-    }
-    // A running Claude process of this account would keep writing into the directory offered for deletion
-    if (busy(account)) {
-      void vscode.window.showWarningMessage(t('share.busy', { name: labelOf(account) }));
-      return;
-    }
+    // Capture the display name before its alias is cleared, so the prompts below still show it
+    const label = labelOf(account);
+    // Re-checked after every modal: another window may have switched to the account, or a terminal was opened meanwhile
+    const blocked = (): boolean => {
+      // The current account cannot be deleted; switch to another account first
+      if (inUse(account)) {
+        void vscode.window.showWarningMessage(t('claude.removeCurrent', { label }));
+        return true;
+      }
+      // A running Claude process of this account would keep writing into the directory offered for deletion
+      if (busy(account)) {
+        void vscode.window.showWarningMessage(t('share.busy', { name: label }));
+        return true;
+      }
+      return false;
+    };
+    if (blocked()) return;
     if (!confirmed) {
       const deleteLabel = t('common.delete');
-      const ok = await vscode.window.showWarningMessage(t('claude.removeConfirm', { label: labelOf(account) }), { modal: true }, deleteLabel);
-      if (ok !== deleteLabel) return;
+      const ok = await vscode.window.showWarningMessage(t('claude.removeConfirm', { label }), { modal: true }, deleteLabel);
+      if (ok !== deleteLabel || blocked()) return;
     }
 
-    // Capture the display name before its alias is cleared, so the prompt below still shows it
-    const label = labelOf(account);
     const shared = isSharedClaudeAccount(account.dir);
     await store.remove(account.name);
     await labels.remove(account.name);
@@ -265,7 +286,7 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
       { modal: true, detail },
       deleteDirLabel,
     );
-    if (delDir !== deleteDirLabel) return;
+    if (delDir !== deleteDirLabel || blocked()) return;
     try {
       await deleteAccountDir(account.dir);
       // The directory is gone; stop ignoring it so a recreated directory is auto-discovered again
@@ -277,6 +298,11 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
 
   function openTerminal(account: Account): void {
     const isDefault = account.name === DEFAULT_NAME;
+    // Linux types the folder into the shell; a control character (a newline) would end the command line early
+    if (!isDefault && !isWindows() && hasControlChars(account.dir)) {
+      void vscode.window.showErrorMessage(t('terminal.badDir', { dir: JSON.stringify(account.dir) }));
+      return;
+    }
     const terminal = vscode.window.createTerminal({
       name: `Claude (${labelOf(account)})`,
       shellPath: accountTerminalShell(),
@@ -313,9 +339,17 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
         if (a?.kind === 'named') await removeAccount(a, true);
         return;
       }
-      case 'add':
-        panel.post({ type: 'addResult', mode: MODE, error: await addAccount(msg.name.trim(), msg.shared !== false) });
+      case 'add': {
+        // Any failure still answers, so the panel never keeps waiting for the result
+        let error: string | undefined;
+        try {
+          error = await addAccount(msg.name.trim(), msg.shared !== false);
+        } catch (err) {
+          error = errText(err);
+        }
+        panel.post({ type: 'addResult', mode: MODE, error });
         return;
+      }
       case 'share': {
         const a = panel.resolve(MODE, msg.dir);
         if (a?.kind === 'named') await shareAccount(a);
@@ -326,9 +360,16 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
         if (a?.kind === 'named') await unshareAccount(a);
         return;
       }
-      case 'rename':
-        panel.post({ type: 'renameResult', mode: MODE, dir: msg.dir, error: await rename(msg.dir, msg.label) });
+      case 'rename': {
+        let error: string | undefined;
+        try {
+          error = await rename(msg.dir, msg.label);
+        } catch (err) {
+          error = errText(err);
+        }
+        panel.post({ type: 'renameResult', mode: MODE, dir: msg.dir, error });
         return;
+      }
       case 'reload':
         await reloadWindow();
         return;
@@ -341,13 +382,19 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
     }
   });
 
-  // Command Palette entries
-  const allWithExternal = (): Account[] =>
-    store.findByDir(currentDir()) ? store.all() : [...store.all(), { name: EXTERNAL_NAME, dir: currentDir() }];
+  // Command Palette entries. The current row is matched like the panel does (findSameDir), so another spelling of the
+  // current directory neither adds an external entry nor offers a switch to the current account
+  const currentIndex = (all: Account[]): number => findSameDir(all.map((a) => a.dir), currentDir());
+  const allWithExternal = (): Account[] => {
+    const all = store.all();
+    return currentIndex(all) >= 0 ? all : [...all, { name: EXTERNAL_NAME, dir: currentDir() }];
+  };
 
   return [
     vscode.commands.registerCommand('planswap.switchAccount', async () => {
-      const a = await pickAccount(store.all().filter((x) => !isCurrent(x)), t('claude.pick.switch'));
+      const all = store.all();
+      const cur = currentIndex(all);
+      const a = await pickAccount(all.filter((_, i) => i !== cur), t('claude.pick.switch'));
       if (a) await switchTo(a);
     }),
     vscode.commands.registerCommand('planswap.addAccount', () => panel.focusAdd(MODE)),
@@ -369,10 +416,13 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
       if (!account) return;
       terminals.delete(terminal);
       refreshUi();
-      // Same sign-in state as the panel rows; never for the default or external-directory row
+      // Same sign-in state as the panel rows; never for the default or external-directory row, nor for an account
+      // removed (or whose folder was deleted) while its terminal was open
       if (
         account.name !== DEFAULT_NAME &&
         account.name !== EXTERNAL_NAME &&
+        store.find(account.name) &&
+        fs.existsSync(account.dir) &&
         !readAccountInfo(account.dir, isExplicitConfigDir(account.dir)).loggedIn
       ) {
         void vscode.window.showWarningMessage(
@@ -402,4 +452,9 @@ export function validateName(name: string, store: AccountStore, labels: LabelSto
 // Wrap in single quotes; inner ' becomes '\''
 export function shQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
+/** Whether a path holds a control character, which must never be typed into a terminal (a newline runs the line). */
+export function hasControlChars(s: string): boolean {
+  return /[\x00-\x1f\x7f]/.test(s);
 }

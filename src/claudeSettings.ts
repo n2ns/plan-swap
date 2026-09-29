@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { defaultDir, samePath } from './paths';
+import { defaultDir, samePath, sameRealPath } from './paths';
 import { isWindows } from './platform';
 
 const SECTION = 'claudeCode';
@@ -61,10 +61,11 @@ export function currentDir(): string {
   return getConfiguredConfigDir() ?? defaultDir();
 }
 
-/** Whether the setting sets CLAUDE_CONFIG_DIR (non-empty) to dir; then Claude Code reads <dir>/.claude.json even for ~/.claude */
+/** Whether the setting sets CLAUDE_CONFIG_DIR (non-empty) to dir; then Claude Code reads <dir>/.claude.json even for ~/.claude.
+ *  Another spelling of the configured folder (8.3 name, '\\?\' prefix, a link to it) counts as the same folder */
 export function isExplicitConfigDir(dir: string): boolean {
   const configured = getConfiguredConfigDir();
-  return configured !== undefined && samePath(configured, dir);
+  return configured !== undefined && (samePath(configured, dir) || sameRealPath(configured, dir));
 }
 
 export async function setConfigDir(dir: string | undefined): Promise<void> {

@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { NAME_RE, caseVariantOf, findSameDir, samePath, sameRealPath } from '../paths';
 import { lstatOrUndefined } from '../claudeShare';
-import { shQuote } from '../commands';
+import { hasControlChars, shQuote } from '../commands';
 import { accountTerminalShell } from '../terminalShell';
 import { type AccountsPanel, type PanelSource, tildify, viewInfo } from '../accountsPanel';
 import { labelFor, sameName, type LabelStore, EXTERNAL_NAME } from '../labels';
@@ -41,10 +41,17 @@ import { isWindows } from '../platform';
 import { askCopyFallback } from '../linkPolicy';
 import { type ServerKind, canAutoRestart, detectServerKind, executeRestart, planRestart } from './codexServer';
 import type { CodexAccountStore } from './codexStore';
-import { runTool, type ToolDeps } from '../tools';
+import { runTool, type TerminalCheck, type ToolDeps } from '../tools';
 import { t } from '../i18n';
 
-export interface CodexDeps { store: CodexAccountStore; panel: AccountsPanel; labels: LabelStore; tools: ToolDeps }
+export interface CodexDeps {
+  store: CodexAccountStore;
+  panel: AccountsPanel;
+  labels: LabelStore;
+  tools: ToolDeps;
+  // Receives this module's "account terminal open" check, so the toolbar's Re-link can treat such an account as busy
+  provideTerminalCheck?: (check: TerminalCheck) => void;
+}
 
 const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
@@ -195,7 +202,8 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore): 
     pendingDir: () => {
       const selected = readSelectedDir() ?? codexDefaultDir();
       if (findSameDir([selected], effectiveDir()) === 0) return undefined;
-      const account = store.findByDir(selected);
+      const all = store.all();
+      const account = all[findSameDir(all.map((a) => a.dir), selected)];
       return account ? labelFor(account.name, labels) : selected;
     },
     // Same directories as accounts() (registered ones plus the external effective dir) without decoding any auth.json
@@ -225,8 +233,11 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
   const selectedAlias = (a: CodexAccount): boolean => isSelected(a) || sameRealPath(a.dir, readSelectedDir() ?? codexDefaultDir());
   // Windows cannot attribute a running codex.exe to an account (see codexAccountBusy), so an open terminal of the
   // account also counts; on Linux the /proc check covers terminals
-  const busy = (a: CodexAccount): boolean =>
-    codexAccountBusy(a.dir) || (isWindows() && [...terminals.values()].some((x) => x.name === a.name));
+  const terminalOpen: TerminalCheck = (dir) => isWindows() && [...terminals.values()].some((x) => samePath(x.dir, dir));
+  deps.provideTerminalCheck?.(terminalOpen);
+  const busy = (a: CodexAccount): boolean => codexAccountBusy(a.dir) || terminalOpen(a.dir);
+  // Passed to the linking steps, which OR it with their own process check
+  const linkBusy = (a: CodexAccount): (() => boolean) => () => terminalOpen(a.dir);
   // A switch is in progress (e.g. its modal is open); further requests such as a double click are ignored
   let switching = false;
 
@@ -267,11 +278,14 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     if (isWindows()) {
       const okWin = await vscode.window.showWarningMessage(t('codex.win.enableConfirm'), { modal: true, detail: t('codex.win.enableDetail') }, writeLabel);
       if (okWin !== writeLabel) return;
+      // Re-enabling over an existing state file keeps it: a failed self-check only rolls back what this run created
+      let existed = true;
       try {
+        existed = fs.existsSync(STATE_FILE());
         enableWindows();
         const result = selfCheck();
         if (!result.ok) {
-          removeWindowsState();
+          if (!existed) removeWindowsState();
           void vscode.window.showErrorMessage(t('codex.win.selfCheckFailed', { detail: result.detail }));
         }
       } catch (err) {
@@ -403,7 +417,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     // A shared account is re-linked first; a problem only warns, the switch still happens
     if (account.name !== CODEX_DEFAULT_NAME && isSharedCodexAccount(account.dir)) {
       try {
-        const notes = describeShareReport(ensureCodexLinks(account.dir));
+        const notes = describeShareReport(ensureCodexLinks(account.dir, { busy: linkBusy(account) }));
         if (notes) void vscode.window.showWarningMessage(t('share.refreshWarning', { label: labelOf(account), notes }));
       } catch (err) {
         void vscode.window.showWarningMessage(t('share.refreshWarning', { label: labelOf(account), notes: errText(err) }));
@@ -447,7 +461,8 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     // Linking or copying failures only warn and do not block
     try {
       if (shared) {
-        const notes = describeShareReport(ensureCodexLinks(account.dir, linkOptions));
+        // The folder may already exist (kept from an earlier removal, its terminal possibly still open)
+        const notes = describeShareReport(ensureCodexLinks(account.dir, { ...linkOptions, busy: linkBusy(account) }));
         if (notes) void vscode.window.showWarningMessage(t('share.addNotes', { name, notes }));
       } else {
         const result = copyCodexIndependent(account.dir);
@@ -481,13 +496,18 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     const ok = t('share.confirmButton');
     const picked = await vscode.window.showWarningMessage(t('share.confirmCodex', { label: labelOf(account), dir: account.dir }), { modal: true }, ok);
     if (picked !== ok) return;
+    // Re-checked after the modal: another window may have selected the account meanwhile
+    if (effectiveAlias(account) || selectedAlias(account)) {
+      void vscode.window.showWarningMessage(t('share.current', { label: labelOf(account) }));
+      return;
+    }
     if (busy(account)) {
       void vscode.window.showWarningMessage(t('share.busyCodex', { name: labelOf(account) }));
       return;
     }
     const linkOptions = await askCopyFallback(account.dir, 'Codex');
     try {
-      const report = migrateCodexToShared(account.dir, account.name, '/proc', linkOptions);
+      const report = migrateCodexToShared(account.dir, account.name, '/proc', { ...linkOptions, busy: linkBusy(account) });
       void vscode.window.showInformationMessage(t('share.done', { label: labelOf(account), summary: describeShareReport(report) || t('share.nothingElse') }));
     } catch (err) {
       void vscode.window.showErrorMessage(t('share.failed', { label: labelOf(account), error: errText(err) }));
@@ -505,6 +525,10 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     const ok = t('unshare.confirmButton');
     const picked = await vscode.window.showWarningMessage(t('unshare.confirmCodex', { label: labelOf(account), dir: account.dir }), { modal: true }, ok);
     if (picked !== ok) return;
+    if (effectiveAlias(account) || selectedAlias(account)) {
+      void vscode.window.showWarningMessage(t('unshare.current', { label: labelOf(account) }));
+      return;
+    }
     if (busy(account)) {
       void vscode.window.showWarningMessage(t('share.busyCodex', { name: labelOf(account) }));
       return;
@@ -523,27 +547,32 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
   // confirmed: the panel already did an inline confirmation; Command Palette entries need a modal confirmation
   async function removeAccount(account: CodexAccount, confirmed: boolean): Promise<void> {
     if (account.name === CODEX_DEFAULT_NAME || !store.find(account.name)) return;
-    // Re-checked after every modal: another window may have selected the account meanwhile
-    const inUse = (): boolean => {
+    // Capture the alias before labels.remove clears it, so the prompts below still show it
+    const label = labelOf(account);
+    // Re-checked after every modal: another window may have selected the account, or a Codex process (daemon or,
+    // on Windows, the account's terminal) started meanwhile
+    const blocked = (): boolean => {
       if (effectiveAlias(account)) {
-        void vscode.window.showWarningMessage(t('codex.removeEffective', { label: labelOf(account) }));
+        void vscode.window.showWarningMessage(t('codex.removeEffective', { label }));
         return true;
       }
       if (selectedAlias(account)) {
-        void vscode.window.showWarningMessage(t('codex.removeSelected', { label: labelOf(account) }));
+        void vscode.window.showWarningMessage(t('codex.removeSelected', { label }));
+        return true;
+      }
+      if (busy(account)) {
+        void vscode.window.showWarningMessage(t('share.busyCodex', { name: label }));
         return true;
       }
       return false;
     };
-    if (inUse()) return;
+    if (blocked()) return;
     if (!confirmed) {
       const deleteLabel = t('common.delete');
-      const ok = await vscode.window.showWarningMessage(t('codex.removeConfirm', { label: labelOf(account) }), { modal: true }, deleteLabel);
-      if (ok !== deleteLabel || inUse()) return;
+      const ok = await vscode.window.showWarningMessage(t('codex.removeConfirm', { label }), { modal: true }, deleteLabel);
+      if (ok !== deleteLabel || blocked()) return;
     }
 
-    // Capture the alias before labels.remove clears it
-    const label = labelOf(account);
     const shared = isSharedCodexAccount(account.dir);
     await store.remove(account.name);
     await labels.remove(account.name);
@@ -556,7 +585,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       { modal: true, detail },
       deleteDirLabel,
     );
-    if (delDir !== deleteDirLabel || inUse()) return;
+    if (delDir !== deleteDirLabel || blocked()) return;
     try {
       await deleteCodexDir(account.dir);
       await store.unignore(account.dir);
@@ -567,6 +596,12 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
 
   function openTerminal(account: CodexAccount, login: boolean): void {
     const isDefault = account.name === CODEX_DEFAULT_NAME;
+    // Linux types the folder into the shell (the env prefix is needed: the rc block re-exports CODEX_HOME); a control
+    // character (a newline) would end the command line early
+    if (!isDefault && !isWindows() && hasControlChars(account.dir)) {
+      void vscode.window.showErrorMessage(t('terminal.badDir', { dir: JSON.stringify(account.dir) }));
+      return;
+    }
     // Windows shells have no `env` command: the terminal environment carries the variable instead (null removes it)
     const terminal = vscode.window.createTerminal({
       name: `Codex (${labelOf(account)})`,
@@ -604,9 +639,17 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
         if (a?.kind === 'named') await removeAccount(a, true);
         return;
       }
-      case 'add':
-        panel.post({ type: 'addResult', mode: MODE, error: await addAccount(msg.name.trim(), msg.shared !== false) });
+      case 'add': {
+        // Any failure still answers, so the panel never keeps waiting for the result
+        let error: string | undefined;
+        try {
+          error = await addAccount(msg.name.trim(), msg.shared !== false);
+        } catch (err) {
+          error = errText(err);
+        }
+        panel.post({ type: 'addResult', mode: MODE, error });
         return;
+      }
       case 'share': {
         const a = panel.resolve(MODE, msg.dir);
         if (a?.kind === 'named') await shareAccount(a);
@@ -617,9 +660,16 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
         if (a?.kind === 'named') await unshareAccount(a);
         return;
       }
-      case 'rename':
-        panel.post({ type: 'renameResult', mode: MODE, dir: msg.dir, error: await rename(msg.dir, msg.label) });
+      case 'rename': {
+        let error: string | undefined;
+        try {
+          error = await rename(msg.dir, msg.label);
+        } catch (err) {
+          error = errText(err);
+        }
+        panel.post({ type: 'renameResult', mode: MODE, dir: msg.dir, error });
         return;
+      }
       case 'reload':
       case 'dismissBanner':
         return;
@@ -629,15 +679,22 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     }
   });
 
-  // Command Palette entries
-  const allWithExternal = (): CodexAccount[] =>
-    store.findByDir(effectiveDir()) ? store.all() : [...store.all(), { name: EXTERNAL_NAME, dir: effectiveDir() }];
+  // Command Palette entries. Rows are matched like the panel does (findSameDir), so another spelling of the effective
+  // directory neither adds an external entry nor offers a switch to the account already effective and selected
+  const indexOf = (all: CodexAccount[], dir: string): number => findSameDir(all.map((a) => a.dir), dir);
+  const allWithExternal = (): CodexAccount[] => {
+    const all = store.all();
+    return indexOf(all, effectiveDir()) >= 0 ? all : [...all, { name: EXTERNAL_NAME, dir: effectiveDir() }];
+  };
 
   return [
     vscode.commands.registerCommand('planswap.codex.enable', enable),
     vscode.commands.registerCommand('planswap.codex.disable', disable),
     vscode.commands.registerCommand('planswap.codex.switchAccount', async () => {
-      const a = await pickAccount(store.all().filter((x) => !(isEffective(x) && isSelected(x))), t('codex.pick.switch'));
+      const all = store.all();
+      const eff = indexOf(all, effectiveDir());
+      const sel = indexOf(all, readSelectedDir() ?? codexDefaultDir());
+      const a = await pickAccount(all.filter((_, i) => !(i === eff && i === sel)), t('codex.pick.switch'));
       if (a) await switchTo(a);
     }),
     vscode.commands.registerCommand('planswap.codex.addAccount', () => panel.focusAdd(MODE)),

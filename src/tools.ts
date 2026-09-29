@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { execFile } from 'node:child_process';
 import { currentDir, isExplicitConfigDir } from './claudeSettings';
 import { effectiveDir } from './codex/codexState';
-import { claudeJsonPath, defaultDir } from './paths';
+import { claudeJsonPath, defaultDir, syncMcpServers } from './paths';
 import { ensureClaudeLinks, isSharedClaudeAccount, mirrorClaudeJson, type LinkOptions } from './claudeShare';
 import { askCopyFallback } from './linkPolicy';
 import { describeShareReport, type ShareReportLike } from './shareReport';
@@ -31,6 +31,20 @@ export interface ToolDeps {
   codexShareOps?: ShareOps;
   // Display name (labelFor) of a registered account dir, for user-visible text
   labelOf?: (mode: PanelMode, dir: string) => string;
+  // Extra busy check passed to the linking steps (Windows: PlanSwap has a terminal of the account open)
+  accountBusy?: (mode: PanelMode, dir: string) => boolean;
+}
+
+/** Whether PlanSwap has an account terminal open for dir (only meaningful on Windows; false elsewhere). */
+export type TerminalCheck = (dir: string) => boolean;
+
+/**
+ * Mirrors the default account's info file into a shared account. An account that is not shared (e.g. an existing
+ * folder that could not be linked) only gets the default MCP servers added, so its own servers are never replaced.
+ */
+export function mirrorClaudeJsonInto(fromJson: string, dir: string): void {
+  if (isSharedClaudeAccount(dir)) mirrorClaudeJson(fromJson, dir);
+  else syncMcpServers(fromJson, dir);
 }
 
 const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
@@ -89,7 +103,7 @@ const claudeShareOps: ShareOps = {
   refresh(dir, options) {
     const report = ensureClaudeLinks(dir, '/proc', options);
     const def = defaultDir();
-    mirrorClaudeJson(claudeJsonPath(def, isExplicitConfigDir(def)), dir);
+    mirrorClaudeJsonInto(claudeJsonPath(def, isExplicitConfigDir(def)), dir);
     return report;
   },
 };
@@ -119,7 +133,8 @@ async function syncShared(mode: PanelMode, deps: ToolDeps): Promise<void> {
   const issues: string[] = [];
   for (const dir of shared) {
     try {
-      const notes = describeShareReport(ops.refresh(dir, options));
+      const accountBusy = deps.accountBusy;
+      const notes = describeShareReport(ops.refresh(dir, accountBusy ? { ...options, busy: () => accountBusy(mode, dir) } : options));
       if (notes) issues.push(t('sync.item', { name: nameOf(dir), notes }));
     } catch (err) {
       issues.push(t('sync.item', { name: nameOf(dir), notes: errText(err) }));
