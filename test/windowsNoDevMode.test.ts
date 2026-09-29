@@ -156,13 +156,14 @@ describe('Windows without Developer Mode', () => {
   test('the modal is a modal warning with copy and skip buttons; dismissing means skip', async () => {
     emulate(false);
     const seen: unknown[][] = [];
-    const answers: Array<string | undefined> = ['Copy files', "Don't copy", undefined];
+    const answers: Array<string | undefined> = ['Copy files', 'Skip', undefined];
     mock.method(window, 'showWarningMessage', async (...args: unknown[]) => (seen.push(args), answers.shift()));
     assert.deepEqual(await askCopyFallback(home, 'Claude'), { copyConfig: true });
     assert.deepEqual(await askCopyFallback(home, 'Claude'), { copyConfig: false });
     assert.deepEqual(await askCopyFallback(home, 'Codex'), { copyConfig: false });
-    assert.deepEqual(seen[0].slice(1), [{ modal: true }, 'Copy files', "Don't copy"]);
-    assert.match(String(seen[0][0]), /Developer Mode/);
+    assert.deepEqual(seen[0].slice(1), [{ modal: true }, 'Copy files', 'Skip']);
+    assert.match(String(seen[0][0]), /Switching accounts still works/);
+    assert.match(String(seen[0][0]), /settings\.json, CLAUDE\.md/);
   });
 
   test('no question when file links work', async () => {
