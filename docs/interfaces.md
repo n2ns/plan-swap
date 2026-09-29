@@ -85,6 +85,16 @@ export function sameIdentityGroups<T extends { identity?: string }>(entries: rea
 export function identityGroupsKey(groups: ReadonlyArray<ReadonlyArray<{ dir: string }>>): string; // order-insensitive key built from the sorted directories only (never identity values)
 ```
 
+## src/environmentWarnings.ts (no vscode import)
+
+```ts
+export const CLAUDE_OVERRIDE_VARS: readonly string[]; // Claude Code credential sources that outrank /login (authentication docs, precedence)
+export function claudeCredentialOverrides(env: NodeJS.ProcessEnv, settingNames: readonly string[], platform?: string): string[]; // names set non-empty in env or passed by the setting (claudeSettings.settingEnvNames); both federation variables → ANTHROPIC_FEDERATION_RULE_ID; case-insensitive on win32
+export function oneDriveHome(home: string, env: NodeJS.ProcessEnv, platform?: string): string | undefined; // win32: the OneDrive / OneDriveCommercial / OneDriveConsumer root containing home (Windows path rules), else undefined
+```
+
+`extension.ts` shows `warn.claudeEnvOverride` / `warn.oneDriveHome` at activation with a `common.dontShowAgain` button; dismissed ids live in `state.json` under `warnings.dismissed` (`claudeEnv:<names>`, `oneDriveHome`).
+
 ## src/identityWarnings.ts (imports vscode)
 
 ```ts
@@ -150,6 +160,7 @@ export function currentDir(): string;                         // CLAUDE_CONFIG_D
 export function isExplicitConfigDir(dir: string): boolean;   // true when the setting has a non-empty CLAUDE_CONFIG_DIR and it is samePath(dir); passed as `explicit` to claudeJsonPath / readAccountInfo by every caller that reads or watches account info (panel rows and watchers, status bar, QuickPick, terminal close)
 export async function setConfigDir(dir: string | undefined): Promise<void>; // builds a new array (never mutates the get() result), keeps other entries, removes all CLAUDE_CONFIG_DIR entries; appends {name, value: path.resolve(dir)} when dir is defined and not samePath(defaultDir()); object form converted to an array; await update(..., ConfigurationTarget.Global). Errors are rethrown as is
 export function affectsSetting(e: vscode.ConfigurationChangeEvent): boolean; // e.affectsConfiguration('claudeCode.environmentVariables')
+export function settingEnvNames(): string[]; // names of the setting's entries with a non-empty value (for the environment warnings)
 ```
 
 On win32 the variable name is matched case-insensitively (a hand-written `claude_config_dir` entry sets the directory there too); with several spellings, the one sorting first (upper case) wins, as Node picks it for the child environment, and `setConfigDir` removes every spelling.

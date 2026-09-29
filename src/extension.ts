@@ -1,13 +1,15 @@
 import * as vscode from 'vscode';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { AccountStore } from './accounts';
+import { claudeCredentialOverrides, oneDriveHome } from './environmentWarnings';
 import { AccountsPanel, VIEW_ID, claudePanelSource, type PanelSource } from './accountsPanel';
 import { LabelStore, labelFor } from './labels';
 import { FileMemento } from './fileState';
 import { ensureCodexLinks, isSharedCodexAccount } from './codex/codexShare';
 import { REFRESH_USAGE_COMMAND, StatusBar } from './statusBar';
 import { registerCommands } from './commands';
-import { affectsSetting } from './claudeSettings';
+import { affectsSetting, settingEnvNames } from './claudeSettings';
 import { CodexAccountStore } from './codex/codexStore';
 import { codexPanelSource, codexRunsInWsl, registerCodexCommands, restartServerInteractive } from './codex/codexCommands';
 import { registerToolCommands, runTool, type ToolDeps } from './tools';
@@ -99,6 +101,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   }
   const identityWarnings = new IdentityWarnings(identitySources);
   identityWarnings.check();
+  showEnvironmentWarnings(state);
 
   // Toolbar dependencies: no restart entry when Codex is not initialized
   const tools: ToolDeps = {
@@ -165,6 +168,25 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     }),
   );
   console.info(`[planswap] activation complete: ${(performance.now() - startedAt).toFixed(1)}ms`);
+}
+
+// state.json key: ids of environment warnings the user chose never to see again
+const DISMISSED_KEY = 'warnings.dismissed';
+
+// Conditions outside PlanSwap that defeat account separation or endanger the account folders, shown once per window
+// until dismissed for good. An id carries the variable names, so a newly set variable is pointed out again
+function showEnvironmentWarnings(state: FileMemento): void {
+  const dismissed = (): string[] => state.get<string[]>(DISMISSED_KEY, []);
+  const warn = (id: string, message: string): void => {
+    if (dismissed().includes(id)) return;
+    const never = t('common.dontShowAgain');
+    void vscode.window.showWarningMessage(message, never).then(async (picked) => {
+      if (picked === never) await state.update(DISMISSED_KEY, [...new Set([...dismissed(), id])]);
+    });
+  };
+  const overrides = claudeCredentialOverrides(process.env, settingEnvNames());
+  if (overrides.length) warn(`claudeEnv:${overrides.join(',')}`, t('warn.claudeEnvOverride', { names: overrides.join(', ') }));
+  if (oneDriveHome(os.homedir(), process.env)) warn('oneDriveHome', t('warn.oneDriveHome', { home: os.homedir() }));
 }
 
 export function deactivate(): void {}

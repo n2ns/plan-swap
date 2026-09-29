@@ -42,6 +42,11 @@ function getConfiguredConfigDir(): string | undefined {
   return name === undefined ? undefined : path.resolve(byName.get(name)!);
 }
 
+/** Names of the variables the setting passes to Claude Code with a non-empty value */
+export function settingEnvNames(): string[] {
+  return readEntries().filter((e) => e.value !== undefined && e.value !== null && String(e.value) !== '').map((e) => e.name);
+}
+
 export function currentDir(): string {
   return getConfiguredConfigDir() ?? defaultDir();
 }

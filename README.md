@@ -120,6 +120,8 @@ In extension settings, set `planswap.language` to `auto` (follow your editor), `
 - **Continuing another account's session can fail**, particularly between Codex accounts in different ChatGPT organizations. Avoid opening the same session from two accounts at once.
 - **Some shared settings need a refresh.** After changing the default setup, use **Re-link**. If PlanSwap reports conflicting files, resolve them manually. Deleting Claude prompt history from a linked account does not necessarily remove it from the shared history.
 - **MCP connections may need sign-in again for each account.** Claude MCP settings copied from the default account can include API keys stored in those settings; choose account setups accordingly.
+- **Some sign-ins are not per account.** An API key, auth token or long-lived OAuth token in the environment (`ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`), a named Anthropic profile (`ANTHROPIC_PROFILE`) or a cloud provider switch outranks every account's sign-in, and PlanSwap warns when it sees one. A Claude Console sign-in *without* an API key is stored outside the account folders (`~/.config/anthropic`, on Windows `%APPDATA%\Anthropic`) and signs out every claude.ai login on the machine, so it cannot be kept per account.
+- **OneDrive (Windows).** If your user folder is synced by OneDrive, PlanSwap warns: OneDrive sync has corrupted Claude Code's `.claude.json`, and all account folders live there.
 
 ## Native Windows
 
