@@ -6,7 +6,7 @@ import { t } from '../i18n';
 import { samePath, sameRealPath } from '../paths';
 import { comparablePath, fileLinksAvailable, imageRunning, isWindows } from '../platform';
 import {
-  type MergeCtx, type MigrateReport, type ShareReport, copyTree, defaultFolder, emptyReport, freeName, linkEntry,
+  type MergeCtx, type MigrateReport, type ShareReport, copyTree, defaultFolder, emptyReport, freeName, linkEntry, recordLink,
   linksTo, lstatOrUndefined, mergeEntry, mergeLines, moveEntry, realOrResolved, record, sameContent, unlinkChildLinks, unlinkIfLinksTo,
 } from '../claudeShare';
 import { blockedConfigReason, codexDaemonAlive, codexDefaultDir, copyCodexSeed } from './codexPaths';
@@ -152,7 +152,7 @@ export function ensureCodexLinks(dir: string): ShareReport {
     if (shared && JSONL_FILES.includes(name) && lstatOrUndefined(link)?.isFile()) {
       mergeLines(link, target);
     }
-    record(report, name, linkEntry(link, target));
+    recordLink(report, name, linkEntry(link, target), link, target);
   }
 
   for (const { dir: rel, excludes } of CODEX_CHILD_SHARED_DIRS) {
@@ -307,6 +307,7 @@ export function migrateCodexToShared(dir: string, accountName: string, procRoot 
   report.created.push(...links.created);
   report.conflicts.push(...links.conflicts);
   report.refused.push(...links.refused);
+  if (links.copied) report.copied = [...links.copied];
   if (links.noPrivilege) report.noPrivilege = [...new Set([...(report.noPrivilege ?? []), ...links.noPrivilege])];
   return report;
 }

@@ -42,6 +42,7 @@ export interface ShareReport {
   created: string[];    // entries created empty in the default dir
   conflicts: string[];  // entries the account has as a real file/dir or a link elsewhere; left untouched
   refused: string[];    // entries refused for safety (e.g. 'settings.json' when the default has identity keys)
+  copied?: string[];    // config files copied once instead of linked (Windows without file-link privilege); they no longer follow the default
   noPrivilege?: string[]; // single-file entries that could not be linked because Windows refuses file symlinks (Developer Mode off); left independent
   busy?: string[];      // entries whose repair would move or unlink account files, skipped because the account is busy (Claude only)
 }
@@ -132,7 +133,29 @@ export function linkEntry(link: string, target: string): 'linked' | 'ok' | 'conf
     }
     return 'linked';
   }
-  return linksTo(link, target) ? 'ok' : 'conflict';
+  if (linksTo(link, target)) return 'ok';
+  // Windows with file-link privilege now available: a copy identical to the default is upgraded to a real link
+  if (isWindows() && st.isFile() && fs.existsSync(target) && sameContent(link, target, st, fs.statSync(target)) && fileLinksAvailable(path.dirname(link))) {
+    fs.unlinkSync(link);
+    createLink(target, link);
+    return 'linked';
+  }
+  return 'conflict';
+}
+
+// Small configuration files that may be copied once when a link is refused. Never history, databases or locks:
+// a copy of those would silently diverge or corrupt
+export const COPYABLE_ON_NO_LINK: readonly string[] = ['settings.json', 'CLAUDE.md', 'config.toml', 'AGENTS.md', 'hooks.json'];
+
+/** record() plus the Windows fallback: a refused link of a copyable file becomes a one-time copy of the default file. */
+export function recordLink(report: ShareReport, name: string, result: ReturnType<typeof linkEntry>, link: string, target: string): void {
+  if (result === 'noprivilege' && COPYABLE_ON_NO_LINK.includes(name) && fs.existsSync(target) && fs.statSync(target).isFile() && !lstatOrUndefined(link)) {
+    fs.copyFileSync(target, link, fs.constants.COPYFILE_EXCL);
+    fs.chmodSync(link, 0o600);
+    (report.copied ??= []).push(name);
+    return;
+  }
+  record(report, name, result);
 }
 
 export function record(report: ShareReport, name: string, result: 'linked' | 'ok' | 'conflict' | 'noprivilege'): void {
@@ -195,7 +218,7 @@ export function ensureClaudeLinks(dir: string, procRoot = '/proc'): ShareReport 
       }
       mergeLines(link, target);
     }
-    record(report, name, linkEntry(link, target));
+    recordLink(report, name, linkEntry(link, target), link, target);
   }
 
   for (const name of CLAUDE_CHILD_SHARED_DIRS) {
@@ -550,6 +573,7 @@ export function migrateClaudeToShared(dir: string, accountName: string, procRoot
   report.conflicts.push(...links.conflicts);
   report.refused.push(...links.refused);
   if (links.busy) report.busy = [...links.busy];
+  if (links.copied) report.copied = [...links.copied];
   if (links.noPrivilege) report.noPrivilege = [...new Set([...(report.noPrivilege ?? []), ...links.noPrivilege])];
   return report;
 }

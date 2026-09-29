@@ -67,11 +67,44 @@ describe('Windows without Developer Mode', () => {
     const r = ensureClaudeLinks(acc, FAKE_PROC);
     assert.ok(r.linked.includes('projects'));
     assert.equal(fs.lstatSync(path.join(acc, 'projects')).isSymbolicLink(), true);
-    assert.ok(r.noPrivilege?.includes('settings.json'));
+    // Config files are copied once; history is never copied
+    assert.ok(r.copied?.includes('settings.json'));
+    assert.ok(r.copied?.includes('CLAUDE.md'));
     assert.ok(r.noPrivilege?.includes('history.jsonl'));
-    assert.equal(fs.existsSync(path.join(acc, 'settings.json')), false);
+    assert.equal(fs.lstatSync(path.join(acc, 'settings.json')).isFile(), true);
+    assert.equal(fs.existsSync(path.join(acc, 'history.jsonl')), false);
     assert.equal(isSharedClaudeAccount(acc), true);
     assert.match(describeShareReport(r), /Developer Mode/);
+    assert.match(describeShareReport(r), /copied once/);
+  });
+
+  test('copies never overwrite an existing account file', () => {
+    emulate(false);
+    const acc = path.join(home, '.claude-work');
+    fs.mkdirSync(acc);
+    fs.writeFileSync(path.join(acc, 'CLAUDE.md'), 'mine\n');
+    fs.writeFileSync(path.join(home, '.claude', 'CLAUDE.md'), 'default\n');
+    const r = ensureClaudeLinks(acc, FAKE_PROC);
+    assert.equal(fs.readFileSync(path.join(acc, 'CLAUDE.md'), 'utf8'), 'mine\n');
+    assert.ok(r.conflicts.includes('CLAUDE.md'));
+  });
+
+  test('identical copies are upgraded to links once Developer Mode is on', () => {
+    emulate(false);
+    const acc = path.join(home, '.claude-work');
+    fs.mkdirSync(acc);
+    fs.writeFileSync(path.join(home, '.claude', 'CLAUDE.md'), 'rules\n');
+    ensureClaudeLinks(acc, FAKE_PROC);
+    assert.equal(fs.lstatSync(path.join(acc, 'CLAUDE.md')).isSymbolicLink(), false);
+    mock.restoreAll();
+    emulate(true);
+    const r = ensureClaudeLinks(acc, FAKE_PROC);
+    assert.ok(r.linked.includes('CLAUDE.md'));
+    assert.equal(fs.lstatSync(path.join(acc, 'CLAUDE.md')).isSymbolicLink(), true);
+    // A diverged copy is left alone
+    fs.rmSync(path.join(acc, 'settings.json'));
+    fs.writeFileSync(path.join(acc, 'settings.json'), '{"x":1}\n');
+    assert.ok(ensureClaudeLinks(acc, FAKE_PROC).conflicts.includes('settings.json'));
   });
 
   test('Claude conversion keeps the account files instead of moving them away', () => {
@@ -100,6 +133,11 @@ describe('Windows without Developer Mode', () => {
     assert.equal(fs.lstatSync(path.join(acc, 'sessions')).isSymbolicLink(), true);
     const again = ensureCodexLinks(acc);
     assert.ok(again.noPrivilege?.includes('history.jsonl'));
+    const fresh = path.join(home, '.codex-fresh');
+    fs.mkdirSync(fresh);
+    const r2 = ensureCodexLinks(fresh);
+    assert.ok(r2.copied?.includes('AGENTS.md'));
+    assert.ok(!r2.copied?.some((n) => n.endsWith('.sqlite') || n.endsWith('.jsonl')));
   });
 
   test('with Developer Mode files link normally', () => {
