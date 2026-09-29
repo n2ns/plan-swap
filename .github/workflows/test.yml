@@ -14,6 +14,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  ui:
+    name: Webview UI preview (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: xvfb-run -a npm run test:ui
+      - name: Upload UI preview results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-preview-results
+          path: .test-out/ui/
+          if-no-files-found: ignore
+
   integration:
     name: VS Code 1.107 smoke tests (Linux)
     runs-on: ubuntu-latest

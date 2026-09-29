@@ -10,6 +10,8 @@ Keep the browser full-screen and at 100% zoom. Adjust the sidebar or preview con
 
 During preview verification, every agent (the main agent and each subagent independently) opens exactly one browser tab for the task and reuses it with `navigate_page` (reload or change URL parameters). Do not share tabs between agents or call `new_page` repeatedly. Include this rule in any delegated frontend verification task. When finished, close the tab you opened and stop the preview static server by its PID. Never kill processes by name; only clean up processes started for the current task.
 
+For the repeatable fixture page and automated checks, see [Development: Repeatable Webview checks](development.md#repeatable-webview-checks). The runner saves screenshots and JSON assertions under `.test-out/ui/`; review those artifacts as well as the exit status.
+
 A static preview verifies layout, not the real editor integration or account switching. Report those checks separately. The real-account steps below are performed by the user; a preview does not authorize writing account data or restarting a WSL server.
 
 ## WSL setup and safety

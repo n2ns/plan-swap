@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PlanSwap synthetic Webview preview</title>
+  <link rel="stylesheet" href="/media/codicon.css" id="vscode-codicon-stylesheet">
+  <link rel="stylesheet" href="/media/panel-style.css">
+  <style>
+    /* Synthetic VS Code colors for a layout preview, not a theme coverage claim. */
+    :root {
+      --vscode-sideBar-background: #181b24; --vscode-editor-background: #181b24;
+      --vscode-foreground: #e3e8f1; --vscode-descriptionForeground: #a5afc1;
+      --vscode-focusBorder: #6a9dff; --vscode-button-background: #3766b1;
+      --vscode-button-foreground: #fff; --vscode-input-background: #252b39;
+      --vscode-input-foreground: #e3e8f1; --vscode-widget-border: #465064;
+      --vscode-widget-shadow: #10131a; --vscode-icon-foreground: #cbd5e6;
+      --vscode-errorForeground: #f48771; --vscode-editorWarning-foreground: #efbb74;
+      --vscode-testing-iconPassed: #73c991; --vscode-notificationsInfoIcon-foreground: #75beff;
+      --vscode-charts-blue: #75beff; --vscode-charts-green: #73c991;
+      --vscode-charts-purple: #b180d7; --vscode-charts-orange: #efaa6c;
+      --vscode-charts-yellow: #e2c06c; --vscode-charts-red: #ef7777;
+      --vscode-badge-background: #3d4961; --vscode-badge-foreground: #fff;
+      --vscode-toolbar-hoverBackground: #39445a; --vscode-toolbar-activeBackground: #4e5b73;
+      --vscode-inputValidation-errorBackground: #5b3038; --vscode-inputValidation-errorBorder: #f48771;
+      --vscode-settings-textInputBackground: #252b39; --vscode-settings-textInputForeground: #e3e8f1;
+      --vscode-settings-textInputBorder: #465064;
+      --vscode-font-family: system-ui, sans-serif; --vscode-editor-font-family: ui-monospace, monospace;
+      --vscode-font-size: 13px;
+    }
+    html { background: #11141c; }
+    body { width: 340px; max-width: 100%; background: var(--vscode-sideBar-background);
+      border-right: 1px solid var(--vscode-widget-border); }
+  </style>
+</head>
+<body id="sidebar">
+  <div id="app"><p role="status">Loading accounts…</p></div>
+  <script src="/fixture.js"></script>
+  <script src="/media/panel.js"></script>
+</body>
+</html>

@@ -215,6 +215,8 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p src/webview && tsc --noEmit -p test",
     "test": "node scripts/run-tests.mjs",
     "test:integration": "npm run build && node scripts/run-integration.mjs",
+    "test:ui": "npm run build && node scripts/run-ui-tests.mjs",
+    "preview": "npm run build && node scripts/preview/server.mjs",
     "build": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
     "vscode:prepublish": "npm run typecheck && npm run build",
@@ -226,6 +228,7 @@
     "@vscode/test-electron": "3.1.0",
     "@vscode/vsce": "4.0.0",
     "esbuild": "0.28.2",
+    "playwright": "1.63.0",
     "typescript": "7.0.2"
   },
   "dependencies": {

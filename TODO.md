@@ -41,6 +41,6 @@ is still missing. Remove an item once it is done or decided.
 ## Deferred features
 
 - **Command Palette entry for "Share with the default account".** The conversion is only available from the panel row.
-- **Repeatable UI preview harness.** Width checks (200 / 240 / 280 / 340 / 420 px, both languages) were done with ad-hoc
-  pages and a CDP driver in a scratch directory. A `scripts/preview` harness in the repo would make them repeatable. The
-  preview theme colors were hand-written dark values, so only layout was verified, not the real theme.
+- **Real-editor theme acceptance.** `npm run test:ui` now repeats four-language, five-width layout and DOM checks, but its
+  theme colors are synthetic. Verify actual light, dark and high-contrast theme injection in an installed editor;
+  automated preview success does not establish that coverage.
