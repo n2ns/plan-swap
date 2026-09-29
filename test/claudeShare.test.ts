@@ -9,7 +9,7 @@ import {
   makeClaudeIndependent, mergeEntry, migrateClaudeToShared, mirrorClaudeJson, type MigrateReport, windowsSessionsBusy,
 } from '../src/claudeShare';
 import { accountDir, deleteAccountDir } from '../src/paths';
-import { assertTempHome, makeTempHome, assertMode, LINUX_ONLY, read, snapshot, type TempHome } from './helpers';
+import { assertTempHome, makeTempHome, assertMode, LINUX_ONLY, SHARING, read, snapshot, type TempHome } from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -45,7 +45,7 @@ const exists = (p: string): boolean => {
   }
 };
 
-describe('ensureClaudeLinks', LINUX_ONLY, () => {
+describe('ensureClaudeLinks', SHARING, () => {
   test('creates absolute links and empty default entries with modes; idempotent', () => {
     const acc = accountDir('a');
     fs.mkdirSync(acc);
@@ -164,7 +164,7 @@ describe('ensureClaudeLinks', LINUX_ONLY, () => {
   });
 });
 
-describe('ensureClaudeLinks history repair', LINUX_ONLY, () => {
+describe('ensureClaudeLinks history repair', SHARING, () => {
   test('a real history.jsonl in a shared account (after `claude project purge`) is merged back and relinked', () => {
     write(path.join(def, 'history.jsonl'), '{"a":1}\n{"a":2}\n');
     const acc = accountDir('h');
@@ -229,7 +229,7 @@ describe('ensureClaudeLinks history repair', LINUX_ONLY, () => {
   });
 });
 
-describe('isSharedClaudeAccount', LINUX_ONLY, () => {
+describe('isSharedClaudeAccount', SHARING, () => {
   test('true only when projects links to the default projects', () => {
     const acc = accountDir('a');
     fs.mkdirSync(acc);
@@ -419,7 +419,7 @@ describe('mergeEntry', () => {
   });
 });
 
-describe('migrateClaudeToShared', LINUX_ONLY, () => {
+describe('migrateClaudeToShared', SHARING, () => {
   test('a dangling link in the default dir does not abort the migration; the account file is backed up', () => {
     fs.symlinkSync('/nowhere', path.join(def, 'CLAUDE.md'));
     const acc = accountDir('dangling');
@@ -553,7 +553,7 @@ describe('migrateClaudeToShared', LINUX_ONLY, () => {
   });
 });
 
-describe('copyClaudeIndependent', LINUX_ONLY, () => {
+describe('copyClaudeIndependent', SHARING, () => {
   test('copies config without overwriting; excludes synced buckets; strips settings', () => {
     write(path.join(def, 'settings.json'), JSON.stringify({ model: 'm', apiKeyHelper: 'x', env: { ANTHROPIC_API_KEY: 'k', A: '1' } }));
     write(path.join(def, 'CLAUDE.md'), 'rules');
@@ -587,7 +587,7 @@ describe('copyClaudeIndependent', LINUX_ONLY, () => {
   });
 });
 
-describe('copyTree', LINUX_ONLY, () => {
+describe('copyTree', SHARING, () => {
   test('copies links verbatim, keeps modes, skips fifos and existing entries; throws EEXIST on demand', () => {
     const src = path.join(home, 'tree-src');
     const dst = path.join(home, 'tree-dst');
@@ -607,7 +607,7 @@ describe('copyTree', LINUX_ONLY, () => {
     assert.throws(() => copyTree(src, dst, 'throw'), { code: 'EEXIST' });
   });
 
-  test('an unreadable folder throws an ordinary error instead of ending the process', () => {
+  test('an unreadable folder throws an ordinary error instead of ending the process', LINUX_ONLY, () => {
     if (process.getuid?.() === 0) return;   // root ignores directory permissions
     const src = path.join(home, 'tree-src');
     write(path.join(src, 'ok.txt'), 'ok');
@@ -623,7 +623,7 @@ describe('copyTree', LINUX_ONLY, () => {
   });
 });
 
-describe('makeClaudeIndependent', LINUX_ONLY, () => {
+describe('makeClaudeIndependent', SHARING, () => {
   const src = (): string => path.join(home, '.claude.json');
 
   test('removes the links, copies the config once, leaves history and the default dir alone', () => {

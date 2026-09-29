@@ -45,6 +45,12 @@ function fileSymlinksAllowed(): boolean {
 export const LINUX_ONLY = { skip: onWindows && 'Linux/WSL behavior' };
 /** Creates file symbolic links, which Windows refuses without Developer Mode or elevation. */
 export const FILE_SYMLINKS = { skip: !fileSymlinksAllowed() && 'file symbolic links need Windows Developer Mode' };
+/**
+ * Sharing logic (link, migrate, copy, unshare) on real links. Runs on Windows too when file symbolic links can be
+ * created (Developer Mode, an elevated shell, or the elevated GitHub Windows runner); directory fixtures become
+ * junctions or directory symlinks there. Linux-only details inside use LINUX_ONLY per test.
+ */
+export const SHARING = { skip: onWindows && !fileSymlinksAllowed() && 'sharing tests need file symbolic links (Windows Developer Mode)' };
 /** Creates entries whose names differ only in case, which a Windows file system folds together. */
 export const CASE_SENSITIVE_FS = { skip: onWindows && 'the Windows file system is case-insensitive' };
 

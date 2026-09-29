@@ -1,0 +1,47 @@
+name: Test
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # The Windows runner is elevated, so file symbolic links work there and the sharing tests run on real links
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Run unit tests
+        shell: bash
+        run: npm test 2>&1 | tee test-output.txt
+
+      # Failures as an annotation, so they can be read without downloading the log
+      - name: Report failing tests
+        if: failure()
+        shell: bash
+        run: |
+          [ -f test-output.txt ] || exit 0
+          msg=$(sed -n '/failing tests:/,$p' test-output.txt | head -c 60000 | tr -d '\r' | sed -e 's/%/%25/g' | awk 'BEGIN{ORS="%0A"}{print}')
+          echo "::error title=Failing tests (${{ matrix.os }})::${msg}"
+
+      - name: Build
+        run: npm run build

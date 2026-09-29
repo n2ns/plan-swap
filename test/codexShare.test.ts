@@ -8,7 +8,7 @@ import {
   isSharedCodexAccount, makeCodexIndependent, migrateCodexToShared,
 } from '../src/codex/codexShare';
 import { codexAccountDir, deleteCodexDir } from '../src/codex/codexPaths';
-import { assertTempHome, makeTempHome, assertMode, LINUX_ONLY, onWindows, read, snapshot, type TempHome } from './helpers';
+import { assertTempHome, makeTempHome, assertMode, LINUX_ONLY, onWindows, SHARING, read, snapshot, type TempHome } from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -50,7 +50,7 @@ const newAccount = (name: string): string => {
 };
 const LINK_ONLY = CODEX_SHARED_ENTRIES.filter((e) => e.kind === 'link-only').map((e) => e.name);
 
-describe('ensureCodexLinks', LINUX_ONLY, () => {
+describe('ensureCodexLinks', SHARING, () => {
   test('creates absolute links and empty default entries with modes; link-only targets are not created; idempotent', () => {
     const acc = newAccount('a');
     const r = ensureCodexLinks(acc);
@@ -267,7 +267,7 @@ describe('ensureCodexLinks', LINUX_ONLY, () => {
   });
 });
 
-describe('isSharedCodexAccount', LINUX_ONLY, () => {
+describe('isSharedCodexAccount', SHARING, () => {
   test('true only when sessions links to the default sessions', () => {
     const acc = newAccount('a');
     assert.equal(isSharedCodexAccount(acc), false);
@@ -341,7 +341,7 @@ describe('codexAccountBusy on Windows', { skip: !onWindows && 'Windows behavior'
   });
 });
 
-describe('migrateCodexToShared', LINUX_ONLY, () => {
+describe('migrateCodexToShared', SHARING, () => {
   test('a config.toml / AGENTS.md the default lacks is moved into the default instead of being backed up', () => {
     const acc = newAccount('solo');
     write(path.join(acc, 'config.toml'), 'model = "gpt"\n');
@@ -513,7 +513,7 @@ describe('migrateCodexToShared', LINUX_ONLY, () => {
   });
 });
 
-describe('copyCodexIndependent', LINUX_ONLY, () => {
+describe('copyCodexIndependent', SHARING, () => {
   test('copies config without overwriting, never links, never copies auth', () => {
     write(path.join(def, 'config.toml'), 'model = "m"\n');
     write(path.join(def, 'AGENTS.md'), 'rules');
@@ -565,7 +565,7 @@ describe('copyCodexIndependent', LINUX_ONLY, () => {
   });
 });
 
-describe('copyCodexIndependent skills children', LINUX_ONLY, () => {
+describe('copyCodexIndependent skills children', SHARING, () => {
   test('a linked skills child is copied from its real location; a dangling child link is skipped', () => {
     write(path.join(home, 'dotfiles', 'skill', 'SKILL.md'), 'real');
     fs.mkdirSync(path.join(def, 'skills'));
@@ -581,7 +581,7 @@ describe('copyCodexIndependent skills children', LINUX_ONLY, () => {
   });
 });
 
-describe('makeCodexIndependent', LINUX_ONLY, () => {
+describe('makeCodexIndependent', SHARING, () => {
   test('removes the links (dangling sqlite links too), copies the config once, leaves the default dir alone', () => {
     write(path.join(def, 'config.toml'), 'model = "m"\n');
     write(path.join(def, 'AGENTS.md'), 'rules');
@@ -670,7 +670,7 @@ describe('makeCodexIndependent', LINUX_ONLY, () => {
     assert.deepEqual(snapshot(def), before);
   });
 
-  test('a failed copy leaves the account shared: the sessions marker and the database links are still there', () => {
+  test('a failed copy leaves the account shared: the sessions marker and the database links are still there', LINUX_ONLY, () => {
     if (process.getuid?.() === 0) return;   // root ignores directory permissions
     write(path.join(def, 'config.toml'), 'model = "m"\n');
     write(path.join(def, 'AGENTS.md'), 'rules');
