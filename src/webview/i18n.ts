@@ -31,6 +31,7 @@ export const en = {
 
   'list.title': 'All accounts',
   'row.rename': 'Rename',
+  'row.renameAria': 'Rename {name}',
   'row.switch': 'Switch to this account',
   'row.login': 'Log in',
   'row.share': 'Link to the default account: its settings, rules, skills, history and sessions move into the default account and are linked from then on; the login stays separate',
@@ -130,6 +131,7 @@ export const zhCn: Record<MessageKey, string> = {
 
   'list.title': '全部账号',
   'row.rename': '重命名',
+  'row.renameAria': '重命名 {name}',
   'row.switch': '切换到此账号',
   'row.login': '登录',
   'row.share': '链接到默认账号：设置、规则、技能、会话历史和会话记录会并入默认账号，之后直接使用默认账号的；登录保持独立',
@@ -227,6 +229,7 @@ export const es: Record<MessageKey, string> = {
 
   'list.title': 'Todas las cuentas',
   'row.rename': 'Renombrar',
+  'row.renameAria': 'Renombrar {name}',
   'row.switch': 'Cambiar a esta cuenta',
   'row.login': 'Acceder',
   'row.share': 'Vincular a la cuenta predeterminada: los ajustes, reglas, Skills, historial y sesiones se integran en ella y se comparten desde entonces; el inicio de sesión sigue siendo independiente',
@@ -323,6 +326,7 @@ export const ja: Record<MessageKey, string> = {
 
   'list.title': 'すべてのアカウント',
   'row.rename': '名前を変更',
+  'row.renameAria': '{name} の名前を変更',
   'row.switch': 'このアカウントに切り替え',
   'row.login': 'ログイン',
   'row.share': 'デフォルトアカウントにリンク：設定・ルール・Skills・履歴・セッションをデフォルトアカウントに統合し、以後は共有します。ログインは独立したままです',
@@ -411,4 +415,9 @@ export function t(key: MessageKey, params?: Record<string, string | number>): st
   const text = TABLES[current][key];
   if (!params) return text;
   return text.replace(/\{(\w+)\}/g, (m, name: string) => (name in params ? String(params[name]) : m));
+}
+
+// Joins translated sentences: Chinese and Japanese end sentences with a full-width stop and use no space after it
+export function joinSentences(...sentences: string[]): string {
+  return sentences.join(current === 'zh-cn' || current === 'ja' ? '' : ' ');
 }

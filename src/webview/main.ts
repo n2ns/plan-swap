@@ -5,7 +5,7 @@ import '@vscode-elements/elements/dist/vscode-textfield/index.js';
 import '@vscode-elements/elements/dist/vscode-toolbar-button/index.js';
 import '@vscode-elements/elements/dist/vscode-icon/index.js';
 import type { AccountView, FromWebview, PanelMode, PanelState, RestartInfo, TabState, ToolId, ToWebview } from '../protocol';
-import { getLocale, setLocale, t, type MessageKey } from './i18n';
+import { getLocale, joinSentences, setLocale, t, type MessageKey } from './i18n';
 
 declare const __PLANSWAP_VERSION__: string;
 
@@ -93,10 +93,36 @@ function toolbarButton(icon: string, label: string, fn: (e: MouseEvent) => void)
   return onClick(h('vscode-toolbar-button', { icon, label, title: label, class: 'icon-btn' }), fn);
 }
 
+/**
+ * Focuses a control. A freshly created vscode-elements component is not focusable until its first async render
+ * (vscode-button reflects its tabindex then); vscode-toolbar-button is never focusable itself, only its inner button
+ */
+function focusElement(el: HTMLElement & { updateComplete?: Promise<unknown>; hasUpdated?: boolean }): void {
+  const focus = (): void => {
+    if (!el.isConnected) return;
+    if (el.tabIndex >= 0) el.focus();
+    else el.shadowRoot?.querySelector<HTMLElement>('button')?.focus();
+  };
+  if (el.updateComplete && !el.hasUpdated) void el.updateComplete.then(focus);
+  else focus();
+}
+
+/** Names a control (data-action) so a re-render can move the focus to its replacement in the same row */
+function withAction(el: HTMLElement, action: string): HTMLElement {
+  el.dataset.action = action;
+  return el;
+}
+
 /** Sets --rename-h (the name line's height before editing) on the edit line; unknown keeps the CSS default */
 function withHeight(el: HTMLElement, px: number | undefined): HTMLElement {
   if (px) el.style.setProperty('--rename-h', `${px}px`);
   return el;
+}
+
+// User-perceived characters; label lengths are counted this way, like labels.ts on the host
+const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+function graphemes(text: string): string[] {
+  return [...segmenter.segment(text)].map((g) => g.segment);
 }
 
 /**
@@ -105,7 +131,7 @@ function withHeight(el: HTMLElement, px: number | undefined): HTMLElement {
  */
 function nameWithTail(label: string, ...icons: Child[]): Child[] {
   if (!icons.some(Boolean)) return [label];
-  const chars = [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(label)].map((g) => g.segment);
+  const chars = graphemes(label);
   const last = chars.pop() ?? '';
   return [chars.join(''), h('span', { class: 'name-tail' }, last, ...icons)];
 }
@@ -321,6 +347,8 @@ class Page {
     this.renameField = field;
     this.renameTitleHeight = titleHeight;
     this.renameError = undefined;
+    // A new edit never waits on an earlier submit, whose renameResult may never arrive
+    this.submitting = false;
     this.render();
     // The component's first render is async; wait a frame before focusing and selecting all
     requestAnimationFrame(() => {
@@ -341,13 +369,14 @@ class Page {
     this.renamingDir = undefined;
     this.renameField = undefined;
     this.renameError = undefined;
+    this.submitting = false;
   }
 
   // Instant frontend validation; the host has the final say
   private validateLabel(label: string, self: AccountView): string | undefined {
     const value = label.trim();
     if (!value) return t('validate.labelEmpty');
-    if (value.length > MAX_LABEL_LENGTH) return t('validate.labelTooLong', { max: MAX_LABEL_LENGTH });
+    if (graphemes(value).length > MAX_LABEL_LENGTH) return t('validate.labelTooLong', { max: MAX_LABEL_LENGTH });
     if (/[\r\n]/.test(value)) return t('validate.labelNewline');
     if (this.tab.accounts.some((a) => a.dir !== self.dir && (sameName(a.name, value) || sameName(a.label, value)))) return t('validate.labelDuplicate');
     return undefined;
@@ -429,8 +458,8 @@ class Page {
       { class: 'disabled-card' },
       h('div', { class: 'disabled-icon' }, h('vscode-icon', { name: 'plug', size: '26' })),
       h('div', { class: 'disabled-title' }, t('disabled.title')),
-      h('div', { class: 'disabled-text' }, `${t(codexRestart().userEnv ? 'disabled.textWin' : 'disabled.text')} ${t(DISABLED_RESTART[codexRestart().context])}`),
-      h('div', { class: 'disabled-actions' }, onClick(h('vscode-button', { icon: 'check' }, t('disabled.enable')), () => this.send({ type: 'enable' }))),
+      h('div', { class: 'disabled-text' }, joinSentences(t(codexRestart().userEnv ? 'disabled.textWin' : 'disabled.text'), t(DISABLED_RESTART[codexRestart().context]))),
+      h('div', { class: 'disabled-actions' }, onClick(h('vscode-button', { icon: 'check', 'data-action': 'enable' }, t('disabled.enable')), () => this.send({ type: 'enable' }))),
     );
   }
 
@@ -453,7 +482,7 @@ class Page {
         h(
           'div',
           { class: 'banner-actions' },
-          onClick(h('vscode-button', { icon: auto ? 'debug-restart' : 'info' }, t(button)), () => this.send({ type: 'restartServer' })),
+          onClick(h('vscode-button', { icon: auto ? 'debug-restart' : 'info', 'data-action': 'restartServer' }, t(button)), () => this.send({ type: 'restartServer' })),
         ),
       ),
     );
@@ -474,10 +503,10 @@ class Page {
         h(
           'div',
           { class: 'banner-actions' },
-          onClick(h('vscode-button', { icon: 'refresh' }, t('common.reloadWindow')), () => this.send({ type: 'reload' })),
+          onClick(h('vscode-button', { icon: 'refresh', 'data-action': 'reload' }, t('common.reloadWindow')), () => this.send({ type: 'reload' })),
         ),
       ),
-      toolbarButton('close', t('banner.dismiss'), () => this.send({ type: 'dismissBanner' })),
+      withAction(toolbarButton('close', t('banner.dismiss'), () => this.send({ type: 'dismissBanner' })), 'dismissBanner'),
     );
   }
 
@@ -486,25 +515,33 @@ class Page {
     if (a.isCurrent) classes.push('is-current');
 
     if (this.confirmingDir === a.dir) {
-      return h(
+      // Leaving the confirmation returns the focus to the row's remove button
+      const close = (): void => {
+        this.confirmingDir = undefined;
+        this.render();
+        this.focusControl(a.dir, 'remove');
+      };
+      const row = h(
         'li',
-        { class: classes.concat('is-confirming').join(' '), 'data-plan': planClass(a.plan, this.mode) },
+        { class: classes.concat('is-confirming').join(' '), 'data-plan': planClass(a.plan, this.mode), 'data-dir': a.dir },
         h('div', { class: 'confirm-text' }, h('vscode-icon', { name: 'trash' }), t('confirm.text', { name: a.label })),
         h('div', { class: 'confirm-hint' }, t('confirm.hint')),
         h(
           'div',
           { class: 'confirm-actions' },
-          onClick(h('vscode-button', {}, t('confirm.remove')), () => {
-            this.confirmingDir = undefined;
+          onClick(h('vscode-button', { 'data-action': 'confirmRemove' }, t('confirm.remove')), () => {
             this.send({ type: 'remove', dir: a.dir });
-            this.render();
+            close();
           }),
-          onClick(h('vscode-button', { secondary: true }, t('confirm.cancel')), () => {
-            this.confirmingDir = undefined;
-            this.render();
-          }),
+          onClick(h('vscode-button', { secondary: true, 'data-action': 'confirmCancel' }, t('confirm.cancel')), close),
         ),
       );
+      row.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        e.preventDefault();
+        close();
+      });
+      return row;
     }
 
     const editing = this.renamingDir === a.dir && !!this.renameField;
@@ -519,37 +556,47 @@ class Page {
       const convertible = a.kind === 'named' && !a.isCurrent && !selected;
       // Independent account: offer converting it to a shared one (the host confirms)
       if (convertible && a.shared === false) {
-        actions.append(toolbarButton('link', t('row.share'), () => this.send({ type: 'share', dir: a.dir })));
+        actions.append(withAction(toolbarButton('link', t('row.share'), () => this.send({ type: 'share', dir: a.dir })), 'share'));
       }
       // Shared account: offer converting it back to an independent one (the host confirms)
       if (convertible && a.shared === true) {
-        actions.append(toolbarButton('debug-disconnect', t('row.unshare'), () => this.send({ type: 'unshare', dir: a.dir })));
+        actions.append(withAction(toolbarButton('debug-disconnect', t('row.unshare'), () => this.send({ type: 'unshare', dir: a.dir })), 'unshare'));
       }
       // The second click of a double-click (detail > 1) would send a duplicate switch
       if (canSwitch) {
         actions.append(
-          toolbarButton('arrow-swap', t('row.switch'), (e) => {
-            if (e.detail > 1) return;
-            this.lastSwitchAt = Date.now();
-            this.send({ type: 'switch', dir: a.dir });
-          }),
+          withAction(
+            toolbarButton('arrow-swap', t('row.switch'), (e) => {
+              if (e.detail > 1) return;
+              this.lastSwitchAt = Date.now();
+              this.send({ type: 'switch', dir: a.dir });
+            }),
+            'switch',
+          ),
         );
       }
       // Not logged in: a "Log in" text button; logged in: a terminal icon to run the CLI with this account
       if (a.loggedIn) {
-        actions.append(toolbarButton('terminal', t(`${this.mode}.terminalTitle`), () => this.send({ type: 'terminal', dir: a.dir })));
+        actions.append(withAction(toolbarButton('terminal', t(`${this.mode}.terminalTitle`), () => this.send({ type: 'terminal', dir: a.dir })), 'terminal'));
       } else {
         actions.append(
-          onClick(h('vscode-button', { class: 'login-button', title: t(`${this.mode}.loginTitle`) }, t('row.login')), () => this.send({ type: 'terminal', dir: a.dir })),
+          onClick(
+            h('vscode-button', { class: 'login-button', title: t(`${this.mode}.loginTitle`), 'data-action': 'terminal' }, t('row.login')),
+            () => this.send({ type: 'terminal', dir: a.dir }),
+          ),
         );
       }
-      // The current account cannot be removed
+      // The current account cannot be removed; the confirmation that opens starts with the focus on Cancel
       if (a.kind === 'named' && !a.isCurrent && !selected) {
         actions.append(
-          toolbarButton('trash', t('row.remove'), () => {
-            this.confirmingDir = a.dir;
-            this.render();
-          }),
+          withAction(
+            toolbarButton('trash', t('row.remove'), () => {
+              this.confirmingDir = a.dir;
+              this.render();
+              this.focusControl(a.dir, 'confirmCancel');
+            }),
+            'remove',
+          ),
         );
       }
     }
@@ -566,7 +613,7 @@ class Page {
       a.kind === 'named' &&
       !editing &&
       onClick(
-        h('button', { type: 'button', class: 'rename-btn', title: t('row.rename'), 'aria-label': `${t('row.rename')} ${a.label}` }, h('vscode-icon', { name: 'edit', size: '12' })),
+        h('button', { type: 'button', class: 'rename-btn', title: t('row.rename'), 'aria-label': t('row.renameAria', { name: a.label }), 'data-action': 'rename' }, h('vscode-icon', { name: 'edit', size: '12' })),
         (e) => this.startRename(a, (e.currentTarget as HTMLElement).closest('.row-title')?.getBoundingClientRect().height),
       );
     const title = editing
@@ -583,7 +630,7 @@ class Page {
     // .row-main is display: contents, so its lines land directly in the .row grid
     const row = h(
       'li',
-      { class: classes.join(' '), 'data-plan': planClass(a.plan, this.mode), tabindex: !canSwitch || editing ? undefined : '0' },
+      { class: classes.join(' '), 'data-plan': planClass(a.plan, this.mode), 'data-dir': a.dir, tabindex: !canSwitch || editing ? undefined : '0' },
       avatar(a),
       h(
         'div',
@@ -647,7 +694,43 @@ class Page {
     );
   }
 
+  // What the last render showed; a state push that changes neither the page's state nor the locale keeps the DOM
+  // (keyboard focus, screen-reader alerts and IME composition stay undisturbed)
+  private renderedKey?: string;
+
+  private renderKey(): string {
+    return `${receivedState}|${getLocale()}|${JSON.stringify([this.tab, codexRestart()])}`;
+  }
+
+  renderIfChanged(): void {
+    if (this.renderKey() !== this.renderedKey) this.render();
+  }
+
+  /** The focused control inside the page's rows, banners or cards, identified by its row's dir and its action */
+  private focusedControl(): { dir?: string; action?: string } | undefined {
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement) || !this.top.contains(active) || active === this.renameField) return undefined;
+    const dir = active.closest<HTMLElement>('[data-dir]')?.dataset.dir;
+    const action = active.closest<HTMLElement>('[data-action]')?.dataset.action;
+    return dir === undefined && action === undefined ? undefined : { dir, action };
+  }
+
+  /**
+   * Focuses the control with this action in the row of this dir (dir undefined: outside the rows); without it, the row
+   * itself when focusable, otherwise the row's first control
+   */
+  private focusControl(dir: string | undefined, action: string | undefined): void {
+    const row = dir === undefined ? undefined : [...this.top.querySelectorAll<HTMLElement>('[data-dir]')].find((el) => el.dataset.dir === dir);
+    if (dir !== undefined && !row) return;
+    const controls = [...(row ?? this.top).querySelectorAll<HTMLElement>('[data-action]')].filter((el) => el.closest('[data-dir]') === (row ?? null));
+    const target = controls.find((el) => el.dataset.action === action) ?? (row && row.tabIndex >= 0 ? row : controls[0]);
+    if (target) focusElement(target);
+  }
+
   render(): void {
+    this.renderedKey = this.renderKey();
+    // A rebuild replaces the focused node; remember what it was so the replacement gets the focus back
+    const focused = this.focusedControl();
     this.rendering = true;
     try {
       this.updateSyncButton();
@@ -671,6 +754,7 @@ class Page {
     }
     // Re-rendering moved the field node and lost focus; restore it
     if (this.renameField && !this.root.hidden) this.renameField.focus();
+    else if (focused) this.focusControl(focused.dir, focused.action);
   }
 }
 
@@ -809,7 +893,8 @@ window.addEventListener('message', (e: MessageEvent<ToWebview>) => {
     // No local record yet: adopt the host's tab and remember it
     if (!activeTab) setActiveTab(state.active);
     for (const mode of MODES) pages[mode].onState();
-    render();
+    renderTabs();
+    for (const mode of MODES) pages[mode].renderIfChanged();
     if (firstState) console.info(`[planswap] first cards rendered: ${(performance.now() - renderStartedAt).toFixed(1)}ms DOM update`);
   } else if (msg.type === 'addResult') {
     pages[msg.mode].onAddResult(msg.error);
