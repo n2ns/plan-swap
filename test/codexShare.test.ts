@@ -8,7 +8,7 @@ import {
   isSharedCodexAccount, makeCodexIndependent, migrateCodexToShared,
 } from '../src/codex/codexShare';
 import { codexAccountDir, deleteCodexDir } from '../src/codex/codexPaths';
-import { assertTempHome, makeTempHome, mode, read, snapshot, type TempHome } from './helpers';
+import { assertTempHome, makeTempHome, assertMode, LINUX_ONLY, read, snapshot, type TempHome } from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -50,7 +50,7 @@ const newAccount = (name: string): string => {
 };
 const LINK_ONLY = CODEX_SHARED_ENTRIES.filter((e) => e.kind === 'link-only').map((e) => e.name);
 
-describe('ensureCodexLinks', () => {
+describe('ensureCodexLinks', LINUX_ONLY, () => {
   test('creates absolute links and empty default entries with modes; link-only targets are not created; idempotent', () => {
     const acc = newAccount('a');
     const r = ensureCodexLinks(acc);
@@ -66,11 +66,11 @@ describe('ensureCodexLinks', () => {
     assert.equal(read(path.join(def, 'hooks.json')), '{}\n');
     assert.equal(read(path.join(def, 'config.toml')), '');
     assert.equal(read(path.join(def, 'AGENTS.md')), '');
-    assert.equal(mode(path.join(def, 'session_index.jsonl')), '600');
-    assert.equal(mode(path.join(def, 'sessions')), '700');
-    assert.equal(mode(path.join(def, '.tmp')), '700');
-    assert.equal(mode(path.join(def, 'skills')), '700');
-    assert.equal(mode(path.join(def, 'plugins', 'cache')), '700');
+    assertMode(path.join(def, 'session_index.jsonl'), '600');
+    assertMode(path.join(def, 'sessions'), '700');
+    assertMode(path.join(def, '.tmp'), '700');
+    assertMode(path.join(def, 'skills'), '700');
+    assertMode(path.join(def, 'plugins', 'cache'), '700');
     assert.ok(r.created.includes('.tmp'));
     assert.ok(r.created.includes('skills'));
     assert.ok(r.created.includes('plugins/cache'));
@@ -78,7 +78,7 @@ describe('ensureCodexLinks', () => {
     for (const f of ['.tmp', 'skills', 'plugins', path.join('plugins', 'cache')]) {
       const st = fs.lstatSync(path.join(acc, f));
       assert.ok(st.isDirectory() && !st.isSymbolicLink(), f);
-      assert.equal(mode(path.join(acc, f)), '700', f);
+      assertMode(path.join(acc, f), '700', f);
     }
     assert.deepEqual(r.conflicts, []);
     assert.deepEqual(r.refused, []);
@@ -267,7 +267,7 @@ describe('ensureCodexLinks', () => {
   });
 });
 
-describe('isSharedCodexAccount', () => {
+describe('isSharedCodexAccount', LINUX_ONLY, () => {
   test('true only when sessions links to the default sessions', () => {
     const acc = newAccount('a');
     assert.equal(isSharedCodexAccount(acc), false);
@@ -298,7 +298,7 @@ function fakeProc(procs: Record<number, { exe?: string; env: Record<string, stri
 }
 const CODEX_EXE = '/opt/codex/vendor/x86_64-unknown-linux-musl/codex/codex';
 
-describe('codexAccountBusy', () => {
+describe('codexAccountBusy', LINUX_ONLY, () => {
   test('matches codex processes by exe basename and CODEX_HOME', () => {
     const acc = newAccount('a');
     assert.equal(codexAccountBusy(acc, fakeProc({})), false);
@@ -332,7 +332,7 @@ describe('codexAccountBusy', () => {
   });
 });
 
-describe('migrateCodexToShared', () => {
+describe('migrateCodexToShared', LINUX_ONLY, () => {
   test('a config.toml / AGENTS.md the default lacks is moved into the default instead of being backed up', () => {
     const acc = newAccount('solo');
     write(path.join(acc, 'config.toml'), 'model = "gpt"\n');
@@ -414,7 +414,7 @@ describe('migrateCodexToShared', () => {
     assert.equal(read(path.join(acc, 'auth.json')), '{"tokens":{}}');
     assert.ok(!exists(path.join(def, 'auth.json')));
     assert.equal(read(path.join(acc, 'memories', 'm.md')), 'memory');
-    assert.equal(mode(path.join(acc, 'memories', 'm.md')), '640');
+    assertMode(path.join(acc, 'memories', 'm.md'), '640');
     assert.equal(fs.statSync(path.join(acc, 'memories', 'm.md')).mtimeMs, memMtime);
     assert.ok(!exists(path.join(def, 'memories')));
     assert.equal(read(path.join(acc, 'memories_1.sqlite')), 'mem db');
@@ -471,7 +471,7 @@ describe('migrateCodexToShared', () => {
     assert.deepEqual(r.backups, []);
     assert.equal(read(path.join(acc, 'config.toml')), 'model = "a"\n');
     assert.equal(read(path.join(def, 'history.jsonl')), '{"a":1}\n');
-    assert.equal(mode(path.join(def, 'history.jsonl')), '600');
+    assertMode(path.join(def, 'history.jsonl'), '600');
   });
 
   test('jsonl files whose lines the default already has do not count as moved', () => {
@@ -504,7 +504,7 @@ describe('migrateCodexToShared', () => {
   });
 });
 
-describe('copyCodexIndependent', () => {
+describe('copyCodexIndependent', LINUX_ONLY, () => {
   test('copies config without overwriting, never links, never copies auth', () => {
     write(path.join(def, 'config.toml'), 'model = "m"\n');
     write(path.join(def, 'AGENTS.md'), 'rules');
@@ -528,8 +528,8 @@ describe('copyCodexIndependent', () => {
     assert.equal(read(path.join(acc, 'config.toml')), 'model = "m"\n');
     assert.equal(read(path.join(acc, 'AGENTS.md')), 'rules');
     assert.ok(!fs.lstatSync(path.join(acc, 'AGENTS.md')).isSymbolicLink());
-    assert.equal(mode(path.join(acc, 'AGENTS.md')), '600');
-    assert.equal(mode(path.join(acc, 'hooks.json')), '600');
+    assertMode(path.join(acc, 'AGENTS.md'), '600');
+    assertMode(path.join(acc, 'hooks.json'), '600');
     assert.equal(read(path.join(acc, 'rules', 'r.rules')), 'r');
     assert.equal(fs.readlinkSync(path.join(acc, 'rules', 'lnk')), '/nowhere');
     assert.equal(read(path.join(acc, 'themes', 't.json')), 'own');
@@ -552,11 +552,11 @@ describe('copyCodexIndependent', () => {
     assert.equal(r.skipped.length, 1);
     assert.match(r.skipped[0].reason, /model_provider/);
     assert.ok(!exists(path.join(acc, 'config.toml')));
-    assert.equal(mode(acc), '700');
+    assertMode(acc, '700');
   });
 });
 
-describe('copyCodexIndependent skills children', () => {
+describe('copyCodexIndependent skills children', LINUX_ONLY, () => {
   test('a linked skills child is copied from its real location; a dangling child link is skipped', () => {
     write(path.join(home, 'dotfiles', 'skill', 'SKILL.md'), 'real');
     fs.mkdirSync(path.join(def, 'skills'));
@@ -572,7 +572,7 @@ describe('copyCodexIndependent skills children', () => {
   });
 });
 
-describe('makeCodexIndependent', () => {
+describe('makeCodexIndependent', LINUX_ONLY, () => {
   test('removes the links (dangling sqlite links too), copies the config once, leaves the default dir alone', () => {
     write(path.join(def, 'config.toml'), 'model = "m"\n');
     write(path.join(def, 'AGENTS.md'), 'rules');

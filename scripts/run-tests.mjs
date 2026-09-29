@@ -3,8 +3,9 @@ import * as esbuild from 'esbuild';
 import { spawnSync } from 'node:child_process';
 import { readdirSync, rmSync } from 'node:fs';
 import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = path.join(root, '.test-out');
 const testDir = path.join(root, 'test');
 

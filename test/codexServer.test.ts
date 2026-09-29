@@ -9,7 +9,7 @@ import {
   canAutoRestart, classifyDataDir, detectServerKind, listChildren, parseServerRoot, parseStatParentPid, planRestart,
   readArgv, readServerCommit, verifyServer,
 } from '../src/codex/codexServer';
-import { assertTempHome, makeTempHome, type TempHome } from './helpers';
+import { assertTempHome, LINUX_ONLY, makeTempHome, type TempHome } from './helpers';
 
 let tmp: TempHome;
 
@@ -27,7 +27,7 @@ describe('parseStatParentPid', () => {
     assert.throws(() => parseStatParentPid('garbage'), { message: 'Cannot parse stat format' });
     assert.throws(() => parseStatParentPid('1 (x) S abc'), { message: 'Cannot parse stat format' });
   });
-  test('matches /proc/self/stat', () => {
+  test('matches /proc/self/stat', LINUX_ONLY, () => {
     assert.equal(parseStatParentPid(fs.readFileSync('/proc/self/stat', 'utf8')), process.ppid);
   });
 });
@@ -80,7 +80,7 @@ describe('classifyDataDir', () => {
     const real = path.join(tmp.home, 'real-home');
     const link = path.join(tmp.home, 'link-home');
     fs.mkdirSync(path.join(real, '.vscodium-server'), { recursive: true });
-    fs.symlinkSync(real, link);
+    fs.symlinkSync(real, link, 'junction');
     assert.equal(classifyDataDir(path.join(real, '.vscodium-server'), link), 'vscodium');
     assert.equal(classifyDataDir(path.join(link, '.vscodium-server'), real), 'vscodium');
   });
@@ -119,7 +119,7 @@ describe('readServerCommit', () => {
   });
 });
 
-describe('readArgv / listChildren', () => {
+describe('readArgv / listChildren', LINUX_ONLY, () => {
   test('readArgv splits /proc/<pid>/cmdline on \\0', () => {
     const argv = readArgv(process.pid);
     assert.ok(argv.length > 0 && argv.every((a) => a !== '' && !a.includes('\0')));
@@ -192,7 +192,7 @@ describe('verifyServer', () => {
   });
 });
 
-describe('planRestart', () => {
+describe('planRestart', LINUX_ONLY, () => {
   test('under the test process (parent is not the server) throws a localized error and returns no plan', () => {
     assertTempHome(tmp.home);
     assert.throws(
@@ -204,7 +204,7 @@ describe('planRestart', () => {
 
 describe('codexServer in zh-cn', () => {
   after(() => setLocale('en'));
-  test('parse and planRestart errors follow the locale', () => {
+  test('parse and planRestart errors follow the locale', LINUX_ONLY, () => {
     setLocale('zh-cn');
     assert.throws(() => parseStatParentPid('garbage'), { message: 'stat 格式无法解析' });
     assert.throws(

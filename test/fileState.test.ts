@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { FileMemento, STATE_JSON } from '../src/fileState';
-import { makeTempHome, MemoryMemento, mode, read, type TempHome } from './helpers';
+import { makeTempHome, MemoryMemento, assertMode, read, type TempHome } from './helpers';
 
 let tmp: TempHome;
 before(() => { tmp = makeTempHome('fileState'); });
@@ -27,8 +27,8 @@ describe('FileMemento', () => {
     await m.update('accounts', [{ name: 'x', dir: '/tmp/x' }]);
     await m.update('claude.labels', { x: 'Work' });
     const file = path.join(tmp.home, '.config', 'planswap', 'b.json');
-    assert.equal(mode(file), '600');
-    assert.equal(mode(path.dirname(file)), '700');
+    assertMode(file, '600');
+    assertMode(path.dirname(file), '700');
     assert.deepEqual(JSON.parse(read(file)), { accounts: [{ name: 'x', dir: '/tmp/x' }], 'claude.labels': { x: 'Work' } });
     assert.deepEqual(fresh('b.json').get('claude.labels'), { x: 'Work' });
     assert.deepEqual([...m.keys()].sort(), ['accounts', 'claude.labels']);

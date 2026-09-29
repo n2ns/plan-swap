@@ -8,7 +8,7 @@ import { setLocale } from '../src/i18n';
 import { comparablePath, copyLink, createLink, imageRunning, isSupportedPlatform, parseTasklistCsv, pidAlive } from '../src/platform';
 import { getUserCodexHome, parseRegQuery, setUserCodexHome } from '../src/codex/codexWindows';
 import { manualRestartMessages } from '../src/codex/codexCommands';
-import { makeTempHome, type TempHome } from './helpers';
+import { LINUX_ONLY, makeTempHome, type TempHome } from './helpers';
 
 let tmp: TempHome;
 before(() => {
@@ -29,7 +29,7 @@ describe('platform', () => {
     assert.equal(comparablePath('/A/b', 'win32'), path.resolve('/A/b').toLowerCase());
   });
 
-  test('createLink and copyLink create symlinks on Linux', () => {
+  test('createLink and copyLink create symlinks on Linux', LINUX_ONLY, () => {
     const target = path.join(tmp.home, 'target');
     fs.mkdirSync(target);
     const link = path.join(tmp.home, 'link');

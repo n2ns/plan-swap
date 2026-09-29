@@ -7,7 +7,7 @@ import {
   checkCodexSafeToDelete, codexAccountDir, codexDaemonAlive, codexDefaultDir, codexLoggedIn, copyCodexSeed,
   decodeJwtPayload, deleteCodexDir, ensureCodexDir, formatCodexPlan, readCodexAccountInfo, scanCodexDirs,
 } from '../src/codex/codexPaths';
-import { assertTempHome, makeTempHome, mode, read, type TempHome } from './helpers';
+import { assertTempHome, makeTempHome, assertMode, LINUX_ONLY, onWindows, read, type TempHome } from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -58,7 +58,7 @@ describe('codexDefaultDir / codexAccountDir / codexLoggedIn / ensureCodexDir', (
   test('codexLoggedIn only checks that auth.json exists; ensureCodexDir uses 0700', () => {
     const d = codexAccountDir('login');
     ensureCodexDir(d);
-    assert.equal(mode(d), '700');
+    assertMode(d, '700');
     assert.equal(codexLoggedIn(d), false);
     fs.writeFileSync(path.join(d, 'auth.json'), '{}');
     assert.equal(codexLoggedIn(d), true);
@@ -115,7 +115,7 @@ describe('copyCodexSeed', () => {
     const r = copyCodexSeed(src, dst);
     assert.deepEqual(r, { copied: ['config.toml'], skipped: [] });
     assert.equal(read(path.join(dst, 'config.toml')), 'model = "gpt-5"\n[profiles.x]\nmodel_provider = "openai"\n');
-    assert.equal(mode(path.join(dst, 'config.toml')), '600');
+    assertMode(path.join(dst, 'config.toml'), '600');
     assert.deepEqual(fs.readdirSync(dst), ['config.toml']);
   });
   test('source missing → skipped', () => {
@@ -200,13 +200,16 @@ describe('scanCodexDirs / checkCodexSafeToDelete / codexDaemonAlive / deleteCode
     fs.mkdirSync(path.join(home, '.codex-a'), { mode: 0o700 });
     fs.mkdirSync(path.join(home, '.codex-b_1'), { mode: 0o700 });
     fs.mkdirSync(path.join(home, '.codex-bad name'));
-    fs.symlinkSync(path.join(home, '.codex-a'), path.join(home, '.codex-link'));
+    fs.symlinkSync(path.join(home, '.codex-a'), path.join(home, '.codex-link'), 'junction');
     fs.writeFileSync(path.join(home, '.codex-file'), 'x');
     // Make ~/.codex a symlink to ~/.codex-real to verify the realpath exclusion
     fs.mkdirSync(path.join(home, '.codex-real'), { mode: 0o700 });
-    fs.symlinkSync(path.join(home, '.codex-real'), def);
-    const stat = fs.readFileSync('/proc/self/stat', 'utf8');
-    myTicks = Number(stat.slice(stat.lastIndexOf(')') + 1).trim().split(/\s+/)[19]);
+    fs.symlinkSync(path.join(home, '.codex-real'), def, 'junction');
+    // Start ticks come from /proc; on Windows the daemon check only asks whether the pid is alive
+    if (!onWindows) {
+      const stat = fs.readFileSync('/proc/self/stat', 'utf8');
+      myTicks = Number(stat.slice(stat.lastIndexOf(')') + 1).trim().split(/\s+/)[19]);
+    }
     dd = path.join(home, '.codex-b_1', 'app-server-daemon');
     fs.mkdirSync(dd);
   });
@@ -221,7 +224,7 @@ describe('scanCodexDirs / checkCodexSafeToDelete / codexDaemonAlive / deleteCode
   });
   test('checkCodexSafeToDelete outside home / invalid basename', () => {
     const d = fs.mkdtempSync(path.join(home, 'out-'));
-    assert.equal(checkCodexSafeToDelete('/tmp/.codex-x'), 'Directory is not a direct child of the home directory: /tmp/.codex-x');
+    assert.equal(checkCodexSafeToDelete('/tmp/.codex-x'), `Directory is not a direct child of the home directory: ${path.resolve('/tmp/.codex-x')}`);
     assert.match(checkCodexSafeToDelete(path.join(d, '.codex-x')) ?? '', /direct child/);
     assert.equal(checkCodexSafeToDelete(path.join(home, '.codex-bad name')), `Directory name does not match the .codex-<name> format: ${path.join(home, '.codex-bad name')}`);
     assert.match(checkCodexSafeToDelete(path.join(home, 'codex-a')) ?? '', /format/);
@@ -258,7 +261,7 @@ describe('scanCodexDirs / checkCodexSafeToDelete / codexDaemonAlive / deleteCode
     assert.equal(codexDaemonAlive(path.join(home, '.codex-b_1')), true);
     clear();
   });
-  test('daemon: startTicks mismatch / pid missing → not alive', () => {
+  test('daemon: startTicks mismatch / pid missing → not alive', LINUX_ONLY, () => {
     pidFile('app-server.pid', { pid: process.pid, processIdentity: { startTicks: myTicks + 1 } });
     assert.equal(codexDaemonAlive(path.join(home, '.codex-b_1')), false);
     clear();
@@ -268,7 +271,7 @@ describe('scanCodexDirs / checkCodexSafeToDelete / codexDaemonAlive / deleteCode
     assert.equal(codexDaemonAlive(path.join(home, '.codex-b_1')), false);
     clear();
   });
-  test('daemon: corrupt JSON / missing pid / missing ticks → not alive; any live file among several → true', () => {
+  test('daemon: corrupt JSON / missing pid / missing ticks → not alive; any live file among several → true', LINUX_ONLY, () => {
     pidFile('daemon.pid', '{not json');
     pidFile('app-server.pid', { processIdentity: { startTicks: myTicks } });
     pidFile('daemon-updater.pid', { pid: process.pid });
@@ -294,6 +297,6 @@ describe('codexPaths in zh-cn', () => {
     assert.deepEqual(copyCodexSeed(src, dst).skipped, [{ file: 'config.toml', reason: '源文件不存在' }]);
     fs.writeFileSync(path.join(src, 'config.toml'), 'log_dir = "/x"\n');
     assert.deepEqual(copyCodexSeed(src, dst).skipped, [{ file: 'config.toml', reason: '含顶层键 log_dir，不复制' }]);
-    assert.equal(checkCodexSafeToDelete('/tmp/.codex-x'), '目录不是用户主目录的直接子目录：/tmp/.codex-x');
+    assert.equal(checkCodexSafeToDelete('/tmp/.codex-x'), `目录不是用户主目录的直接子目录：${path.resolve('/tmp/.codex-x')}`);
   });
 });

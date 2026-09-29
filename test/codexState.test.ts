@@ -7,7 +7,7 @@ import {
   RC_BEGIN, RC_END, STATE_FILE, effectiveDir, installRcBlocks, preCheck, rcBlock, rcStatus, readSelectedDir,
   migrateLegacyCodex, removeRcBlockFrom, removeRcBlocks, selfCheck, writeSelectedDir,
 } from '../src/codex/codexState';
-import { assertTempHome, makeTempHome, mode, read, type TempHome } from './helpers';
+import { assertTempHome, makeTempHome, assertMode, LINUX_ONLY, read, type TempHome } from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -48,8 +48,8 @@ describe('state file', () => {
   test('atomic write: resolved path, 0600, directory 0700, no temp file left', () => {
     writeSelectedDir(path.join(home, 'foo/../.codex-a'));
     assert.equal(readSelectedDir(), path.join(home, '.codex-a'));
-    assert.equal(mode(STATE_FILE()), '600');
-    assert.equal(mode(path.dirname(STATE_FILE())), '700');
+    assertMode(STATE_FILE(), '600');
+    assertMode(path.dirname(STATE_FILE()), '700');
     assert.deepEqual(fs.readdirSync(path.dirname(STATE_FILE())), ['codex-home']);
   });
   test('writing undefined → empty file → reads as undefined; blank content is also undefined', () => {
@@ -88,7 +88,7 @@ fi
   });
 });
 
-describe('installRcBlocks / removeRcBlocks / rcStatus', () => {
+describe('installRcBlocks / removeRcBlocks / rcStatus', LINUX_ONLY, () => {
   before(() => {
     fs.writeFileSync(bashrc, bashrcOrig, { mode: 0o600 });
     fs.writeFileSync(profile, profileOrig, { mode: 0o644 });
@@ -104,9 +104,9 @@ describe('installRcBlocks / removeRcBlocks / rcStatus', () => {
     const b = read(bashrc);
     assert.ok(b.indexOf(RC_BEGIN) >= 0 && b.indexOf(RC_END) > b.indexOf(RC_BEGIN) && b.indexOf('case $- in') > b.indexOf(RC_END));
     assert.equal(b, '# ~/.bashrc\nexport FOO=1\n\n' + rcBlock() + 'case $- in\n    *i*) ;;\n      *) return;;\nesac\nalias ll=\'ls -l\'\n');
-    assert.equal(mode(bashrc), '600');
+    assertMode(bashrc, '600');
     assert.equal(read(profile), profileOrig + '\n' + rcBlock());
-    assert.equal(mode(profile), '644');
+    assertMode(profile, '644');
     assert.deepEqual(rcStatus().map((s) => s.hasBlock), [true, true]);
   });
   test('idempotent', () => {
@@ -121,7 +121,7 @@ describe('installRcBlocks / removeRcBlocks / rcStatus', () => {
     removeRcBlocks();
     assert.equal(read(bashrc), bashrcOrig);
     assert.equal(read(profile), profileOrig);
-    assert.equal(mode(bashrc), '600');
+    assertMode(bashrc, '600');
     removeRcBlocks();
     assert.equal(read(bashrc), bashrcOrig);
   });
@@ -145,7 +145,7 @@ describe('installRcBlocks / removeRcBlocks / rcStatus', () => {
     installRcBlocks();
     assert.equal(read(bashrc), 'export A=1\n' + rcBlock());
     assert.equal(read(profile), rcBlock());
-    assert.equal(mode(profile), '644');
+    assertMode(profile, '644');
     removeRcBlocks();
     assert.equal(read(bashrc), 'export A=1');
     assert.equal(read(profile), '');
@@ -213,7 +213,7 @@ describe('installRcBlocks / removeRcBlocks / rcStatus', () => {
     removeRcBlockFrom(bashrc);
     assert.ok(fs.lstatSync(bashrc).isSymbolicLink());
     assert.equal(read(realBashrc), bashrcOrig);
-    assert.equal(mode(realBashrc), '640');
+    assertMode(realBashrc, '640');
     assert.equal(read(profile), p, 'the other file is not touched');
     assert.deepEqual(fs.readdirSync(path.dirname(realBashrc)), ['bashrc']);
     removeRcBlockFrom(bashrc);
@@ -258,17 +258,17 @@ describe('installRcBlocks / removeRcBlocks / rcStatus', () => {
     fs.symlinkSync(realProfile, profile);
     const inoBefore = fs.statSync(realProfile).ino;
     installRcBlocks();
-    assert.equal(mode(bashrc), '640');
+    assertMode(bashrc, '640');
     assert.ok(fs.lstatSync(profile).isSymbolicLink());
     assert.equal(read(realProfile), 'p=1\n\n' + rcBlock());
-    assert.equal(mode(realProfile), '600');
+    assertMode(realProfile, '600');
     assert.notEqual(fs.statSync(realProfile).ino, inoBefore, 'rename replaced the target inode');
     const leftovers = [...fs.readdirSync(home), ...fs.readdirSync(path.dirname(realProfile))].filter((f) => f.endsWith('.tmp'));
     assert.deepEqual(leftovers, []);
     removeRcBlocks();
     assert.ok(fs.lstatSync(profile).isSymbolicLink());
     assert.equal(read(realProfile), 'p=1\n');
-    assert.equal(mode(realProfile), '600');
+    assertMode(realProfile, '600');
     assert.equal(read(bashrc), 'x=1\n');
     fs.unlinkSync(profile);
     fs.rmSync(path.dirname(realProfile), { recursive: true });
@@ -289,7 +289,7 @@ describe('installRcBlocks / removeRcBlocks / rcStatus', () => {
   });
 });
 
-describe('migrateLegacyCodex (pre-rename ai-switcher setup)', () => {
+describe('migrateLegacyCodex (pre-rename ai-switcher setup)', LINUX_ONLY, () => {
   const toLegacy = (text: string): string => text.replace(/_planswap_/g, '_ai_switcher_').replace(/planswap/g, 'ai-switcher');
   const legacyState = (): string => path.join(home, '.config', 'ai-switcher', 'codex-home');
   let installedBashrc: string;
@@ -328,10 +328,10 @@ describe('migrateLegacyCodex (pre-rename ai-switcher setup)', () => {
     assert.equal(migrateLegacyCodex(), true);
     assert.equal(read(bashrc), installedBashrc);
     assert.equal(read(profile), installedProfile);
-    assert.equal(mode(bashrc), '600');
-    assert.equal(mode(profile), '644');
+    assertMode(bashrc, '600');
+    assertMode(profile, '644');
     assert.equal(readSelectedDir(), dir);
-    assert.equal(mode(STATE_FILE()), '600');
+    assertMode(STATE_FILE(), '600');
     assert.equal(fs.existsSync(path.dirname(legacyState())), false);
     assert.deepEqual(rcStatus().map((s) => [s.hasBlock, s.hasUserExport]), [[true, false], [true, false]]);
     assert.equal(preCheck().ok, true);
@@ -401,7 +401,7 @@ describe('migrateLegacyCodex (pre-rename ai-switcher setup)', () => {
   });
 });
 
-describe('preCheck', () => {
+describe('preCheck', LINUX_ONLY, () => {
   before(() => {
     fs.writeFileSync(bashrc, 'x\n');
     fs.writeFileSync(profile, 'y\n');
@@ -470,7 +470,7 @@ describe('preCheck', () => {
   });
 });
 
-describe('selfCheck (real bash -i -l, clean environment)', () => {
+describe('selfCheck (real bash -i -l, clean environment)', LINUX_ONLY, () => {
   // selfCheck's internal spawnSync takes no env argument and only inherits process.env; during the call, process.env
   // is replaced with a minimal env -i style environment (HOME is the temp dir) so outer variables such as CODEX_HOME do not leak into the login shell
   const inCleanEnv = <T,>(fn: () => T): T => {
@@ -493,7 +493,7 @@ describe('selfCheck (real bash -i -l, clean environment)', () => {
     assert.ok(r.ok, 'selfCheck failed: ' + r.detail);
     assert.match(r.detail, /^CODEX_HOME=/);
     assert.equal(read(STATE_FILE()), home + '/.codex-orig');
-    assert.equal(mode(STATE_FILE()), '600');
+    assertMode(STATE_FILE(), '600');
     assert.deepEqual(fs.readdirSync(path.dirname(STATE_FILE())), ['codex-home']);
     // The login shell printed the temporary directory selfCheck created; it must be gone (other test files run
     // selfCheck concurrently, so the temp dir listing cannot be compared as a whole)
@@ -524,7 +524,7 @@ describe('selfCheck (real bash -i -l, clean environment)', () => {
   });
 });
 
-describe('codexState in zh-cn', () => {
+describe('codexState in zh-cn', LINUX_ONLY, () => {
   before(() => {
     fs.writeFileSync(bashrc, 'a=1\n' + RC_BEGIN + '\n');
     fs.writeFileSync(profile, 'y\n');

@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { AccountStore } from '../src/accounts';
 import { LabelStore } from '../src/labels';
-import { makeTempHome, MemoryMemento, type TempHome } from './helpers';
+import { CASE_SENSITIVE_FS, makeTempHome, MemoryMemento, type TempHome } from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -149,7 +149,7 @@ describe('AccountStore syncWithDisk', () => {
     assert.deepEqual(store.named(), [x, a, { name: 'fresh', dir: path.join(home, '.claude-fresh') }]);
   });
 
-  test('registers only one of two scanned directories whose names differ only in case', async () => {
+  test('registers only one of two scanned directories whose names differ only in case', CASE_SENSITIVE_FS, async () => {
     for (const n of ['foo', 'Foo']) fs.mkdirSync(path.join(home, `.claude-${n}`));
     const { store } = make();
     await store.syncWithDisk();

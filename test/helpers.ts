@@ -1,12 +1,57 @@
 // Shared test helpers: create a temporary HOME, assert the real HOME is not used, clean up
 import assert from 'node:assert/strict';
+import childProcess from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { mock } from 'node:test';
 import type { Memento } from 'vscode';
 
 // Record the real home directory at module load (before any `before` hook) for later assertions
 const REAL_HOME = os.homedir();
+
+export const onWindows = process.platform === 'win32';
+
+// On a Windows test machine the Windows code paths would read and write the real user-level CODEX_HOME through reg and
+// powershell.exe (codexWindows' default runner). Refuse both for the whole test process; tests inject their own runners.
+if (onWindows) {
+  const realExecFileSync = childProcess.execFileSync;
+  mock.method(childProcess, 'execFileSync', ((file: string, ...rest: unknown[]) => {
+    if (/^(reg|powershell)(\.exe)?$/i.test(path.basename(file))) throw new Error(`tests must not run ${file} against the real user environment`);
+    return (realExecFileSync as (...a: unknown[]) => unknown)(file, ...rest);
+  }) as typeof childProcess.execFileSync);
+}
+
+// Whether this process may create a file symbolic link: always off Windows; on Windows only with Developer Mode or elevation
+function fileSymlinksAllowed(): boolean {
+  if (!onWindows) return true;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'planswap-probe-'));
+  try {
+    fs.writeFileSync(path.join(dir, 'target'), '');
+    fs.symlinkSync(path.join(dir, 'target'), path.join(dir, 'link'), 'file');
+    return true;
+  } catch {
+    return false;
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Test/describe options. Directory link fixtures pass the 'junction' type to fs.symlinkSync (ignored off Windows, no
+ * privilege needed on Windows), so only the categories below are skipped, and only on Windows.
+ */
+/** Linux/WSL behavior: rc files and bash, /proc, the WSL server, fifos, chmod-based permissions and the Linux link semantics of sharing. */
+export const LINUX_ONLY = { skip: onWindows && 'Linux/WSL behavior' };
+/** Creates file symbolic links, which Windows refuses without Developer Mode or elevation. */
+export const FILE_SYMLINKS = { skip: !fileSymlinksAllowed() && 'file symbolic links need Windows Developer Mode' };
+/** Creates entries whose names differ only in case, which a Windows file system folds together. */
+export const CASE_SENSITIVE_FS = { skip: onWindows && 'the Windows file system is case-insensitive' };
+
+/** Asserts POSIX permission bits; Windows has none to check (mode() reads 666 / 444 there). */
+export function assertMode(f: string, expected: string, message?: string): void {
+  if (!onWindows) assert.equal(mode(f), expected, message);
+}
 const ENV_KEYS = ['HOME', 'USERPROFILE', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'SHELL'] as const;
 
 export interface TempHome { home: string; restore(): void }

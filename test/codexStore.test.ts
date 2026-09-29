@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { CodexAccountStore } from '../src/codex/codexStore';
 import { LabelStore } from '../src/labels';
-import { makeTempHome, MemoryMemento, type TempHome } from './helpers';
+import { CASE_SENSITIVE_FS, makeTempHome, MemoryMemento, type TempHome } from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -125,7 +125,7 @@ describe('CodexAccountStore', () => {
     for (const d of [foo, work, def, upper.dir, b.dir]) fs.rmSync(d, { recursive: true });
   });
 
-  test('syncWithDisk registers only one of two scanned directories whose names differ only in case', async () => {
+  test('syncWithDisk registers only one of two scanned directories whose names differ only in case', CASE_SENSITIVE_FS, async () => {
     const dirs = ['foo', 'Foo'].map((n) => path.join(home, `.codex-${n}`));
     for (const d of dirs) fs.mkdirSync(d);
     const store = new CodexAccountStore(new MemoryMemento());

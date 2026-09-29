@@ -13,7 +13,7 @@ import { RC_BEGIN, STATE_FILE, installRcBlocks, rcBlock, rcStatus, readSelectedD
 import { CODEX_DEFAULT_NAME, codexAccountDir, type CodexAccount } from '../src/codex/codexPaths';
 import { isSharedCodexAccount } from '../src/codex/codexShare';
 import { labelFor } from '../src/labels';
-import { assertTempHome, makeTempHome, MemoryMemento, read, type TempHome } from './helpers';
+import { assertTempHome, LINUX_ONLY, makeTempHome, MemoryMemento, read, type TempHome } from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -30,7 +30,7 @@ describe('manual restart guidance by editor connection', () => {
     test(`${locale}: local desktop guidance applies even when a server kind is recognized`, () => {
       setLocale(locale);
       for (const kind of ['unknown', 'vscode', 'antigravity', 'vscodium'] as const) {
-        const messages = manualRestartMessages(kind, undefined);
+        const messages = manualRestartMessages(kind, undefined, false);
         const hint = t('codex.manualRestartHintLocal');
         assert.deepEqual(messages, {
           hint,
@@ -91,7 +91,7 @@ describe('local selection with manual restart', () => {
     assert.equal(execute.mock.callCount(), 0);
   });
 
-  test('confirmed named/default selections stay pending without changing the running host or quitting', async (ctx) => {
+  test('confirmed named/default selections stay pending without changing the running host or quitting', LINUX_ONLY, async (ctx) => {
     const fixture = makeTempHome('manual-selection');
     const home = fixture.home;
     env.remoteName = undefined;
@@ -192,7 +192,7 @@ describe('validateName (Codex)', () => {
     const { store, labels } = await make();
     const def = path.join(home, '.codex');
     fs.mkdirSync(def);
-    fs.symlinkSync(def, path.join(home, '.codex-main'));
+    fs.symlinkSync(def, path.join(home, '.codex-main'), 'junction');
     try {
       assert.equal(validateName('main', store, labels), t('name.sameAsDefaultDir'));
     } finally {
@@ -264,7 +264,7 @@ describe('panel message handlers', () => {
   const modal = (ctx: { mock: { method: typeof import('node:test').mock.method } }, answer: (message: string) => string | undefined) =>
     ctx.mock.method(window, 'showWarningMessage', async (message: string) => answer(message));
 
-  test('enable: pre-check, confirmation, rc blocks written, self-check passes, state file untouched', async (ctx) => {
+  test('enable: pre-check, confirmation, rc blocks written, self-check passes, state file untouched', LINUX_ONLY, async (ctx) => {
     fs.writeFileSync(bashrc(), 'x=1\n');
     fs.writeFileSync(profile(), '. ~/.bashrc\n');
     writeSelectedDir(path.join(fxHome, 'keep'));
@@ -288,7 +288,7 @@ describe('panel message handlers', () => {
     }
   });
 
-  test('enable: a failed self-check rolls back only the files newly written this time', async (ctx) => {
+  test('enable: a failed self-check rolls back only the files newly written this time', LINUX_ONLY, async (ctx) => {
     // ~/.bash_profile mentions .bashrc (pre-check passes) but does not source it, so the login shell never sees the block
     fs.writeFileSync(path.join(fxHome, '.bash_profile'), ': ~/.bashrc\n');
     fs.writeFileSync(bashrc(), 'x=1\n\n' + rcBlock());
@@ -311,7 +311,7 @@ describe('panel message handlers', () => {
     }
   });
 
-  test('enable: pre-check failures are reported without a confirmation', async (ctx) => {
+  test('enable: pre-check failures are reported without a confirmation', LINUX_ONLY, async (ctx) => {
     fs.writeFileSync(bashrc(), 'export CODEX_HOME=/mine\n');
     fs.writeFileSync(profile(), 'p=1\n');
     const h = await harness();
@@ -327,7 +327,7 @@ describe('panel message handlers', () => {
     }
   });
 
-  test('disable: removes both blocks and the state file after confirmation; a cancel changes nothing', async (ctx) => {
+  test('disable: removes both blocks and the state file after confirmation; a cancel changes nothing', LINUX_ONLY, async (ctx) => {
     fs.writeFileSync(bashrc(), 'x=1\n');
     fs.writeFileSync(profile(), 'p=1\n');
     installRcBlocks();
@@ -350,7 +350,7 @@ describe('panel message handlers', () => {
     }
   });
 
-  test('enabled(): a start marker without its end marker counts as not enabled so the repair guidance is reachable', async () => {
+  test('enabled(): a start marker without its end marker counts as not enabled so the repair guidance is reachable', LINUX_ONLY, async () => {
     fs.writeFileSync(bashrc(), 'x=1\n\n' + rcBlock());
     fs.writeFileSync(profile(), 'p=1\n\n' + RC_BEGIN + '\n');
     const h = await harness();
@@ -365,7 +365,7 @@ describe('panel message handlers', () => {
     }
   });
 
-  test('switch: an account already effective in this window only realigns the state file; no confirmation, no restart', async (ctx) => {
+  test('switch: an account already effective in this window only realigns the state file; no confirmation, no restart', LINUX_ONLY, async (ctx) => {
     const a = named('eff');
     const h = await harness([a]);
     const warnings = modal(ctx, () => t('common.continue'));
@@ -388,7 +388,7 @@ describe('panel message handlers', () => {
     }
   });
 
-  test('add: a linked account is created and linked; an independent one gets a copy; invalid names are reported', async () => {
+  test('add: a linked account is created and linked; an independent one gets a copy; invalid names are reported', LINUX_ONLY, async () => {
     fs.mkdirSync(def, { recursive: true });
     fs.writeFileSync(path.join(def, 'config.toml'), 'model = "m"\n');
     fs.mkdirSync(path.join(def, 'sessions'), { recursive: true });
@@ -471,7 +471,7 @@ describe('panel message handlers', () => {
     }
   });
 
-  test('share then unshare: conversion after confirmation; the selected account is refused', async (ctx) => {
+  test('share then unshare: conversion after confirmation; the selected account is refused', LINUX_ONLY, async (ctx) => {
     fs.writeFileSync(path.join(def, 'config.toml'), 'model = "m"\n');
     const a = named('conv');
     const h = await harness([a]);
@@ -530,7 +530,7 @@ describe('panel message handlers', () => {
     }
   });
 
-  test('terminal: runs codex login without auth.json, codex with it, and env -u for the default account', async (ctx) => {
+  test('terminal: runs codex login without auth.json, codex with it, and env -u for the default account', LINUX_ONLY, async (ctx) => {
     const a = named('term');
     const h = await harness([a]);
     await h.labels.set(a.name, 'Term Label');

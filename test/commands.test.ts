@@ -13,7 +13,7 @@ import { accountDir } from '../src/paths';
 import type { FromWebview, ToWebview } from '../src/protocol';
 import type { StatusBar } from '../src/statusBar';
 import { resetConfig, setConfig, updates, window } from './stubs/vscode';
-import { makeTempHome, MemoryMemento, type TempHome } from './helpers';
+import { LINUX_ONLY, makeTempHome, MemoryMemento, type TempHome } from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -58,7 +58,7 @@ describe('validateName', () => {
     const { store, labels } = await make();
     const target = path.join(home, 'elsewhere');
     fs.mkdirSync(target);
-    fs.symlinkSync(target, path.join(home, '.claude-lnk'));
+    fs.symlinkSync(target, path.join(home, '.claude-lnk'), 'junction');
     try {
       assert.equal(validateName('lnk', store, labels), t('name.dirIsSymlink'));
       assert.equal(validateName('lnk2', store, labels), undefined);
@@ -89,7 +89,7 @@ describe('shQuote', () => {
     assert.equal(shQuote(''), `''`);
   });
 
-  test('bash reads the quoted value back byte for byte', () => {
+  test('bash reads the quoted value back byte for byte', LINUX_ONLY, () => {
     for (const s of [`/tmp/a b`, `it's`, `$HOME`, '`id`', `a"b\\c`, `x;rm -rf y`, `line\nbreak`]) {
       assert.equal(execFileSync('bash', ['-c', `printf %s ${shQuote(s)}`], { encoding: 'utf8' }), s);
     }
@@ -219,7 +219,7 @@ describe('panel message handlers (Claude)', () => {
       const real = path.join(home, 'real-b');
       fs.mkdirSync(real);
       const link = accountDir('b');
-      fs.symlinkSync(real, link);
+      fs.symlinkSync(real, link, 'junction');
       await h.store.add({ name: 'b', dir: link });
       await h.handle({ type: 'remove', mode: 'claude', dir: link });
       assert.deepEqual(warning.mock.calls.at(-1)?.arguments[1], { modal: true, detail: t('claude.removeDirDetail') });
@@ -231,7 +231,7 @@ describe('panel message handlers (Claude)', () => {
     }
   });
 
-  test('switch to a shared account re-links and mirrors first; problems only warn and the switch proceeds', async (ctx) => {
+  test('switch to a shared account re-links and mirrors first; problems only warn and the switch proceeds', LINUX_ONLY, async (ctx) => {
     const h = harness();
     const dir = await add(h, 's', true);
     // A link replaced by a real file is a conflict; a running session keeps a purged history from being merged
@@ -293,7 +293,7 @@ describe('panel message handlers (Claude)', () => {
     }
   });
 
-  test('unshare: confirmed conversion, cancellation, busy account, and ignored rows', async (ctx) => {
+  test('unshare: confirmed conversion, cancellation, busy account, and ignored rows', LINUX_ONLY, async (ctx) => {
     const h = harness();
     const shared = await add(h, 's', true);
     const solo = await add(h, 'i', false);

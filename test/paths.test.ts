@@ -8,7 +8,7 @@ import {
   ensureAccountDir, formatClaudePlan, readAccountInfo, samePath, sameRealPath, scanAccountDirs,
   syncMcpServers,
 } from '../src/paths';
-import { assertTempHome, makeTempHome, mode, read, type TempHome } from './helpers';
+import { assertTempHome, makeTempHome, assertMode, FILE_SYMLINKS, read, type TempHome } from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -51,7 +51,7 @@ describe('formatClaudePlan', () => {
 describe('samePath / sameRealPath', () => {
   test('samePath normalizes trailing slashes and . / .. but does not resolve symlinks', () => {
     const link = path.join(home, 'same-link');
-    fs.symlinkSync(def, link);
+    fs.symlinkSync(def, link, 'junction');
     try {
       assert.ok(samePath(def, def + '/'));
       assert.ok(samePath(def, path.join(home, 'x', '..', '.claude')));
@@ -64,7 +64,7 @@ describe('samePath / sameRealPath', () => {
 
   test('sameRealPath resolves symlinks; missing paths fall back to path.resolve', () => {
     const link = path.join(home, 'real-link');
-    fs.symlinkSync(def, link);
+    fs.symlinkSync(def, link, 'junction');
     try {
       assert.ok(sameRealPath(def, link + '/'));
       assert.ok(sameRealPath(path.join(home, 'missing'), path.join(home, 'missing') + '/'));
@@ -166,10 +166,10 @@ describe('copySettingsStripped', () => {
     }));
     const work = accountDir('work');
     ensureAccountDir(work);
-    assert.equal(mode(work), '700');
+    assertMode(work, '700');
     assert.equal(copySettingsStripped(def, work), true);
     assert.deepEqual(JSON.parse(read(path.join(work, 'settings.json'))), { env: { KEEP: '1' }, model: 'opus', permissions: { allow: ['Bash'] } });
-    assert.equal(mode(path.join(work, 'settings.json')), '600');
+    assertMode(path.join(work, 'settings.json'), '600');
   });
   test('does not overwrite an existing target', () => {
     const work = accountDir('work');
@@ -204,7 +204,7 @@ function ensureScanFixtures(): void {
   try {
     fs.lstatSync(path.join(home, '.claude-link'));
   } catch {
-    fs.symlinkSync(accountDir('work'), path.join(home, '.claude-link'));
+    fs.symlinkSync(accountDir('work'), path.join(home, '.claude-link'), 'junction');
   }
 }
 
@@ -238,7 +238,7 @@ describe('checkSafeToDelete / deleteAccountDir', () => {
   test('refuses symlinks, the home directory itself, outside home, .. escape, invalid names, files, missing', () => {
     assert.equal(checkSafeToDelete(path.join(home, '.claude-link')), `Directory is a symbolic link; refusing to delete: ${path.join(home, '.claude-link')}`);
     assert.match(checkSafeToDelete(home) ?? '', /not a direct child of the home directory/);
-    assert.equal(checkSafeToDelete('/tmp/.claude-x'), 'Directory is not a direct child of the home directory: /tmp/.claude-x');
+    assert.equal(checkSafeToDelete('/tmp/.claude-x'), `Directory is not a direct child of the home directory: ${path.resolve('/tmp/.claude-x')}`);
     assert.match(checkSafeToDelete(path.join(home, '..', '.claude-x')) ?? '', /not a direct child of the home directory/);
     assert.equal(checkSafeToDelete(path.join(home, 'other')), `Directory name does not match the .claude-<name> format: ${path.join(home, 'other')}`);
     assert.equal(checkSafeToDelete(path.join(home, '.claude-file')), `Path is not a directory: ${path.join(home, '.claude-file')}`);
@@ -272,7 +272,7 @@ describe('syncMcpServers', () => {
     const a = mk('a');
     assert.deepEqual(syncMcpServers(src(), a), { added: ['one', 'two'], kept: [] });
     assert.deepEqual(target(a), { mcpServers: { one, two } });
-    assert.equal(mode(path.join(a, '.claude.json')), '600');
+    assertMode(path.join(a, '.claude.json'), '600');
   });
 
   test('merges into an existing file: adds missing, skips identical, keeps differing, removes nothing, keeps other keys and mode', () => {
@@ -286,7 +286,7 @@ describe('syncMcpServers', () => {
     setSource({ one, two, three: two });
     assert.deepEqual(syncMcpServers(src(), b), { added: ['three'], kept: ['two'] });
     assert.deepEqual(target(b), { userID: 'u', mcpServers: { one, two: own, mine: own, three: two } });
-    assert.equal(mode(file), '640');
+    assertMode(file, '640');
     assert.deepEqual(fs.readdirSync(b), ['.claude.json']);
   });
 
@@ -310,7 +310,7 @@ describe('syncMcpServers', () => {
     }
   });
 
-  test('a symlinked target is written through, keeping the link', () => {
+  test('a symlinked target is written through, keeping the link', FILE_SYMLINKS, () => {
     setSource({ one });
     const e = mk('e');
     const real = path.join(home, 'real-claude.json');
@@ -345,7 +345,7 @@ describe('checkSafeToDelete in zh-cn', () => {
   after(() => setLocale('en'));
   test('reasons follow the locale', () => {
     setLocale('zh-cn');
-    assert.equal(checkSafeToDelete('/tmp/.claude-x'), '目录不是用户主目录的直接子目录：/tmp/.claude-x');
+    assert.equal(checkSafeToDelete('/tmp/.claude-x'), `目录不是用户主目录的直接子目录：${path.resolve('/tmp/.claude-x')}`);
     assert.equal(checkSafeToDelete(path.join(home, '.claude-gone')), `目录不存在：${path.join(home, '.claude-gone')}`);
   });
 });

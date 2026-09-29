@@ -13,7 +13,7 @@ import { LinkPrivilegeError, copyLink, createLink, fileLinksAvailable } from '..
 import { deleteAccountDir } from '../src/paths';
 import { askCopyFallback } from '../src/linkPolicy';
 import { window } from './stubs/vscode';
-import { makeTempHome, type TempHome } from './helpers';
+import { FILE_SYMLINKS, makeTempHome, type TempHome } from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -26,7 +26,7 @@ function emulate(devMode: boolean): void {
   Object.defineProperty(process, 'platform', { value: 'win32' });
   mock.method(fsModule, 'symlinkSync', ((target: fs.PathLike, link: fs.PathLike, type?: string) => {
     if (type === 'file' && !devMode) throw Object.assign(new Error('EPERM: operation not permitted, symlink'), { code: 'EPERM' });
-    return realSymlink(target, link);
+    return realSymlink(target, link, type as fs.symlink.Type | undefined);
   }) as typeof fs.symlinkSync);
 }
 
@@ -56,7 +56,7 @@ describe('Windows without Developer Mode', () => {
     assert.deepEqual(fs.readdirSync(home).filter((n) => n.startsWith('.planswap-probe')), []);
   });
 
-  test('the probe passes with Developer Mode', () => {
+  test('the probe passes with Developer Mode', FILE_SYMLINKS, () => {
     emulate(true);
     assert.equal(fileLinksAvailable(home), true);
   });
@@ -91,7 +91,7 @@ describe('Windows without Developer Mode', () => {
     assert.ok(!r.conflicts.includes('CLAUDE.md'));
   });
 
-  test('identical copies are upgraded to links once Developer Mode is on', () => {
+  test('identical copies are upgraded to links once Developer Mode is on', FILE_SYMLINKS, () => {
     emulate(false);
     const acc = path.join(home, '.claude-work');
     fs.mkdirSync(acc);
@@ -166,7 +166,7 @@ describe('Windows without Developer Mode', () => {
     assert.match(String(seen[0][0]), /settings\.json, CLAUDE\.md/);
   });
 
-  test('no question when file links work', async () => {
+  test('no question when file links work', FILE_SYMLINKS, async () => {
     emulate(true);
     const m = mock.method(window, 'showWarningMessage', async () => undefined);
     assert.deepEqual(await askCopyFallback(home, 'Claude'), {});
@@ -199,12 +199,12 @@ describe('Windows without Developer Mode', () => {
     assert.throws(() => createLink(path.join(home, 'f'), path.join(home, 'l2'), 'win32'), LinkPrivilegeError);
   });
 
-  test('createLink uses junctions for folders and file symlinks for files; copyLink resolves relative targets', () => {
+  test('createLink uses junctions for folders and file symlinks for files; copyLink resolves relative targets', FILE_SYMLINKS, () => {
     Object.defineProperty(process, 'platform', { value: 'win32' });
     const types: Array<string | undefined> = [];
     mock.method(fsModule, 'symlinkSync', ((target: fs.PathLike, link: fs.PathLike, type?: string) => {
       types.push(type);
-      return realSymlink(target, link);
+      return realSymlink(target, link, type as fs.symlink.Type | undefined);
     }) as typeof fs.symlinkSync);
     const dir = path.join(home, 'd');
     fs.mkdirSync(dir);
@@ -218,7 +218,7 @@ describe('Windows without Developer Mode', () => {
     assert.equal(fs.readlinkSync(path.join(home, 'copied')), path.join(home, 'f'));
   });
 
-  test('deleting an account never descends through links into the default account', async () => {
+  test('deleting an account never descends through links into the default account', FILE_SYMLINKS, async () => {
     emulate(true);
     const acc = path.join(home, '.claude-work');
     fs.mkdirSync(acc);
@@ -230,7 +230,7 @@ describe('Windows without Developer Mode', () => {
     assert.equal(fs.readFileSync(path.join(home, '.claude', 'projects', 'keep.txt'), 'utf8'), 'x');
   });
 
-  test('with Developer Mode files link normally', () => {
+  test('with Developer Mode files link normally', FILE_SYMLINKS, () => {
     emulate(true);
     const acc = path.join(home, '.claude-work');
     fs.mkdirSync(acc);

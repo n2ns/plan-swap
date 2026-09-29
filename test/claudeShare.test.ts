@@ -9,7 +9,7 @@ import {
   makeClaudeIndependent, mergeEntry, migrateClaudeToShared, mirrorClaudeJson, type MigrateReport,
 } from '../src/claudeShare';
 import { accountDir, deleteAccountDir } from '../src/paths';
-import { assertTempHome, makeTempHome, mode, read, snapshot, type TempHome } from './helpers';
+import { assertTempHome, makeTempHome, assertMode, LINUX_ONLY, read, snapshot, type TempHome } from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -45,7 +45,7 @@ const exists = (p: string): boolean => {
   }
 };
 
-describe('ensureClaudeLinks', () => {
+describe('ensureClaudeLinks', LINUX_ONLY, () => {
   test('creates absolute links and empty default entries with modes; idempotent', () => {
     const acc = accountDir('a');
     fs.mkdirSync(acc);
@@ -57,9 +57,9 @@ describe('ensureClaudeLinks', () => {
     }
     assert.equal(read(path.join(def, 'settings.json')), '{}\n');
     assert.equal(read(path.join(def, 'CLAUDE.md')), '');
-    assert.equal(mode(path.join(def, 'history.jsonl')), '600');
-    assert.equal(mode(path.join(def, 'projects')), '700');
-    assert.equal(mode(path.join(def, 'skills')), '700');
+    assertMode(path.join(def, 'history.jsonl'), '600');
+    assertMode(path.join(def, 'projects'), '700');
+    assertMode(path.join(def, 'skills'), '700');
     assert.ok(fs.lstatSync(path.join(acc, 'skills')).isDirectory());
     assert.deepEqual(r.conflicts, []);
     assert.deepEqual(r.refused, []);
@@ -164,7 +164,7 @@ describe('ensureClaudeLinks', () => {
   });
 });
 
-describe('ensureClaudeLinks history repair', () => {
+describe('ensureClaudeLinks history repair', LINUX_ONLY, () => {
   test('a real history.jsonl in a shared account (after `claude project purge`) is merged back and relinked', () => {
     write(path.join(def, 'history.jsonl'), '{"a":1}\n{"a":2}\n');
     const acc = accountDir('h');
@@ -229,7 +229,7 @@ describe('ensureClaudeLinks history repair', () => {
   });
 });
 
-describe('isSharedClaudeAccount', () => {
+describe('isSharedClaudeAccount', LINUX_ONLY, () => {
   test('true only when projects links to the default projects', () => {
     const acc = accountDir('a');
     fs.mkdirSync(acc);
@@ -271,7 +271,7 @@ describe('mirrorClaudeJson', () => {
     assert.deepEqual(data.oauthAccount, { emailAddress: 'acc@x' });
     assert.deepEqual(data.projects['/p'], { allowedTools: ['X'], lastCost: 3, hasTrustDialogAccepted: true });
     assert.deepEqual(data.projects['/q'], { allowedTools: ['Q'] });
-    assert.equal(mode(path.join(acc, '.claude.json')), '640');
+    assertMode(path.join(acc, '.claude.json'), '640');
 
     // Unchanged → no write
     const mtime = fs.statSync(path.join(acc, '.claude.json')).mtimeMs;
@@ -294,7 +294,7 @@ describe('mirrorClaudeJson', () => {
     assert.ok(!exists(path.join(b, '.claude.json')));
     write(src(), JSON.stringify({ mcpServers: { m: { command: 'm' } } }));
     assert.deepEqual(mirrorClaudeJson(src(), b).changed, ['mcpServers']);
-    assert.equal(mode(path.join(b, '.claude.json')), '600');
+    assertMode(path.join(b, '.claude.json'), '600');
   });
 
   test('bad target or bad source throws without writing; default dir is a no-op', () => {
@@ -368,7 +368,7 @@ describe('claudeAccountBusy', () => {
 });
 
 describe('mergeEntry', () => {
-  test('a fifo the default lacks is left in place instead of being moved', () => {
+  test('a fifo the default lacks is left in place instead of being moved', LINUX_ONLY, () => {
     const src = path.join(home, 'merge-src');
     const dst = path.join(home, 'merge-dst');
     fs.mkdirSync(src);
@@ -383,7 +383,7 @@ describe('mergeEntry', () => {
   });
 });
 
-describe('migrateClaudeToShared', () => {
+describe('migrateClaudeToShared', LINUX_ONLY, () => {
   test('a dangling link in the default dir does not abort the migration; the account file is backed up', () => {
     fs.symlinkSync('/nowhere', path.join(def, 'CLAUDE.md'));
     const acc = accountDir('dangling');
@@ -484,7 +484,7 @@ describe('migrateClaudeToShared', () => {
     assert.deepEqual(r.backups, ['CLAUDE.md.independent-backup-2']);
     assert.equal(read(path.join(acc, 'CLAUDE.md.independent-backup-2')), 'own');
     assert.equal(read(path.join(def, 'history.jsonl')), '{"a":1}\n');
-    assert.equal(mode(path.join(def, 'history.jsonl')), '600');
+    assertMode(path.join(def, 'history.jsonl'), '600');
     assert.equal(read(path.join(def, 'CLAUDE.md')), 'def rules');
   });
 
@@ -517,7 +517,7 @@ describe('migrateClaudeToShared', () => {
   });
 });
 
-describe('copyClaudeIndependent', () => {
+describe('copyClaudeIndependent', LINUX_ONLY, () => {
   test('copies config without overwriting; excludes synced buckets; strips settings', () => {
     write(path.join(def, 'settings.json'), JSON.stringify({ model: 'm', apiKeyHelper: 'x', env: { ANTHROPIC_API_KEY: 'k', A: '1' } }));
     write(path.join(def, 'CLAUDE.md'), 'rules');
@@ -551,7 +551,7 @@ describe('copyClaudeIndependent', () => {
   });
 });
 
-describe('copyTree', () => {
+describe('copyTree', LINUX_ONLY, () => {
   test('copies links verbatim, keeps modes, skips fifos and existing entries; throws EEXIST on demand', () => {
     const src = path.join(home, 'tree-src');
     const dst = path.join(home, 'tree-dst');
@@ -567,7 +567,7 @@ describe('copyTree', () => {
     fs.rmSync(path.join(dst, 'a', 'f.txt'));
     copyTree(src, dst);
     assert.equal(read(path.join(dst, 'a', 'f.txt')), 'f');
-    assert.equal(mode(path.join(dst, 'a', 'f.txt')), '640');
+    assertMode(path.join(dst, 'a', 'f.txt'), '640');
     assert.throws(() => copyTree(src, dst, 'throw'), { code: 'EEXIST' });
   });
 
@@ -587,7 +587,7 @@ describe('copyTree', () => {
   });
 });
 
-describe('makeClaudeIndependent', () => {
+describe('makeClaudeIndependent', LINUX_ONLY, () => {
   const src = (): string => path.join(home, '.claude.json');
 
   test('removes the links, copies the config once, leaves history and the default dir alone', () => {

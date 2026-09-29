@@ -30,7 +30,7 @@ is still missing. Remove an item once it is done or decided.
 
 - **Native Windows is implemented but not yet accepted on a real machine.** Run [the Windows checklist](docs/manual-verification.md#native-windows-user-operated). Open questions: where `.claude.json` lives when `CLAUDE_CONFIG_DIR` is set on Windows, whether the Claude extension honors `claudeCode.environmentVariables`, whether the Codex extension host inherits the changed user variable after a fresh start, Codex's default credential store on Windows (keyring accounts read as signed out), and rc/state behavior of the `.vsix` under a real Windows editor.
 - **Add a CHANGELOG entry** for Windows support when preparing the next release (no `[Unreleased]` heading before then).
-- **Windows CI** is not set up; unit tests run on Linux with injected runners.
+- **Windows CI** is not set up. `npm test` passes on a local Windows machine without Developer Mode (Linux-only, file-symlink and case-sensitivity tests skipped, see [Development](docs/development.md#verification-and-release-boundaries)); a run with Developer Mode on, where the `FILE_SYMLINKS` tests execute, is still unverified.
 
 ## Deferred features
 
