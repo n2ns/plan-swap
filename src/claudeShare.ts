@@ -147,9 +147,12 @@ export function linkEntry(link: string, target: string): 'linked' | 'ok' | 'conf
 // a copy of those would silently diverge or corrupt
 export const COPYABLE_ON_NO_LINK: readonly string[] = ['settings.json', 'CLAUDE.md', 'config.toml', 'AGENTS.md', 'hooks.json'];
 
+/** Options of the linking operations. copyConfig: the user agreed to one-time copies where a file link is refused. */
+export interface LinkOptions { copyConfig?: boolean }
+
 /** record() plus the Windows fallback: a refused link of a copyable file becomes a one-time copy of the default file. */
-export function recordLink(report: ShareReport, name: string, result: ReturnType<typeof linkEntry>, link: string, target: string): void {
-  if (result === 'noprivilege' && COPYABLE_ON_NO_LINK.includes(name) && fs.existsSync(target) && fs.statSync(target).isFile() && !lstatOrUndefined(link)) {
+export function recordLink(report: ShareReport, name: string, result: ReturnType<typeof linkEntry>, link: string, target: string, allowCopy: boolean): void {
+  if (result === 'noprivilege' && allowCopy && COPYABLE_ON_NO_LINK.includes(name) && fs.existsSync(target) && fs.statSync(target).isFile() && !lstatOrUndefined(link)) {
     fs.copyFileSync(target, link, fs.constants.COPYFILE_EXCL);
     fs.chmodSync(link, 0o600);
     (report.copied ??= []).push(name);
@@ -189,7 +192,7 @@ export function mergeLines(src: string, dst: string): number {
  *  in a shared account a real history.jsonl (replaced by `claude project purge`) is merged back and relinked.
  *  Also removes links in skills/ or plugins/ whose default child no longer exists. Steps that move or unlink account
  *  files are skipped and reported under busy while claudeAccountBusy(dir, procRoot). dir === default → empty report. */
-export function ensureClaudeLinks(dir: string, procRoot = '/proc'): ShareReport {
+export function ensureClaudeLinks(dir: string, procRoot = '/proc', options: LinkOptions = {}): ShareReport {
   const report = emptyReport();
   if (isDefault(dir)) return report;
   const def = defaultDir();
@@ -218,7 +221,7 @@ export function ensureClaudeLinks(dir: string, procRoot = '/proc'): ShareReport 
       }
       mergeLines(link, target);
     }
-    recordLink(report, name, linkEntry(link, target), link, target);
+    recordLink(report, name, linkEntry(link, target), link, target, !!options.copyConfig);
   }
 
   for (const name of CLAUDE_CHILD_SHARED_DIRS) {
@@ -498,7 +501,7 @@ function appendHistory(src: string, dst: string): void {
 
 /** Converts an independent account into a shared one (see the contract); ends with ensureClaudeLinks(dir, procRoot).
  *  Throws t('share.busy') with the display name label (defaults to accountName) when claudeAccountBusy(dir, procRoot). */
-export function migrateClaudeToShared(dir: string, accountName: string, procRoot = '/proc', label = accountName): MigrateReport {
+export function migrateClaudeToShared(dir: string, accountName: string, procRoot = '/proc', label = accountName, options: LinkOptions = {}): MigrateReport {
   const report: MigrateReport = { ...emptyReport(), moved: 0, duplicates: 0, keptBoth: [], backups: [] };
   if (isDefault(dir)) return report;
   if (claudeAccountBusy(dir, procRoot)) throw new Error(t('share.busy', { name: label }));
@@ -567,7 +570,7 @@ export function migrateClaudeToShared(dir: string, accountName: string, procRoot
     }
   }
 
-  const links = ensureClaudeLinks(dir, procRoot);
+  const links = ensureClaudeLinks(dir, procRoot, options);
   report.linked.push(...links.linked);
   report.created.push(...links.created);
   report.conflicts.push(...links.conflicts);

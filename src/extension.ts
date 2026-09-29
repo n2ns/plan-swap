@@ -64,7 +64,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     postVersions: (items) => panel.post({ type: 'versions', items }),
     claudeDirs: () => store.named().map((a) => a.dir),
     codexDirs: codex ? () => codex.store.named().map((a) => a.dir) : undefined,
-    codexShareOps: codex ? { isShared: isSharedCodexAccount, refresh: ensureCodexLinks } : undefined,
+    codexShareOps: codex ? { isShared: isSharedCodexAccount, refresh: (dir, options) => ensureCodexLinks(dir, options) } : undefined,
     labelOf: (mode, dir) => {
       const account = mode === 'claude' ? store.findByDir(dir) : codex?.store.findByDir(dir);
       return account ? labelFor(account.name, mode === 'claude' ? claudeLabels : codexLabels) : path.basename(dir);

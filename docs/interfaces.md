@@ -46,7 +46,7 @@ export function migrateLegacyLanguage(state: vscode.Memento): Promise<void>; // 
 
 - `isWindows()`, `isSupportedPlatform(platform?)` (linux, win32), `comparablePath(p, platform?)` (`path.resolve`, lower-cased on win32 for comparison only).
 - `createLink(target, link, platform?)`: `fs.symlinkSync`, or on win32 a junction for directories and a file symlink otherwise (`EPERM` → an Error naming Developer Mode). `copyLink(src, dst, platform?)` recreates a link, resolving relative targets on win32.
-- `LinkPrivilegeError`, `fileLinksAvailable(dir, platform?)` (probe; true off Windows). `ShareReport.noPrivilege` lists file entries left independent for lack of that privilege; `describeShareReport` reports it. `ShareReport.copied` lists config files copied once instead; `recordLink(report, name, result, link, target)` applies that fallback and `COPYABLE_ON_NO_LINK` is its whitelist.
+- `LinkPrivilegeError`, `fileLinksAvailable(dir, platform?)` (probe; true off Windows). `ShareReport.noPrivilege` lists file entries left independent for lack of that privilege; `describeShareReport` reports it. `ShareReport.copied` lists config files copied once instead; `LinkOptions { copyConfig? }` is passed as the last parameter of `ensureClaudeLinks`, `migrateClaudeToShared`, `ensureCodexLinks`, `migrateCodexToShared` (default: no copying); `recordLink(report, name, result, link, target, allowCopy)` applies that fallback; `linkPolicy.askCopyFallback(dir, vendor)` (imports vscode) asks the user and `COPYABLE_ON_NO_LINK` is its whitelist.
 - `pidAlive(pid)` (signal 0), `parseTasklistCsv(out)`, `imageRunning(image, run?)` (a failing probe counts as running), `fsyncDir(dir)` (no-op on win32).
 
 ## src/paths.ts (data layer, no vscode import)

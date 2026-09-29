@@ -6,7 +6,7 @@ import { t } from '../i18n';
 import { samePath, sameRealPath } from '../paths';
 import { comparablePath, fileLinksAvailable, imageRunning, isWindows } from '../platform';
 import {
-  type MergeCtx, type MigrateReport, type ShareReport, copyTree, defaultFolder, emptyReport, freeName, linkEntry, recordLink,
+  type MergeCtx, type MigrateReport, type ShareReport, copyTree, defaultFolder, emptyReport, freeName, linkEntry, recordLink, type LinkOptions,
   linksTo, lstatOrUndefined, mergeEntry, mergeLines, moveEntry, realOrResolved, record, sameContent, unlinkChildLinks, unlinkIfLinksTo,
 } from '../claudeShare';
 import { blockedConfigReason, codexDaemonAlive, codexDefaultDir, copyCodexSeed } from './codexPaths';
@@ -121,7 +121,7 @@ export function isSharedCodexAccount(dir: string): boolean {
 /** Creates/repairs every link of a shared account (idempotent). Never touches the default dir's existing content.
  *  In a shared account a real history.jsonl / session_index.jsonl is merged back into the default file and relinked
  *  (reported under `linked`); a real sqlite db stays a conflict. dir === default → empty report. */
-export function ensureCodexLinks(dir: string): ShareReport {
+export function ensureCodexLinks(dir: string, options: LinkOptions = {}): ShareReport {
   const report = emptyReport();
   if (isDefault(dir)) return report;
   const def = codexDefaultDir();
@@ -152,7 +152,7 @@ export function ensureCodexLinks(dir: string): ShareReport {
     if (shared && JSONL_FILES.includes(name) && lstatOrUndefined(link)?.isFile()) {
       mergeLines(link, target);
     }
-    recordLink(report, name, linkEntry(link, target), link, target);
+    recordLink(report, name, linkEntry(link, target), link, target, !!options.copyConfig);
   }
 
   for (const { dir: rel, excludes } of CODEX_CHILD_SHARED_DIRS) {
@@ -230,7 +230,7 @@ function backupSqlite(src: string, rel: string, report: MigrateReport): void {
 
 /** Converts an independent account into a shared one (see the contract); ends with ensureCodexLinks(dir).
  *  Throws t('share.busyCodex') when codexAccountBusy(dir, procRoot). */
-export function migrateCodexToShared(dir: string, accountName: string, procRoot = '/proc'): MigrateReport {
+export function migrateCodexToShared(dir: string, accountName: string, procRoot = '/proc', options: LinkOptions = {}): MigrateReport {
   const report: MigrateReport = { ...emptyReport(), moved: 0, duplicates: 0, keptBoth: [], backups: [] };
   if (isDefault(dir)) return report;
   if (codexAccountBusy(dir, procRoot)) throw new Error(t('share.busyCodex', { name: accountName }));
@@ -302,7 +302,7 @@ export function migrateCodexToShared(dir: string, accountName: string, procRoot 
     }
   }
 
-  const links = ensureCodexLinks(dir);
+  const links = ensureCodexLinks(dir, options);
   report.linked.push(...links.linked);
   report.created.push(...links.created);
   report.conflicts.push(...links.conflicts);

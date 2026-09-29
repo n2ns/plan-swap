@@ -35,6 +35,7 @@ import {
   writeSelection,
 } from './codexState';
 import { isWindows } from '../platform';
+import { askCopyFallback } from '../linkPolicy';
 import { type ServerKind, canAutoRestart, detectServerKind, executeRestart, planRestart } from './codexServer';
 import type { CodexAccountStore } from './codexStore';
 import { runTool, type ToolDeps } from '../tools';
@@ -399,10 +400,11 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     } catch (err) {
       return t('account.createDirFailed', { error: errText(err) });
     }
+    const linkOptions = shared ? await askCopyFallback(account.dir, 'Codex') : {};
     // Linking or copying failures only warn and do not block
     try {
       if (shared) {
-        const notes = describeShareReport(ensureCodexLinks(account.dir));
+        const notes = describeShareReport(ensureCodexLinks(account.dir, linkOptions));
         if (notes) void vscode.window.showWarningMessage(t('share.addNotes', { name, notes }));
       } else {
         const result = copyCodexIndependent(account.dir);
@@ -440,8 +442,9 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       void vscode.window.showWarningMessage(t('share.busyCodex', { name: labelOf(account) }));
       return;
     }
+    const linkOptions = await askCopyFallback(account.dir, 'Codex');
     try {
-      const report = migrateCodexToShared(account.dir, account.name);
+      const report = migrateCodexToShared(account.dir, account.name, '/proc', linkOptions);
       void vscode.window.showInformationMessage(t('share.done', { label: labelOf(account), summary: describeShareReport(report) || t('share.nothingElse') }));
     } catch (err) {
       void vscode.window.showErrorMessage(t('share.failed', { label: labelOf(account), error: errText(err) }));

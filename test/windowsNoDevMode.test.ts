@@ -10,6 +10,8 @@ import { ensureClaudeLinks, isSharedClaudeAccount, migrateClaudeToShared } from 
 import { ensureCodexLinks, migrateCodexToShared } from '../src/codex/codexShare';
 import { describeShareReport } from '../src/shareReport';
 import { fileLinksAvailable } from '../src/platform';
+import { askCopyFallback } from '../src/linkPolicy';
+import { window } from './stubs/vscode';
 import { makeTempHome, type TempHome } from './helpers';
 
 let tmp: TempHome;
@@ -17,6 +19,7 @@ let home: string;
 const realPlatform = Object.getOwnPropertyDescriptor(process, 'platform') as PropertyDescriptor;
 const realSymlink = fsModule.symlinkSync;
 let FAKE_PROC = '';
+const COPY = { copyConfig: true };
 
 function emulate(devMode: boolean): void {
   Object.defineProperty(process, 'platform', { value: 'win32' });
@@ -64,7 +67,7 @@ describe('Windows without Developer Mode', () => {
     emulate(false);
     const acc = path.join(home, '.claude-work');
     fs.mkdirSync(acc);
-    const r = ensureClaudeLinks(acc, FAKE_PROC);
+    const r = ensureClaudeLinks(acc, FAKE_PROC, COPY);
     assert.ok(r.linked.includes('projects'));
     assert.equal(fs.lstatSync(path.join(acc, 'projects')).isSymbolicLink(), true);
     // Config files are copied once; history is never copied
@@ -84,7 +87,7 @@ describe('Windows without Developer Mode', () => {
     fs.mkdirSync(acc);
     fs.writeFileSync(path.join(acc, 'CLAUDE.md'), 'mine\n');
     fs.writeFileSync(path.join(home, '.claude', 'CLAUDE.md'), 'default\n');
-    const r = ensureClaudeLinks(acc, FAKE_PROC);
+    const r = ensureClaudeLinks(acc, FAKE_PROC, COPY);
     assert.equal(fs.readFileSync(path.join(acc, 'CLAUDE.md'), 'utf8'), 'mine\n');
     assert.ok(r.conflicts.includes('CLAUDE.md'));
   });
@@ -94,17 +97,17 @@ describe('Windows without Developer Mode', () => {
     const acc = path.join(home, '.claude-work');
     fs.mkdirSync(acc);
     fs.writeFileSync(path.join(home, '.claude', 'CLAUDE.md'), 'rules\n');
-    ensureClaudeLinks(acc, FAKE_PROC);
+    ensureClaudeLinks(acc, FAKE_PROC, COPY);
     assert.equal(fs.lstatSync(path.join(acc, 'CLAUDE.md')).isSymbolicLink(), false);
     mock.restoreAll();
     emulate(true);
-    const r = ensureClaudeLinks(acc, FAKE_PROC);
+    const r = ensureClaudeLinks(acc, FAKE_PROC, COPY);
     assert.ok(r.linked.includes('CLAUDE.md'));
     assert.equal(fs.lstatSync(path.join(acc, 'CLAUDE.md')).isSymbolicLink(), true);
     // A diverged copy is left alone
     fs.rmSync(path.join(acc, 'settings.json'));
     fs.writeFileSync(path.join(acc, 'settings.json'), '{"x":1}\n');
-    assert.ok(ensureClaudeLinks(acc, FAKE_PROC).conflicts.includes('settings.json'));
+    assert.ok(ensureClaudeLinks(acc, FAKE_PROC, COPY).conflicts.includes('settings.json'));
   });
 
   test('Claude conversion keeps the account files instead of moving them away', () => {
@@ -113,7 +116,7 @@ describe('Windows without Developer Mode', () => {
     fs.mkdirSync(path.join(acc, 'projects'), { recursive: true });
     fs.writeFileSync(path.join(acc, 'CLAUDE.md'), 'mine\n');
     fs.writeFileSync(path.join(acc, 'history.jsonl'), '{"a":1}\n');
-    const r = migrateClaudeToShared(acc, 'work', FAKE_PROC);
+    const r = migrateClaudeToShared(acc, 'work', FAKE_PROC, 'work', COPY);
     assert.equal(fs.readFileSync(path.join(acc, 'CLAUDE.md'), 'utf8'), 'mine\n');
     assert.equal(fs.readFileSync(path.join(acc, 'history.jsonl'), 'utf8'), '{"a":1}\n');
     // The default may get an empty link target, but the account's content is never moved into it
@@ -135,16 +138,45 @@ describe('Windows without Developer Mode', () => {
     assert.ok(again.noPrivilege?.includes('history.jsonl'));
     const fresh = path.join(home, '.codex-fresh');
     fs.mkdirSync(fresh);
-    const r2 = ensureCodexLinks(fresh);
+    const r2 = ensureCodexLinks(fresh, COPY);
     assert.ok(r2.copied?.includes('AGENTS.md'));
     assert.ok(!r2.copied?.some((n) => n.endsWith('.sqlite') || n.endsWith('.jsonl')));
+  });
+
+  test('without consent nothing is copied', () => {
+    emulate(false);
+    const acc = path.join(home, '.claude-work');
+    fs.mkdirSync(acc);
+    const r = ensureClaudeLinks(acc, FAKE_PROC);
+    assert.equal(r.copied, undefined);
+    assert.ok(r.noPrivilege?.includes('CLAUDE.md'));
+    assert.equal(fs.existsSync(path.join(acc, 'CLAUDE.md')), false);
+  });
+
+  test('the modal is a modal warning with copy and skip buttons; dismissing means skip', async () => {
+    emulate(false);
+    const seen: unknown[][] = [];
+    const answers: Array<string | undefined> = ['Copy files', "Don't copy", undefined];
+    mock.method(window, 'showWarningMessage', async (...args: unknown[]) => (seen.push(args), answers.shift()));
+    assert.deepEqual(await askCopyFallback(home, 'Claude'), { copyConfig: true });
+    assert.deepEqual(await askCopyFallback(home, 'Claude'), { copyConfig: false });
+    assert.deepEqual(await askCopyFallback(home, 'Codex'), { copyConfig: false });
+    assert.deepEqual(seen[0].slice(1), [{ modal: true }, 'Copy files', "Don't copy"]);
+    assert.match(String(seen[0][0]), /Developer Mode/);
+  });
+
+  test('no question when file links work', async () => {
+    emulate(true);
+    const m = mock.method(window, 'showWarningMessage', async () => undefined);
+    assert.deepEqual(await askCopyFallback(home, 'Claude'), {});
+    assert.equal(m.mock.callCount(), 0);
   });
 
   test('with Developer Mode files link normally', () => {
     emulate(true);
     const acc = path.join(home, '.claude-work');
     fs.mkdirSync(acc);
-    const r = ensureClaudeLinks(acc, FAKE_PROC);
+    const r = ensureClaudeLinks(acc, FAKE_PROC, COPY);
     assert.equal(r.noPrivilege, undefined);
     assert.equal(fs.lstatSync(path.join(acc, 'settings.json')).isSymbolicLink(), true);
   });
