@@ -30,6 +30,8 @@ beforeEach(() => {
   fs.mkdirSync(def, { mode: 0o700 });
 });
 
+// A dangling link target; absolute on every platform (Windows stores a rooted target with the current drive)
+const NOWHERE = path.resolve('/nowhere');
 const write = (f: string, content: string): void => {
   fs.mkdirSync(path.dirname(f), { recursive: true });
   fs.writeFileSync(f, content);
@@ -421,14 +423,14 @@ describe('mergeEntry', () => {
 
 describe('migrateClaudeToShared', SHARING, () => {
   test('a dangling link in the default dir does not abort the migration; the account file is backed up', () => {
-    fs.symlinkSync('/nowhere', path.join(def, 'CLAUDE.md'));
+    fs.symlinkSync(NOWHERE, path.join(def, 'CLAUDE.md'));
     const acc = accountDir('dangling');
     write(path.join(acc, 'CLAUDE.md'), 'acc rules');
     write(path.join(acc, 'projects', 'p', 'a.jsonl'), 'a');
     const r = migrateClaudeToShared(acc, 'dangling', fakeProc({}));
     assert.deepEqual(r.backups, ['CLAUDE.md.independent-backup']);
     assert.equal(read(path.join(acc, 'CLAUDE.md.independent-backup')), 'acc rules');
-    assert.equal(fs.readlinkSync(path.join(def, 'CLAUDE.md')), '/nowhere');   // the default entry is never touched
+    assert.equal(fs.readlinkSync(path.join(def, 'CLAUDE.md')), NOWHERE);   // the default entry is never touched
     assert.equal(read(path.join(def, 'projects', 'p', 'a.jsonl')), 'a');
     assert.ok(isSharedClaudeAccount(acc));
   });
@@ -468,7 +470,7 @@ describe('migrateClaudeToShared', SHARING, () => {
     write(path.join(acc, 'projects', 'p', 'new.jsonl'), 'new');
     write(path.join(acc, 'projects', 'p', 'memory', 'MEMORY.md'), 'acc mem');
     write(path.join(acc, 'projects', 'q', 'only.jsonl'), 'q');
-    fs.symlinkSync('/nowhere', path.join(acc, 'projects', 'q', 'lnk'));
+    fs.symlinkSync(NOWHERE, path.join(acc, 'projects', 'q', 'lnk'));
     write(path.join(acc, 'history.jsonl'), '{"a":1}\n{"a":2}');
     write(path.join(acc, 'settings.json'), '{"model":"a"}');
     write(path.join(acc, 'CLAUDE.md'), 'def rules');
@@ -490,7 +492,7 @@ describe('migrateClaudeToShared', SHARING, () => {
     assert.equal(read(path.join(def, 'projects', 'p', 'memory', 'MEMORY.md')), 'def mem');
     assert.equal(read(path.join(def, 'projects', 'p', 'memory', 'MEMORY.md.from-xn')), 'older');
     assert.equal(read(path.join(def, 'projects', 'p', 'memory', 'MEMORY.md.from-xn-2')), 'acc mem');
-    assert.equal(fs.readlinkSync(path.join(def, 'projects', 'q', 'lnk')), '/nowhere');
+    assert.equal(fs.readlinkSync(path.join(def, 'projects', 'q', 'lnk')), NOWHERE);
     assert.equal(read(path.join(def, 'history.jsonl')), '{"d":1}\n{"a":1}\n{"a":2}\n');
     assert.equal(read(path.join(def, 'settings.json')), '{"model":"d"}');
     assert.equal(read(path.join(acc, 'settings.json.independent-backup')), '{"model":"a"}');
@@ -558,7 +560,7 @@ describe('copyClaudeIndependent', SHARING, () => {
     write(path.join(def, 'settings.json'), JSON.stringify({ model: 'm', apiKeyHelper: 'x', env: { ANTHROPIC_API_KEY: 'k', A: '1' } }));
     write(path.join(def, 'CLAUDE.md'), 'rules');
     write(path.join(def, 'agents', 'a.md'), 'agent');
-    fs.symlinkSync('/nowhere', path.join(def, 'agents', 'lnk'));
+    fs.symlinkSync(NOWHERE, path.join(def, 'agents', 'lnk'));
     write(path.join(def, 'commands', 'c.md'), 'cmd');
     write(path.join(def, 'skills', 'one', 'SKILL.md'), '1');
     write(path.join(def, 'skills', 'synced', 'x'), 's');
@@ -574,7 +576,7 @@ describe('copyClaudeIndependent', SHARING, () => {
     assert.equal(read(path.join(acc, 'CLAUDE.md')), 'rules');
     assert.ok(!fs.lstatSync(path.join(acc, 'CLAUDE.md')).isSymbolicLink());
     assert.equal(read(path.join(acc, 'agents', 'a.md')), 'agent');
-    assert.equal(fs.readlinkSync(path.join(acc, 'agents', 'lnk')), '/nowhere');
+    assert.equal(fs.readlinkSync(path.join(acc, 'agents', 'lnk')), NOWHERE);
     assert.equal(read(path.join(acc, 'commands', 'c.md')), 'own');
     assert.equal(read(path.join(acc, 'skills', 'one', 'SKILL.md')), '1');
     assert.ok(!exists(path.join(acc, 'skills', 'synced')));
@@ -593,12 +595,12 @@ describe('copyTree', SHARING, () => {
     const dst = path.join(home, 'tree-dst');
     write(path.join(src, 'a', 'f.txt'), 'f');
     fs.chmodSync(path.join(src, 'a', 'f.txt'), 0o640);
-    fs.symlinkSync('/nowhere', path.join(src, 'lnk'));
+    fs.symlinkSync(NOWHERE, path.join(src, 'lnk'));
     execFileSync('mkfifo', [path.join(src, 'pipe')]);
     write(path.join(dst, 'a', 'f.txt'), 'old');
     copyTree(src, dst);
     assert.equal(read(path.join(dst, 'a', 'f.txt')), 'old');   // never overwritten
-    assert.equal(fs.readlinkSync(path.join(dst, 'lnk')), '/nowhere');
+    assert.equal(fs.readlinkSync(path.join(dst, 'lnk')), NOWHERE);
     assert.ok(!fs.existsSync(path.join(dst, 'pipe')));
     fs.rmSync(path.join(dst, 'a', 'f.txt'));
     copyTree(src, dst);

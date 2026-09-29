@@ -29,6 +29,8 @@ beforeEach(() => {
   fs.mkdirSync(def, { mode: 0o700 });
 });
 
+// A dangling link target; absolute on every platform (Windows stores a rooted target with the current drive)
+const NOWHERE = path.resolve('/nowhere');
 const write = (f: string, content: string): void => {
   fs.mkdirSync(path.dirname(f), { recursive: true });
   fs.writeFileSync(f, content);
@@ -520,7 +522,7 @@ describe('copyCodexIndependent', SHARING, () => {
     fs.chmodSync(path.join(def, 'AGENTS.md'), 0o644);
     write(path.join(def, 'hooks.json'), '{"h":1}');
     write(path.join(def, 'rules', 'r.rules'), 'r');
-    fs.symlinkSync('/nowhere', path.join(def, 'rules', 'lnk'));
+    fs.symlinkSync(NOWHERE, path.join(def, 'rules', 'lnk'));
     write(path.join(def, 'hooks', 'h.sh'), 'h');
     write(path.join(def, 'agents', 'a.toml'), 'a');
     write(path.join(def, 'themes', 't.json'), 't');
@@ -540,7 +542,7 @@ describe('copyCodexIndependent', SHARING, () => {
     assertMode(path.join(acc, 'AGENTS.md'), '600');
     assertMode(path.join(acc, 'hooks.json'), '600');
     assert.equal(read(path.join(acc, 'rules', 'r.rules')), 'r');
-    assert.equal(fs.readlinkSync(path.join(acc, 'rules', 'lnk')), '/nowhere');
+    assert.equal(fs.readlinkSync(path.join(acc, 'rules', 'lnk')), NOWHERE);
     assert.equal(read(path.join(acc, 'themes', 't.json')), 'own');
     assert.equal(read(path.join(acc, 'skills', 'one', 'SKILL.md')), '1');
     assert.ok(!exists(path.join(acc, 'skills', '.system')));
