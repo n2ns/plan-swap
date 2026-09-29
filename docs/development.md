@@ -15,6 +15,7 @@ Purpose: repository layout, setup, dependency and build constraints, automated c
 | `docs/` | Specialized documentation; responsibilities and task routing in [the documentation map](README.md). |
 | `.vscode/` | F5 launch configuration and its pre-launch build task. |
 | `.github/workflows/publish.yml` | `v*` tag workflow for VS Code Marketplace and Open VSX publication. |
+| `.github/workflows/test.yml` | Type check, tests and build on every push and pull request, on `ubuntu-latest` and `windows-latest` (elevated, so the `SHARING` and `FILE_SYMLINKS` tests run on real Windows links); failing tests are also reported as an annotation. |
 | `package.json`, `package.nls*.json` | Extension manifest, commands, settings and localized static strings. |
 | `esbuild.mjs`, `tsconfig.json`, `src/webview/tsconfig.json`, `test/tsconfig.json` | Host/frontend bundles and separate type-check scopes. |
 | `.vscodeignore`, `.gitignore` | Packaging and Git exclusions. |
@@ -55,7 +56,7 @@ Frontend assets must all be emitted into `dist/media/`, the Webview's only `loca
 
 - Before committing, `npm run typecheck`, `npm test` and `npm run build` must pass.
 - File-system tests use a temporary HOME via `makeTempHome` in `test/helpers.ts` (it sets both `HOME` and `USERPROFILE`, which `os.homedir()` reads on Windows), which asserts the real home is not used. Never run account, rc-file or state-file write/delete tests under the real home. Busy checks and migrations use a fake `procRoot` where applicable; never test `executeRestart` or signal the editor server or its children.
-- Tests also run on native Windows. Linux/WSL remains the full run; on Windows `test/helpers.ts` skips `LINUX_ONLY` tests (rc files and bash, `/proc`, the WSL server, fifos and chmod, and the Linux link semantics of sharing, which `windowsNoDevMode.test.ts` covers for Windows), `FILE_SYMLINKS` tests when file symbolic links are refused (Developer Mode off) and `CASE_SENSITIVE_FS` tests; `assertMode` checks POSIX modes only off Windows. Directory link fixtures pass the `'junction'` type (ignored on Linux). On Windows the test process refuses to run `reg` / `powershell.exe`, so nothing can touch the real user-level `CODEX_HOME`.
+- Tests also run on native Windows. Linux/WSL remains the full run; on Windows `test/helpers.ts` skips `LINUX_ONLY` tests (rc files and bash, `/proc`, the WSL server, fifos and chmod), `SHARING` and `FILE_SYMLINKS` tests when file symbolic links are refused (Developer Mode off; `windowsNoDevMode.test.ts` covers that case) and `CASE_SENSITIVE_FS` tests; `assertMode` checks POSIX modes only off Windows. Directory link fixtures pass the `'junction'` type (ignored on Linux). On Windows the test process refuses to run `reg` / `powershell.exe`, so nothing can touch the real user-level `CODEX_HOME`.
 - The local tests use disposable fixtures; UI integration and real-account acceptance are separate and follow [Manual Verification](manual-verification.md). Record what ran and what remains unverified.
 - Before releasing, check `README.md` and `CHANGELOG.md`: neither may contain `[Unreleased]` content, including an empty heading. Packaging does not authorize installation or publication. Never install the `.vsix` into the user's editor automatically; the user installs it after packaging. Publish only under the user's explicit release authorization.
 
