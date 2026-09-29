@@ -148,6 +148,7 @@ export const en = {
   'share.removeDirDetail':
     "Linked data in the default account will be kept. This account directory and everything stored locally in it, including login credentials, per-account memories, backups and other unlinked files, will be permanently deleted.",
   'claude.pick.switch': 'Select the account to switch to',
+  'claude.pick.share': 'Select the account to share with the default account',
   'claude.pick.remove': 'Select the account to delete',
   'claude.pick.terminal': 'Select the account to open claude with in a terminal',
   'claude.loginNotLanded':
@@ -202,6 +203,7 @@ export const en = {
   'codex.removeDirDetail':
     "The directory contains this account's login credentials, sessions and local data and cannot be recovered once deleted.",
   'codex.pick.switch': 'Select the Codex account to switch to',
+  'codex.pick.share': 'Select the Codex account to share with the default account',
   'codex.pick.remove': 'Select the Codex account to delete',
   'codex.pick.terminal': 'Select the account to run codex with in a terminal',
 
@@ -447,6 +449,7 @@ export const zhCn: Record<MessageKey, string> = {
     '目录内含该账号的登录凭据与会话历史，删除后无法恢复。若刚从该账号切走且尚未重新加载窗口，已打开的会话仍在使用此目录。',
   'claude.removeDirDetailShared': '默认账号中的链接目标会保留。本账号目录及其中本地存储的全部内容（包括登录凭据、备份和其他未链接文件）将永久删除。',
   'claude.pick.switch': '选择要切换到的账号',
+  'claude.pick.share': '选择要与默认账号共享的账号',
   'claude.pick.remove': '选择要删除的账号',
   'claude.pick.terminal': '选择要在终端中打开 claude 的账号',
   'claude.loginNotLanded':
@@ -492,6 +495,7 @@ export const zhCn: Record<MessageKey, string> = {
   'codex.removeDirDetail': '目录内含该账号的登录凭据、会话与本地数据，删除后无法恢复。',
   'share.removeDirDetail': '默认账号中的链接目标会保留。本账号目录及其中本地存储的全部内容（包括登录凭据、独立记忆、备份和其他未链接文件）将永久删除。',
   'codex.pick.switch': '选择要切换到的 Codex 账号',
+  'codex.pick.share': '选择要与默认账号共享的 Codex 账号',
   'codex.pick.remove': '选择要删除的 Codex 账号',
   'codex.pick.terminal': '选择要在终端中运行 codex 的账号',
 
@@ -725,6 +729,7 @@ export const es: Record<MessageKey, string> = {
   'claude.removeDirDetailShared': 'Los datos enlazados de la cuenta predeterminada se conservarán. Se eliminarán permanentemente este directorio y todo su contenido local, incluidas las credenciales, copias de seguridad y demás archivos no enlazados.',
   'share.removeDirDetail': 'Los datos enlazados de la cuenta predeterminada se conservarán. Se eliminarán permanentemente este directorio y todo su contenido local, incluidas las credenciales, Memories de la cuenta, copias de seguridad y demás archivos no enlazados.',
   'claude.pick.switch': 'Elige la cuenta que quieres usar',
+  'claude.pick.share': 'Elige la cuenta que quieres compartir con la cuenta predeterminada',
   'claude.pick.remove': 'Elige la cuenta que quieres eliminar',
   'claude.pick.terminal': 'Elige la cuenta para abrir claude en una terminal',
   'claude.loginNotLanded': 'No se encontró información de inicio de sesión en {dir}. Comprueba si ~/.bashrc u otro archivo sobrescribe CLAUDE_CONFIG_DIR, o vuelve a abrir la terminal e inicia sesión de nuevo.',
@@ -764,6 +769,7 @@ export const es: Record<MessageKey, string> = {
   'codex.removeConfirm': '¿Eliminar la cuenta de Codex {label}?',
   'codex.removeDirDetail': 'El directorio contiene las credenciales, sesiones y datos locales de esta cuenta. La eliminación es irreversible.',
   'codex.pick.switch': 'Elige la cuenta de Codex que quieres usar',
+  'codex.pick.share': 'Elige la cuenta de Codex que quieres compartir con la cuenta predeterminada',
   'codex.pick.remove': 'Elige la cuenta de Codex que quieres eliminar',
   'codex.pick.terminal': 'Elige la cuenta para ejecutar codex en una terminal',
   'codex.seed.srcMissing': 'El archivo de origen no existe',
@@ -992,6 +998,7 @@ export const ja: Record<MessageKey, string> = {
   'claude.removeDirDetailShared': '既定のアカウントにあるリンク先のデータは保持されます。このアカウントのディレクトリと、ログイン情報、バックアップ、リンクされていないファイルを含むローカルの全内容は完全に削除されます。',
   'share.removeDirDetail': '既定のアカウントにあるリンク先のデータは保持されます。このアカウントのディレクトリと、ログイン情報、アカウント固有の Memories、バックアップ、リンクされていないファイルを含むローカルの全内容は完全に削除されます。',
   'claude.pick.switch': '切り替え先のアカウントを選択',
+  'claude.pick.share': '既定のアカウントと共有するアカウントを選択',
   'claude.pick.remove': '削除するアカウントを選択',
   'claude.pick.terminal': 'ターミナルで claude を開くアカウントを選択',
   'claude.loginNotLanded': '{dir} にログイン情報が見つかりません。~/.bashrc などで CLAUDE_CONFIG_DIR が上書きされていないか確認するか、ターミナルを開き直して再度ログインしてください。',
@@ -1031,6 +1038,7 @@ export const ja: Record<MessageKey, string> = {
   'codex.removeConfirm': 'Codex アカウント {label} を削除しますか？',
   'codex.removeDirDetail': 'このディレクトリにはログイン情報、セッション、ローカルデータが含まれます。削除すると復元できません。',
   'codex.pick.switch': '切り替え先の Codex アカウントを選択',
+  'codex.pick.share': '既定のアカウントと共有する Codex アカウントを選択',
   'codex.pick.remove': '削除する Codex アカウントを選択',
   'codex.pick.terminal': 'ターミナルで codex を実行するアカウントを選択',
   'codex.seed.srcMissing': 'コピー元のファイルがありません',

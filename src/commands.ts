@@ -398,6 +398,10 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
       if (a) await switchTo(a);
     }),
     vscode.commands.registerCommand('planswap.addAccount', () => panel.focusAdd(MODE)),
+    vscode.commands.registerCommand('planswap.shareAccount', async () => {
+      const a = await pickAccount(store.named().filter((x) => !isSharedClaudeAccount(x.dir) && !inUse(x)), t('claude.pick.share'));
+      if (a) await shareAccount(a);
+    }),
     vscode.commands.registerCommand('planswap.removeAccount', async () => {
       const a = await pickAccount(store.named().filter((x) => !inUse(x)), t('claude.pick.remove'));
       if (a) await removeAccount(a, false);

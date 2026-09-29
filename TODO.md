@@ -42,7 +42,6 @@ is still missing. Remove an item once it is done or decided.
 
 - **Claude quota collection** awaits graphical-chat invocation and per-account attribution evidence. No collector is installed. Follow the bounded [user-operated experiment](docs/research/claude-usage.md#user-operated-acceptance-experiment); CLI status-line support alone is insufficient, and shared default settings must remain unchanged.
 
-- **Command Palette entry for "Share with the default account".** The conversion is only available from the panel row.
 - **Real-editor theme acceptance.** `npm run test:ui` now repeats four-language, five-width layout and DOM checks, but its
   theme colors are synthetic. Verify actual light, dark and high-contrast theme injection in an installed editor;
   automated preview success does not establish that coverage.

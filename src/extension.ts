@@ -142,7 +142,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     const notify = () => void vscode.window.showErrorMessage(t('ext.codexUnavailable', { error: codexInitError ?? '' }));
     // Toolbar messages are handled as usual (runTool reports "not initialized" for restartServer)
     panel.setHandler('codex', (msg) => (msg.type === 'tool' ? runTool('codex', msg.tool, tools) : notify()));
-    for (const id of ['enable', 'disable', 'switchAccount', 'addAccount', 'removeAccount', 'openTerminal', 'restartServer', 'refreshUsage']) {
+    for (const id of ['enable', 'disable', 'switchAccount', 'addAccount', 'shareAccount', 'removeAccount', 'openTerminal', 'restartServer', 'refreshUsage']) {
       ctx.subscriptions.push(vscode.commands.registerCommand(`planswap.codex.${id}`, notify));
     }
   }

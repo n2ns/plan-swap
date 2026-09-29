@@ -150,7 +150,7 @@ After clicking the pencil icon after the name of a named account row, the row's 
 
 ## 4. Commands
 
-All five commands appear in the Command Palette in the category "Claude Account" ("Claude 账号"). Buttons, double-clicks, inputs and other actions in the panel send messages directly to the extension to run the corresponding flow, without going through the Command Palette; when a command that needs an account (switch, remove, open terminal) is run from the Command Palette, a QuickPick asks for the account first (each item shows the display name, the email or "Not logged in", and the directory); when there is nothing to pick, "No accounts to choose from." is shown. Messages and terminal names always use the account's display name.
+All six commands appear in the Command Palette in the category "Claude Account" ("Claude 账号"). Buttons, double-clicks, inputs and other actions in the panel send messages directly to the extension to run the corresponding flow, without going through the Command Palette; when a command that needs an account (switch, share, remove, open terminal) is run from the Command Palette, a QuickPick asks for the account first (each item shows the display name, the email or "Not logged in", and the directory); when there is nothing to pick, "No accounts to choose from." is shown. Messages and terminal names always use the account's display name.
 
 ### 4.1 Switch account `planswap.switchAccount`
 
@@ -248,7 +248,7 @@ Entry points: the `$(refresh)` title bar button, the Command Palette. Removes ac
 
 ### 4.6 Share an independent account
 
-Entry point: the `link` button "Link to the default account: its settings, rules, skills, history and sessions move into the default account and are linked from then on; the login stays separate" of an independent named row that is not current (panel only, no Command Palette entry).
+Entry points: the `link` button "Link to the default account: its settings, rules, skills, history and sessions move into the default account and are linked from then on; the login stays separate" of an independent named row that is not current; or **Share with Default Account** (`planswap.shareAccount`) in the Command Palette. The command lists independent named accounts excluding the current account (including equivalent directory paths), then uses the same confirmation and conversion flow below. Cancelling the picker or confirmation changes nothing.
 
 1. The extension resolves the row by `dir` and only accepts named accounts that are not already shared; the current account is refused with "Switch away from X before linking it.".
 2. Modal confirmation "Link X to the default account? Its history, memory, settings and other folders in <dir> are moved into the default account and replaced by links; the login stays. Files that differ from the default account's are kept for manual merging: inside linked folders next to the default file with a .from-<name> suffix, top-level files in the account directory as <file>.independent-backup. This cannot be undone automatically.", button **Link**.
@@ -381,7 +381,7 @@ When they pass, it is deleted with Node's `fs.rm(dir, { recursive: true, force: 
 
 Independent of Claude account switching. The implementation is based on `docs/codex-design.md` (design) and `docs/codex-interfaces.md` (module contract). This extension only reads each account directory's `auth.json` and only decodes the payload of its `tokens.id_token` to display the email and plan and to compare identities (10.1); it never copies, links, swaps, caches or outputs any token or `auth.json`. Usage limits are asked from the official `codex` CLI run with the account's `CODEX_HOME` (see [Status bar account summary](#status-bar-account-summary)). The contents of `~/.codex` are only changed for shared accounts (10.12): missing shared entries are created empty there as link targets, and converting an account moves its files in without overwriting existing ones.
 
-If the Codex part fails to initialize on activation (e.g. an rc file is unreadable), this is only logged and Claude is not affected: the Codex page renders as "not enabled, no accounts"; account actions on the Codex page and the 8 `planswap.codex.*` commands then show "Codex account switching is unavailable: <reason>", while the toolbar and the "Tools" row work as usual (see 5.5).
+If the Codex part fails to initialize on activation (e.g. an rc file is unreadable), this is only logged and Claude is not affected: the Codex page renders as "not enabled, no accounts"; account actions on the Codex page and the 9 `planswap.codex.*` commands then show "Codex account switching is unavailable: <reason>", while the toolbar and the "Tools" row work as usual (see 5.5).
 
 ### 10.1 Accounts and directories
 
@@ -417,7 +417,7 @@ If the Codex part fails to initialize on activation (e.g. an rc file is unreadab
 
 ### 10.3 Commands
 
-Eight commands appear in the Command Palette in the category "Codex Account" ("Codex 账号"). Commands that need an account first show a QuickPick (each item shows the display name, "Logged in"/"Not logged in", and the directory); when there is nothing to pick, "No accounts to choose from." is shown. Messages and terminal names always use the display name.
+Nine commands appear in the Command Palette in the category "Codex Account" ("Codex 账号"). Commands that need an account first show a QuickPick (each item shows the display name, "Logged in"/"Not logged in", and the directory); when there is nothing to pick, "No accounts to choose from." is shown. Messages and terminal names always use the display name.
 
 | Command id | Title | Entry points and flow |
 |---|---|---|
@@ -425,6 +425,7 @@ Eight commands appear in the Command Palette in the category "Codex Account" ("C
 | `planswap.codex.disable` | Disable Codex Account Switching | Command Palette → 10.5 |
 | `planswap.codex.switchAccount` | Switch Codex Account | Panel switch button/double-click/Enter, Command Palette QuickPick (without the account that is both effective and selected) → 10.6 |
 | `planswap.codex.addAccount` | Add Codex Account | Opens the panel, switches to the Codex tab and focuses the add input → 10.7 |
+| `planswap.codex.shareAccount` | Share with Default Account | QuickPick of independent named accounts excluding effective and selected accounts (including equivalent directory paths), then the existing confirmation and conversion flow → 10.12; cancelling changes nothing |
 | `planswap.codex.removeAccount` | Delete Codex Account | Panel trash button via inline confirmation, Command Palette QuickPick (without the effective and the selected account) → 10.8 |
 | `planswap.codex.openTerminal` | Run codex in Terminal with Codex Account | Panel terminal/sign-in button, Command Palette QuickPick (also the external directory when it is current) → 10.9 |
 | `planswap.codex.refreshUsage` | Refresh Codex Usage Limits | Command Palette, the tooltip's "Refresh usage" link → queries the effective account's usage limits now (see [Status bar account summary](#status-bar-account-summary)) |

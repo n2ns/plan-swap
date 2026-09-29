@@ -4,6 +4,7 @@
 
 ### Added
 
+- Claude and Codex each have a **Share with Default Account** command that selects an eligible independent account and opens the existing conversion confirmation.
 - A localized diagnostics report previews anonymous account-selection and environment information before you choose whether to copy it for troubleshooting.
 - Codex account rows show their last observed usage with a collection time and a "not live" label. Observations survive editor restarts, hide after a sign-in file change, and expire after a reset or 24 hours; accounts without an observation show no usage estimate.
 

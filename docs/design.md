@@ -177,6 +177,7 @@ Panel actions call the flow functions inside `commands.ts` directly through Webv
 |---|---|---|
 | `planswap.switchAccount` | Switch Account | Shows a QuickPick of the registered accounts that are not current; the selected one goes through 6.1 |
 | `planswap.addAccount` | Add Account (Focus Sidebar Input) | Only opens the sidebar and focuses the add input at the bottom, see 6.2 |
+| `planswap.shareAccount` | Share with Default Account | QuickPick of independent named accounts excluding the current account, then the existing modal conversion in 6.7 |
 | `planswap.removeAccount` | Delete Account | Shows a QuickPick of the non-default accounts; the selected one goes through 6.3 (modal confirmation) |
 | `planswap.openTerminal` | Run claude in Terminal with Account | Shows a QuickPick of the registered accounts (also the external directory when it is current), see 6.4 |
 | `planswap.refresh` | Refresh | Scans `~/.claude-*` to register unregistered directories, re-reads each directory's email and sign-in state, refreshes the panel and the status bar |

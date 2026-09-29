@@ -44,6 +44,12 @@
         "icon": "$(add)"
       },
       {
+        "command": "planswap.shareAccount",
+        "title": "%command.shareAccount%",
+        "category": "%category.claude%",
+        "icon": "$(link)"
+      },
+      {
         "command": "planswap.removeAccount",
         "title": "%command.removeAccount%",
         "category": "%category.claude%",
@@ -84,6 +90,12 @@
         "title": "%command.codex.addAccount%",
         "category": "%category.codex%",
         "icon": "$(add)"
+      },
+      {
+        "command": "planswap.codex.shareAccount",
+        "title": "%command.codex.shareAccount%",
+        "category": "%category.codex%",
+        "icon": "$(link)"
       },
       {
         "command": "planswap.codex.removeAccount",

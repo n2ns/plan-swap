@@ -194,6 +194,7 @@ Command titles below are the English entries of `package.nls.json`; the category
 | `planswap.codex.disable` | Disable Codex Account Switching | Section 4 |
 | `planswap.codex.switchAccount` | Switch Codex Account | QuickPick → 8.1 |
 | `planswap.codex.addAccount` | Add Codex Account | `panel.focusAdd('codex')`: opens the panel, switches to the Codex tab and focuses the add input |
+| `planswap.codex.shareAccount` | Share with Default Account | QuickPick of independent named accounts excluding effective and selected accounts, then the existing modal conversion in 8.6 |
 | `planswap.codex.removeAccount` | Delete Codex Account | QuickPick (without the current account) → 8.3 |
 | `planswap.codex.openTerminal` | Run codex in Terminal with Codex Account | QuickPick → 8.4 |
 | `planswap.codex.refreshUsage` | Refresh Codex Usage Limits | 8.7 |

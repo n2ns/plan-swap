@@ -553,6 +553,72 @@ describe('panel message handlers', () => {
     }
   });
 
+  test('share command picks only independent named accounts outside the effective and selected directories', LINUX_ONLY, async (ctx) => {
+    const candidate = named('palette-share-choice');
+    const effective = named('palette-share-effective');
+    const selected = named('palette-share-selected');
+    const shared = named('palette-share-linked');
+    const h = await harness([candidate, effective, selected, shared]);
+    fs.mkdirSync(path.join(def, 'sessions'), { recursive: true });
+    fs.symlinkSync(path.join(def, 'sessions'), path.join(shared.dir, 'sessions'), 'junction');
+    await h.labels.set(candidate.name, 'Choice Alias');
+    writeSelectedDir(selected.dir);
+    const savedCodexHome = process.env.CODEX_HOME;
+    process.env.CODEX_HOME = effective.dir;
+    const picks: Array<Array<{ label: string; account: CodexAccount }>> = [];
+    const quickPick = ctx.mock.method(window, 'showQuickPick', async (items: Array<{ label: string; account: CodexAccount }>) => {
+      picks.push(items);
+      return undefined;
+    });
+    const infos = ctx.mock.method(window, 'showInformationMessage', async () => undefined);
+    try {
+      assert.ok(commands.registered['planswap.codex.shareAccount']);
+      await commands.registered['planswap.codex.shareAccount']();
+      assert.deepEqual(picks[0].map((item) => [item.label, item.account.dir]), [['Choice Alias', candidate.dir]]);
+      assert.equal((quickPick.mock.calls[0].arguments[1] as { placeHolder?: string } | undefined)?.placeHolder, t('codex.pick.share'));
+      await h.store.remove(effective.name);
+      await h.store.remove(selected.name);
+      writeSelectedDir(candidate.dir);
+      await commands.registered['planswap.codex.shareAccount']();
+      assert.equal(quickPick.mock.callCount(), 1);
+      assert.equal(infos.mock.calls.at(-1)?.arguments[0], t('common.noAccounts'));
+    } finally {
+      restoreEnv('CODEX_HOME', savedCodexHome);
+      writeSelectedDir(undefined);
+      h.dispose();
+    }
+  });
+
+  test('share command cancellation leaves files unchanged and confirmation converts the picked account', LINUX_ONLY, async (ctx) => {
+    const account = named('palette-share-convert');
+    const h = await harness([account]);
+    const source = path.join(account.dir, 'sessions', 'entry.jsonl');
+    fs.mkdirSync(path.dirname(source), { recursive: true });
+    fs.writeFileSync(source, 'session\n');
+    writeSelectedDir(undefined);
+    ctx.mock.method(window, 'showQuickPick', async (items: Array<{ account: CodexAccount }>) => items[0]);
+    let confirm = false;
+    const warnings = modal(ctx, () => confirm ? t('share.confirmButton') : undefined);
+    const errors = ctx.mock.method(window, 'showErrorMessage', async () => undefined);
+    try {
+      await commands.registered['planswap.codex.shareAccount']();
+      assert.equal(read(source), 'session\n');
+      assert.equal(isSharedCodexAccount(account.dir), false);
+      assert.equal(h.refreshes(), 0);
+
+      confirm = true;
+      await commands.registered['planswap.codex.shareAccount']();
+      assert.equal(errors.mock.callCount(), 0);
+      assert.equal(warnings.mock.callCount(), 2);
+      assert.equal(isSharedCodexAccount(account.dir), true);
+      assert.equal(read(path.join(def, 'sessions', 'entry.jsonl')), 'session\n');
+      assert.equal(h.refreshes(), 1);
+    } finally {
+      writeSelectedDir(undefined);
+      h.dispose();
+    }
+  });
+
   test('rename: named rows get an alias; a colliding label is reported; the default row is ignored', async () => {
     const a = named('rn');
     const b = named('other');

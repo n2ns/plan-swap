@@ -16,6 +16,12 @@ A static preview verifies layout, not the real editor integration or account swi
 
 ## WSL setup and safety
 
+### Command Palette sharing
+
+For each provider, prepare an independent named test account that is not current (and, for Codex, not selected). Run **Share with Default Account** from that provider's Command Palette category. Check that the picker uses aliases and excludes default, external, already shared and in-use selections. Cancel the picker, then repeat and cancel the conversion modal: account files must remain unchanged. Confirm on a disposable account to exercise the same conversion and busy checks as the sidebar sharing procedures below. With no eligible accounts, expect **No accounts to choose from.** Verify the command title and picker prompt in English, Simplified Chinese, Spanish and Japanese. Real-account conversion remains user-operated.
+
+### Setup
+
 `npm test` covers modules and mocked host interactions, not a real Webview; for changes affecting UI behavior, verify the affected flows manually in a **WSL window**. Two ways:
 
 - **Install the vsix**: `npm run package`, then in the WSL window run `Extensions: Install from VSIX...`, install and reload.

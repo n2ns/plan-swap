@@ -715,6 +715,10 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       if (a) await switchTo(a);
     }),
     vscode.commands.registerCommand('planswap.codex.addAccount', () => panel.focusAdd(MODE)),
+    vscode.commands.registerCommand('planswap.codex.shareAccount', async () => {
+      const a = await pickAccount(store.named().filter((x) => !isSharedCodexAccount(x.dir) && !effectiveAlias(x) && !selectedAlias(x)), t('codex.pick.share'));
+      if (a) await shareAccount(a);
+    }),
     vscode.commands.registerCommand('planswap.codex.removeAccount', async () => {
       const a = await pickAccount(store.named().filter((x) => !effectiveAlias(x) && !selectedAlias(x)), t('codex.pick.remove'));
       if (a) await removeAccount(a, false);

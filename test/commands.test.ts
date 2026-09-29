@@ -12,7 +12,7 @@ import { LabelStore } from '../src/labels';
 import { accountDir } from '../src/paths';
 import type { FromWebview, ToWebview } from '../src/protocol';
 import type { StatusBar } from '../src/statusBar';
-import { resetConfig, setConfig, updates, window } from './stubs/vscode';
+import { commands, resetConfig, setConfig, updates, window } from './stubs/vscode';
 import { LINUX_ONLY, makeTempHome, MemoryMemento, type TempHome } from './helpers';
 
 let tmp: TempHome;
@@ -303,6 +303,59 @@ describe('panel message handlers (Claude)', () => {
       assert.deepEqual(warning.mock.calls[1].arguments, [t('unshare.current', { label: 's' })]);
       assert.equal(isSharedClaudeAccount(shared), true);
       assert.equal(warning.mock.callCount(), 2);
+    } finally {
+      h.dispose();
+    }
+  });
+
+  test('the share command picks only an independent non-current account and converts it after confirmation', LINUX_ONLY, async (ctx) => {
+    const h = harness();
+    const current = await add(h, 'current', false);
+    const shared = await add(h, 'shared', true);
+    const solo = await add(h, 'solo', false);
+    await h.labels.set('solo', 'Work');
+    setCurrent(current);
+    fs.writeFileSync(path.join(solo, 'history.jsonl'), '{"from":"solo"}\n');
+    let choose = false;
+    const pick = ctx.mock.method(window, 'showQuickPick', async (items: Array<{ label: string; account: { dir: string } }>) => choose ? items[0] : undefined);
+    let confirmed = false;
+    const warning = ctx.mock.method(window, 'showWarningMessage', async () => confirmed ? t('share.confirmButton') : undefined);
+    try {
+      const command = commands.registered['planswap.shareAccount'];
+      assert.equal(typeof command, 'function');
+      await command();
+      assert.equal(warning.mock.callCount(), 0, 'cancelled QuickPick does not ask to convert');
+      assert.equal(isSharedClaudeAccount(solo), false);
+      const items = pick.mock.calls[0].arguments[0] as Array<{ label: string; account: { dir: string } }>;
+      assert.deepEqual(items.map((item) => [item.label, item.account.dir]), [['Work', solo]]);
+      assert.deepEqual(pick.mock.calls[0].arguments[1], { placeHolder: t('claude.pick.share') });
+      choose = true;
+      await command();
+      assert.deepEqual(warning.mock.calls[0].arguments, [t('share.confirm', { label: 'Work', dir: solo }), { modal: true }, t('share.confirmButton')]);
+      assert.equal(isSharedClaudeAccount(solo), false);
+      assert.equal(fs.readFileSync(path.join(solo, 'history.jsonl'), 'utf8'), '{"from":"solo"}\n');
+      confirmed = true;
+      await command();
+      assert.equal(isSharedClaudeAccount(solo), true);
+      assert.equal(fs.readFileSync(path.join(home, '.claude', 'history.jsonl'), 'utf8'), '{"from":"solo"}\n');
+      assert.equal(fs.readFileSync(path.join(solo, 'history.jsonl'), 'utf8'), '{"from":"solo"}\n');
+      assert.equal(isSharedClaudeAccount(shared), true);
+    } finally {
+      h.dispose();
+    }
+  });
+
+  test('the share command reports no accounts when every named account is current or shared', async (ctx) => {
+    const h = harness();
+    const current = await add(h, 'current', false);
+    await add(h, 'shared', true);
+    setCurrent(current);
+    const pick = ctx.mock.method(window, 'showQuickPick', async () => undefined);
+    const info = ctx.mock.method(window, 'showInformationMessage', async () => undefined);
+    try {
+      await commands.registered['planswap.shareAccount']();
+      assert.equal(pick.mock.callCount(), 0);
+      assert.deepEqual(info.mock.calls[0].arguments, [t('common.noAccounts')]);
     } finally {
       h.dispose();
     }
