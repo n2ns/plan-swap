@@ -213,6 +213,10 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
   const labelOf = (a: CodexAccount): string => labelFor(a.name, labels);
   const isEffective = (a: CodexAccount): boolean => samePath(a.dir, effectiveDir());
   const isSelected = (a: CodexAccount): boolean => samePath(a.dir, readSelectedDir() ?? codexDefaultDir());
+  // Windows cannot attribute a running codex.exe to an account (see codexAccountBusy), so an open terminal of the
+  // account also counts; on Linux the /proc check covers terminals
+  const busy = (a: CodexAccount): boolean =>
+    codexAccountBusy(a.dir) || (isWindows() && [...terminals.values()].some((x) => x.name === a.name));
   // A switch is in progress (e.g. its modal is open); further requests such as a double click are ignored
   let switching = false;
 
@@ -467,7 +471,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     const ok = t('share.confirmButton');
     const picked = await vscode.window.showWarningMessage(t('share.confirmCodex', { label: labelOf(account), dir: account.dir }), { modal: true }, ok);
     if (picked !== ok) return;
-    if (codexAccountBusy(account.dir)) {
+    if (busy(account)) {
       void vscode.window.showWarningMessage(t('share.busyCodex', { name: labelOf(account) }));
       return;
     }
@@ -491,7 +495,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     const ok = t('unshare.confirmButton');
     const picked = await vscode.window.showWarningMessage(t('unshare.confirmCodex', { label: labelOf(account), dir: account.dir }), { modal: true }, ok);
     if (picked !== ok) return;
-    if (codexAccountBusy(account.dir)) {
+    if (busy(account)) {
       void vscode.window.showWarningMessage(t('share.busyCodex', { name: labelOf(account) }));
       return;
     }

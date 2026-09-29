@@ -63,6 +63,10 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
   // Display name: the alias if set, otherwise the name
   const labelOf = (a: Account): string => labelFor(a.name, labels);
   const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+  // Windows cannot attribute a running Claude process to an account (see windowsSessionsBusy), so an open terminal of
+  // the account also counts; on Linux the /proc check covers terminals
+  const busy = (a: Account): boolean =>
+    claudeAccountBusy(a.dir, procRoot) || (isWindows() && [...terminals.values()].some((x) => x.name === a.name));
 
   async function pickAccount(accounts: Account[], placeHolder: string): Promise<Account | undefined> {
     if (accounts.length === 0) {
@@ -183,7 +187,7 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
     const ok = t('share.confirmButton');
     const picked = await vscode.window.showWarningMessage(t('share.confirm', { label: labelOf(account), dir: account.dir }), { modal: true }, ok);
     if (picked !== ok) return;
-    if (claudeAccountBusy(account.dir, procRoot)) {
+    if (busy(account)) {
       void vscode.window.showWarningMessage(t('share.busy', { name: labelOf(account) }));
       return;
     }
@@ -208,7 +212,7 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
     const ok = t('unshare.confirmButton');
     const picked = await vscode.window.showWarningMessage(t('unshare.confirm', { label: labelOf(account), dir: account.dir }), { modal: true }, ok);
     if (picked !== ok) return;
-    if (claudeAccountBusy(account.dir, procRoot)) {
+    if (busy(account)) {
       void vscode.window.showWarningMessage(t('share.busy', { name: labelOf(account) }));
       return;
     }
@@ -232,7 +236,7 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
       return;
     }
     // A running Claude process of this account would keep writing into the directory offered for deletion
-    if (claudeAccountBusy(account.dir, procRoot)) {
+    if (busy(account)) {
       void vscode.window.showWarningMessage(t('share.busy', { name: labelOf(account) }));
       return;
     }

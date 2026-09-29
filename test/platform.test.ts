@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import * as path from 'node:path';
 import { setLocale } from '../src/i18n';
-import { comparablePath, copyLink, createLink, imageRunning, isSupportedPlatform, parseTasklistCsv, pidAlive } from '../src/platform';
+import { comparablePath, copyLink, createLink, isSupportedPlatform, parseStartTimes, pidAlive, windowsStartTimes } from '../src/platform';
 import { getUserCodexHome, parseRegQuery, setUserCodexHome } from '../src/codex/codexWindows';
 import { manualRestartMessages } from '../src/codex/codexCommands';
 import { LINUX_ONLY, makeTempHome, type TempHome } from './helpers';
@@ -47,12 +47,17 @@ describe('platform', () => {
     assert.equal(pidAlive(done.pid), false);
   });
 
-  test('tasklist parsing and the fail-safe image probe', () => {
-    const out = '"codex.exe","1234","Console","1","50,000 K"\r\n"Other.exe","5","Console","1","1 K"\r\n';
-    assert.deepEqual(parseTasklistCsv(out), ['codex.exe', 'other.exe']);
-    assert.equal(imageRunning('codex.exe', () => out), true);
-    assert.equal(imageRunning('codex.exe', () => 'INFO: No tasks are running which match the specified criteria.\r\n'), false);
-    assert.equal(imageRunning('codex.exe', () => { throw new Error('no tasklist'); }), true);
+  test('start-time probe: parsing, validated pids and failure', () => {
+    assert.deepEqual([...parseStartTimes('29368 134351739525860505\r\n\r\nnoise\r\n7 1\r\n')], [[29368, '134351739525860505'], [7, '1']]);
+    let script = '';
+    const times = windowsStartTimes([12, -1, 1.5, 34], (s) => {
+      script = s;
+      return '12 100\r\n';
+    });
+    assert.deepEqual([...(times ?? [])], [[12, '100']]);
+    assert.match(script, /^Get-Process -Id 12,34 /);
+    assert.deepEqual([...(windowsStartTimes([], () => { throw new Error('not called'); }) ?? [])], []);
+    assert.equal(windowsStartTimes([5], () => { throw new Error('no powershell'); }), undefined);
   });
 });
 

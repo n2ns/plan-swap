@@ -8,7 +8,7 @@ import {
   isSharedCodexAccount, makeCodexIndependent, migrateCodexToShared,
 } from '../src/codex/codexShare';
 import { codexAccountDir, deleteCodexDir } from '../src/codex/codexPaths';
-import { assertTempHome, makeTempHome, assertMode, LINUX_ONLY, read, snapshot, type TempHome } from './helpers';
+import { assertTempHome, makeTempHome, assertMode, LINUX_ONLY, onWindows, read, snapshot, type TempHome } from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -329,6 +329,15 @@ describe('codexAccountBusy', LINUX_ONLY, () => {
     const startTicks = Number(stat.slice(stat.lastIndexOf(')') + 1).trim().split(/\s+/)[19]);
     write(path.join(acc, 'app-server-daemon', 'daemon.pid'), JSON.stringify({ pid: process.pid, processIdentity: { startTicks } }));
     assert.equal(codexAccountBusy(acc, fakeProc({})), true);
+  });
+});
+
+describe('codexAccountBusy on Windows', { skip: !onWindows && 'Windows behavior' }, () => {
+  test('only the account daemon counts, not every running codex.exe', () => {
+    const acc = newAccount('a');
+    assert.equal(codexAccountBusy(acc), false);
+    write(path.join(acc, 'app-server-daemon', 'daemon.pid'), JSON.stringify({ pid: process.pid }));
+    assert.equal(codexAccountBusy(acc), true);
   });
 });
 

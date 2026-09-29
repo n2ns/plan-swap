@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { t } from '../i18n';
 import { samePath, sameRealPath } from '../paths';
-import { comparablePath, fileLinksAvailable, imageRunning, isWindows } from '../platform';
+import { comparablePath, fileLinksAvailable, isWindows } from '../platform';
 import {
   type MergeCtx, type MigrateReport, type ShareReport, copyTree, defaultFolder, emptyReport, freeName, linkEntry, recordLink, type LinkOptions,
   linksTo, lstatOrUndefined, mergeEntry, mergeLines, moveEntry, realOrResolved, record, sameContent, unlinkChildLinks, unlinkIfLinksTo,
@@ -183,11 +183,14 @@ export function ensureCodexLinks(dir: string, options: LinkOptions = {}): ShareR
 
 /** true when a Codex process uses this dir: codexDaemonAlive(dir), or a <procRoot>/<pid> whose exe basename is
  *  'codex' and whose environ CODEX_HOME resolves to dir (for the default dir: unset, empty or ~/.codex).
- *  Unreadable /proc entries are skipped; an unreadable procRoot counts as busy. procRoot is for tests. */
+ *  Unreadable /proc entries are skipped; an unreadable procRoot counts as busy. Windows: codexDaemonAlive only.
+ *  procRoot is for tests. */
 export function codexAccountBusy(dir: string, procRoot = '/proc'): boolean {
   if (codexDaemonAlive(path.resolve(dir))) return true;
-  // Windows has no /proc and cannot read another process's environment: any running codex.exe counts as busy
-  if (isWindows() && procRoot === '/proc') return imageRunning('codex.exe');
+  // Windows cannot read another process's environment, and a codex.exe is nearly always running (the Codex extension's
+  // app server, which serves the effective account the callers already refuse); they also refuse while the account's
+  // own terminal is open
+  if (isWindows() && procRoot === '/proc') return false;
   let pids: string[];
   try {
     pids = fs.readdirSync(procRoot).filter((p) => /^\d+$/.test(p));

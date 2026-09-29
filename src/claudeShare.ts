@@ -5,7 +5,9 @@ import * as path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { t } from './i18n';
 import { copySettingsStripped, defaultDir, samePath, sameRealPath, syncMcpServers } from './paths';
-import { comparablePath, LinkPrivilegeError, copyLink, createLink, fileLinksAvailable, isWindows, pidAlive } from './platform';
+import {
+  comparablePath, LinkPrivilegeError, copyLink, createLink, fileLinksAvailable, isWindows, pidAlive, type StartTimeProbe, windowsStartTimes,
+} from './platform';
 
 // Whole-entry links (kind: file needs an empty-file default, dir needs an empty dir)
 export const CLAUDE_SHARED_ENTRIES: ReadonlyArray<{ name: string; kind: 'file' | 'dir' }> = [
@@ -353,31 +355,52 @@ export function mirrorClaudeJson(fromJson: string, dir: string, beforeCommit?: (
   return { changed };
 }
 
-// pid of a live process recorded in a session file; undefined when unreadable, invalid or not running
-function sessionPid(file: string): number | undefined {
+// A session file's live process: pid and the recorded start time (procStart); undefined when unreadable, invalid or not running
+function liveSession(file: string): { pid: number; start?: string } | undefined {
   try {
     const data: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
-    const pid = isPlainObject(data) ? data.pid : undefined;
-    return typeof pid === 'number' && Number.isInteger(pid) && pid > 0 && pidAlive(pid) ? pid : undefined;
+    if (!isPlainObject(data)) return undefined;
+    const { pid, procStart } = data;
+    if (typeof pid !== 'number' || !Number.isInteger(pid) || pid <= 0 || !pidAlive(pid)) return undefined;
+    return typeof procStart === 'string' && /^\d+$/.test(procStart) ? { pid, start: procStart } : { pid };
   } catch {
     return undefined;
   }
 }
 
-/** true when a Claude process is running with this config dir: a <dir>/sessions/*.json whose pid is alive and whose
- *  /proc/<pid>/environ has CLAUDE_CONFIG_DIR=<dir> (for the default dir: unset or the default). Without procRoot
- *  (e.g. no /proc) a session file counts as busy. procRoot is for tests. */
-export function claudeAccountBusy(dir: string, procRoot = '/proc'): boolean {
-  const sessions = path.join(path.resolve(dir), 'sessions');
+/**
+ * Windows busy check (no /proc, and another process's environment cannot be read). A shared account's sessions folder
+ * is a link to the default one, whose records belong to every account sharing it and cannot be told apart: false (the
+ * callers also refuse while the account's own terminal is open). Otherwise a record whose pid is alive and, when it
+ * carries procStart, whose process started at that time; a failed start-time probe counts as busy.
+ */
+export function windowsSessionsBusy(sessions: string, startTimes: StartTimeProbe = windowsStartTimes): boolean {
+  if (lstatOrUndefined(sessions)?.isSymbolicLink()) return false;
   let files: string[];
   try {
     files = fs.readdirSync(sessions).filter((f) => f.endsWith('.json'));
   } catch {
     return false;
   }
-  // Windows has no /proc and an environment cannot be read from another process: a live session pid in the
-  // account's own sessions folder counts as busy
-  if (isWindows() && procRoot === '/proc') return files.some((f) => sessionPid(path.join(sessions, f)) !== undefined);
+  const live = files.map((f) => liveSession(path.join(sessions, f))).filter((s) => s !== undefined);
+  if (live.some((s) => s.start === undefined)) return true;
+  if (live.length === 0) return false;
+  const times = startTimes(live.map((s) => s.pid));
+  return !times || live.some((s) => times.get(s.pid) === s.start);
+}
+
+/** true when a Claude process is running with this config dir: a <dir>/sessions/*.json whose pid is alive and whose
+ *  /proc/<pid>/environ has CLAUDE_CONFIG_DIR=<dir> (for the default dir: unset or the default). Without procRoot
+ *  (e.g. no /proc) a session file counts as busy. Windows: windowsSessionsBusy. procRoot is for tests. */
+export function claudeAccountBusy(dir: string, procRoot = '/proc'): boolean {
+  const sessions = path.join(path.resolve(dir), 'sessions');
+  if (isWindows() && procRoot === '/proc') return windowsSessionsBusy(sessions);
+  let files: string[];
+  try {
+    files = fs.readdirSync(sessions).filter((f) => f.endsWith('.json'));
+  } catch {
+    return false;
+  }
   // A live session cannot be ruled out without procRoot
   if (files.length > 0 && !fs.existsSync(procRoot)) return true;
   const def = defaultDir();

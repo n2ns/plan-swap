@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { setLocale, t } from '../src/i18n';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import {
   CLAUDE_SHARED_ENTRIES, claudeAccountBusy, copyClaudeIndependent, copyTree, ensureClaudeLinks, isSharedClaudeAccount, lstatOrUndefined,
-  makeClaudeIndependent, mergeEntry, migrateClaudeToShared, mirrorClaudeJson, type MigrateReport,
+  makeClaudeIndependent, mergeEntry, migrateClaudeToShared, mirrorClaudeJson, type MigrateReport, windowsSessionsBusy,
 } from '../src/claudeShare';
 import { accountDir, deleteAccountDir } from '../src/paths';
 import { assertTempHome, makeTempHome, assertMode, LINUX_ONLY, read, snapshot, type TempHome } from './helpers';
@@ -357,6 +357,31 @@ describe('claudeAccountBusy', () => {
     assert.equal(claudeAccountBusy(def, fakeProc({ 200: { CLAUDE_CONFIG_DIR: acc } })), false);
     // No sessions folder
     assert.equal(claudeAccountBusy(accountDir('none'), fakeProc({})), false);
+  });
+  test('Windows check: live pid with a matching start time; shared sessions folders are not attributed', () => {
+    const acc = accountDir('win');
+    const sessions = path.join(acc, 'sessions');
+    const done = spawnSync(process.execPath, ['-e', '0']).pid;
+    const never = (): Map<number, string> => assert.fail('no probe expected');
+    assert.equal(windowsSessionsBusy(sessions, never), false);
+    write(path.join(sessions, 'dead.json'), JSON.stringify({ pid: done, procStart: '1' }));
+    write(path.join(sessions, 'bad.json'), '{ half');
+    assert.equal(windowsSessionsBusy(sessions, never), false);
+    write(path.join(sessions, 'live.json'), JSON.stringify({ pid: process.pid, procStart: '42' }));
+    assert.equal(windowsSessionsBusy(sessions, () => new Map([[process.pid, '42']])), true);
+    // The pid now belongs to another process (reused), or it exited between the two checks
+    assert.equal(windowsSessionsBusy(sessions, () => new Map([[process.pid, '43']])), false);
+    assert.equal(windowsSessionsBusy(sessions, () => new Map()), false);
+    // A failed probe cannot rule the session out
+    assert.equal(windowsSessionsBusy(sessions, () => undefined), true);
+    // A live record without procStart cannot be told from a reused pid
+    write(path.join(sessions, 'old.json'), JSON.stringify({ pid: process.pid }));
+    assert.equal(windowsSessionsBusy(sessions, () => new Map()), true);
+    // Shared account: sessions is a link to the default folder, whose records belong to every sharing account
+    const shared = path.join(accountDir('winshared'), 'sessions');
+    fs.mkdirSync(path.dirname(shared), { recursive: true });
+    fs.symlinkSync(sessions, shared, 'junction');
+    assert.equal(windowsSessionsBusy(shared, never), false);
   });
   test('a missing procRoot counts a session file as busy', () => {
     const acc = accountDir('noproc');

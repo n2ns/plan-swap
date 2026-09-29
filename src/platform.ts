@@ -90,27 +90,37 @@ export function pidAlive(pid: number): boolean {
   }
 }
 
-/** Parses `tasklist /FO CSV /NH` output into the image names it lists. */
-export function parseTasklistCsv(out: string): string[] {
-  const names: string[] = [];
+/** Start times of live processes by pid (Windows FILETIME ticks as decimal strings); undefined when the probe fails. */
+export type StartTimeProbe = (pids: number[]) => Map<number, string> | undefined;
+
+/** Parses `<pid> <filetime>` lines (the output of windowsStartTimes' PowerShell probe). */
+export function parseStartTimes(out: string): Map<number, string> {
+  const times = new Map<number, string>();
   for (const line of out.split(/\r?\n/)) {
-    const m = /^"([^"]+)"/.exec(line.trim());
-    if (m) names.push(m[1].toLowerCase());
+    const m = /^\s*(\d+)\s+(\d+)\s*$/.exec(line);
+    if (m) times.set(Number(m[1]), m[2]);
   }
-  return names;
+  return times;
 }
 
-/** Whether a process image (e.g. 'codex.exe') is running on Windows. A failing probe counts as running. */
-export function imageRunning(image: string, run: (image: string) => string = defaultTasklist): boolean {
+/**
+ * Windows: the creation times of the given processes, which Claude Code records as `procStart` in its session files,
+ * so a pid reused by an unrelated process is not mistaken for a live session. Exited pids are simply absent. The pids
+ * are validated integers, so nothing else reaches the command line.
+ */
+export function windowsStartTimes(pids: number[], run: (script: string) => string = defaultPowerShell): Map<number, string> | undefined {
+  const ids = pids.filter((p) => Number.isInteger(p) && p > 0);
+  if (ids.length === 0) return new Map();
+  const script = `Get-Process -Id ${ids.join(',')} -ErrorAction SilentlyContinue | ForEach-Object { '{0} {1}' -f $_.Id, $_.StartTime.ToFileTimeUtc() }`;
   try {
-    return parseTasklistCsv(run(image)).includes(image.toLowerCase());
+    return parseStartTimes(run(script));
   } catch {
-    return true;
+    return undefined;
   }
 }
 
-function defaultTasklist(image: string): string {
-  return execFileSync('tasklist', ['/FI', `IMAGENAME eq ${image}`, '/FO', 'CSV', '/NH'], { encoding: 'utf8', timeout: 8000, windowsHide: true });
+function defaultPowerShell(script: string): string {
+  return execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', timeout: 8000, windowsHide: true });
 }
 
 /**
