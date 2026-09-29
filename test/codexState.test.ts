@@ -8,7 +8,7 @@ import {
   migrateLegacyCodex, removeRcBlockFrom, removeRcBlocks, selfCheck, writeSelectedDir, disableWindows, selfCheckWindows,
 } from '../src/codex/codexState';
 import type { Runner } from '../src/codex/codexWindows';
-import { assertTempHome, makeTempHome, assertMode, LINUX_ONLY, read, type TempHome } from './helpers';
+import { assertTempHome, makeTempHome, assertMode, LINUX_ONLY, read, withEnv, type TempHome } from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -54,6 +54,7 @@ describe('state file', () => {
     assert.deepEqual(fs.readdirSync(path.dirname(STATE_FILE())), ['codex-home']);
   });
   test('writing undefined → empty file → reads as undefined; blank content is also undefined', () => {
+    writeSelectedDir(path.join(home, '.codex-a'));
     writeSelectedDir(undefined);
     assert.equal(read(STATE_FILE()), '');
     assert.equal(readSelectedDir(), undefined);
@@ -61,13 +62,9 @@ describe('state file', () => {
     assert.equal(readSelectedDir(), undefined);
   });
   test('effectiveDir uses the extension host CODEX_HOME, default directory when empty', () => {
-    delete process.env.CODEX_HOME;
-    assert.equal(effectiveDir(), path.join(home, '.codex'));
-    process.env.CODEX_HOME = home + '/x/../.codex-z';
-    assert.equal(effectiveDir(), path.join(home, '.codex-z'));
-    process.env.CODEX_HOME = '';
-    assert.equal(effectiveDir(), path.join(home, '.codex'));
-    delete process.env.CODEX_HOME;
+    withEnv({ CODEX_HOME: undefined }, () => assert.equal(effectiveDir(), path.join(home, '.codex')));
+    withEnv({ CODEX_HOME: home + '/x/../.codex-z' }, () => assert.equal(effectiveDir(), path.join(home, '.codex-z')));
+    withEnv({ CODEX_HOME: '' }, () => assert.equal(effectiveDir(), path.join(home, '.codex')));
   });
 });
 
@@ -130,17 +127,25 @@ fi
 });
 
 describe('installRcBlocks / removeRcBlocks / rcStatus', LINUX_ONLY, () => {
-  before(() => {
+  // Each test sets up the rc files it needs, so none depends on what an earlier one left behind
+  const writeOrig = (): void => {
+    fs.rmSync(bashrc, { force: true });
+    fs.rmSync(profile, { force: true });
     fs.writeFileSync(bashrc, bashrcOrig, { mode: 0o600 });
     fs.writeFileSync(profile, profileOrig, { mode: 0o644 });
-  });
+    fs.chmodSync(bashrc, 0o600);
+    fs.chmodSync(profile, 0o644);
+  };
+  before(writeOrig);
   test('rcStatus is all false before install', () => {
+    writeOrig();
     assert.deepEqual(rcStatus(), [
       { file: profile, hasBlock: false, broken: false, hasUserExport: false },
       { file: bashrc, hasBlock: false, broken: false, hasUserExport: false },
     ]);
   });
   test('bashrc block before the guard, profile block appended at the end, modes preserved', () => {
+    writeOrig();
     installRcBlocks();
     const b = read(bashrc);
     assert.ok(b.indexOf(RC_BEGIN) >= 0 && b.indexOf(RC_END) > b.indexOf(RC_BEGIN) && b.indexOf('case $- in') > b.indexOf(RC_END));
@@ -151,6 +156,8 @@ describe('installRcBlocks / removeRcBlocks / rcStatus', LINUX_ONLY, () => {
     assert.deepEqual(rcStatus().map((s) => s.hasBlock), [true, true]);
   });
   test('idempotent', () => {
+    writeOrig();
+    installRcBlocks();
     const b = read(bashrc);
     const p = read(profile);
     installRcBlocks();
@@ -159,6 +166,8 @@ describe('installRcBlocks / removeRcBlocks / rcStatus', LINUX_ONLY, () => {
     assert.equal(b.split(RC_BEGIN).length, 2);
   });
   test('removal restores exactly; no-op without a block', () => {
+    writeOrig();
+    installRcBlocks();
     removeRcBlocks();
     assert.equal(read(bashrc), bashrcOrig);
     assert.equal(read(profile), profileOrig);
@@ -182,7 +191,7 @@ describe('installRcBlocks / removeRcBlocks / rcStatus', LINUX_ONLY, () => {
   });
   test('appends without a guard; only the missing newline when the trailing one is missing; creates a missing file with 0644', () => {
     fs.writeFileSync(bashrc, 'export A=1');
-    fs.rmSync(profile);
+    fs.rmSync(profile, { force: true });
     installRcBlocks();
     assert.equal(read(bashrc), 'export A=1\n' + rcBlock());
     assert.equal(read(profile), rcBlock());
@@ -243,7 +252,7 @@ describe('installRcBlocks / removeRcBlocks / rcStatus', LINUX_ONLY, () => {
     assert.equal(read(profile), p);
   });
   test('removeRcBlockFrom: single file, symlinked ~/.bashrc stays a symlink, target mode kept; missing END → throws unchanged', () => {
-    fs.rmSync(bashrc);
+    fs.rmSync(bashrc, { force: true });
     const realBashrc = path.join(home, 'dotfiles', 'bashrc');
     fs.mkdirSync(path.dirname(realBashrc), { recursive: true });
     fs.writeFileSync(realBashrc, bashrcOrig, { mode: 0o640 });
@@ -268,8 +277,9 @@ describe('installRcBlocks / removeRcBlocks / rcStatus', LINUX_ONLY, () => {
     fs.writeFileSync(bashrc, 'x\n');
   });
   test('a dangling symlinked rc file is never replaced by a regular file', () => {
+    fs.writeFileSync(bashrc, 'x\n');
     const saved = read(bashrc);
-    fs.rmSync(profile);
+    fs.rmSync(profile, { force: true });
     fs.symlinkSync(path.join(home, 'dotfiles', 'missing-profile'), profile);
     assert.throws(() => installRcBlocks(), {
       message: `${profile} is a symbolic link whose target does not exist; fix the link before retrying`,
@@ -292,7 +302,7 @@ describe('installRcBlocks / removeRcBlocks / rcStatus', LINUX_ONLY, () => {
   test('atomic write: no temp file left, mode preserved, symlink writes go to the real target', () => {
     fs.writeFileSync(bashrc, 'x=1\n');
     fs.chmodSync(bashrc, 0o640);
-    fs.rmSync(profile);
+    fs.rmSync(profile, { force: true });
     const realProfile = path.join(home, 'dotfiles', 'profile');
     fs.mkdirSync(path.dirname(realProfile), { recursive: true });
     fs.writeFileSync(realProfile, 'p=1\n', { mode: 0o600 });
@@ -448,22 +458,24 @@ describe('preCheck', LINUX_ONLY, () => {
     fs.writeFileSync(profile, 'y\n');
   });
   test('bash + no conflicts → ok', () => {
-    process.env.SHELL = '/bin/bash';
-    assert.deepEqual(preCheck(), { ok: true, reasons: [] });
+    withEnv({ SHELL: '/bin/bash' }, () => assert.deepEqual(preCheck(), { ok: true, reasons: [] }));
   });
   test('SHELL not bash / unset → refused', () => {
-    process.env.SHELL = '/usr/bin/zsh';
-    let r = preCheck();
-    assert.equal(r.ok, false);
-    assert.equal(r.reasons.length, 1);
-    assert.match(r.reasons[0], /zsh/);
-    delete process.env.SHELL;
-    r = preCheck();
-    assert.equal(r.ok, false);
-    assert.equal(r.reasons[0], 'Login shell is not bash (current SHELL=unset); only bash is supported');
-    process.env.SHELL = '/bin/bash';
+    withEnv({ SHELL: '/usr/bin/zsh' }, () => {
+      const r = preCheck();
+      assert.equal(r.ok, false);
+      assert.equal(r.reasons.length, 1);
+      assert.match(r.reasons[0], /zsh/);
+    });
+    withEnv({ SHELL: undefined }, () => {
+      const r = preCheck();
+      assert.equal(r.ok, false);
+      assert.equal(r.reasons[0], 'Login shell is not bash (current SHELL=unset); only bash is supported');
+    });
   });
   test('.bash_profile / .bash_login not sourcing .bashrc → refused', () => {
+    fs.writeFileSync(bashrc, 'x\n');
+    fs.writeFileSync(profile, 'y\n');
     fs.writeFileSync(path.join(home, '.bash_profile'), 'echo hi\n');
     let r = preCheck();
     assert.equal(r.ok, false);
@@ -529,6 +541,7 @@ describe('selfCheck (real bash -i -l, clean environment)', LINUX_ONLY, () => {
     installRcBlocks();
   });
   test('passes, restores the state file (trimmed + resolved, 0600) and cleans up its temp directory', () => {
+    fs.mkdirSync(path.dirname(STATE_FILE()), { recursive: true, mode: 0o700 });
     fs.writeFileSync(STATE_FILE(), '  ' + home + '/.codex-orig\n', { mode: 0o644 });
     const r = inCleanEnv(selfCheck);
     assert.ok(r.ok, 'selfCheck failed: ' + r.detail);
@@ -543,7 +556,7 @@ describe('selfCheck (real bash -i -l, clean environment)', LINUX_ONLY, () => {
     assert.ok(!fs.existsSync(used), 'temporary directory left behind: ' + used);
   });
   test('state file originally missing → still missing after the self-check', () => {
-    fs.rmSync(STATE_FILE());
+    fs.rmSync(STATE_FILE(), { force: true });
     const r = inCleanEnv(selfCheck);
     assert.ok(r.ok, r.detail);
     assert.equal(fs.existsSync(STATE_FILE()), false);

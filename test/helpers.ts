@@ -4,23 +4,20 @@ import childProcess from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { mock } from 'node:test';
 import type { Memento } from 'vscode';
+import { CLAUDE_OVERRIDE_VARS } from '../src/environmentWarnings';
+import { setLocale } from '../src/i18n';
 
 // Record the real home directory at module load (before any `before` hook) for later assertions
 const REAL_HOME = os.homedir();
 
 export const onWindows = process.platform === 'win32';
 
-// On a Windows test machine the Windows code paths would read and write the real user-level CODEX_HOME through reg and
-// powershell.exe (codexWindows' default runner). Refuse both for the whole test process; tests inject their own runners.
-if (onWindows) {
-  const realExecFileSync = childProcess.execFileSync;
-  mock.method(childProcess, 'execFileSync', ((file: string, ...rest: unknown[]) => {
-    if (/^(reg|powershell)(\.exe)?$/i.test(path.basename(file))) throw new Error(`tests must not run ${file} against the real user environment`);
-    return (realExecFileSync as (...a: unknown[]) => unknown)(file, ...rest);
-  }) as typeof childProcess.execFileSync);
-}
+// scripts/test-guard.cjs (loaded first in every test bundle by scripts/run-tests.mjs) refuses reg / powershell / pwsh /
+// setx on every platform, so the Windows code paths cannot touch the real user-level CODEX_HOME. Fail loudly when a
+// bundle was built without it.
+assert.ok((childProcess as unknown as { __planswapTestGuard?: boolean }).__planswapTestGuard,
+  'the process guard (scripts/test-guard.cjs) is not loaded; run the tests through npm test');
 
 // Whether this process may create a file symbolic link: always off Windows; on Windows only with Developer Mode or elevation
 function fileSymlinksAllowed(): boolean {
@@ -58,35 +55,80 @@ export const CASE_SENSITIVE_FS = { skip: onWindows && 'the Windows file system i
 export function assertMode(f: string, expected: string, message?: string): void {
   if (!onWindows) assert.equal(mode(f), expected, message);
 }
-const ENV_KEYS = ['HOME', 'USERPROFILE', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'SHELL'] as const;
+/**
+ * Variables PlanSwap reads from the extension host environment that a developer's shell may have set, cleared for the
+ * duration of a temporary HOME: the account directories, CLAUDE_CODE_CUSTOM_OAUTH_URL (switches the info file name),
+ * the Claude credential overrides and federation pair (environment warnings) and the OneDrive roots (OneDrive warning).
+ */
+const CLEARED_ENV_KEYS = [
+  'CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'CLAUDE_CODE_CUSTOM_OAUTH_URL',
+  ...CLAUDE_OVERRIDE_VARS, 'ANTHROPIC_FEDERATION_RULE_ID', 'ANTHROPIC_ORGANIZATION_ID',
+  'OneDrive', 'OneDriveCommercial', 'OneDriveConsumer',
+] as const;
+// Saved and restored, but left as they are (SHELL is set by the rc-file tests themselves)
+const ENV_KEYS = ['HOME', 'USERPROFILE', 'SHELL', ...CLEARED_ENV_KEYS] as const;
 
 export interface TempHome { home: string; restore(): void }
 
 /**
- * Creates a mktemp directory and points process.env.HOME and USERPROFILE (read by os.homedir() on Windows) at it; also clears CLAUDE_CONFIG_DIR / CODEX_HOME
- * so that defaultDir / codexDefaultDir / effectiveDir all resolve inside the temporary directory.
- * restore() deletes the directory and restores the environment variables.
+ * Creates a mktemp directory and points process.env.HOME and USERPROFILE (read by os.homedir() on Windows) at it; also
+ * clears CLEARED_ENV_KEYS (CLAUDE_CONFIG_DIR / CODEX_HOME among them) so that defaultDir / codexDefaultDir / effectiveDir
+ * all resolve inside the temporary directory and nothing from the developer's shell changes the results.
+ * restore() deletes the directory and restores every saved variable to its previous value (or absence).
  */
 export function makeTempHome(prefix: string): TempHome {
-  const saved: Partial<Record<(typeof ENV_KEYS)[number], string | undefined>> = {};
-  for (const k of ENV_KEYS) saved[k] = process.env[k];
+  const saved = new Map<string, string | undefined>();
+  for (const k of ENV_KEYS) saved.set(k, process.env[k]);
   // The prefix avoids selfCheck's own planswap-codex-*, otherwise parallel tests would disturb its leftover check
   const home = fs.mkdtempSync(path.join(os.tmpdir(), `planswap-test-${prefix}-`));
   process.env.HOME = home;
   process.env.USERPROFILE = home;
-  delete process.env.CLAUDE_CONFIG_DIR;
-  delete process.env.CODEX_HOME;
+  for (const k of CLEARED_ENV_KEYS) delete process.env[k];
   assertTempHome(home);
   return {
     home,
     restore() {
-      for (const k of ENV_KEYS) {
-        if (saved[k] === undefined) delete process.env[k];
-        else process.env[k] = saved[k];
-      }
+      for (const [k, v] of saved) restoreEnv(k, v);
       fs.rmSync(home, { recursive: true, force: true });
     },
   };
+}
+
+/** Sets process.env[name] back to a saved value, or removes it when it was absent */
+export function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) delete process.env[name];
+  else process.env[name] = value;
+}
+
+/**
+ * Runs fn with the given variables set (undefined removes one) and restores their previous values afterwards, also
+ * when fn throws or its promise rejects.
+ */
+export function withEnv<T>(vars: Record<string, string | undefined>, fn: () => T): T {
+  const saved = Object.keys(vars).map((k) => [k, process.env[k]] as const);
+  for (const [k, v] of Object.entries(vars)) restoreEnv(k, v);
+  const restore = (): void => { for (const [k, v] of saved) restoreEnv(k, v); };
+  return settle(fn, restore);
+}
+
+/** Runs fn in the given locale and switches back to English afterwards, also when fn throws or its promise rejects */
+export function inLocale<T>(locale: Parameters<typeof setLocale>[0], fn: () => T): T {
+  setLocale(locale);
+  return settle(fn, () => setLocale('en'));
+}
+
+// Calls fn, then cleanup: right away for a synchronous result or throw, after settling for a promise
+function settle<T>(fn: () => T, cleanup: () => void): T {
+  let result: T;
+  try {
+    result = fn();
+  } catch (e) {
+    cleanup();
+    throw e;
+  }
+  if (result instanceof Promise) return result.finally(cleanup) as T;
+  cleanup();
+  return result;
 }
 
 /** Asserts that the current os.homedir() is a temporary directory, not the real home directory */

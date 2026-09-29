@@ -5,10 +5,15 @@ on:
     tags:
       - 'v*'
 
+# Reading the repository is all the jobs need; the registries are reached with their own tokens
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Build and Test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -44,11 +49,36 @@ jobs:
           path: '*.vsix'
           retention-days: 7
 
+  # The Windows code paths are only exercised on Windows; nothing is published unless they pass too
+  test-windows:
+    name: Test (windows-latest)
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Run unit tests
+        run: npm test
+
   # Both registries publish the same VSIX built above
   publish-marketplace:
     name: Publish to VS Code Marketplace
     runs-on: ubuntu-latest
-    needs: build
+    timeout-minutes: 15
+    needs: [build, test-windows]
     steps:
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -68,7 +98,8 @@ jobs:
   publish-openvsx:
     name: Publish to Open VSX
     runs-on: ubuntu-latest
-    needs: build
+    timeout-minutes: 15
+    needs: [build, test-windows]
     steps:
       - name: Setup Node.js
         uses: actions/setup-node@v7

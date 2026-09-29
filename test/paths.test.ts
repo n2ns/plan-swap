@@ -8,7 +8,7 @@ import {
   ensureAccountDir, formatClaudePlan, readAccountInfo, samePath, sameRealPath, scanAccountDirs,
   findSameDir, setClaudeSettingEnv, syncMcpServers,
 } from '../src/paths';
-import { assertTempHome, makeTempHome, assertMode, FILE_SYMLINKS, read, type TempHome } from './helpers';
+import { assertTempHome, makeTempHome, assertMode, FILE_SYMLINKS, read, withEnv, type TempHome } from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -79,31 +79,28 @@ describe('defaultDir / accountDir / claudeJsonPath', () => {
   test('defaultDir defaults to ~/.claude; blank CLAUDE_CONFIG_DIR falls back', () => {
     assertTempHome(home);
     assert.equal(defaultDir(), def);
-    process.env.CLAUDE_CONFIG_DIR = '   ';
-    assert.equal(defaultDir(), def);
-    delete process.env.CLAUDE_CONFIG_DIR;
+    withEnv({ CLAUDE_CONFIG_DIR: '   ' }, () => assert.equal(defaultDir(), def));
   });
   test('CLAUDE_CONFIG_DIR is used as is, surrounding spaces included, as Claude Code does', () => {
-    process.env.CLAUDE_CONFIG_DIR = path.join(home, 'with space ');
-    assert.equal(defaultDir(), path.resolve(path.join(home, 'with space ')));
-    delete process.env.CLAUDE_CONFIG_DIR;
+    withEnv({ CLAUDE_CONFIG_DIR: path.join(home, 'with space ') }, () =>
+      assert.equal(defaultDir(), path.resolve(path.join(home, 'with space '))));
   });
   test('the info file is .claude-custom-oauth.json while Claude Code sees CLAUDE_CODE_CUSTOM_OAUTH_URL', () => {
     const acc = accountDir('oauth');
     assert.equal(claudeJsonPath(acc), path.join(acc, '.claude.json'));
-    process.env.CLAUDE_CODE_CUSTOM_OAUTH_URL = 'https://auth.example';
     try {
+      withEnv({ CLAUDE_CODE_CUSTOM_OAUTH_URL: 'https://auth.example' }, () => {
+        assert.equal(claudeJsonPath(acc), path.join(acc, '.claude-custom-oauth.json'));
+        assert.equal(claudeJsonPath(def), path.join(home, '.claude-custom-oauth.json'));
+        // The setting can clear the inherited variable for Claude Code, or set it
+        setClaudeSettingEnv({ set: [], cleared: ['CLAUDE_CODE_CUSTOM_OAUTH_URL'] });
+        assert.equal(claudeJsonPath(acc), path.join(acc, '.claude.json'));
+      });
+      setClaudeSettingEnv({ set: ['CLAUDE_CODE_CUSTOM_OAUTH_URL'], cleared: [] });
       assert.equal(claudeJsonPath(acc), path.join(acc, '.claude-custom-oauth.json'));
-      assert.equal(claudeJsonPath(def), path.join(home, '.claude-custom-oauth.json'));
-      // The setting can clear the inherited variable for Claude Code, or set it
-      setClaudeSettingEnv({ set: [], cleared: ['CLAUDE_CODE_CUSTOM_OAUTH_URL'] });
-      assert.equal(claudeJsonPath(acc), path.join(acc, '.claude.json'));
     } finally {
-      delete process.env.CLAUDE_CODE_CUSTOM_OAUTH_URL;
+      setClaudeSettingEnv({ set: [], cleared: [] });
     }
-    setClaudeSettingEnv({ set: ['CLAUDE_CODE_CUSTOM_OAUTH_URL'], cleared: [] });
-    assert.equal(claudeJsonPath(acc), path.join(acc, '.claude-custom-oauth.json'));
-    setClaudeSettingEnv({ set: [], cleared: [] });
   });
   test('findSameDir prefers the same spelling and falls back to another spelling of the folder', () => {
     const a = path.join(home, 'find-a');
@@ -119,9 +116,8 @@ describe('defaultDir / accountDir / claudeJsonPath', () => {
     assert.equal(findSameDir([a], path.join(home, 'missing')), -1);
   });
   test('CLAUDE_CONFIG_DIR takes effect with trailing slash removed', () => {
-    process.env.CLAUDE_CONFIG_DIR = path.join(home, '.claude-x') + '/';
-    assert.equal(defaultDir(), path.join(home, '.claude-x'));
-    delete process.env.CLAUDE_CONFIG_DIR;
+    withEnv({ CLAUDE_CONFIG_DIR: path.join(home, '.claude-x') + '/' }, () =>
+      assert.equal(defaultDir(), path.join(home, '.claude-x')));
   });
   test('accountDir', () => {
     assert.equal(accountDir('work'), path.join(home, '.claude-work'));
@@ -130,9 +126,7 @@ describe('defaultDir / accountDir / claudeJsonPath', () => {
     assert.equal(claudeJsonPath(def), path.join(home, '.claude.json'));
     assert.equal(claudeJsonPath(def + '/'), path.join(home, '.claude.json'));
     assert.equal(claudeJsonPath(path.join(home, '.claude-a')), path.join(home, '.claude-a', '.claude.json'));
-    process.env.CLAUDE_CONFIG_DIR = def;
-    assert.equal(claudeJsonPath(def), path.join(def, '.claude.json'));
-    delete process.env.CLAUDE_CONFIG_DIR;
+    withEnv({ CLAUDE_CONFIG_DIR: def }, () => assert.equal(claudeJsonPath(def), path.join(def, '.claude.json')));
   });
   test('claudeJsonPath: explicit → always inside the dir, even for the default dir without the variable', () => {
     assert.equal(claudeJsonPath(def, true), path.join(def, '.claude.json'));
@@ -288,22 +282,18 @@ describe('scanAccountDirs', () => {
     assert.equal(scanAccountDirs().find((a) => a.name === 'work')?.dir, accountDir('work'));
   });
   test('excludes the default directory pointed to by CLAUDE_CONFIG_DIR (realpath comparison)', () => {
-    process.env.CLAUDE_CONFIG_DIR = accountDir('work') + '/';
-    assert.ok(!scanAccountDirs().some((a) => a.name === 'work'));
-    assert.ok(scanAccountDirs().some((a) => a.name === 'w2'));
-    delete process.env.CLAUDE_CONFIG_DIR;
+    withEnv({ CLAUDE_CONFIG_DIR: accountDir('work') + '/' }, () => {
+      assert.ok(!scanAccountDirs().some((a) => a.name === 'work'));
+      assert.ok(scanAccountDirs().some((a) => a.name === 'w2'));
+    });
   });
 });
 
 describe('checkSafeToDelete / deleteAccountDir', () => {
   before(ensureScanFixtures);
   test('refuses the default directory (including one set via CLAUDE_CONFIG_DIR)', () => {
-    process.env.CLAUDE_CONFIG_DIR = accountDir('work');
-    try {
-      assert.equal(checkSafeToDelete(accountDir('work')), `Cannot delete the default account directory: ${accountDir('work')}`);
-    } finally {
-      delete process.env.CLAUDE_CONFIG_DIR;
-    }
+    withEnv({ CLAUDE_CONFIG_DIR: accountDir('work') }, () =>
+      assert.equal(checkSafeToDelete(accountDir('work')), `Cannot delete the default account directory: ${accountDir('work')}`));
     assert.match(checkSafeToDelete(def) ?? '', /format|default account directory/);
   });
   test('refuses symlinks, the home directory itself, outside home, .. escape, invalid names, files, missing', () => {

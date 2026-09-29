@@ -5,14 +5,25 @@ on:
     branches: ['**']
   pull_request:
 
+permissions:
+  contents: read
+
+# A newer push to the same branch or pull request cancels the run it supersedes
+concurrency:
+  group: test-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
-    name: Test (${{ matrix.os }})
+    name: Test (${{ matrix.os }}, Node ${{ matrix.node }})
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         # The Windows runner is elevated, so file symbolic links work there and the sharing tests run on real links
         os: [ubuntu-latest, windows-latest]
+        # esbuild targets node22 and the editors ship Node 22; 24 is the current LTS
+        node: ['22', '24']
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
@@ -21,7 +32,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '24'
+          node-version: ${{ matrix.node }}
           cache: 'npm'
 
       - name: Install dependencies
@@ -32,16 +43,53 @@ jobs:
 
       - name: Run unit tests
         shell: bash
-        run: npm test 2>&1 | tee test-output.txt
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee test-output.txt
 
-      # Failures as an annotation, so they can be read without downloading the log
+      # Counts and skip reasons in the job summary. The Windows runner is elevated, so a SHARING / FILE_SYMLINKS skip
+      # there means the runner stopped allowing file symbolic links and the sharing suites would silently stop running.
+      # (A skipped suite counts as a single skipped test, so the reasons are checked rather than the skipped count.)
+      - name: Check test counts
+        if: success()
+        shell: bash
+        run: |
+          out=$(tr -d '\r' < test-output.txt)
+          # The spec summary ('ℹ skipped 33'); '# skipped 33' in case a TAP reporter is ever used
+          count() { printf '%s\n' "$out" | sed -n -E "s/^(ℹ|#) $1 ([0-9]+)$/\2/p" | tail -n 1; }
+          tests=$(count tests); pass=$(count pass); fail=$(count fail); skipped=$(count skipped)
+          reasons=$(printf '%s\n' "$out" | sed -n -E 's/^ *﹣ .* # (.*)$/\1/p' | sort | uniq -c | sort -rn)
+          echo "tests=$tests pass=$pass fail=$fail skipped=$skipped"
+          echo "$reasons"
+          {
+            echo "Tests (${{ matrix.os }}, Node ${{ matrix.node }}): $tests total, $pass passed, $fail failed, $skipped skipped"
+            echo '```'
+            echo "$reasons"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -z "$tests" ] || [ -z "$skipped" ]; then
+            echo "::error title=Test counts (${{ matrix.os }})::could not read the test counts from the output"
+            exit 1
+          fi
+          if [ "$RUNNER_OS" = "Windows" ] && printf '%s\n' "$reasons" | grep -q 'symbolic links'; then
+            echo "::error title=Sharing tests skipped (${{ matrix.os }})::the runner refused file symbolic links, so the SHARING / FILE_SYMLINKS tests did not run"
+            exit 1
+          fi
+
+      # Failures as an annotation, so they can be read without downloading the log. Without a 'failing tests:' section
+      # (a bundling error, a crash, a timeout) the end of the log is reported instead.
       - name: Report failing tests
         if: failure()
         shell: bash
         run: |
           [ -f test-output.txt ] || exit 0
-          msg=$(sed -n '/failing tests:/,$p' test-output.txt | head -c 60000 | tr -d '\r' | sed -e 's/%/%25/g' | awk 'BEGIN{ORS="%0A"}{print}')
-          echo "::error title=Failing tests (${{ matrix.os }})::${msg}"
+          if grep -q 'failing tests:' test-output.txt; then
+            body=$(sed -n '/failing tests:/,$p' test-output.txt | head -c 60000)
+          else
+            body=$(tail -c 20000 test-output.txt)
+          fi
+          msg=$(printf '%s\n' "$body" | tr -d '\r' | sed -e 's/%/%25/g' | awk 'BEGIN{ORS="%0A"}{print}')
+          echo "::error title=Failing tests (${{ matrix.os }}, Node ${{ matrix.node }})::${msg}"
 
       - name: Build
         run: npm run build

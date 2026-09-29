@@ -13,7 +13,7 @@ import { RC_BEGIN, STATE_FILE, installRcBlocks, rcBlock, rcStatus, readSelectedD
 import { CODEX_DEFAULT_NAME, codexAccountDir, readCodexAccountInfo, type CodexAccount } from '../src/codex/codexPaths';
 import { isSharedCodexAccount } from '../src/codex/codexShare';
 import { labelFor } from '../src/labels';
-import { assertTempHome, LINUX_ONLY, makeTempHome, MemoryMemento, read, type TempHome } from './helpers';
+import { assertTempHome, inLocale, LINUX_ONLY, makeTempHome, MemoryMemento, read, restoreEnv, type TempHome } from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -28,60 +28,66 @@ describe('manual restart guidance by editor connection', () => {
 
   for (const locale of ['en', 'zh-cn'] as const) {
     test(`${locale}: local desktop guidance applies even when a server kind is recognized`, () => {
-      setLocale(locale);
-      for (const kind of ['unknown', 'vscode', 'antigravity', 'vscodium'] as const) {
-        const messages = manualRestartMessages(kind, undefined, false);
-        const hint = t('codex.manualRestartHintLocal');
-        assert.deepEqual(messages, {
-          hint,
-          required: t('codex.manualRestartRequiredLocal', { hint }),
-          switchConfirm: t('codex.switchConfirmManualLocal', { hint }),
-        });
-        assert.doesNotMatch(Object.values(messages).join(' '), /WSL|wsl --shutdown/);
-      }
+      inLocale(locale, () => {
+        for (const kind of ['unknown', 'vscode', 'antigravity', 'vscodium'] as const) {
+          const messages = manualRestartMessages(kind, undefined, false);
+          const hint = t('codex.manualRestartHintLocal');
+          assert.deepEqual(messages, {
+            hint,
+            required: t('codex.manualRestartRequiredLocal', { hint }),
+            switchConfirm: t('codex.switchConfirmManualLocal', { hint }),
+          });
+          assert.doesNotMatch(Object.values(messages).join(' '), /WSL|wsl --shutdown/);
+        }
+      });
     });
 
     test(`${locale}: WSL guidance preserves each editor's manual method`, () => {
-      setLocale(locale);
-      const hints = {
-        vscode: t('codex.manualRestartHintVscode'),
-        unknown: t('codex.manualRestartHintUnknown'),
-        antigravity: t('codex.manualRestartHint', { editor: 'Antigravity' }),
-        vscodium: t('codex.manualRestartHint', { editor: 'VSCodium' }),
-      };
-      for (const kind of ['vscode', 'unknown', 'antigravity', 'vscodium'] as const) {
-        const hint = hints[kind];
-        assert.deepEqual(manualRestartMessages(kind, 'wsl'), {
-          hint,
-          required: t('codex.manualRestartRequired', { hint }),
-          switchConfirm: t('codex.switchConfirmManual', { hint }),
-        });
-      }
+      inLocale(locale, () => {
+        const hints = {
+          vscode: t('codex.manualRestartHintVscode'),
+          unknown: t('codex.manualRestartHintUnknown'),
+          antigravity: t('codex.manualRestartHint', { editor: 'Antigravity' }),
+          vscodium: t('codex.manualRestartHint', { editor: 'VSCodium' }),
+        };
+        for (const kind of ['vscode', 'unknown', 'antigravity', 'vscodium'] as const) {
+          const hint = hints[kind];
+          assert.deepEqual(manualRestartMessages(kind, 'wsl'), {
+            hint,
+            required: t('codex.manualRestartRequired', { hint }),
+            switchConfirm: t('codex.switchConfirmManual', { hint }),
+          });
+        }
+      });
     });
 
     test(`${locale}: SSH and container windows receive remote guidance`, () => {
-      setLocale(locale);
-      for (const remoteName of ['ssh-remote', 'dev-container']) {
-        const hint = t('codex.manualRestartHintRemote');
-        assert.deepEqual(manualRestartMessages('vscode', remoteName), {
-          hint,
-          required: t('codex.manualRestartRequiredRemote', { hint }),
-          switchConfirm: t('codex.switchConfirmManualRemote', { hint }),
-        });
-      }
+      inLocale(locale, () => {
+        for (const remoteName of ['ssh-remote', 'dev-container']) {
+          const hint = t('codex.manualRestartHintRemote');
+          assert.deepEqual(manualRestartMessages('vscode', remoteName), {
+            hint,
+            required: t('codex.manualRestartRequiredRemote', { hint }),
+            switchConfirm: t('codex.switchConfirmManualRemote', { hint }),
+          });
+        }
+      });
     });
   }
 });
 
 describe('local selection with manual restart', () => {
   test('local and other remote connections never advertise automatic restart', () => {
-    for (const remoteName of [undefined, 'ssh-remote', 'dev-container']) {
-      env.remoteName = remoteName;
-      const expected = { context: remoteName === undefined ? 'local' : 'remote', auto: false };
-      // Native Windows also reports that the selection lives in the user environment, not in rc files
-      assert.deepEqual(restartInfo(), process.platform === 'win32' ? { ...expected, userEnv: true } : expected);
+    try {
+      for (const remoteName of [undefined, 'ssh-remote', 'dev-container']) {
+        env.remoteName = remoteName;
+        const expected = { context: remoteName === undefined ? 'local' : 'remote', auto: false };
+        // Native Windows also reports that the selection lives in the user environment, not in rc files
+        assert.deepEqual(restartInfo(), process.platform === 'win32' ? { ...expected, userEnv: true } : expected);
+      }
+    } finally {
+      env.remoteName = undefined;
     }
-    env.remoteName = undefined;
   });
 
   test('the restart action only shows local instructions', async (ctx) => {
@@ -117,6 +123,7 @@ describe('local selection with manual restart', () => {
     ctx.mock.method(window, 'showWarningMessage', async () => confirm ? t('common.continue') : undefined);
     const disposables = registerCodexCommands({ store, labels, panel, tools: {} });
     const source = codexPanelSource(store, labels);
+    const savedCodexHome = process.env.CODEX_HOME;
     try {
       writeSelectedDir(undefined);
       // Not enabled: switching is refused with a warning and nothing changes
@@ -152,7 +159,7 @@ describe('local selection with manual restart', () => {
       assert.equal(refreshes, 2);
       assert.equal(execute.mock.callCount(), 0);
     } finally {
-      delete process.env.CODEX_HOME;
+      restoreEnv('CODEX_HOME', savedCodexHome);
       for (const disposable of disposables) disposable.dispose();
       fixture.restore();
     }
@@ -193,7 +200,7 @@ describe('validateName (Codex)', () => {
   test('a name whose directory resolves to ~/.codex is rejected', async () => {
     const { store, labels } = await make();
     const def = path.join(home, '.codex');
-    fs.mkdirSync(def);
+    fs.mkdirSync(def, { recursive: true });
     fs.symlinkSync(def, path.join(home, '.codex-main'), 'junction');
     try {
       assert.equal(validateName('main', store, labels), t('name.sameAsDefaultDir'));
@@ -314,6 +321,7 @@ describe('panel message handlers', () => {
   });
 
   test('enable: pre-check failures are reported without a confirmation', LINUX_ONLY, async (ctx) => {
+    fs.rmSync(path.join(fxHome, '.bash_profile'), { force: true });
     fs.writeFileSync(bashrc(), 'export CODEX_HOME=/mine\n');
     fs.writeFileSync(profile(), 'p=1\n');
     const h = await harness();
@@ -368,12 +376,17 @@ describe('panel message handlers', () => {
   });
 
   test('switch: an account already effective in this window only realigns the state file; no confirmation, no restart', LINUX_ONLY, async (ctx) => {
+    // Enabled: rc blocks in place (the confirmed switch back to the default needs them)
+    fs.writeFileSync(bashrc(), 'x=1\n');
+    fs.writeFileSync(profile(), 'p=1\n');
+    installRcBlocks();
     const a = named('eff');
     const h = await harness([a]);
     const warnings = modal(ctx, () => t('common.continue'));
-    env.remoteName = 'wsl';
-    process.env.CODEX_HOME = a.dir;
+    const savedCodexHome = process.env.CODEX_HOME;
     try {
+      env.remoteName = 'wsl';
+      process.env.CODEX_HOME = a.dir;
       writeSelectedDir(undefined);
       await h.handle({ type: 'switch', mode: 'codex', dir: a.dir });
       assert.equal(readSelectedDir(), a.dir);
@@ -384,7 +397,7 @@ describe('panel message handlers', () => {
       assert.equal(readSelectedDir(), undefined);
       assert.equal(warnings.mock.callCount() >= 1, true);
     } finally {
-      delete process.env.CODEX_HOME;
+      restoreEnv('CODEX_HOME', savedCodexHome);
       env.remoteName = undefined;
       h.dispose();
     }
@@ -460,20 +473,22 @@ describe('panel message handlers', () => {
     const a = named('active');
     const h = await harness([a]);
     writeSelectedDir(undefined);
-    process.env.CODEX_HOME = a.dir;
+    const savedCodexHome = process.env.CODEX_HOME;
     const warnings = modal(ctx, () => t('common.deleteDir'));
     try {
+      process.env.CODEX_HOME = a.dir;
       await h.handle({ type: 'remove', mode: 'codex', dir: a.dir });
       assert.deepEqual(warnings.mock.calls.map((c) => c.arguments[0]), [t('codex.removeEffective', { label: 'active' })]);
       assert.ok(h.store.find('active'));
       assert.ok(fs.existsSync(a.dir));
     } finally {
-      delete process.env.CODEX_HOME;
+      restoreEnv('CODEX_HOME', savedCodexHome);
       h.dispose();
     }
   });
 
   test('share then unshare: conversion after confirmation; the selected account is refused', LINUX_ONLY, async (ctx) => {
+    fs.mkdirSync(def, { recursive: true, mode: 0o700 });
     fs.writeFileSync(path.join(def, 'config.toml'), 'model = "m"\n');
     const a = named('conv');
     const h = await harness([a]);

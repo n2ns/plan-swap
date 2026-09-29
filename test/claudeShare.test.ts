@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { setLocale, t } from '../src/i18n';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
+import { pidAlive } from '../src/platform';
 import {
   CLAUDE_SHARED_ENTRIES, claudeAccountBusy, copyClaudeIndependent, copyTree, ensureClaudeLinks, isSharedClaudeAccount, lstatOrUndefined,
   makeClaudeIndependent, mergeEntry, migrateClaudeToShared, mirrorClaudeJson, type MigrateReport, windowsSessionsBusy,
@@ -363,7 +364,9 @@ describe('claudeAccountBusy', () => {
   test('Windows check: live pid with a matching start time; shared sessions folders are not attributed', () => {
     const acc = accountDir('win');
     const sessions = path.join(acc, 'sessions');
-    const done = spawnSync(process.execPath, ['-e', '0']).pid;
+    // A pid no process can have (the pid of an exited child could be reused before the check)
+    const done = 0x7ffffffc;
+    assert.equal(pidAlive(done), false);
     const never = (): Map<number, string> => assert.fail('no probe expected');
     assert.equal(windowsSessionsBusy(sessions, never), false);
     write(path.join(sessions, 'dead.json'), JSON.stringify({ pid: done, procStart: '1' }));

@@ -1,4 +1,4 @@
-import { after, before, describe, test } from 'node:test';
+import { after, afterEach, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import * as fs from 'node:fs';
@@ -302,12 +302,19 @@ describe('readCodexUsage', () => {
       shimDir = path.join(tmp.home, 'npm-bin');
       fs.mkdirSync(shimDir);
     });
-    after(() => {
+    // Each test states whether PATH has a codex.cmd shim, so none depends on what an earlier one left behind
+    const shim = (present: boolean): void => {
+      if (present) fs.writeFileSync(path.join(shimDir, 'codex.cmd'), '');
+      else fs.rmSync(path.join(shimDir, 'codex.cmd'), { force: true });
+    };
+    afterEach(() => {
+      shim(false);
       if (savedPath === undefined) delete process.env.PATH;
       else process.env.PATH = savedPath;
     });
 
     test('no codex.cmd on PATH → cliMissing without a second spawn', async () => {
+      shim(false);
       process.env.PATH = shimDir;
       const f = fakeSpawn(() => undefined, { enoent: () => true });
       assert.deepEqual(await readCodexUsage(acct, { ...base(f.spawn), platform: 'win32' }), { ok: false, reason: 'cliMissing' });
@@ -315,7 +322,7 @@ describe('readCodexUsage', () => {
     });
 
     test('retries once with codex.cmd through the shell', async () => {
-      fs.writeFileSync(path.join(shimDir, 'codex.cmd'), '');
+      shim(true);
       process.env.PATH = shimDir;
       const f = fakeSpawn(server((id) => ({ id, result: LIMITS })), { enoent: (n) => n === 1, exitOnStdinEnd: true });
       const r = await readCodexUsage(acct, { ...base(f.spawn), platform: 'win32' });
@@ -325,7 +332,7 @@ describe('readCodexUsage', () => {
     });
 
     test('a shim child that does not exit is ended as a tree by its own pid, not by kill()', async () => {
-      fs.writeFileSync(path.join(shimDir, 'codex.cmd'), '');
+      shim(true);
       process.env.PATH = shimDir;
       const f = fakeSpawn(() => undefined, { enoent: (n) => n === 1 });
       const trees: number[] = [];
@@ -338,7 +345,7 @@ describe('readCodexUsage', () => {
     });
 
     test('a quoted PATH entry still finds codex.cmd', async () => {
-      fs.writeFileSync(path.join(shimDir, 'codex.cmd'), '');
+      shim(true);
       process.env.PATH = `"${shimDir}"`;
       const f = fakeSpawn(server((id) => ({ id, result: LIMITS })), { enoent: (n) => n === 1, exitOnStdinEnd: true });
       const r = await readCodexUsage(acct, { ...base(f.spawn), platform: 'win32' });
@@ -347,6 +354,7 @@ describe('readCodexUsage', () => {
     });
 
     test('ENOENT from the retry too → cliMissing', async () => {
+      shim(true);
       process.env.PATH = shimDir;
       const f = fakeSpawn(() => undefined, { enoent: () => true });
       assert.deepEqual(await readCodexUsage(acct, { ...base(f.spawn), platform: 'win32' }), { ok: false, reason: 'cliMissing' });
@@ -354,6 +362,7 @@ describe('readCodexUsage', () => {
     });
 
     test('an explicit command gets no fallback', async () => {
+      shim(true);   // even with codex.cmd on PATH
       process.env.PATH = shimDir;
       const f = fakeSpawn(() => undefined, { enoent: () => true });
       assert.deepEqual(await readCodexUsage(acct, { ...base(f.spawn), platform: 'win32', command: 'my-codex' }), { ok: false, reason: 'cliMissing' });
