@@ -152,6 +152,15 @@ export async function setConfigDir(dir: string | undefined): Promise<void>; // b
 export function affectsSetting(e: vscode.ConfigurationChangeEvent): boolean; // e.affectsConfiguration('claudeCode.environmentVariables')
 ```
 
+On win32 the variable name is matched case-insensitively (a hand-written `claude_config_dir` entry sets the directory there too); with several spellings, the one sorting first (upper case) wins, as Node picks it for the child environment, and `setConfigDir` removes every spelling.
+
+## src/terminalShell.ts (imports vscode)
+
+```ts
+export function isWslProfile(name: string, profiles?: TerminalProfiles): boolean; // a detected '<distro> (WSL)' profile, or a profile whose path is wsl.exe or the System32/Sysnative bash.exe launcher
+export function accountTerminalShell(): string | undefined; // win32 only: 'powershell.exe' when terminal.integrated.defaultProfile.windows is a WSL profile (a WSL shell does not receive the terminal environment that carries the account), otherwise undefined (the default profile); passed as shellPath by the Claude / Codex account terminals and the update-CLI terminal
+```
+
 ## src/fileState.ts (depends only on the vscode Memento type)
 
 ```ts
@@ -283,7 +292,7 @@ export interface PanelSource {
   restart?(): RestartInfo;        // codex only; copied into TabState.restart on every push
 }
 export function claudePanelSource(store: AccountStore, labels: LabelStore): PanelSource; // maps store.all() (label via labelFor(name, labels), email/plan via readAccountInfo, shared via isSharedClaudeAccount for named rows); when currentDir() does not correspond to any account, appends a current row with kind='external' (name EXTERNAL_NAME, label labelFor(EXTERNAL_NAME, labels)); enabled always true; pendingDir always undefined
-export function tildify(dir: string): string;  // replaces the home directory with ~
+export function tildify(dir: string): string;  // replaces the home directory with ~ (case-insensitive on win32); file watchers are keyed by comparablePath, so two spellings of one file share a watcher
 export function viewInfo(info: { email?: string; plan?: string; loggedIn: boolean }): Pick<AccountView, 'email' | 'plan' | 'loggedIn'>; // picks only these fields; both sources build rows with ...viewInfo(read…Info(dir)), so the host-only identity key never reaches the Webview
 
 export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposable {

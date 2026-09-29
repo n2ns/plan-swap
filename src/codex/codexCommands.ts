@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { NAME_RE, samePath, sameRealPath } from '../paths';
 import { shQuote } from '../commands';
+import { accountTerminalShell } from '../terminalShell';
 import { type AccountsPanel, type PanelSource, tildify, viewInfo } from '../accountsPanel';
 import { labelFor, sameName, type LabelStore, EXTERNAL_NAME } from '../labels';
 import type { AccountView, FromWebview, RestartInfo } from '../protocol';
@@ -561,6 +562,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     // Windows shells have no `env` command: the terminal environment carries the variable instead (null removes it)
     const terminal = vscode.window.createTerminal({
       name: `Codex (${labelOf(account)})`,
+      shellPath: accountTerminalShell(),
       env: isWindows() ? { CODEX_HOME: isDefault ? null : account.dir } : undefined,
     });
     terminals.set(terminal, account);

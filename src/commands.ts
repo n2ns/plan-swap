@@ -35,6 +35,7 @@ import { runTool, type ToolDeps } from './tools';
 import { t } from './i18n';
 import { isWindows } from './platform';
 import { askCopyFallback } from './linkPolicy';
+import { accountTerminalShell } from './terminalShell';
 
 export interface Deps {
   store: AccountStore;
@@ -274,6 +275,7 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
     const isDefault = account.name === DEFAULT_NAME;
     const terminal = vscode.window.createTerminal({
       name: `Claude (${labelOf(account)})`,
+      shellPath: accountTerminalShell(),
       env: isDefault ? undefined : { CLAUDE_CONFIG_DIR: account.dir },
     });
     terminals.set(terminal, account);

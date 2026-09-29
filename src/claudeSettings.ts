@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { defaultDir, samePath } from './paths';
+import { isWindows } from './platform';
 
 const SECTION = 'claudeCode';
 const KEY = 'environmentVariables';
@@ -23,15 +24,22 @@ function readEntries(): EnvEntry[] {
   return [];
 }
 
+// Windows variable names are case-insensitive, so a hand-written 'claude_config_dir' entry also sets it there
+function isEnvName(name: string): boolean {
+  return isWindows() ? name.toUpperCase() === ENV_NAME : name === ENV_NAME;
+}
+
 function getConfiguredConfigDir(): string | undefined {
-  let found: string | undefined;
+  const byName = new Map<string, string>();
   for (const e of readEntries()) {
-    if (e.name !== ENV_NAME || e.value === undefined || e.value === null) continue;
+    if (!isEnvName(e.name) || e.value === undefined || e.value === null) continue;
     const v = String(e.value);
     // The official extension skips empty-string entries; a later non-empty entry overrides earlier ones
-    if (v) found = v;
+    if (v) byName.set(e.name, v);
   }
-  return found === undefined ? undefined : path.resolve(found);
+  // Several spellings (Windows only): Node passes the child the one that sorts first, i.e. the upper-case one
+  const name = [...byName.keys()].sort()[0];
+  return name === undefined ? undefined : path.resolve(byName.get(name)!);
 }
 
 export function currentDir(): string {
@@ -49,9 +57,9 @@ export async function setConfigDir(dir: string | undefined): Promise<void> {
   const raw = config.get<unknown>(KEY);
   // Other entries are kept as-is (shallow-copied, not filtered, values unchanged); the object form is converted to {name, value} per official semantics
   const next: unknown[] = Array.isArray(raw)
-    ? raw.filter((e) => !(isPlainObject(e) && e.name === ENV_NAME)).map((e) => (isPlainObject(e) ? { ...e } : e))
+    ? raw.filter((e) => !(isPlainObject(e) && typeof e.name === 'string' && isEnvName(e.name))).map((e) => (isPlainObject(e) ? { ...e } : e))
     : isPlainObject(raw)
-      ? Object.entries(raw).filter(([name]) => name !== ENV_NAME).map(([name, value]) => ({ name, value: String(value) }))
+      ? Object.entries(raw).filter(([name]) => !isEnvName(name)).map(([name, value]) => ({ name, value: String(value) }))
       : [];
   if (dir !== undefined && !samePath(dir, defaultDir())) next.push({ name: ENV_NAME, value: path.resolve(dir) });
   await config.update(KEY, next, vscode.ConfigurationTarget.Global);

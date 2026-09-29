@@ -9,6 +9,7 @@ import { EXTERNAL_NAME, labelFor, type LabelStore } from './labels';
 import type { AccountView, FromWebview, PanelMode, PanelState, RestartInfo, TabState, ToWebview } from './protocol';
 import { isSharedClaudeAccount } from './claudeShare';
 import { getLocale, t } from './i18n';
+import { comparablePath, isWindows } from './platform';
 
 export const VIEW_ID = 'planswap.accounts';
 
@@ -236,21 +237,22 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
 
   // Keep the watcher set equal to the union of both sources' watchTargets(); watcher callbacks only push state (no re-sync) to avoid loops
   private syncWatchers(): void {
-    const files = new Set([...this.sources.claude.watchTargets(), ...this.sources.codex.watchTargets()]);
-    for (const [file, w] of this.watchers) {
-      if (!files.has(file)) {
+    // Keyed by comparablePath: on Windows two spellings of one file (drive letter or folder case) share one watcher
+    const files = new Map([...this.sources.claude.watchTargets(), ...this.sources.codex.watchTargets()].map((f) => [comparablePath(f), f]));
+    for (const [key, w] of this.watchers) {
+      if (!files.has(key)) {
         w.dispose();
-        this.watchers.delete(file);
+        this.watchers.delete(key);
       }
     }
-    for (const file of files) {
-      if (this.watchers.has(file)) continue;
+    for (const [key, file] of files) {
+      if (this.watchers.has(key)) continue;
       const watcher = vscode.workspace.createFileSystemWatcher(
         new vscode.RelativePattern(vscode.Uri.file(path.dirname(file)), path.basename(file)),
       );
       const fire = () => this.pushState();
       this.watchers.set(
-        file,
+        key,
         vscode.Disposable.from(watcher, watcher.onDidCreate(fire), watcher.onDidChange(fire), watcher.onDidDelete(fire)),
       );
     }
@@ -267,5 +269,7 @@ export function viewInfo(info: { email?: string; plan?: string; loggedIn: boolea
 
 export function tildify(dir: string): string {
   const home = os.homedir();
-  return dir === home || dir.startsWith(home + path.sep) ? '~' + dir.slice(home.length) : dir;
+  // Windows paths are case-insensitive (a drive letter or folder may differ only in case); the rest keeps its spelling
+  const [d, h] = isWindows() ? [dir.toLowerCase(), home.toLowerCase()] : [dir, home];
+  return d === h || d.startsWith(h + path.sep) ? '~' + dir.slice(home.length) : dir;
 }

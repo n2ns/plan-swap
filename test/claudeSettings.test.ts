@@ -105,6 +105,26 @@ describe('setConfigDir', () => {
   });
 });
 
+describe('variable name case on Windows', () => {
+  const realPlatform = Object.getOwnPropertyDescriptor(process, 'platform') as PropertyDescriptor;
+  const asPlatform = (platform: string): void => { Object.defineProperty(process, 'platform', { value: platform }); };
+  after(() => Object.defineProperty(process, 'platform', realPlatform));
+
+  test('a lower-case entry sets the directory on Windows only; the upper-case spelling wins as it does for Node', async () => {
+    set([{ name: 'claude_config_dir', value: home + '/.claude-low' }]);
+    asPlatform('linux');
+    assert.equal(currentDir(), def);
+    asPlatform('win32');
+    assert.equal(currentDir(), path.join(home, '.claude-low'));
+    set([{ name: 'claude_config_dir', value: home + '/.claude-low' }, { name: 'CLAUDE_CONFIG_DIR', value: home + '/.claude-up' }]);
+    assert.equal(currentDir(), path.join(home, '.claude-up'));
+    // A switch replaces every spelling
+    await setConfigDir(home + '/.claude-new');
+    assert.deepEqual(last(), [{ name: 'CLAUDE_CONFIG_DIR', value: path.join(home, '.claude-new') }]);
+    Object.defineProperty(process, 'platform', realPlatform);
+  });
+});
+
 describe('affectsSetting', () => {
   test('checks exactly claudeCode.environmentVariables', () => {
     const seen: string[] = [];

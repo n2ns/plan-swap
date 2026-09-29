@@ -11,6 +11,7 @@ import { describeShareReport, type ShareReportLike } from './shareReport';
 import type { PanelMode, ToolId } from './protocol';
 import { t } from './i18n';
 import { isWindows } from './platform';
+import { accountTerminalShell } from './terminalShell';
 
 export interface ShareOps {
   isShared(dir: string): boolean;
@@ -73,6 +74,7 @@ export async function runTool(mode: PanelMode, tool: ToolId, deps: ToolDeps): Pr
       const vendor = mode === 'claude' ? 'Claude' : 'Codex';
       const terminal = vscode.window.createTerminal({
         name: t('tools.updateCli', { vendor }),
+        shellPath: accountTerminalShell(),
         env: isWindows() && mode === 'codex' ? { CODEX_HOME: null } : undefined,
       });
       terminal.sendText(mode === 'claude' ? 'claude update' : isWindows() ? 'codex update' : 'env -u CODEX_HOME codex update');
