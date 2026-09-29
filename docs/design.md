@@ -287,6 +287,10 @@ Goal: when one account runs out of quota, switch to another and keep working wit
 
 Signing two directories in to the same account gives no separate usage limits, which defeats the purpose of switching. Per vendor, the identities of all registered accounts (default + named) are compared (`sameIdentityGroups`); Claude uses the `accountUuid` + `organizationUuid` key (section 4), Codex the user + workspace key of [Codex design 6](codex-design.md#6-data-model). Each duplicate group (keyed by its sorted directories only, `identityGroupsKey`) is warned once per window session, and again only if it disappears and later recurs: "{vendor} accounts {labels} are signed in to the same account and workspace. Switching between them does not give separate usage limits; sign one of them in with a different account." (`identity.duplicate`). The check runs at activation and whenever account info changes. Accounts without an identity (signed out, API key, missing claims) never match.
 
+### 6.9 Claude usage collection feasibility
+
+Claude quota collection is not implemented. Official CLI status-line data can expose usage windows, but this does not establish that the graphical VS Code chat executes the collector or that shared settings can safely identify the producing account. The [feasibility record](research/claude-usage.md) owns the dated evidence, default-directory constraint and user-operated experiment.
+
 ## 7. Refresh triggers
 
 - `onDidChangeConfiguration` affecting `claudeCode.environmentVariables`: refresh the panel and the status bar.

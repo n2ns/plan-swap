@@ -40,6 +40,8 @@ is still missing. Remove an item once it is done or decided.
 - **Native Windows is implemented but not yet accepted on a real machine.** Run [the Windows checklist](docs/manual-verification.md#native-windows-user-operated). Settled on 2026-09-30 without real accounts: `<dir>.claude.json` when `CLAUDE_CONFIG_DIR` is set (claude.exe 2.1.284 with temporary folders), the Claude extension 2.1.284 applies `claudeCode.environmentVariables` to the process it starts and follows it host-side (code), Codex honors `CODEX_HOME` including non-ASCII paths (`codex app-server` with a temporary folder), and Codex's default credential store is `file` (upstream `defaults.toml`). Still open: whether the Codex extension host inherits the changed user variable after a fresh start, whether the Codex extension with `chatgpt.runCodexInWindowsSubsystemForLinux` really runs Codex in WSL and ignores the Windows `CODEX_HOME` (PlanSwap refuses Codex switching then), and rc/state behavior of the `.vsix` under a real Windows editor.
 ## Deferred features
 
+- **Claude quota collection** awaits graphical-chat invocation and per-account attribution evidence. No collector is installed. Follow the bounded [user-operated experiment](docs/research/claude-usage.md#user-operated-acceptance-experiment); CLI status-line support alone is insufficient, and shared default settings must remain unchanged.
+
 - **Command Palette entry for "Share with the default account".** The conversion is only available from the panel row.
 - **Real-editor theme acceptance.** `npm run test:ui` now repeats four-language, five-width layout and DOM checks, but its
   theme colors are synthetic. Verify actual light, dark and high-contrast theme injection in an installed editor;

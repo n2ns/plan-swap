@@ -18,6 +18,7 @@ Each document owns a different kind of information. Read the sections relevant t
 | [CLAUDE.md](../CLAUDE.md) | Imports AGENTS.md and adds Claude Code-specific execution restrictions. | A second copy of the project documentation. |
 | [TODO](../TODO.md) | Open work, evidence still needed, deferred decisions and pending user actions. | A specification of already verified behavior or release history. |
 | [CHANGELOG](../CHANGELOG.md) | User-facing release history. | Current plans or agent instructions. |
+| [Claude usage feasibility](research/claude-usage.md) | Dated upstream evidence, integration boundaries and the proposed user-operated experiment. | Claims of implemented quota collection or completed real-account acceptance. |
 | [Branding candidate notes](branding/candidates/) | Image-generation prompts and candidate design records. | Runtime behavior or coding rules. |
 
 ## Choose documents by task
