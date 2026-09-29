@@ -236,7 +236,8 @@ function attempt(
       } catch {
         return; // not a protocol message; never echoed anywhere
       }
-      if (!isPlainObject(msg) || (msg.id !== INIT_ID && msg.id !== LIMITS_ID)) return; // notifications and the like
+      // Only responses count: notifications have no id, and a request from the server may reuse our ids but carries a method
+      if (!isPlainObject(msg) || (msg.id !== INIT_ID && msg.id !== LIMITS_ID) || Object.hasOwn(msg, 'method')) return;
       if (isPlainObject(msg.error)) {
         const e = msg.error;
         // 401 first: "authentication failed: 401 Unauthorized" is an expired sign-in, not a missing one

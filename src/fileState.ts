@@ -71,7 +71,8 @@ export class FileMemento implements Memento {
     const dirName = path.dirname(this.file);
     fs.mkdirSync(dirName, { recursive: true, mode: 0o700 });
     const tmp = path.join(dirName, `.state.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`);
-    const fd = fs.openSync(tmp, 'w', 0o600);
+    // Exclusive create: never write through a file or symlink that already sits at the random temp name
+    const fd = fs.openSync(tmp, 'wx', 0o600);
     try {
       fs.writeFileSync(fd, JSON.stringify(state, null, 2) + '\n');
       fs.fsyncSync(fd);

@@ -80,6 +80,13 @@ export class AccountStore {
       taken.push(s.name);
       missing.push(s);
     }
-    if (pruned.length || missing.length) await this.save([...list, ...missing]);
+    if (!pruned.length && !missing.length) return;
+    // Another window may have added, removed or ignored accounts while the disk was scanned (and the aliases cleared):
+    // apply only the deltas to the list as it is now, so its changes are kept
+    const current = this.load().filter((a) => !pruned.some((p) => p.name === a.name && samePath(p.dir, a.dir)));
+    const ignoredNow = this.ignored();
+    const added = missing.filter((s) => !ignoredNow.some((d) => samePath(d, s.dir))
+      && !current.some((a) => samePath(a.dir, s.dir) || sameName(a.name, s.name)));
+    await this.save([...current, ...added]);
   }
 }

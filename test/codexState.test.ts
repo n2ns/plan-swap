@@ -539,7 +539,7 @@ describe('selfCheck (real bash -i -l, clean environment)', LINUX_ONLY, () => {
     // The login shell printed the temporary directory selfCheck created; it must be gone (other test files run
     // selfCheck concurrently, so the temp dir listing cannot be compared as a whole)
     const used = r.detail.slice('CODEX_HOME='.length);
-    assert.ok(path.basename(used).startsWith('planswap-codex-'), used);
+    assert.ok(path.basename(used).startsWith('.selfcheck-') && path.dirname(used) === path.dirname(STATE_FILE()), used);
     assert.ok(!fs.existsSync(used), 'temporary directory left behind: ' + used);
   });
   test('state file originally missing → still missing after the self-check', () => {

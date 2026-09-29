@@ -24,16 +24,21 @@ export function decodeEnvOutput(out: string): string | undefined {
  * this process's environment; PlanSwap itself only writes REG_SZ). Read through .NET and
  * printed as base64 of its UTF-8 bytes: without a console (the extension host) `reg query` prints the ANSI code page,
  * which garbles non-ASCII paths such as a Chinese user name.
+ * A failed read returns undefined like an unset variable; with `strict` it throws instead, for callers that would
+ * adopt, delete or clear something on the strength of "unset".
  */
-export function getUserEnv(name: string, run: Runner = defaultRunner): string | undefined {
+export function getUserEnv(name: string, run: Runner = defaultRunner, strict = false): string | undefined {
   const script =
     "$v = [Environment]::GetEnvironmentVariable($env:PLANSWAP_ENV_NAME, 'User'); " +
     'if ($v) { [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($v)) }';
+  let out: string;
   try {
-    return decodeEnvOutput(run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { PLANSWAP_ENV_NAME: name }));
-  } catch {
+    out = run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { PLANSWAP_ENV_NAME: name });
+  } catch (e) {
+    if (strict) throw e;
     return undefined;
   }
+  return decodeEnvOutput(out);
 }
 
 /**
@@ -45,9 +50,9 @@ export function setUserEnv(name: string, value: string | undefined, run: Runner 
   run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { PLANSWAP_ENV_NAME: name, PLANSWAP_ENV_VALUE: value ?? '' });
 }
 
-/** The user-level CODEX_HOME, or undefined when unset. */
-export function getUserCodexHome(run: Runner = defaultRunner): string | undefined {
-  return getUserEnv(ENV_NAME, run);
+/** The user-level CODEX_HOME, or undefined when unset; `strict` as in getUserEnv. */
+export function getUserCodexHome(run: Runner = defaultRunner, strict = false): string | undefined {
+  return getUserEnv(ENV_NAME, run, strict);
 }
 
 /** Sets (or with undefined removes) the user-level CODEX_HOME. */

@@ -26,7 +26,8 @@ export function writeSelectedDir(dir: string | undefined): void {
   const dirName = path.dirname(file);
   fs.mkdirSync(dirName, { recursive: true, mode: 0o700 });
   const tmp = path.join(dirName, `.codex-home.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`);
-  const fd = fs.openSync(tmp, 'w', 0o600);
+  // Exclusive create: never write through a file or symlink that already sits at the random temp name
+  const fd = fs.openSync(tmp, 'wx', 0o600);
   try {
     fs.writeFileSync(fd, dir === undefined ? '' : path.resolve(dir));
     fs.fsyncSync(fd);
@@ -46,20 +47,21 @@ export function writeSelectedDir(dir: string | undefined): void {
  * Writes the selected directory and, on Windows when management is enabled (the state file existed), mirrors it into
  * the user-level CODEX_HOME so a freshly started editor picks it up. Elsewhere the rc blocks read the state file.
  */
-export function writeSelection(dir: string | undefined): void {
+export function writeSelection(dir: string | undefined, run?: Runner): void {
   if (!isWindows()) {
     writeSelectedDir(dir);
     return;
   }
   // Windows: the state file marks management; without it nothing is written (a stray file would look like "enabled")
   if (!fs.existsSync(STATE_FILE())) throw new Error(t('codex.notEnabled'));
-  // The user variable first: if the state file write then fails, the variable is put back so the two never diverge
-  const previous = getUserCodexHome();
-  setUserCodexHome(dir === undefined ? undefined : path.resolve(dir));
+  // The user variable first: if the state file write then fails, the variable is put back so the two never diverge.
+  // The previous value is read strictly: a failed read taken for "unset" would clear the variable on rollback
+  const previous = getUserCodexHome(run, true);
+  setUserCodexHome(dir === undefined ? undefined : path.resolve(dir), run);
   try {
     writeSelectedDir(dir);
   } catch (e) {
-    try { setUserCodexHome(previous); } catch { /* keep the original error */ }
+    try { setUserCodexHome(previous, run); } catch { /* keep the original error */ }
     throw e;
   }
 }
@@ -78,16 +80,18 @@ function adoptableUserHome(value: string): boolean {
 }
 
 /** Windows enable: creates the state file (after preCheck); an existing file, or an adoptable variable, keeps the selection. */
-export function enableWindows(): void {
+export function enableWindows(run?: Runner): void {
   if (fs.existsSync(STATE_FILE())) return;
-  const current = getUserCodexHome();
+  // Strict: a failed read must not record "default" while the variable still selects an account directory
+  const current = getUserCodexHome(run, true);
   writeSelectedDir(current !== undefined && adoptableUserHome(current) ? current : undefined);
 }
 
 /** Windows disable: removes the state file and the user-level CODEX_HOME when it still holds a value PlanSwap sets (an
- *  account directory ~/.codex-<name>); a value the user put there in the meantime is left alone. */
+ *  account directory ~/.codex-<name>); a value the user put there in the meantime is left alone. A failed read throws
+ *  before anything is removed, so the variable and the state file never disagree about management. */
 export function disableWindows(run?: Runner): void {
-  const current = getUserCodexHome(run);
+  const current = getUserCodexHome(run, true);
   if (current !== undefined && adoptableUserHome(current)) setUserCodexHome(undefined, run);
   removeWindowsState();
 }
@@ -145,7 +149,8 @@ function readText(file: string): string | undefined {
   }
 }
 
-/** Returns lines outside marker blocks; if the last BEGIN has no END, lines from that BEGIN count as outside and broken is set. */
+/** Returns lines outside marker blocks; if the last BEGIN has no END, lines from that BEGIN count as outside (except
+ *  lines of the block itself) and broken is set. */
 function scanBlocks(text: string): { outside: string[]; broken: boolean } {
   const lines = text.split('\n');
   const outside: string[] = [];
@@ -160,7 +165,9 @@ function scanBlocks(text: string): { outside: string[]; broken: boolean } {
     outside.push(line);
   }
   if (blockStart >= 0) {
-    outside.push(...lines.slice(blockStart));
+    // The unterminated block's own lines (its export among them) are not the user's; anything else after it is
+    const own = new Set(rcBlock().split('\n').map((l) => l.trim()));
+    outside.push(...lines.slice(blockStart).filter((l) => !own.has(l.trim())));
     return { outside, broken: true };
   }
   return { outside, broken: false };
@@ -181,12 +188,13 @@ export function rcStatus(): RcFileStatus[] {
 
 export interface PreCheck { ok: boolean; reasons: string[] }
 
-export function preCheck(): PreCheck {
+export function preCheck(run?: Runner): PreCheck {
   const reasons: string[] = [];
   if (isWindows()) {
-    // An existing state file means PlanSwap already owns the variable
+    // An existing state file means PlanSwap already owns the variable. Strict read: a failure throws (the caller refuses
+    // to enable) instead of passing as "unset" over a value the user set
     if (!fs.existsSync(STATE_FILE())) {
-      const current = getUserCodexHome();
+      const current = getUserCodexHome(run, true);
       if (current !== undefined && !adoptableUserHome(current)) reasons.push(t('codex.pre.winUserEnv'));
     }
     return { ok: reasons.length === 0, reasons };
@@ -235,7 +243,7 @@ function writeRc(file: string, content: string, mode: number | undefined): void 
   }
   const dirName = path.dirname(target);
   const tmp = path.join(dirName, `.${path.basename(target)}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`);
-  const fd = fs.openSync(tmp, 'w', 0o600);
+  const fd = fs.openSync(tmp, 'wx', 0o600);
   try {
     fs.writeFileSync(fd, content);
     fs.fsyncSync(fd);
@@ -414,6 +422,8 @@ export function migrateLegacyCodex(): boolean {
 const STDERR_NOISE = ['cannot set terminal process group', 'no job control in this shell'];
 // Prefix of the self-check's output line, so nothing else a login shell prints is taken for the value
 const SELF_CHECK_MARK = '__PLANSWAP_CODEX_HOME__=';
+/** Name prefix of the Linux self-check's scratch directory inside ~/.config/planswap. */
+export const SELF_CHECK_DIR_PREFIX = '.selfcheck-';
 
 // Windows: writes a marker into a scratch user variable (never CODEX_HOME itself), reads it back through the registry, then
 // removes it. A failed removal is reported; it only leaves that harmless scratch variable behind
@@ -443,7 +453,9 @@ export function selfCheck(): { ok: boolean; detail: string } {
   const backup = readText(file);
   let tmpDir: string | undefined;
   try {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'planswap-codex-'));
+    // The scratch directory lives next to the state file (user-owned, 0700), not in the world-writable temp directory
+    fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+    tmpDir = fs.mkdtempSync(path.join(path.dirname(file), SELF_CHECK_DIR_PREFIX));
     writeSelectedDir(tmpDir);
     const r = spawnSync('bash', ['-i', '-l', '-c', `printf '\\n${SELF_CHECK_MARK}%s\\n' "$CODEX_HOME"`], {
       timeout: 10000,
@@ -469,16 +481,21 @@ export function selfCheck(): { ok: boolean; detail: string } {
   } catch (e) {
     return { ok: false, detail: t('codex.self.error', { error: e instanceof Error ? e.message : String(e) }) };
   } finally {
-    try {
-      if (backup === undefined) {
-        try { fs.unlinkSync(file); } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e; }
-      } else {
-        const s = backup.trim();
-        writeSelectedDir(s ? s : undefined);
-      }
-    } catch { /* ignore */ }
+    // Compare and restore: only while the state file still names the scratch directory, so a switch another window
+    // made in the meantime is kept
+    if (tmpDir !== undefined && readSelectedDir() === path.resolve(tmpDir)) {
+      try {
+        if (backup === undefined) {
+          try { fs.unlinkSync(file); } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e; }
+        } else {
+          const s = backup.trim();
+          writeSelectedDir(s ? s : undefined);
+        }
+      } catch { /* ignore */ }
+    }
+    // Never recursive: if something wrote into the scratch directory it is left alone
     if (tmpDir) {
-      try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
+      try { fs.rmdirSync(tmpDir); } catch { /* not empty or already gone */ }
     }
   }
 }
