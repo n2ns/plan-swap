@@ -93,10 +93,9 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
           const ext = vscode.extensions.getExtension(CODEX_EXTENSION_ID);
           return ext && findBundledCodex(ext.extensionPath);
         }, { clientVersion: version });
-        // A cache write failure must not turn a successful official query into a usage error.
-        try { await usageHistory.record(dir, result); } catch { /* the live tooltip still works */ }
         return result;
       },
+      onAccepted: (dir, result, stamp) => usageHistory.record(dir, result, stamp),
     })
     : undefined;
   if (usage) statusBar.setCodexUsage(usage.current());

@@ -2,10 +2,12 @@
 // the caller decides when to ask (focus, a manual refresh, an auth.json change). No vscode import.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { samePath } from '../paths';
+import { readCodexAccountInfo } from './codexPaths';
 import { readCodexUsage, type UsageResult } from './codexUsage';
 
 export interface CodexUsageState {
-  // A query is running (the previous result, if any, stays visible meanwhile)
+  // A query is running (a previous result stays visible only for the same known identity)
   checking: boolean;
   result?: UsageResult;
 }
@@ -15,8 +17,19 @@ export interface UsageMonitorOptions {
   now?: () => number;
   // A result older than this is refreshed by refreshIfStale; failures count from the attempt, so they are not retried in a loop
   staleMs?: number;
-  // Cheap fingerprint of <dir>/auth.json (never its content); a different value means a sign-in, sign-out or re-login
+  // Cheap fingerprint of <dir>/auth.json (never its content); changes include sign-in, sign-out and token refreshes.
   authStamp?: (dir: string) => string;
+  // In-memory comparison only; never included in state or persistence callbacks.
+  authIdentity?: (dir: string) => string | undefined;
+  onAccepted?: (dir: string, result: UsageResult, stamp: string) => Promise<void> | void;
+}
+
+interface AuthSnapshot { dir: string; stamp: string; identity?: string }
+
+function sameAuth(a: AuthSnapshot, b: AuthSnapshot): boolean {
+  if (!samePath(a.dir, b.dir)) return false;
+  if (a.identity !== undefined || b.identity !== undefined) return a.identity !== undefined && a.identity === b.identity;
+  return a.stamp === b.stamp;
 }
 
 export const USAGE_STALE_MS = 15 * 60_000;
@@ -35,12 +48,15 @@ export class CodexUsageMonitor {
   private state: CodexUsageState = { checking: false };
   private running: Promise<void> | undefined;
   private lastAttempt: number | undefined;
-  // auth.json as it was when the last query ended (so a token refresh Codex does during our own query is not a "change")
-  private stampAfterQuery: string | undefined;
+  private accepted: AuthSnapshot | undefined;
+  private queryAuth: AuthSnapshot | undefined;
+  private needsRefresh = false;
   private readonly read: (dir: string) => Promise<UsageResult>;
   private readonly now: () => number;
   private readonly staleMs: number;
   private readonly authStamp: (dir: string) => string;
+  private readonly authIdentity: (dir: string) => string | undefined;
+  private readonly onAccepted: UsageMonitorOptions['onAccepted'];
 
   constructor(
     private readonly dirOf: () => string,
@@ -51,6 +67,8 @@ export class CodexUsageMonitor {
     this.now = options.now ?? Date.now;
     this.staleMs = options.staleMs ?? USAGE_STALE_MS;
     this.authStamp = options.authStamp ?? authFileStamp;
+    this.authIdentity = options.authIdentity ?? ((dir) => readCodexAccountInfo(dir).identity);
+    this.onAccepted = options.onAccepted;
   }
 
   current(): CodexUsageState {
@@ -61,38 +79,71 @@ export class CodexUsageMonitor {
   refresh(): Promise<void> {
     this.running ??= this.run().finally(() => {
       this.running = undefined;
+      this.queryAuth = undefined;
     });
     return this.running;
   }
 
-  /** Queries only when nothing was tried yet or the last attempt is older than the stale interval. */
+  /** Queries after a discarded response, when nothing was tried yet, or after the stale interval. */
   refreshIfStale(): Promise<void> {
-    if (this.lastAttempt !== undefined && this.now() - this.lastAttempt < this.staleMs) return this.running ?? Promise.resolve();
+    if (!this.needsRefresh && this.lastAttempt !== undefined && this.now() - this.lastAttempt < this.staleMs) return this.running ?? Promise.resolve();
     return this.refresh();
   }
 
   /**
-   * Queries when auth.json changed since the last query ended: a sign-in, a re-login after an expired sign-in, or a
+   * Queries when auth.json changed since the last accepted response: a sign-in, a re-login after an expired sign-in, or a
    * sign-out. Other account-info events (tab switches, other accounts' files) start nothing.
    */
   refreshIfAuthChanged(): Promise<void> {
-    if (this.running) return this.running;
-    if (this.stampAfterQuery === undefined || this.authStamp(this.dirOf()) === this.stampAfterQuery) return Promise.resolve();
+    if (this.running) {
+      if (this.queryAuth && !sameAuth(this.queryAuth, this.snapshot())) {
+        this.needsRefresh = true;
+        if (this.state.result) this.set({ checking: true });
+      }
+      return this.running;
+    }
+    if (!this.needsRefresh && (!this.accepted || this.authStamp(this.dirOf()) === this.accepted.stamp)) return Promise.resolve();
     return this.refresh();
   }
 
-  private async run(): Promise<void> {
+  private snapshot(): AuthSnapshot {
     const dir = this.dirOf();
-    this.lastAttempt = this.now();
-    this.set({ checking: true, result: this.state.result });
-    let result: UsageResult;
-    try {
-      result = await this.read(dir);
-    } catch (e) {
-      result = { ok: false, reason: 'failed', detail: e instanceof Error ? e.message : String(e) };
+    return { dir, stamp: this.authStamp(dir), identity: this.authIdentity(dir) };
+  }
+
+  private async run(): Promise<void> {
+    // One follow-up for a newly identified account; repeated changes wait for the next refresh trigger.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const before = this.snapshot();
+      this.queryAuth = before;
+      this.lastAttempt = this.now();
+      const keep = this.accepted?.identity !== undefined && this.accepted.identity === before.identity
+        && samePath(this.accepted.dir, before.dir);
+      this.set({ checking: true, result: keep ? this.state.result : undefined });
+      let result: UsageResult;
+      try {
+        result = await this.read(before.dir);
+      } catch (e) {
+        result = { ok: false, reason: 'failed', detail: e instanceof Error ? e.message : String(e) };
+      }
+      const after = this.snapshot();
+      if (sameAuth(before, after)) {
+        // The callback gets the verified stamp, never a newly sampled stamp for an older response.
+        try { await this.onAccepted?.(before.dir, result, after.stamp); } catch { /* history failure does not hide live usage */ }
+        const current = this.snapshot();
+        if (sameAuth(after, current)) {
+          this.accepted = current;
+          this.needsRefresh = false;
+          this.set({ checking: false, result });
+          return;
+        }
+      }
+      this.needsRefresh = true;
+      const current = this.snapshot();
+      if (attempt === 0 && current.identity !== undefined && current.identity !== before.identity) continue;
+      this.set({ checking: false });
+      return;
     }
-    this.stampAfterQuery = this.authStamp(dir);
-    this.set({ checking: false, result });
   }
 
   private set(state: CodexUsageState): void {

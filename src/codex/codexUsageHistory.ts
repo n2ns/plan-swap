@@ -47,10 +47,11 @@ export class CodexUsageHistory {
   }
 
   /** Capture only completed queries. A temporary query failure leaves the last observation intact. */
-  async record(dir: string, result: UsageResult): Promise<void> {
+  async record(dir: string, result: UsageResult, acceptedStamp: string): Promise<void> {
+    if (acceptedStamp !== this.stamp(dir)) return;
     if (!result.ok && result.reason !== 'notLoggedIn' && result.reason !== 'authExpired') return;
     const entries = this.entries().filter((e) => !samePath(e.dir, dir) && this.recent(e));
-    const stamp = this.stamp(dir);
+    const stamp = acceptedStamp;
     if (result.ok && stamp !== 'missing') {
       const { windows, checkedAt, limitReached } = result.usage;
       entries.push({ dir, stamp, usage: {

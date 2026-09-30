@@ -141,18 +141,18 @@ export async function readCodexUsageWithFallback(dir: string, fallback: () => st
 ## src/codex/codexUsageMonitor.ts (no vscode import)
 
 ```ts
-export interface CodexUsageState { checking: boolean; result?: UsageResult } // the previous result stays while checking
+export interface CodexUsageState { checking: boolean; result?: UsageResult } // the previous result stays while checking only for the same known identity
 export const USAGE_STALE_MS = 15 * 60_000;
 export class CodexUsageMonitor {
-  constructor(dirOf: () => string, onChange: (state: CodexUsageState) => void, options?: { read?: (dir: string) => Promise<UsageResult>; now?: () => number; staleMs?: number; authStamp?: (dir: string) => string /* default authFileStamp */ });
+  constructor(dirOf: () => string, onChange: (state: CodexUsageState) => void, options?: { read?: (dir: string) => Promise<UsageResult>; now?: () => number; staleMs?: number; authStamp?: (dir: string) => string /* default authFileStamp */; authIdentity?: (dir: string) => string | undefined /* default readCodexAccountInfo(dir).identity */; onAccepted?: (dir: string, result: UsageResult, stamp: string) => Promise<void> | void });
   current(): CodexUsageState;
   refresh(): Promise<void>;            // queries dirOf() now; a call while a query runs joins it (one codex process at a time); a thrown error becomes 'failed'
-  refreshIfStale(): Promise<void>;     // only when nothing was tried yet or the last attempt (failures included) is older than staleMs
-  refreshIfAuthChanged(): Promise<void>; // joins a running query; otherwise refresh() only when a query has ended before and authStamp(dirOf()) differs from the stamp recorded when it ended (sign-in, re-login, sign-out)
+  refreshIfStale(): Promise<void>;     // when nothing was tried yet, an unverified response needs another check, or the last attempt (failures included) is older than staleMs
+  refreshIfAuthChanged(): Promise<void>; // joins a running query while invalidating a stale live result; otherwise refresh() after a discarded response or when authStamp(dirOf()) differs from the last accepted stamp (sign-in, re-login, sign-out)
 }
 export function authFileStamp(dir: string): string; // `${mtimeMs}:${size}` of <dir>/auth.json from stat, or 'missing'; the file is never opened
 ```
-The stamp is taken when each query ends, so rewrites Codex makes during the query (token refresh) do not count as a change.
+Before and after each query, the monitor compares the in-memory identity and auth stamp. A changed stamp is accepted only for the same known identity; otherwise the response is discarded. A known identity change permits one sequential follow-up query per refresh chain. Discarded responses remain eligible for the next auth-change or stale check. `onAccepted` receives the verified stamp for persistence; identity is checked again after this callback settles before publishing the result. Identity keys never enter the callback, live state or persistent history.
 State lives in memory only; it is never persisted.
 
 ## src/codex/codexUsageHistory.ts (imports vscode only for the Memento type)
@@ -162,7 +162,7 @@ export const USAGE_HISTORY_MAX_AGE_MS = 24 * 60 * 60_000;
 export class CodexUsageHistory {
   constructor(state: Memento, now?: () => number, stamp?: (dir: string) => string);
   get(dir: string): CodexUsage | undefined; // recent observation with unchanged auth metadata; reset windows omitted
-  record(dir: string, result: UsageResult): Promise<void>; // success replaces this directory; auth failure clears; other failures keep
+  record(dir: string, result: UsageResult, acceptedStamp: string): Promise<void>; // ignore a changed stamp; success replaces this directory using acceptedStamp; auth failure clears; other failures keep
 }
 ```
 Storage is `codex.usageHistory`: entries `{ dir, stamp, usage }`. The directory is compared with `samePath`; identity keys and credentials are never persisted. Age, stamp and reset checks happen on read. Expired entries are pruned on recording. See [design 8.7](codex-design.md#87-usage-limits) for display rules.
@@ -225,7 +225,7 @@ The Codex panel source computes current and selected registered-row indices with
 
 See docs/interfaces.md: before the Codex store is created, `migrateLegacyCodex()` runs in its own try/catch (an error only shows the localized warning `ext.codexLegacyFailed`, Codex initialization continues). A single `AccountsPanel` whose `sources.codex` is `codexPanelSource(codexStore, codexLabels, usageHistory)`; when Codex initialization fails it degrades to an empty source (`enabled: () => false`), Claude is not affected, and `tool` messages of the Codex page still go through `runTool('codex', …)`. Otherwise, `extension.ts` owns per-vendor `terminalChecks`; `ToolDeps.accountBusy` reads them, `codexShareOps.refresh` forwards `LinkOptions`, and `registerCodexCommands(... provideTerminalCheck ...)` publishes the Codex terminal check so toolbar Re-link obeys the same Windows terminal-busy rule as add and switch.
 
-Usage limits (design 8.7), only when Codex is initialized: `usage = new CodexUsageMonitor(effectiveDir, (s) => { statusBar.setCodexUsage(s); if (!s.checking) panel.refresh(); }, { read: (dir) => readCodexAccountInfo(dir).plan === 'API key' ? { ok: false, reason: 'notLoggedIn' } /* nothing started */ : readCodexUsageWithFallback(dir, () => findBundledCodex(<extensionPath of openai.chatgpt>), { clientVersion: <extension version> }) })`; `checkUsage()` = `refreshIfStale()` when `vscode.window.state.focused` and not `codexRunsInWsl()`, run 5 s after activation, every 60 s and on regaining focus (the 15-minute stale interval limits the actual queries); `panel.onDidChange` (account-info changes) → `refreshIfAuthChanged()` unless `codexRunsInWsl()`; `planswap.codex.refreshUsage` → the `codex.win.runsInWsl` warning when `codexRunsInWsl()`, otherwise `refresh()`. A change of `chatgpt.runCodexInWindowsSubsystemForLinux` re-renders the status bar. The timers are cleared on dispose.
+Usage limits (design 8.7), only when Codex is initialized: `usage = new CodexUsageMonitor(effectiveDir, (s) => { statusBar.setCodexUsage(s); if (!s.checking) panel.refresh(); }, { read: (dir) => readCodexAccountInfo(dir).plan === 'API key' ? { ok: false, reason: 'notLoggedIn' } /* nothing started */ : readCodexUsageWithFallback(dir, () => findBundledCodex(<extensionPath of openai.chatgpt>), { clientVersion: <extension version> }) })`; `checkUsage()` = `refreshIfStale()` when `vscode.window.state.focused` and not `codexRunsInWsl()`, run 5 s after activation, every 60 s and on regaining focus (the 15-minute stale interval limits the actual queries); `panel.onDidChange` (account-info changes) → `refreshIfAuthChanged()` unless `codexRunsInWsl()`; `planswap.codex.refreshUsage` → the `codex.win.runsInWsl` warning when `codexRunsInWsl()`, otherwise `refresh()`. The monitor's `onAccepted` callback records history with its verified stamp; a storage failure does not turn a successful query into an error. A change of `chatgpt.runCodexInWindowsSubsystemForLinux` re-renders the status bar. The timers are cleared on dispose.
 
 ## package.json
 
