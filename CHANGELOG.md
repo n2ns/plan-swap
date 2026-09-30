@@ -11,7 +11,7 @@
 ### Fixed
 
 - Account creation, linking and unlinking now refuse directories that contain the default account, including through a symbolic link, before moving or writing files.
-- Account migrations preserve symbolic-link targets when files move, including relative links and targets renamed to retain conflicting data. Independent copies also keep relative links to the copied root inside the new account.
+- Account migrations preserve symbolic-link targets when files move, including relative links, targets renamed to retain conflicting data, Windows short paths and directory aliases. Independent copies also keep relative links to the copied root inside the new account.
 - Codex configuration checks correctly handle escaped quotes in TOML multiline strings, so account-specific login restrictions are not overlooked or mistaken for string content.
 - Codex usage results are checked against the account identity before display and history storage; signing in to another account while a query is running no longer attributes the old result to the new account.
 - Codex protocol output preserves UTF-8 characters split across stream chunks, including non-ASCII account paths.

@@ -11,7 +11,7 @@ import {
   makeClaudeIndependent, mergeEntry, migrateClaudeToShared, mirrorClaudeJson, moveEntry, type MigrateReport, windowsSessionsBusy,
 } from '../src/claudeShare';
 import { accountDir, deleteAccountDir } from '../src/paths';
-import { assertTempHome, makeTempHome, assertMode, LINUX_ONLY, onWindows, SHARING, read, snapshot, type TempHome } from './helpers';
+import { assertTempHome, makeTempHome, assertMode, LINUX_ONLY, onWindows, SHARING, read, snapshot, withEnv, type TempHome } from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -460,6 +460,36 @@ describe('mergeEntry', () => {
 });
 
 describe('migrateClaudeToShared', SHARING, () => {
+  test('links follow migrated targets when the account home is reached through a directory alias', async () => {
+    const physicalHome = path.join(home, 'physical-home');
+    const aliasHome = path.join(home, 'alias-home');
+    fs.mkdirSync(physicalHome);
+    fs.symlinkSync(physicalHome, aliasHome, 'junction');
+    await withEnv({ HOME: aliasHome, USERPROFILE: aliasHome }, async () => {
+      const acc = accountDir('alias');
+      const shared = path.join(aliasHome, '.claude');
+      write(path.join(shared, 'agents', 'target.md'), 'default agent');
+      write(path.join(acc, 'agents', 'target.md'), 'account agent');
+      write(path.join(acc, 'CLAUDE.md'), 'account instructions');
+      write(path.join(aliasHome, 'outside.md'), 'external agent');
+      fs.symlinkSync('target.md', path.join(acc, 'agents', 'relative.md'), 'file');
+      fs.symlinkSync(path.join(acc, 'agents', 'target.md'), path.join(acc, 'agents', 'absolute.md'), 'file');
+      fs.symlinkSync('../CLAUDE.md', path.join(acc, 'agents', 'instructions.md'), 'file');
+      fs.symlinkSync('../../outside.md', path.join(acc, 'agents', 'external.md'), 'file');
+
+      const report = migrateClaudeToShared(acc, 'alias', fakeProc({}));
+      assert.ok(report.keptBoth.includes('agents/target.md.from-alias'));
+      await deleteAccountDir(acc);
+      assert.equal(read(path.join(shared, 'agents', 'target.md')), 'default agent');
+      for (const name of ['relative.md', 'absolute.md']) {
+        assert.ok(fs.lstatSync(path.join(shared, 'agents', name)).isSymbolicLink());
+        assert.equal(read(path.join(shared, 'agents', name)), 'account agent');
+      }
+      assert.equal(read(path.join(shared, 'agents', 'instructions.md')), 'account instructions');
+      assert.equal(read(path.join(shared, 'agents', 'external.md')), 'external agent');
+    });
+  });
+
   test('relative links follow migrated targets and keep external targets after account deletion', async () => {
     const acc = accountDir('relative');
     const relocated = path.join(home, 'profiles', 'main');
@@ -694,14 +724,18 @@ describe('migrateClaudeToShared', SHARING, () => {
 
 describe('moveEntry link targets', SHARING, () => {
   test('whole-tree moves preserve internal and external relative links on the same and another volume', (ctx) => {
+    const physicalParent = path.join(home, 'physical-parent');
+    const aliasParent = path.join(home, 'alias-parent');
+    fs.mkdirSync(physicalParent);
+    fs.symlinkSync(physicalParent, aliasParent, 'junction');
     for (const crossVolume of [false, true]) {
-      const src = path.join(home, `move-src-${crossVolume}`);
+      const src = path.join(aliasParent, `move-src-${crossVolume}`);
       const dst = path.join(home, 'profiles', `move-dst-${crossVolume}`);
       write(path.join(home, 'outside.md'), 'outside');
       write(path.join(src, 'target.md'), 'inside');
       fs.mkdirSync(path.dirname(dst), { recursive: true });
       fs.symlinkSync('target.md', path.join(src, 'inside.md'), 'file');
-      fs.symlinkSync('../outside.md', path.join(src, 'outside.md'), 'file');
+      fs.symlinkSync('../../outside.md', path.join(src, 'outside.md'), 'file');
       const mocked = crossVolume ? ctx.mock.method(fsModule, 'renameSync', (() => {
         throw Object.assign(new Error('EXDEV'), { code: 'EXDEV' });
       }) as typeof fs.renameSync) : undefined;

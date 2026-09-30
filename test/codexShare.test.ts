@@ -8,6 +8,7 @@ import {
   isSharedCodexAccount, makeCodexIndependent, migrateCodexToShared,
 } from '../src/codex/codexShare';
 import { codexAccountDir, deleteCodexDir } from '../src/codex/codexPaths';
+import { sameRealPath } from '../src/paths';
 import { assertTempHome, makeTempHome, assertMode, LINUX_ONLY, onWindows, SHARING, read, snapshot, type TempHome } from './helpers';
 
 let tmp: TempHome;
@@ -412,7 +413,8 @@ describe('migrateCodexToShared', SHARING, () => {
 
     assert.equal(isSharedCodexAccount(acc), true);
     assert.deepEqual(report.conflicts, []);
-    assert.equal(fs.realpathSync(path.join(def, 'agents', 'custom.md')), fs.realpathSync(target));
+    assert.ok(fs.lstatSync(path.join(def, 'agents', 'custom.md')).isSymbolicLink());
+    assert.ok(sameRealPath(path.join(def, 'agents', 'custom.md'), target));
     assert.equal(read(path.join(acc, 'agents', 'custom.md')), 'external agent');
     await deleteCodexDir(acc);
     assert.equal(read(path.join(def, 'agents', 'instructions.md')), 'account instructions');

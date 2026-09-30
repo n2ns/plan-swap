@@ -455,8 +455,13 @@ export function claudeAccountBusy(dir: string, procRoot = '/proc'): boolean {
   return false;
 }
 
+// Resolve the parent while preserving the final entry, which may be a link or an already-moved file.
+function realEntryPath(entry: string): string {
+  return path.join(realPath(path.dirname(entry)), path.basename(entry));
+}
+
 function linkTarget(link: string): string {
-  return path.resolve(realPath(path.dirname(link)), fs.readlinkSync(link));
+  return realEntryPath(path.resolve(realPath(path.dirname(link)), fs.readlinkSync(link)));
 }
 
 // A moved link is created successfully before its original is removed. A rename can keep the original link on
@@ -524,6 +529,7 @@ function hasExternalRelativeLink(dir: string, root = dir): boolean {
 // Moves a file, link or folder without following symlinks. Relative links keep their targets; links inside a whole
 // moved tree still point into that tree. false means link privilege was refused and the original entry is kept.
 export function moveEntry(src: string, dst: string): boolean {
+  src = realEntryPath(src);
   const st = fs.lstatSync(src);
   if (st.isSymbolicLink()) return moveLink(src, dst, linkTarget(src));
   try {
@@ -580,7 +586,7 @@ export interface MergeCtx {
 }
 
 export function rememberMove(ctx: MergeCtx, src: string, dst: string): void {
-  (ctx.movedPaths ??= new Map()).set(path.resolve(src), dst);
+  (ctx.movedPaths ??= new Map()).set(realEntryPath(src), dst);
 }
 
 function movedTarget(ctx: MergeCtx, target: string): string {
@@ -597,6 +603,7 @@ function movedTarget(ctx: MergeCtx, target: string): string {
 
 // Merges the account entry src into the default entry dst (rel: dst relative to the default dir, for the report)
 export function mergeEntry(src: string, dst: string, rel: string, ctx: MergeCtx, count = true): void {
+  src = realEntryPath(src);
   const ss = fs.lstatSync(src);
   const ds = lstatOrUndefined(dst);
   if (!ss.isDirectory() && !ss.isFile() && !ss.isSymbolicLink()) {
