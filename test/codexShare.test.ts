@@ -391,6 +391,31 @@ describe('codexAccountBusy on Windows', { skip: !onWindows && 'Windows behavior'
 });
 
 describe('migrateCodexToShared', SHARING, () => {
+  test('relative links keep external and migrated targets when the default directory is relocated', async () => {
+    const relocated = path.join(home, 'profiles', 'main');
+    fs.mkdirSync(path.dirname(relocated), { recursive: true });
+    fs.renameSync(def, relocated);
+    fs.symlinkSync(relocated, def, 'junction');
+    const acc = newAccount('work');
+    const target = path.join(home, 'dotfiles', 'agent.md');
+    write(target, 'external agent');
+    write(path.join(acc, 'AGENTS.md'), 'account instructions');
+    fs.mkdirSync(path.join(acc, 'agents'));
+    fs.symlinkSync(path.join('..', '..', 'dotfiles', 'agent.md'), path.join(acc, 'agents', 'custom.md'), 'file');
+    fs.symlinkSync(path.join('..', 'AGENTS.md'), path.join(acc, 'agents', 'instructions.md'), 'file');
+
+    const report = migrateCodexToShared(acc, 'work', fakeProc({}));
+
+    assert.equal(isSharedCodexAccount(acc), true);
+    assert.deepEqual(report.conflicts, []);
+    assert.equal(fs.realpathSync(path.join(def, 'agents', 'custom.md')), fs.realpathSync(target));
+    assert.equal(read(path.join(acc, 'agents', 'custom.md')), 'external agent');
+    await deleteCodexDir(acc);
+    assert.equal(read(path.join(def, 'agents', 'instructions.md')), 'account instructions');
+    assert.equal(read(path.join(def, 'agents', 'custom.md')), 'external agent');
+    assert.equal(read(target), 'external agent');
+  });
+
   test('a config.toml / AGENTS.md the default lacks is moved into the default instead of being backed up', () => {
     const acc = newAccount('solo');
     write(path.join(acc, 'config.toml'), 'model = "gpt"\n');

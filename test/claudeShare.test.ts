@@ -1,13 +1,14 @@
 import { after, before, beforeEach, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
+import fsModule from 'node:fs';
 import * as path from 'node:path';
 import { setLocale, t } from '../src/i18n';
 import { execFileSync } from 'node:child_process';
 import { pidAlive } from '../src/platform';
 import {
   CLAUDE_SHARED_ENTRIES, claudeAccountBusy, copyClaudeIndependent, copyTree, ensureClaudeLinks, isSharedClaudeAccount, lstatOrUndefined,
-  makeClaudeIndependent, mergeEntry, migrateClaudeToShared, mirrorClaudeJson, type MigrateReport, windowsSessionsBusy,
+  makeClaudeIndependent, mergeEntry, migrateClaudeToShared, mirrorClaudeJson, moveEntry, type MigrateReport, windowsSessionsBusy,
 } from '../src/claudeShare';
 import { accountDir, deleteAccountDir } from '../src/paths';
 import { assertTempHome, makeTempHome, assertMode, LINUX_ONLY, onWindows, SHARING, read, snapshot, type TempHome } from './helpers';
@@ -459,6 +460,105 @@ describe('mergeEntry', () => {
 });
 
 describe('migrateClaudeToShared', SHARING, () => {
+  test('relative links follow migrated targets and keep external targets after account deletion', async () => {
+    const acc = accountDir('relative');
+    const relocated = path.join(home, 'profiles', 'main');
+    write(path.join(home, 'dotfiles', 'agent.md'), 'external agent');
+    write(path.join(relocated, 'agents', 'target.md'), 'default agent');
+    write(path.join(acc, 'agents', 'target.md'), 'account agent');
+    write(path.join(acc, 'rules', 'rule.md'), 'account rule');
+    write(path.join(acc, 'CLAUDE.md'), 'account instructions');
+    fs.symlinkSync('../../dotfiles/agent.md', path.join(acc, 'agents', 'external.md'), 'file');
+    fs.symlinkSync('target.md', path.join(acc, 'agents', 'alias.md'), 'file');
+    fs.symlinkSync('target.md', path.join(relocated, 'agents', 'alias.md'), 'file');
+    fs.symlinkSync('../rules/rule.md', path.join(acc, 'agents', 'rule.md'), 'file');
+    fs.symlinkSync('../CLAUDE.md', path.join(acc, 'agents', 'instructions.md'), 'file');
+    process.env.CLAUDE_CONFIG_DIR = relocated;
+    try {
+      const report = migrateClaudeToShared(acc, 'relative', fakeProc({}));
+      assert.ok(report.keptBoth.includes('agents/target.md.from-relative'));
+      assert.ok(report.keptBoth.includes('agents/alias.md.from-relative'));
+      await deleteAccountDir(acc);
+      assert.equal(read(path.join(relocated, 'agents', 'external.md')), 'external agent');
+      assert.equal(read(path.join(relocated, 'agents', 'alias.md')), 'default agent');
+      assert.equal(read(path.join(relocated, 'agents', 'alias.md.from-relative')), 'account agent');
+      assert.equal(read(path.join(relocated, 'agents', 'rule.md')), 'account rule');
+      assert.equal(read(path.join(relocated, 'agents', 'instructions.md')), 'account instructions');
+    } finally {
+      delete process.env.CLAUDE_CONFIG_DIR;
+    }
+  });
+
+  test('a folder kept beside a conflicting file keeps internal and external link targets', async () => {
+    const acc = accountDir('folder');
+    write(path.join(def, 'agents', 'bundle'), 'default file');
+    write(path.join(home, 'outside.md'), 'external');
+    write(path.join(acc, 'agents', 'bundle', 'target.md'), 'inside');
+    fs.symlinkSync('target.md', path.join(acc, 'agents', 'bundle', 'inside.md'), 'file');
+    fs.symlinkSync('../../../outside.md', path.join(acc, 'agents', 'bundle', 'outside.md'), 'file');
+    const report = migrateClaudeToShared(acc, 'folder', fakeProc({}));
+    assert.deepEqual(report.keptBoth, ['agents/bundle.from-folder']);
+    await deleteAccountDir(acc);
+    assert.equal(read(path.join(def, 'agents', 'bundle')), 'default file');
+    assert.equal(read(path.join(def, 'agents', 'bundle.from-folder', 'inside.md')), 'inside');
+    assert.equal(read(path.join(def, 'agents', 'bundle.from-folder', 'outside.md')), 'external');
+  });
+
+  test('links whose final targets are identical are dropped without replacing the default link', () => {
+    const acc = accountDir('identical-link');
+    write(path.join(home, 'outside.md'), 'external');
+    fs.mkdirSync(path.join(def, 'agents'));
+    fs.mkdirSync(path.join(acc, 'agents'), { recursive: true });
+    fs.symlinkSync('../../outside.md', path.join(acc, 'agents', 'alias.md'), 'file');
+    fs.symlinkSync(path.join(home, 'outside.md'), path.join(def, 'agents', 'alias.md'), 'file');
+    const report = migrateClaudeToShared(acc, 'identical-link', fakeProc({}));
+    assert.equal(report.duplicates, 1);
+    assert.deepEqual(report.keptBoth, []);
+    assert.equal(fs.readlinkSync(path.join(def, 'agents', 'alias.md')), path.join(home, 'outside.md'));
+  });
+
+  test('a link to a skipped FIFO still points to the source entry', LINUX_ONLY, () => {
+    const acc = accountDir('pipe');
+    fs.mkdirSync(path.join(acc, 'agents'), { recursive: true });
+    const pipe = path.join(acc, 'agents', 'pipe');
+    execFileSync('mkfifo', [pipe]);
+    fs.symlinkSync('pipe', path.join(acc, 'agents', 'alias'));
+    const report = migrateClaudeToShared(acc, 'pipe', fakeProc({}));
+    assert.ok(report.conflicts.includes('agents'));
+    assert.equal(fs.realpathSync(path.join(def, 'agents', 'alias')), pipe);
+    assert.ok(fs.lstatSync(pipe).isFIFO());
+  });
+
+  test('a refused Windows link keeps its dependent source links instead of moving broken aliases', (ctx) => {
+    const acc = accountDir('no-privilege');
+    const relocated = path.join(home, 'profiles', 'main');
+    write(path.join(home, 'outside.md'), 'external');
+    fs.mkdirSync(path.join(acc, 'agents'), { recursive: true });
+    fs.mkdirSync(relocated, { recursive: true });
+    fs.symlinkSync('z.md', path.join(acc, 'agents', 'a.md'), 'file');
+    fs.symlinkSync('../../outside.md', path.join(acc, 'agents', 'z.md'), 'file');
+    const before = snapshot(path.join(acc, 'agents'));
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform') as PropertyDescriptor;
+    const symlink = fsModule.symlinkSync;
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    ctx.mock.method(fsModule, 'symlinkSync', ((target: fs.PathLike, link: fs.PathLike, type?: fs.symlink.Type) => {
+      if (type === 'file') throw Object.assign(new Error('EPERM'), { code: 'EPERM' });
+      return symlink(target, link, type);
+    }) as typeof fs.symlinkSync);
+    process.env.CLAUDE_CONFIG_DIR = relocated;
+    try {
+      const report = migrateClaudeToShared(acc, 'no-privilege', fakeProc({}));
+      assert.ok(report.noPrivilege?.includes('agents/z.md'));
+      assert.ok(report.noPrivilege?.includes('agents/a.md'));
+      assert.deepEqual(snapshot(path.join(acc, 'agents')), before);
+      assert.equal(read(path.join(acc, 'agents', 'a.md')), 'external');
+      assert.equal(fs.existsSync(path.join(relocated, 'agents', 'a.md')), false);
+    } finally {
+      delete process.env.CLAUDE_CONFIG_DIR;
+      Object.defineProperty(process, 'platform', platform);
+    }
+  });
+
   test('a dangling link in the default dir does not abort the migration; the account file is backed up', () => {
     fs.symlinkSync(NOWHERE, path.join(def, 'CLAUDE.md'));
     const acc = accountDir('dangling');
@@ -589,6 +689,54 @@ describe('migrateClaudeToShared', SHARING, () => {
       () => migrateClaudeToShared(acc, 'a', fakeProc({ 42: { CLAUDE_CONFIG_DIR: acc } }), 'Work'),
       { message: t('share.busy', { name: 'Work' }) },
     );
+  });
+});
+
+describe('moveEntry link targets', SHARING, () => {
+  test('whole-tree moves preserve internal and external relative links on the same and another volume', (ctx) => {
+    for (const crossVolume of [false, true]) {
+      const src = path.join(home, `move-src-${crossVolume}`);
+      const dst = path.join(home, 'profiles', `move-dst-${crossVolume}`);
+      write(path.join(home, 'outside.md'), 'outside');
+      write(path.join(src, 'target.md'), 'inside');
+      fs.mkdirSync(path.dirname(dst), { recursive: true });
+      fs.symlinkSync('target.md', path.join(src, 'inside.md'), 'file');
+      fs.symlinkSync('../outside.md', path.join(src, 'outside.md'), 'file');
+      const mocked = crossVolume ? ctx.mock.method(fsModule, 'renameSync', (() => {
+        throw Object.assign(new Error('EXDEV'), { code: 'EXDEV' });
+      }) as typeof fs.renameSync) : undefined;
+      try {
+        assert.equal(moveEntry(src, dst), true);
+        assert.equal(fs.existsSync(src), false);
+        assert.equal(read(path.join(dst, 'inside.md')), 'inside');
+        assert.equal(read(path.join(dst, 'outside.md')), 'outside');
+      } finally {
+        mocked?.mock.restore();
+      }
+    }
+  });
+
+  test('a refused cross-volume link copy keeps every source entry and removes the partial destination', (ctx) => {
+    const src = path.join(home, 'move-src');
+    const dst = path.join(home, 'move-dst');
+    write(path.join(src, '000-file.md'), 'keep');
+    fs.symlinkSync('gone.md', path.join(src, 'dangling.md'), 'file');
+    const before = snapshot(src);
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform') as PropertyDescriptor;
+    const symlink = fsModule.symlinkSync;
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    ctx.mock.method(fsModule, 'renameSync', (() => { throw Object.assign(new Error('EXDEV'), { code: 'EXDEV' }); }) as typeof fs.renameSync);
+    ctx.mock.method(fsModule, 'symlinkSync', ((target: fs.PathLike, link: fs.PathLike, type?: fs.symlink.Type) => {
+      if (type === 'file') throw Object.assign(new Error('EPERM'), { code: 'EPERM' });
+      return symlink(target, link, type);
+    }) as typeof fs.symlinkSync);
+    try {
+      assert.equal(moveEntry(src, dst), false);
+      assert.deepEqual(snapshot(src), before);
+      assert.equal(fs.existsSync(dst), false);
+    } finally {
+      Object.defineProperty(process, 'platform', platform);
+    }
   });
 });
 

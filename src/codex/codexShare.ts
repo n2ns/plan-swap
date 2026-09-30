@@ -7,7 +7,7 @@ import { realPathInside, samePath, sameRealPath } from '../paths';
 import { comparablePath, fileLinksAvailable, isWindows } from '../platform';
 import {
   type MergeCtx, type MigrateReport, type ShareReport, copyTree, defaultFolder, emptyReport, freeName, linkEntry, recordLink, type LinkOptions,
-  linksTo, lstatOrUndefined, mergeEntry, mergeLines, moveEntry, record, sameContent, unlinkChildLinks, unlinkIfLinksTo,
+  finalizeMerge, linksTo, lstatOrUndefined, mergeEntry, mergeLines, moveEntry, record, rememberMove, sameContent, unlinkChildLinks, unlinkIfLinksTo,
 } from '../claudeShare';
 import { blockedConfigReason, codexDaemonAlive, codexDefaultDir, copyCodexSeed } from './codexPaths';
 
@@ -272,14 +272,15 @@ export function removeWindowsSqliteLink(link: string, target: string): 'removed'
 }
 
 // Renames an account sqlite db and its -wal / -shm files to '<name>.independent-backup' (+ the same suffixes)
-function backupSqlite(src: string, rel: string, report: MigrateReport): void {
+function backupSqlite(src: string, rel: string, ctx: MergeCtx): void {
   let base = `${src}.independent-backup`;
   const taken = (b: string): boolean => ['', ...SQLITE_SIDE_FILES].some((s) => lstatOrUndefined(b + s));
   for (let i = 2; taken(base); i++) base = `${src}.independent-backup-${i}`;
   for (const suffix of ['', ...SQLITE_SIDE_FILES]) {
     if (!lstatOrUndefined(src + suffix)) continue;
     fs.renameSync(src + suffix, base + suffix);
-    report.backups.push(path.posix.join(path.posix.dirname(rel), path.basename(base + suffix)));
+    rememberMove(ctx, src + suffix, base + suffix);
+    ctx.report.backups.push(path.posix.join(path.posix.dirname(rel), path.basename(base + suffix)));
   }
 }
 
@@ -315,9 +316,10 @@ export function migrateCodexToShared(dir: string, accountName: string, procRoot 
       (report.noPrivilege ??= []).push(name);
     } else if (JSONL_FILES.includes(name)) {
       if (mergeLines(src, dst) > 0) report.moved++;
+      rememberMove(ctx, src, dst);
     } else if (name.endsWith('.sqlite')) {
       // Windows: the account keeps its own databases, which are never linked there
-      if (!isWindows()) backupSqlite(src, name, report);
+      if (!isWindows()) backupSqlite(src, name, ctx);
     } else {
       // config.toml stays when it cannot be linked (default has identity keys), so the account keeps its config
       if (name === 'config.toml' && !configShareable(dst)) continue;
@@ -326,13 +328,18 @@ export function migrateCodexToShared(dir: string, accountName: string, procRoot 
         // The default has none: the account's file becomes the shared one, unless it carries identity keys
         if (name === 'config.toml' && !configShareable(src)) continue;
         fs.mkdirSync(path.dirname(dst), { recursive: true, mode: 0o700 });
-        if (moveEntry(src, dst)) report.moved++;
+        if (moveEntry(src, dst)) {
+          rememberMove(ctx, src, dst);
+          report.moved++;
+        }
       } else if (fs.existsSync(dst) && sameContent(src, dst, st, fs.statSync(dst))) {
         fs.unlinkSync(src);
+        rememberMove(ctx, src, dst);
         report.duplicates++;
       } else {
         const backup = freeName(`${src}.independent-backup`);
         fs.renameSync(src, backup);
+        rememberMove(ctx, src, backup);
         report.backups.push(path.posix.join(parent, path.basename(backup)));
       }
     }
@@ -358,6 +365,7 @@ export function migrateCodexToShared(dir: string, accountName: string, procRoot 
     }
   }
 
+  finalizeMerge(ctx);
   const links = ensureCodexLinks(dir, options, procRoot);
   report.linked.push(...links.linked);
   report.created.push(...links.created);

@@ -4,10 +4,10 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { t } from './i18n';
-import { claudeJsonName, copySettingsStripped, defaultDir, realPathInside, samePath, sameRealPath, syncMcpServers, unchangedSince } from './paths';
+import { claudeJsonName, copySettingsStripped, defaultDir, realPath, realPathInside, samePath, sameRealPath, syncMcpServers, unchangedSince } from './paths';
 import {
-  comparablePath, isOpaqueReparseDir, JunctionError, LinkPrivilegeError, copyLink, createLink, fileLinksAvailable, isWindows, pidAlive, renameReplacing, type StartTimeProbe,
-  stripBom, windowsStartTimes,
+  comparablePath, isOpaqueReparseDir, JunctionError, LinkPrivilegeError, createLink, fileLinksAvailable, isWindows, pidAlive, renameReplacing, type StartTimeProbe,
+  stripBom, unlinkLinks, windowsStartTimes,
 } from './platform';
 
 // Whole-entry links (kind: file needs an empty-file default, dir needs an empty dir)
@@ -455,27 +455,97 @@ export function claudeAccountBusy(dir: string, procRoot = '/proc'): boolean {
   return false;
 }
 
-// Moves a file, link or folder without following symlinks; falls back to copy + delete across file systems
-// false: a link that cannot be recreated on the other volume (Windows refuses the file link a dangling link becomes
-// without Developer Mode) stays where it is; the caller reports nothing as moved
-export function moveEntry(src: string, dst: string): boolean {
+function linkTarget(link: string): string {
+  return path.resolve(realPath(path.dirname(link)), fs.readlinkSync(link));
+}
+
+// A moved link is created successfully before its original is removed. A rename can keep the original link on
+// Windows without file-link privilege when its target spelling still means the same thing at the destination.
+function moveLink(src: string, dst: string, target: string): boolean {
+  const raw = fs.readlinkSync(src);
+  if (sameRealPath(path.resolve(realPath(path.dirname(dst)), raw), target)) {
+    try {
+      fs.renameSync(src, dst);
+      return true;
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'EXDEV') throw e;
+    }
+  }
   try {
-    fs.renameSync(src, dst);
-    return true;
+    createLink(target, dst);
+  } catch (e) {
+    if (e instanceof LinkPrivilegeError) return false;
+    throw e;
+  }
+  fs.unlinkSync(src);
+  return true;
+}
+
+function pathBelow(root: string, entry: string): string | undefined {
+  const rel = path.relative(comparablePath(root), comparablePath(entry));
+  return rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel) ? path.relative(root, entry) : undefined;
+}
+
+// Unlike independent copying, a failed link copy must never fall back to a regular file or skip a dangling link:
+// the whole source tree is only removed once every entry has a copy with the same meaning.
+function copyMovedTree(src: string, dst: string, root: string, targetRoot: string): void {
+  const st = fs.lstatSync(src);
+  if (st.isDirectory()) {
+    fs.mkdirSync(dst, { mode: st.mode & 0o777 });
+    for (const child of fs.readdirSync(src)) copyMovedTree(path.join(src, child), path.join(dst, child), root, targetRoot);
+    fs.utimesSync(dst, st.atime, st.mtime);
+  } else if (st.isSymbolicLink()) {
+    const raw = fs.readlinkSync(src);
+    const target = linkTarget(src);
+    const inside = !path.isAbsolute(raw) ? pathBelow(root, target) : undefined;
+    if (inside !== undefined && !isWindows()) fs.symlinkSync(raw, dst);
+    else createLink(inside === undefined ? target : path.join(targetRoot, inside), dst);
+  } else if (st.isFile()) {
+    fs.copyFileSync(src, dst, fs.constants.COPYFILE_EXCL);
+    fs.chmodSync(dst, st.mode & 0o777);
+    fs.utimesSync(dst, st.atime, st.mtime);
+  } else {
+    throw Object.assign(new Error(`EOPNOTSUPP: cannot move special file '${src}'`), { code: 'EOPNOTSUPP' });
+  }
+}
+
+function hasExternalRelativeLink(dir: string, root = dir): boolean {
+  for (const child of fs.readdirSync(dir)) {
+    const file = path.join(dir, child);
+    const st = fs.lstatSync(file);
+    if (st.isDirectory() && hasExternalRelativeLink(file, root)) return true;
+    if (!st.isSymbolicLink()) continue;
+    const raw = fs.readlinkSync(file);
+    if (!path.isAbsolute(raw) && pathBelow(root, linkTarget(file)) === undefined) return true;
+  }
+  return false;
+}
+
+// Moves a file, link or folder without following symlinks. Relative links keep their targets; links inside a whole
+// moved tree still point into that tree. false means link privilege was refused and the original entry is kept.
+export function moveEntry(src: string, dst: string): boolean {
+  const st = fs.lstatSync(src);
+  if (st.isSymbolicLink()) return moveLink(src, dst, linkTarget(src));
+  try {
+    if (!st.isDirectory() || !hasExternalRelativeLink(src)) {
+      fs.renameSync(src, dst);
+      return true;
+    }
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code !== 'EXDEV') throw e;
   }
-  const st = fs.lstatSync(src);
-  if (st.isSymbolicLink()) {
+  if (st.isDirectory()) {
+    // Refuse an existing destination before cleanup can own it.
+    if (lstatOrUndefined(dst)) existsError(dst, 'throw');
     try {
-      copyLink(src, dst);
+      copyMovedTree(src, dst, src, dst);
     } catch (e) {
+      unlinkLinks(dst);
+      fs.rmSync(dst, { recursive: true, force: true });
       if (e instanceof LinkPrivilegeError) return false;
       throw e;
     }
-    fs.unlinkSync(src);
-  } else if (st.isDirectory()) {
-    copyTree(src, dst, 'throw');
+    unlinkLinks(src);
     fs.rmSync(src, { recursive: true });
   } else {
     fs.copyFileSync(src, dst, fs.constants.COPYFILE_EXCL);
@@ -495,44 +565,141 @@ export function freeName(base: string): string {
 export function sameContent(a: string, b: string, sa: fs.Stats, sb: fs.Stats): boolean {
   if (sa.isSymbolicLink() || sb.isSymbolicLink()) {
     if (!sa.isSymbolicLink() || !sb.isSymbolicLink()) return false;
-    const ra = fs.readlinkSync(a);
-    const rb = fs.readlinkSync(b);
-    return ra === rb || (isWindows() && comparablePath(ra) === comparablePath(rb));
+    return samePath(linkTarget(a), linkTarget(b));
   }
   return sa.isFile() && sb.isFile() && sa.size === sb.size && fs.readFileSync(a).equals(fs.readFileSync(b));
 }
 
-export interface MergeCtx { report: MigrateReport; account: string }
+interface PendingLink { src: string; dst: string; rel: string; target: string; count: boolean; kept: boolean; duplicate?: boolean }
+export interface MergeCtx {
+  report: MigrateReport;
+  account: string;
+  movedPaths?: Map<string, string>;
+  pendingLinks?: PendingLink[];
+  sourceDirs?: string[];
+}
+
+export function rememberMove(ctx: MergeCtx, src: string, dst: string): void {
+  (ctx.movedPaths ??= new Map()).set(path.resolve(src), dst);
+}
+
+function movedTarget(ctx: MergeCtx, target: string): string {
+  let best = '';
+  let result = target;
+  for (const [src, dst] of ctx.movedPaths ?? []) {
+    const rel = pathBelow(src, target);
+    if (rel === undefined || src.length <= best.length) continue;
+    best = src;
+    result = path.join(dst, rel);
+  }
+  return result;
+}
 
 // Merges the account entry src into the default entry dst (rel: dst relative to the default dir, for the report)
-export function mergeEntry(src: string, dst: string, rel: string, ctx: MergeCtx): void {
+export function mergeEntry(src: string, dst: string, rel: string, ctx: MergeCtx, count = true): void {
   const ss = fs.lstatSync(src);
   const ds = lstatOrUndefined(dst);
-  if (!ss.isDirectory() && !ss.isFile() && !ss.isSymbolicLink()) return;   // sockets, fifos: left in place
+  if (!ss.isDirectory() && !ss.isFile() && !ss.isSymbolicLink()) {
+    rememberMove(ctx, src, src);   // sockets, fifos: left in place
+    return;
+  }
+  if (ss.isSymbolicLink()) {
+    (ctx.pendingLinks ??= []).push({ src, dst, rel, target: linkTarget(src), count, kept: false });
+    return;
+  }
   // Never merge an entry into itself (another spelling of the same folder): the "identical copy" would be the only one
-  if (ds && sameRealPath(src, dst)) return;
+  if (ds && sameRealPath(src, dst)) {
+    rememberMove(ctx, src, dst);
+    return;
+  }
   // Windows reparse points that lstat reports as plain folders (a junction to \\?\Volume{…}, a mount point): moving out
   // of them would take files from another location; left in place like sockets
-  if (ss.isDirectory() && isOpaqueReparseDir(src)) return;
+  if (ss.isDirectory() && isOpaqueReparseDir(src)) {
+    rememberMove(ctx, src, src);
+    return;
+  }
   if (ss.isDirectory()) {
     if (!ds) fs.mkdirSync(dst, { mode: ss.mode & 0o777 });
     if (!ds || ds.isDirectory()) {
-      for (const child of fs.readdirSync(src)) mergeEntry(path.join(src, child), path.join(dst, child), `${rel}/${child}`, ctx);
-      removeIfEmpty(src);
+      rememberMove(ctx, src, dst);
+      (ctx.sourceDirs ??= []).push(src);
+      for (const child of fs.readdirSync(src)) mergeEntry(path.join(src, child), path.join(dst, child), `${rel}/${child}`, ctx, count);
       return;
     }
   } else if (!ds) {
-    if (moveEntry(src, dst)) ctx.report.moved++;
+    if (moveEntry(src, dst)) {
+      rememberMove(ctx, src, dst);
+      if (count) ctx.report.moved++;
+    }
     return;
   } else if (sameContent(src, dst, ss, ds)) {
     fs.unlinkSync(src);
-    ctx.report.duplicates++;
+    rememberMove(ctx, src, dst);
+    if (count) ctx.report.duplicates++;
     return;
   }
   const kept = freeName(`${dst}.from-${ctx.account}`);
-  if (!moveEntry(src, kept)) return;
+  if (ss.isDirectory()) mergeEntry(src, kept, rel, ctx, false);
+  else {
+    if (!moveEntry(src, kept)) return;
+    rememberMove(ctx, src, kept);
+  }
   // Report names use / on every platform, like the other entries of a report
-  ctx.report.keptBoth.push(path.posix.join(path.posix.dirname(rel), path.basename(kept)));
+  if (count) ctx.report.keptBoth.push(path.posix.join(path.posix.dirname(rel), path.basename(kept)));
+}
+
+/** Completes one account's directory merges after every shared entry has its final location, before re-linking.
+ *  Deferred links use those locations, including conflict suffixes, so they survive deletion of the old account. */
+export function finalizeMerge(ctx: MergeCtx): void {
+  const pending = ctx.pendingLinks ?? [];
+  const reserved = new Set<string>();
+  for (const link of pending) {
+    const targetDependsOnLink = pending.some((other) => pathBelow(other.src, link.target) !== undefined);
+    if (!targetDependsOnLink && lstatOrUndefined(link.dst)?.isSymbolicLink()
+      && sameRealPath(movedTarget(ctx, link.target), linkTarget(link.dst))) {
+      link.duplicate = true;
+      rememberMove(ctx, link.src, link.dst);
+      continue;
+    }
+    if (lstatOrUndefined(link.dst) || reserved.has(comparablePath(link.dst))) {
+      const base = `${link.dst}.from-${ctx.account}`;
+      let candidate = base;
+      for (let n = 2; lstatOrUndefined(candidate) || reserved.has(comparablePath(candidate)); n++) candidate = `${base}-${n}`;
+      link.kept = true;
+      link.dst = candidate;
+    }
+    reserved.add(comparablePath(link.dst));
+    rememberMove(ctx, link.src, link.dst);
+  }
+  const finished = new Map<PendingLink, boolean>();
+  const visiting = new Set<PendingLink>();
+  const finishLink = (link: PendingLink): boolean => {
+    const done = finished.get(link);
+    if (done !== undefined) return done;
+    if (visiting.has(link)) return true;   // preserve an existing link cycle without recursing forever
+    visiting.add(link);
+    const dependency = pending.filter((other) => other !== link && pathBelow(other.src, link.target) !== undefined)
+      .sort((a, b) => b.src.length - a.src.length)[0];
+    const dependencyMoved = !dependency || finishLink(dependency);
+    if (link.duplicate) {
+      fs.unlinkSync(link.src);
+      if (link.count) ctx.report.duplicates++;
+    } else if (!dependencyMoved || !moveLink(link.src, link.dst, movedTarget(ctx, link.target))) {
+      (ctx.report.noPrivilege ??= []).push(link.rel);
+      rememberMove(ctx, link.src, link.src);
+      visiting.delete(link);
+      finished.set(link, false);
+      return false;
+    } else if (link.count) {
+      if (link.kept) ctx.report.keptBoth.push(path.posix.join(path.posix.dirname(link.rel), path.basename(link.dst)));
+      else ctx.report.moved++;
+    }
+    visiting.delete(link);
+    finished.set(link, true);
+    return true;
+  };
+  for (const link of pending) finishLink(link);
+  for (const dir of [...(ctx.sourceDirs ?? [])].reverse()) removeIfEmpty(dir);
 }
 
 // The default folder to merge into (a link to a folder is followed; created 0700 when missing); undefined when not a folder
@@ -599,6 +766,7 @@ export function migrateClaudeToShared(dir: string, accountName: string, procRoot
       }
       if (name === 'history.jsonl') {
         appendHistory(src, dst);
+        rememberMove(ctx, src, dst);
         report.moved++;
       } else {
         // settings.json stays when it cannot be linked (default has identity keys), so the account keeps its settings
@@ -607,13 +775,18 @@ export function migrateClaudeToShared(dir: string, accountName: string, procRoot
         if (!ds) {
           // The default has none: the account's file becomes the shared one, unless it carries identity keys
           if (name === 'settings.json' && !settingsShareable(src)) continue;
-          if (moveEntry(src, dst)) report.moved++;
+          if (moveEntry(src, dst)) {
+            rememberMove(ctx, src, dst);
+            report.moved++;
+          }
         } else if (fs.existsSync(dst) && sameContent(src, dst, st, fs.statSync(dst))) {
           fs.unlinkSync(src);
+          rememberMove(ctx, src, dst);
           report.duplicates++;
         } else {
           const backup = freeName(`${src}.independent-backup`);
           fs.renameSync(src, backup);
+          rememberMove(ctx, src, backup);
           report.backups.push(path.basename(backup));
         }
       }
@@ -639,6 +812,7 @@ export function migrateClaudeToShared(dir: string, accountName: string, procRoot
     }
   }
 
+  finalizeMerge(ctx);
   const links = ensureClaudeLinks(dir, procRoot, options);
   report.linked.push(...links.linked);
   report.created.push(...links.created);
