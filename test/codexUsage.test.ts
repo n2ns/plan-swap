@@ -198,6 +198,24 @@ describe('readCodexUsage', () => {
     assert.equal(r.ok && r.usage.limitReached, true);
   });
 
+  test('UTF-8 account paths survive protocol chunks split inside multibyte characters', async () => {
+    const dir = path.join(tmp.home, '用户📁', '.codex');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'auth.json'), '{}');
+    const f = fakeSpawn((msg, child, write) => {
+      if (msg.method === 'initialize') {
+        const line = Buffer.from(JSON.stringify({ id: msg.id, result: { codexHome: dir } }) + '\n');
+        for (const byte of line) child.stdout!.push(Buffer.from([byte]));
+      } else if (msg.method === 'account/rateLimits/read') {
+        write({ id: msg.id, result: LIMITS });
+      }
+    }, { exitOnStdinEnd: true });
+    const result = await readCodexUsage(dir, base(f.spawn));
+    assert.equal(result.ok, true);
+    assert.equal(result.ok && result.usage.windows[0].usedPercent, 25);
+    assert.deepEqual(f.children[0].sent.map((msg) => msg.method), ['initialize', 'initialized', 'account/rateLimits/read']);
+  });
+
   test('authentication error → notLoggedIn', async () => {
     const f = fakeSpawn(server((id) => ({ id, error: { code: -32600, message: 'codex account authentication required to read rate limits' } })), { exitOnStdinEnd: true });
     assert.deepEqual(await readCodexUsage(acct, base(f.spawn)), { ok: false, reason: 'notLoggedIn' });

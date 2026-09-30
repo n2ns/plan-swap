@@ -263,8 +263,8 @@ function attempt(
       finish(usage ? { ok: true, usage } : { ok: false, reason: 'noRateLimits' });
     };
 
-    const onData = (chunk: Buffer | string): void => {
-      buffer += chunk.toString();
+    const onData = (chunk: string): void => {
+      buffer += chunk;
       let nl: number;
       while (!settled && (nl = buffer.indexOf('\n')) >= 0) {
         const line = buffer.slice(0, nl).replace(/\r$/, '');
@@ -318,6 +318,7 @@ function attempt(
 
     // EPIPE and the like after the child is gone are expected; the exit/error handlers report the outcome
     stdin?.on('error', () => undefined);
+    stdout?.setEncoding('utf8'); // Decode multibyte characters across chunk boundaries before parsing JSON lines.
     stdout?.on('data', onData);
     child.on('error', onError);
     child.on('exit', onExit);
