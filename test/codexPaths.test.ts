@@ -209,6 +209,9 @@ describe('copyCodexSeed', () => {
     ['after a multi-line nested array', 'a = [\n  [1, 2],\n]\nmodel_provider = "x"\n', 'Contains top-level key model_provider'],
     ['after array lines that look like headers', 'a = [\n  ["x"],\n  [1]\n]\nmodel_providers.x.base_url = "u"\n', 'Contains top-level key model_providers'],
     ['after a multi-line string with a header-like line', 'p = """\n[profiles]\n"""\nmodel_provider = "x"\n', 'Contains top-level key model_provider'],
+    ['after escaped quotes in a multi-line basic string', 'p = """\nPrint \\""" as an example:\n[example]\n"""\nforced_login_method = "chatgpt"\n', 'Contains top-level key forced_login_method'],
+    ['after an escaped backslash before the closing delimiter', 'p = """Escaped slash \\\\"""\nforced_login_method = "chatgpt"\n', 'Contains top-level key forced_login_method'],
+    ['after a literal backslash before the closing delimiter', "p = '''Literal slash \\'''\nforced_login_method = 'chatgpt'\n", 'Contains top-level key forced_login_method'],
   ]) {
     test(`blocks ${label}`, () => {
       const { src, dst } = fresh(cfg, 'x');
@@ -227,6 +230,8 @@ describe('copyCodexSeed', () => {
   test('lines inside multi-line values are not read as keys or headers', () => {
     const a = fresh("a = [\n  'model_provider = 1',\n]\nb = '''\n[model_providers.x]\n'''\nc = { d = [\n  1,\n] }\nmodel = \"y\"\n", 'x');
     assert.deepEqual(copyCodexSeed(a.src, a.dst).copied, ['config.toml']);
+    const b = fresh('p = """\nPrint \\""" as an example:\nforced_login_method = "chatgpt"\n"""\nmodel = "x"\n');
+    assert.deepEqual(copyCodexSeed(b.src, b.dst).copied, ['config.toml']);
   });
   test('comment lines and key-name prefixes are not false positives', () => {
     const a = fresh('# model_provider = "x"\n  # [model_providers.foo]\n#log_dir = "/x"\nmodel = "y"\n', 'x');

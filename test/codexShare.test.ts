@@ -199,6 +199,10 @@ describe('ensureCodexLinks', SHARING, () => {
     assert.ok(refused('profiles.work.model = "x"\n'));
     assert.ok(refused('model_providers = { corp = { base_url = "x" } }\n'));
     assert.ok(refused("'model_provider' = \"x\"\n"));
+    for (const key of ['forced_login_method', 'forced_chatgpt_workspace_id']) {
+      assert.ok(refused(`instructions = """\nPrint \\""" as an example:\n[example]\n"""\n${key} = "x"\n`));
+      assert.ok(!exists(path.join(acc, 'config.toml')), key);
+    }
     // Not top-level / inside a multi-line value: shareable
     assert.ok(!refused('[tui]\nprofile = "x"\n'));
     assert.ok(isLinkTo(path.join(acc, 'config.toml'), cfg));

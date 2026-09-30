@@ -167,10 +167,14 @@ function scanValue(s: string, st: ValueState): void {
   let i = 0;
   while (i < s.length) {
     if (st.ml) {
-      const end = s.indexOf(st.ml, i);
-      if (end < 0) return;
-      i = end + 3;
-      st.ml = undefined;
+      if (st.ml === '"""' && s[i] === '\\') {
+        i += 2; // A basic-string escape consumes the next character, including a quote or another backslash.
+      } else if (s.startsWith(st.ml, i)) {
+        i += 3;
+        st.ml = undefined;
+      } else {
+        i++;
+      }
       continue;
     }
     const c = s[i];
