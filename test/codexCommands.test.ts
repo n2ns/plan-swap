@@ -553,6 +553,65 @@ describe('panel message handlers', () => {
     }
   });
 
+  test('adding a kept independent directory does not claim that linking succeeded', LINUX_ONLY, async (ctx) => {
+    const a = named('kept-unlinked');
+    fs.mkdirSync(path.join(a.dir, 'sessions'), { recursive: true });
+    const h = await harness();
+    const warnings = modal(ctx, () => undefined);
+    try {
+      await h.handle({ type: 'add', mode: 'codex', name: a.name, shared: true });
+      assert.ok(h.store.find(a.name));
+      assert.equal(isSharedCodexAccount(a.dir), false);
+      assert.match(String(warnings.mock.calls[0].arguments[0]), /^Account kept-unlinked was added\. Linking reported: /);
+      assert.match(String(warnings.mock.calls[0].arguments[0]), /sessions/);
+    } finally {
+      h.dispose();
+    }
+  });
+
+  test('a conversion that leaves the marker unlinked reports an incomplete link', LINUX_ONLY, async (ctx) => {
+    const a = named('marker-conflict');
+    const h = await harness([a]);
+    const elsewhere = path.join(fxHome, 'other-sessions');
+    fs.mkdirSync(elsewhere);
+    fs.symlinkSync(elsewhere, path.join(a.dir, 'sessions'), 'junction');
+    writeSelectedDir(undefined);
+    modal(ctx, () => t('share.confirmButton'));
+    const infos = ctx.mock.method(window, 'showInformationMessage', async () => undefined);
+    try {
+      await h.handle({ type: 'share', mode: 'codex', dir: a.dir });
+      assert.equal(isSharedCodexAccount(a.dir), false);
+      assert.deepEqual(infos.mock.calls[0].arguments, [t('share.incomplete', {
+        label: a.name, summary: t('share.r.conflicts', { list: 'sessions' }),
+      })]);
+    } finally {
+      h.dispose();
+    }
+  });
+
+  test('Windows conversion confirmations describe independent thread databases', async (ctx) => {
+    const independent = named('windows-confirm-independent');
+    const shared = named('windows-confirm-shared');
+    const h = await harness([independent, shared]);
+    fs.mkdirSync(path.join(def, 'sessions'), { recursive: true });
+    fs.symlinkSync(path.join(def, 'sessions'), path.join(shared.dir, 'sessions'), 'junction');
+    writeSelectedDir(undefined);
+    const warnings = modal(ctx, () => undefined);
+    const realPlatform = Object.getOwnPropertyDescriptor(process, 'platform') as PropertyDescriptor;
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    try {
+      await h.handle({ type: 'share', mode: 'codex', dir: independent.dir });
+      await h.handle({ type: 'unshare', mode: 'codex', dir: shared.dir });
+      assert.deepEqual(warnings.mock.calls.map((call) => call.arguments[0]), [
+        t('share.confirmCodexWindows', { label: independent.name, dir: independent.dir }),
+        t('unshare.confirmCodexWindows', { label: shared.name, dir: shared.dir }),
+      ]);
+    } finally {
+      Object.defineProperty(process, 'platform', realPlatform);
+      h.dispose();
+    }
+  });
+
   test('share command picks only independent named accounts outside the effective and selected directories', LINUX_ONLY, async (ctx) => {
     const candidate = named('palette-share-choice');
     const effective = named('palette-share-effective');

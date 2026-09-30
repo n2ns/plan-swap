@@ -511,7 +511,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       return;
     }
     const ok = t('share.confirmButton');
-    const picked = await vscode.window.showWarningMessage(t('share.confirmCodex', { label: labelOf(account), dir: account.dir }), { modal: true }, ok);
+    const picked = await vscode.window.showWarningMessage(t(isWindows() ? 'share.confirmCodexWindows' : 'share.confirmCodex', { label: labelOf(account), dir: account.dir }), { modal: true }, ok);
     if (picked !== ok) return;
     // Re-checked after the modal: another window may have selected the account meanwhile
     if (effectiveAlias(account) || selectedAlias(account)) {
@@ -525,7 +525,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     const linkOptions = await askCopyFallback(account.dir, 'Codex');
     try {
       const report = migrateCodexToShared(account.dir, account.name, '/proc', { ...linkOptions, busy: linkBusy(account) });
-      void vscode.window.showInformationMessage(t('share.done', { label: labelOf(account), summary: describeShareReport(report) || t('share.nothingElse') }));
+      void vscode.window.showInformationMessage(t(isSharedCodexAccount(account.dir) ? 'share.done' : 'share.incomplete', { label: labelOf(account), summary: describeShareReport(report) || t('share.nothingElse') }));
     } catch (err) {
       void vscode.window.showErrorMessage(t('share.failed', { label: labelOf(account), error: errText(err) }));
     }
@@ -540,7 +540,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       return;
     }
     const ok = t('unshare.confirmButton');
-    const picked = await vscode.window.showWarningMessage(t('unshare.confirmCodex', { label: labelOf(account), dir: account.dir }), { modal: true }, ok);
+    const picked = await vscode.window.showWarningMessage(t(isWindows() ? 'unshare.confirmCodexWindows' : 'unshare.confirmCodex', { label: labelOf(account), dir: account.dir }), { modal: true }, ok);
     if (picked !== ok) return;
     if (effectiveAlias(account) || selectedAlias(account)) {
       void vscode.window.showWarningMessage(t('unshare.current', { label: labelOf(account) }));

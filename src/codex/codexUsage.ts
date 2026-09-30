@@ -19,7 +19,8 @@ export interface CodexUsage {
 }
 
 // authExpired: auth.json exists but the service refused it (401), i.e. the account has to sign in again
-export type UsageFailure = 'notLoggedIn' | 'authExpired' | 'cliMissing' | 'timeout' | 'failed';
+export type UsageFailure = 'notLoggedIn' | 'authExpired' | 'cliMissing' | 'timeout' | 'homeMismatch' |
+  'noRateLimits' | 'protocolTooLong' | 'exited' | 'unknownError' | 'failed';
 export type UsageResult = { ok: true; usage: CodexUsage } | { ok: false; reason: UsageFailure; detail?: string };
 
 /** The part of a ChildProcess readCodexUsage uses; node's ChildProcess satisfies it. */
@@ -144,9 +145,8 @@ export function findBundledCodex(extensionPath: string, platform: NodeJS.Platfor
   return fs.existsSync(file) ? file : undefined;
 }
 
-function errorMessage(e: Record<string, unknown>): string {
-  const msg = typeof e.message === 'string' ? e.message : 'unknown error';
-  return truncate(typeof e.code === 'number' ? `${msg} (${e.code})` : msg);
+function errorMessage(message: string, code: unknown): string {
+  return truncate(typeof code === 'number' ? `${message} (${code})` : message);
 }
 
 function comparable(p: string, platform: NodeJS.Platform): string {
@@ -243,7 +243,8 @@ function attempt(
         // 401 first: "authentication failed: 401 Unauthorized" is an expired sign-in, not a missing one
         finish(isExpiredAuth(e) ? { ok: false, reason: 'authExpired' }
           : isAuthError(e) ? { ok: false, reason: 'notLoggedIn' }
-            : { ok: false, reason: 'failed', detail: errorMessage(e) });
+            : typeof e.message === 'string' ? { ok: false, reason: 'failed', detail: errorMessage(e.message, e.code) }
+              : { ok: false, reason: 'unknownError', detail: typeof e.code === 'number' ? String(e.code) : undefined });
         return;
       }
       const result = msg.result;
@@ -251,7 +252,7 @@ function attempt(
         // Proves which account the server serves before asking it anything
         const reported = isPlainObject(result) ? result.codexHome : undefined;
         if (typeof reported === 'string' && comparable(reported, platform) !== comparable(home, platform)) {
-          finish({ ok: false, reason: 'failed', detail: truncate(`codexHome mismatch: ${reported}`) });
+          finish({ ok: false, reason: 'homeMismatch', detail: truncate(reported) });
           return;
         }
         send({ method: 'initialized' });
@@ -259,7 +260,7 @@ function attempt(
         return;
       }
       const usage = parseRateLimits(isPlainObject(result) ? result : undefined, now());
-      finish(usage ? { ok: true, usage } : { ok: false, reason: 'failed', detail: 'no rate limits in the response' });
+      finish(usage ? { ok: true, usage } : { ok: false, reason: 'noRateLimits' });
     };
 
     const onData = (chunk: Buffer | string): void => {
@@ -270,7 +271,7 @@ function attempt(
         buffer = buffer.slice(nl + 1);
         if (line.trim()) onLine(line);
       }
-      if (!settled && buffer.length > MAX_BUFFER) finish({ ok: false, reason: 'failed', detail: 'protocol line too long' });
+      if (!settled && buffer.length > MAX_BUFFER) finish({ ok: false, reason: 'protocolTooLong' });
     };
 
     const onError = (e: NodeJS.ErrnoException): void => {
@@ -279,7 +280,8 @@ function attempt(
     };
 
     const onExit = (code: number | null, signal: NodeJS.Signals | null): void => {
-      finish({ ok: false, reason: 'failed', detail: `codex exited before answering (${code ?? signal ?? 'unknown'})` });
+      const status = code ?? signal;
+      finish({ ok: false, reason: 'exited', detail: status === null ? undefined : String(status) });
     };
 
     const timer = setTimeout(() => finish({ ok: false, reason: 'timeout' }), timeoutMs);

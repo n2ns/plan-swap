@@ -160,6 +160,62 @@ describe('panel message handlers (Claude)', () => {
     fs.mkdirSync(path.join(home, '.claude'), { mode: 0o700 });
   });
 
+  test('account picks distinguish signed-in accounts without an email from signed-out accounts', async (ctx) => {
+    const h = harness();
+    const signedIn = await add(h, 'signed-in', false);
+    const withEmail = await add(h, 'with-email', false);
+    await add(h, 'signed-out', false);
+    fs.writeFileSync(path.join(signedIn, '.credentials.json'), '');
+    fs.writeFileSync(path.join(withEmail, '.claude.json'), JSON.stringify({ oauthAccount: { emailAddress: 'person@example.com' } }));
+    const pick = ctx.mock.method(window, 'showQuickPick', async () => undefined);
+    try {
+      await commands.registered['planswap.switchAccount']();
+      const items = pick.mock.calls[0].arguments[0] as Array<{ label: string; description: string }>;
+      assert.deepEqual(items.map(({ label, description }) => [label, description]), [
+        ['signed-in', t('common.loggedIn')],
+        ['signed-out', t('common.notLoggedIn')],
+        ['with-email', 'person@example.com'],
+      ]);
+    } finally {
+      h.dispose();
+    }
+  });
+
+  test('adding a kept independent directory does not claim that linking succeeded', LINUX_ONLY, async (ctx) => {
+    const h = harness();
+    const dir = accountDir('kept');
+    fs.mkdirSync(path.join(dir, 'projects'), { recursive: true });
+    const warning = ctx.mock.method(window, 'showWarningMessage', async () => undefined);
+    try {
+      await h.handle({ type: 'add', mode: 'claude', name: 'kept', shared: true });
+      assert.ok(h.store.find('kept'));
+      assert.equal(isSharedClaudeAccount(dir), false);
+      assert.match(String(warning.mock.calls[0].arguments[0]), /^Account kept was added\. Linking reported: /);
+      assert.match(String(warning.mock.calls[0].arguments[0]), /projects/);
+    } finally {
+      h.dispose();
+    }
+  });
+
+  test('a conversion that leaves the marker unlinked reports an incomplete link', LINUX_ONLY, async (ctx) => {
+    const h = harness();
+    const dir = await add(h, 'conflict', false);
+    const elsewhere = path.join(home, 'other-projects');
+    fs.mkdirSync(elsewhere);
+    fs.symlinkSync(elsewhere, path.join(dir, 'projects'), 'junction');
+    ctx.mock.method(window, 'showWarningMessage', async () => t('share.confirmButton'));
+    const info = ctx.mock.method(window, 'showInformationMessage', async () => undefined);
+    try {
+      await h.handle({ type: 'share', mode: 'claude', dir });
+      assert.equal(isSharedClaudeAccount(dir), false);
+      assert.deepEqual(info.mock.calls[0].arguments, [t('share.incomplete', {
+        label: 'conflict', summary: t('share.r.conflicts', { list: 'projects' }),
+      })]);
+    } finally {
+      h.dispose();
+    }
+  });
+
   test('remove refuses the current account', async (ctx) => {
     const h = harness();
     const dir = await add(h, 'a', false);

@@ -543,7 +543,7 @@ describe('migrateClaudeToShared', SHARING, () => {
     const acc = accountDir('a');
     write(path.join(acc, 'sessions', '42.json'), JSON.stringify({ pid: 42 }));
     write(path.join(acc, 'projects', 'p', 'x'), 'x');
-    assert.throws(() => migrateClaudeToShared(acc, 'a', fakeProc({ 42: { CLAUDE_CONFIG_DIR: acc } })), /still running with account a;/);
+    assert.throws(() => migrateClaudeToShared(acc, 'a', fakeProc({ 42: { CLAUDE_CONFIG_DIR: acc } })), { message: t('share.busy', { name: 'a' }) });
     assert.equal(read(path.join(acc, 'projects', 'p', 'x')), 'x');
     assert.ok(!exists(path.join(def, 'projects')));
   });

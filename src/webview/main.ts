@@ -453,7 +453,9 @@ class Page {
     this.addField.invalid = !!error;
     this.addButton.disabled = this.adding || !name || !!error;
     this.addHelp.className = error ? 'help error' : 'help';
-    const createKey = this.addShared.checked ? (`${this.mode}.addHelpShared` as const) : 'add.help.independent';
+    const createKey = !this.addShared.checked ? 'add.help.independent'
+      : this.mode === 'codex' && codexRestart().userEnv ? 'codex.addHelpSharedWin'
+        : (`${this.mode}.addHelpShared` as const);
     this.addHelp.textContent =
       error ?? (name ? t(createKey, { dir: this.dirPrefix() + name }) : t('add.helpIdle', { prefix: this.dirPrefix() }));
   }

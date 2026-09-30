@@ -6,11 +6,12 @@ import { REFRESH_USAGE_COMMAND, StatusBar, usageLines } from '../src/statusBar';
 import { AccountStore } from '../src/accounts';
 import { CodexAccountStore } from '../src/codex/codexStore';
 import { LabelStore } from '../src/labels';
-import { setLocale } from '../src/i18n';
+import { setLocale, type Locale } from '../src/i18n';
 import { makeTempHome, MemoryMemento } from './helpers';
 import { MarkdownString, statusBarItems, StatusBarAlignment, tooltipText } from './stubs/vscode';
 import { installRcBlocks, writeSelectedDir } from '../src/codex/codexState';
 import type { CodexUsageState } from '../src/codex/codexUsageMonitor';
+import type { UsageResult } from '../src/codex/codexUsage';
 
 before(() => setLocale('en'));
 
@@ -85,6 +86,24 @@ describe('Codex usage limits in the tooltip', () => {
     assert.deepEqual(usageLines({ checking: true }), ['Checking usage limits…']);
   });
 
+  test('usageLines localizes generated reasons while preserving raw details and external errors', () => {
+    const cases: Array<[UsageResult, string]> = [
+      [{ ok: false, reason: 'homeMismatch', detail: '/other/.codex' }, '无法获取用量额度：codex 返回了不同的账号目录：/other/.codex'],
+      [{ ok: false, reason: 'noRateLimits' }, '无法获取用量额度：响应中没有用量额度。'],
+      [{ ok: false, reason: 'protocolTooLong' }, '无法获取用量额度：响应中的协议行过长。'],
+      [{ ok: false, reason: 'exited', detail: '3' }, '无法获取用量额度：codex 在响应前已退出（3）。'],
+      [{ ok: false, reason: 'exited', detail: 'SIGTERM' }, '无法获取用量额度：codex 在响应前已退出（SIGTERM）。'],
+      [{ ok: false, reason: 'exited' }, '无法获取用量额度：codex 在响应前已退出（退出状态未知）。'],
+      [{ ok: false, reason: 'unknownError', detail: '-32603' }, '无法获取用量额度：未知错误 (-32603)'],
+      [{ ok: false, reason: 'unknownError' }, '无法获取用量额度：未知错误'],
+      [{ ok: false, reason: 'failed', detail: 'no rate limits in the response (-32603)' }, '无法获取用量额度：no rate limits in the response (-32603)'],
+    ];
+    try {
+      setLocale('zh-cn');
+      for (const [result, expected] of cases) assert.deepEqual(usageLines({ checking: false, result }), [expected]);
+    } finally { setLocale('en'); }
+  });
+
   describe('rendered tooltip', () => {
     let temp: ReturnType<typeof makeTempHome>;
     let state: MemoryMemento;
@@ -114,6 +133,25 @@ describe('Codex usage limits in the tooltip', () => {
         // The status bar text itself stays short
         assert.equal(item.text, '$(account) Codex: default');
       } finally { bar.dispose(); }
+    });
+
+    test('a cached generated failure follows locale changes when the tooltip is updated', () => {
+      fs.writeFileSync(path.join(temp.home, '.codex', 'auth.json'), '{}');
+      const { bar, item } = make();
+      const expected: Record<Locale, string> = {
+        en: 'Usage limits unavailable: the response contained no usage limits.',
+        'zh-cn': '无法获取用量额度：响应中没有用量额度。',
+        es: 'Límites de uso no disponibles: la respuesta no contenía límites de uso.',
+        ja: '使用量の上限を取得できません: 応答に使用量の上限が含まれていません。',
+      };
+      try {
+        bar.setCodexUsage({ checking: false, result: { ok: false, reason: 'noRateLimits' } });
+        for (const locale of Object.keys(expected) as Locale[]) {
+          setLocale(locale);
+          bar.update();
+          assert.ok(tooltipText(item.tooltip).includes(expected[locale]), locale);
+        }
+      } finally { setLocale('en'); bar.dispose(); }
     });
 
     test('a signed-out account shows no usage and no refresh link', () => {

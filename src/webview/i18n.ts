@@ -33,7 +33,7 @@ export const en = {
   'account.current': 'Current account',
   'account.loggedIn': 'Logged in',
   'account.notLoggedIn': 'Not logged in',
-  'account.sharedBadge': "Linked to the default account's settings, rules, skills, history and sessions",
+  'account.sharedBadge': 'Shares linked content with the default account; some files may remain independent',
 
   'list.title': 'All accounts',
   'row.rename': 'Rename',
@@ -54,7 +54,7 @@ export const en = {
   'validate.labelTooLong': 'Display name can be at most {max} characters',
   'validate.labelNewline': 'Display name cannot contain line breaks',
   'validate.labelDuplicate': "Same as another account's name",
-  'validate.nameChars': 'Only letters, digits, underscores and hyphens are allowed',
+  'validate.nameChars': 'Only A-Z, a-z, 0-9, underscores (_) and hyphens (-) are allowed',
   'validate.nameReserved': 'Cannot use the reserved name default',
   'validate.nameExists': 'An account with this name already exists',
 
@@ -65,6 +65,7 @@ export const en = {
   'add.shared': "Link to the default account's settings and history",
   'claude.addHelpShared': "Will create {dir} linked to the default account's settings, rules, skills, history and sessions",
   'codex.addHelpShared': "Will create {dir} linked to the default account's settings, rules, skills, history, sessions and thread databases (memories stay per account)",
+  'codex.addHelpSharedWin': "Will create {dir} linked to the default account's settings, rules, skills, history and sessions (memories and thread databases stay per account)",
   'add.help.independent': 'Will create {dir} with a copy of the default configuration, independent from then on',
   'add.helpIdle': 'Each account uses its own config directory {prefix}<name>',
 
@@ -99,7 +100,7 @@ export const en = {
   'common.reloadWindow': 'Reload Window',
   'footer.restartExtHost': 'Restart Extension Host',
   'footer.restartServer': 'Restart WSL Server',
-  'footer.restartManual': 'How to Apply the Codex Account',
+  'footer.restartManual': 'Show Restart Instructions',
   'footer.help': 'User guide',
   'footer.star': 'Star',
   'footer.version': 'v{version}',
@@ -139,7 +140,7 @@ export const zhCn: Record<MessageKey, string> = {
   'account.current': '当前账号',
   'account.loggedIn': '已登录',
   'account.notLoggedIn': '未登录',
-  'account.sharedBadge': '已链接到默认账号的设置、规则、技能、会话历史和会话记录',
+  'account.sharedBadge': '已链接的内容与默认账号共享；部分文件可能保持独立',
 
   'list.title': '全部账号',
   'row.rename': '重命名',
@@ -160,7 +161,7 @@ export const zhCn: Record<MessageKey, string> = {
   'validate.labelTooLong': '显示名最多 {max} 个字符',
   'validate.labelNewline': '显示名不能包含换行',
   'validate.labelDuplicate': '与其他账号的名字重复',
-  'validate.nameChars': '只能包含字母、数字、下划线和连字符',
+  'validate.nameChars': '只能包含 A-Z、a-z、0-9、下划线（_）和连字符（-）',
   'validate.nameReserved': '不能使用保留名 default',
   'validate.nameExists': '已存在同名账号',
 
@@ -171,6 +172,7 @@ export const zhCn: Record<MessageKey, string> = {
   'add.shared': '链接到默认账号的配置和历史',
   'claude.addHelpShared': '将创建 {dir}，设置、规则、技能、会话历史和会话记录链接到默认账号',
   'codex.addHelpShared': '将创建 {dir}，设置、规则、技能、会话历史、会话记录和会话数据库链接到默认账号（记忆仍按账号独立）',
+  'codex.addHelpSharedWin': '将创建 {dir}，设置、规则、技能、会话历史和会话记录链接到默认账号（记忆与会话数据库仍按账号独立）',
   'add.help.independent': '将创建 {dir}，复制一份默认账号的配置，之后各自独立',
   'add.helpIdle': '每个账号使用独立的配置目录 {prefix}<名字>',
 
@@ -205,7 +207,7 @@ export const zhCn: Record<MessageKey, string> = {
   'common.reloadWindow': '重新加载窗口',
   'footer.restartExtHost': '重启扩展宿主',
   'footer.restartServer': '重启 WSL 服务端',
-  'footer.restartManual': '如何应用 Codex 账号',
+  'footer.restartManual': '查看重启说明',
   'footer.help': '使用说明',
   'footer.star': 'Star',
   'footer.version': 'v{version}',
@@ -243,7 +245,7 @@ export const es: Record<MessageKey, string> = {
   'account.current': 'Cuenta actual',
   'account.loggedIn': 'Sesión iniciada',
   'account.notLoggedIn': 'Sin sesión',
-  'account.sharedBadge': 'Vinculada a los ajustes, reglas, Skills, historial y sesiones de la cuenta predeterminada',
+  'account.sharedBadge': 'Comparte el contenido vinculado con la cuenta predeterminada; algunos archivos pueden seguir siendo independientes',
 
   'list.title': 'Todas las cuentas',
   'row.rename': 'Renombrar',
@@ -264,7 +266,7 @@ export const es: Record<MessageKey, string> = {
   'validate.labelTooLong': 'El nombre visible admite hasta {max} caracteres',
   'validate.labelNewline': 'El nombre visible no admite saltos de línea',
   'validate.labelDuplicate': 'Coincide con el nombre de otra cuenta',
-  'validate.nameChars': 'Solo se admiten letras, números, guiones bajos y guiones',
+  'validate.nameChars': 'Solo se admiten A-Z, a-z, 0-9, guiones bajos (_) y guiones (-)',
   'validate.nameReserved': 'No se puede usar el nombre reservado default',
   'validate.nameExists': 'Ya existe una cuenta con este nombre',
 
@@ -275,6 +277,7 @@ export const es: Record<MessageKey, string> = {
   'add.shared': 'Vincular ajustes e historial a la cuenta predeterminada',
   'claude.addHelpShared': 'Se creará {dir}, vinculado a los ajustes, reglas, Skills, historial y sesiones de la cuenta predeterminada',
   'codex.addHelpShared': 'Se creará {dir}, vinculado a los ajustes, reglas, Skills, historial, sesiones y bases de datos de conversaciones de la cuenta predeterminada (Memories se mantiene separado por cuenta)',
+  'codex.addHelpSharedWin': 'Se creará {dir}, vinculado a los ajustes, reglas, Skills, historial y sesiones de la cuenta predeterminada (Memories y las bases de datos de conversaciones permanecen independientes por cuenta)',
   'add.help.independent': 'Se creará {dir} con una copia de la configuración predeterminada; desde entonces será independiente',
   'add.helpIdle': 'Cada cuenta usa su propio directorio de configuración {prefix}<name>',
 
@@ -308,7 +311,7 @@ export const es: Record<MessageKey, string> = {
   'common.reloadWindow': 'Recargar ventana',
   'footer.restartExtHost': 'Reiniciar Extension Host',
   'footer.restartServer': 'Reiniciar servidor WSL',
-  'footer.restartManual': 'Cómo aplicar la cuenta de Codex',
+  'footer.restartManual': 'Ver instrucciones de reinicio',
   'footer.help': 'Guía de uso',
   'footer.star': 'Star',
   'footer.version': 'v{version}',
@@ -346,7 +349,7 @@ export const ja: Record<MessageKey, string> = {
   'account.current': '現在のアカウント',
   'account.loggedIn': 'ログイン済み',
   'account.notLoggedIn': '未ログイン',
-  'account.sharedBadge': 'デフォルトアカウントの設定・ルール・Skills・履歴・セッションにリンク済み',
+  'account.sharedBadge': 'リンクした内容をデフォルトアカウントと共有。一部のファイルは独立したままの場合があります',
 
   'list.title': 'すべてのアカウント',
   'row.rename': '名前を変更',
@@ -367,7 +370,7 @@ export const ja: Record<MessageKey, string> = {
   'validate.labelTooLong': '表示名は {max} 文字以内で入力してください',
   'validate.labelNewline': '表示名に改行は使えません',
   'validate.labelDuplicate': '別のアカウントと名前が重複しています',
-  'validate.nameChars': '使用できるのは英数字・アンダースコア・ハイフンのみです',
+  'validate.nameChars': '使用できるのは A-Z、a-z、0-9、アンダースコア（_）、ハイフン（-）のみです',
   'validate.nameReserved': '予約名 default は使えません',
   'validate.nameExists': '同じ名前のアカウントがすでにあります',
 
@@ -378,6 +381,7 @@ export const ja: Record<MessageKey, string> = {
   'add.shared': 'デフォルトアカウントの設定と履歴にリンク',
   'claude.addHelpShared': '{dir} を作成し、デフォルトアカウントの設定・ルール・Skills・履歴・セッションにリンクします',
   'codex.addHelpShared': '{dir} を作成し、デフォルトアカウントの設定・ルール・Skills・履歴・セッション・スレッドデータベースにリンクします（Memories はアカウントごとに独立）',
+  'codex.addHelpSharedWin': '{dir} を作成し、デフォルトアカウントの設定・ルール・Skills・履歴・セッションにリンクします（Memories とスレッドデータベースはアカウントごとに独立）',
   'add.help.independent': '{dir} を作成し、デフォルト設定をコピーします。以後は独立して使用します',
   'add.helpIdle': 'アカウントごとに専用の設定ディレクトリ {prefix}<name> を使います',
 
@@ -411,7 +415,7 @@ export const ja: Record<MessageKey, string> = {
   'common.reloadWindow': 'ウィンドウを再読み込み',
   'footer.restartExtHost': 'Extension Host を再起動',
   'footer.restartServer': 'WSL サーバーを再起動',
-  'footer.restartManual': 'Codex アカウントの適用方法',
+  'footer.restartManual': '再起動の手順を表示',
   'footer.help': '使い方',
   'footer.star': 'Star',
   'footer.version': 'v{version}',

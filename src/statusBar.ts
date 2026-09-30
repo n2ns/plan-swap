@@ -4,17 +4,28 @@ import { claudeJsonPath, findSameDir, readAccountInfo } from './paths';
 import { currentDir, isExplicitConfigDir } from './claudeSettings';
 import type { AccountStore } from './accounts';
 import { EXTERNAL_NAME, labelFor, type LabelStore } from './labels';
-import { getLocale, t, type Locale } from './i18n';
+import { getLocale, t, type Locale, type MessageKey } from './i18n';
 import type { CodexAccountStore } from './codex/codexStore';
 import { codexDefaultDir, readCodexAccountInfo } from './codex/codexPaths';
 import { effectiveDir, isEnabled, readSelectedDir } from './codex/codexState';
 import { codexRunsInWsl } from './codex/codexCommands';
 import type { CodexUsageState } from './codex/codexUsageMonitor';
-import type { UsageWindow } from './codex/codexUsage';
+import type { UsageFailure, UsageWindow } from './codex/codexUsage';
 
 export const REFRESH_USAGE_COMMAND = 'planswap.codex.refreshUsage';
 
 const INTL_LOCALES: Record<Locale, string> = { en: 'en', 'zh-cn': 'zh-CN', es: 'es', ja: 'ja' };
+const USAGE_FAILURE_MESSAGES: Record<Exclude<UsageFailure, 'notLoggedIn'>, MessageKey> = {
+  cliMissing: 'status.usageCliMissing',
+  authExpired: 'status.usageAuthExpired',
+  timeout: 'status.usageTimeout',
+  homeMismatch: 'status.usageHomeMismatch',
+  noRateLimits: 'status.usageNoRateLimits',
+  protocolTooLong: 'status.usageProtocolTooLong',
+  exited: 'status.usageExited',
+  unknownError: 'status.usageUnknownError',
+  failed: 'status.usageFailed',
+};
 
 // 300 → 5h, 10080 → 7d; anything that is not a whole hour stays in minutes
 function formatDuration(minutes: number): string {
@@ -49,10 +60,10 @@ export function usageLines(state: CodexUsageState | undefined): string[] {
     lines.push(...r.usage.windows.map(windowLine));
     if (r.usage.limitReached) lines.push(t('status.usageReached'));
   } else if (r && r.reason !== 'notLoggedIn') {
-    lines.push(r.reason === 'cliMissing' ? t('status.usageCliMissing')
-      : r.reason === 'authExpired' ? t('status.usageAuthExpired')
-        : r.reason === 'timeout' ? t('status.usageTimeout')
-          : t('status.usageFailed', { detail: r.detail ?? '' }));
+    let detail = r.detail ?? '';
+    if (r.reason === 'exited' && !detail) detail = t('status.usageUnknownExit');
+    if (r.reason === 'unknownError' && detail) detail = ` (${detail})`;
+    lines.push(t(USAGE_FAILURE_MESSAGES[r.reason], { detail }));
   }
   if (state.checking) lines.push(t('status.usageChecking'));
   else if (r?.ok) lines.push(t('status.usageChecked', { time: formatTime(r.usage.checkedAt) }));

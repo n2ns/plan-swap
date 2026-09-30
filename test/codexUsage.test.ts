@@ -221,13 +221,29 @@ describe('readCodexUsage', () => {
     assert.ok(detail.length <= 200);
   });
 
-  test('a response without usable limits → failed', async () => {
-    const f = fakeSpawn(server((id) => ({ id, result: { rateLimits: null } })), { exitOnStdinEnd: true });
-    const r = await readCodexUsage(acct, base(f.spawn));
-    assert.equal(!r.ok && r.reason, 'failed');
+  test('an error without a message keeps its code separately for localization', async () => {
+    for (const code of [-32603, undefined]) {
+      const f = fakeSpawn(server((id) => ({ id, error: code === undefined ? {} : { code } })), { exitOnStdinEnd: true });
+      assert.deepEqual(await readCodexUsage(acct, base(f.spawn)), {
+        ok: false, reason: 'unknownError', detail: code === undefined ? undefined : String(code),
+      });
+    }
   });
 
-  test('exit before an answer → failed with the exit code, no protocol lines', async () => {
+  test('a response without usable limits has a localizable reason', async () => {
+    const f = fakeSpawn(server((id) => ({ id, result: { rateLimits: null } })), { exitOnStdinEnd: true });
+    const r = await readCodexUsage(acct, base(f.spawn));
+    assert.deepEqual(r, { ok: false, reason: 'noRateLimits' });
+  });
+
+  test('an oversized protocol line has a localizable reason without including the line', async () => {
+    const f = fakeSpawn((_msg, child) => {
+      (child.stdout as PassThrough).write('x'.repeat(1024 * 1024 + 1));
+    }, { exitOnStdinEnd: true });
+    assert.deepEqual(await readCodexUsage(acct, base(f.spawn)), { ok: false, reason: 'protocolTooLong' });
+  });
+
+  test('exit before an answer keeps the exit code separately, without protocol lines', async () => {
     const f = fakeSpawn((msg, child) => {
       if (msg.method !== 'initialize') return;
       (child.stdout as PassThrough).write('{"secret":"token-like-output"}\n');
@@ -235,8 +251,7 @@ describe('readCodexUsage', () => {
       setImmediate(() => child.emit('exit', 3, null));
     });
     const r = await readCodexUsage(acct, base(f.spawn));
-    assert.equal(!r.ok && r.reason, 'failed');
-    assert.match((!r.ok && r.detail) || '', /\b3\b/);
+    assert.deepEqual(r, { ok: false, reason: 'exited', detail: '3' });
     assert.doesNotMatch(JSON.stringify(r), /secret|token-like/);
     await settle();
     assert.equal(f.children[0]!.killed, 0, 'an exited child is not signalled');
@@ -263,11 +278,10 @@ describe('readCodexUsage', () => {
     assert.equal(child.killed, 1);
   });
 
-  test('codexHome mismatch → failed without asking for limits', async () => {
+  test('codexHome mismatch keeps the reported directory separately without asking for limits', async () => {
     const f = fakeSpawn(server((id) => ({ id, result: LIMITS }), path.join(tmp.home, '.codex')), { exitOnStdinEnd: true });
     const r = await readCodexUsage(acct, base(f.spawn));
-    assert.equal(!r.ok && r.reason, 'failed');
-    assert.match((!r.ok && r.detail) || '', /codexHome/);
+    assert.deepEqual(r, { ok: false, reason: 'homeMismatch', detail: path.join(tmp.home, '.codex') });
     assert.deepEqual(f.children[0]!.sent.map((m) => m.method), ['initialize']);
   });
 

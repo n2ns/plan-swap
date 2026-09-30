@@ -84,12 +84,15 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
       return undefined;
     }
     const picked = await vscode.window.showQuickPick(
-      accounts.map((account) => ({
-        label: labelOf(account),
-        description: readAccountInfo(account.dir, isExplicitConfigDir(account.dir)).email ?? t('common.notLoggedIn'),
-        detail: account.dir,
-        account,
-      })),
+      accounts.map((account) => {
+        const info = readAccountInfo(account.dir, isExplicitConfigDir(account.dir));
+        return {
+          label: labelOf(account),
+          description: info.email ?? t(info.loggedIn ? 'common.loggedIn' : 'common.notLoggedIn'),
+          detail: account.dir,
+          account,
+        };
+      }),
       { placeHolder },
     );
     return picked?.account;
@@ -212,7 +215,7 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
     try {
       const report = migrateClaudeToShared(account.dir, account.name, procRoot, labelOf(account), { ...linkOptions, busy: linkBusy(account) });
       mirrorClaudeJsonInto(defaultJson(), account.dir);
-      void vscode.window.showInformationMessage(t('share.done', { label: labelOf(account), summary: describeShareReport(report) || t('share.nothingElse') }));
+      void vscode.window.showInformationMessage(t(isSharedClaudeAccount(account.dir) ? 'share.done' : 'share.incomplete', { label: labelOf(account), summary: describeShareReport(report) || t('share.nothingElse') }));
     } catch (err) {
       void vscode.window.showErrorMessage(t('share.failed', { label: labelOf(account), error: errText(err) }));
     }

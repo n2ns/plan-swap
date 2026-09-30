@@ -507,7 +507,7 @@ describe('migrateCodexToShared', SHARING, () => {
     write(path.join(acc, 'sessions', 'x.jsonl'), 'x');
     assert.throws(
       () => migrateCodexToShared(acc, 'a', fakeProc({ 7: { exe: CODEX_EXE, env: { CODEX_HOME: acc } } })),
-      /Codex is still running with account a/,
+      { message: t('share.busyCodex', { name: 'a' }) },
     );
     assert.equal(read(path.join(acc, 'sessions', 'x.jsonl')), 'x');
     assert.ok(!exists(path.join(def, 'sessions')));
