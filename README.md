@@ -24,7 +24,7 @@ Switch between the Claude Code and Codex subscription accounts you own (Claude P
 - **Keep accounts signed in**: sign in once per account, then switch from the sidebar. Codex switches require a restart (see below).
 - **Linked or independent accounts**: reuse the default account's setup, or keep separate settings and session histories.
 - **Display names**: give named accounts labels that are easy to recognize.
-- **Codex usage limits**: hover the status bar item to see the current Codex account's usage limits and reset times.
+- **Codex usage limits**: hover the status bar item to see the current Codex account's usage limits and reset times. Account rows retain the last observation with its collection time and a "not live" label; missing observations are not shown as zero usage.
 - **Handy tools**: open your rules and settings, update the CLI, check installed versions and reload the editor.
 - **English, Simplified Chinese, Spanish and Japanese UI**, switchable in the settings.
 
@@ -101,11 +101,15 @@ You can change an existing account's mode after switching away from it and closi
 
 Use **Re-link** in the Tools row to refresh shared settings and repair links. It appears only when the selected tab has a linked account.
 
+The Command Palette also offers **Share with Default Account** separately for Claude and Codex. Choose an eligible independent account and review the conversion confirmation.
+
 ## Tools
 
 The Tools row and footer let you open rules and settings, check CLI and extension versions, reload the window, or restart the extension host or WSL server.
 
 **Update CLI** opens a terminal for the selected service. Follow its progress and prompts there. If your CLI was installed in a custom location, you may need to update it using its original installation method.
+
+For troubleshooting, run **Preview Diagnostics Report** from the Command Palette. It opens an anonymous report of versions, account-selection state and environment checks. Review it before choosing **Copy report**; nothing is uploaded automatically.
 
 **User guide** opens this README; **Star** opens the GitHub repository. The footer also shows your installed PlanSwap version.
 
@@ -138,6 +142,7 @@ PlanSwap also runs in a local Windows editor (no remote window). Claude switchin
 Account management runs locally in your WSL environment or Windows user profile. PlanSwap includes no telemetry or analytics and makes no network requests of its own. To show Codex usage limits, it runs the official `codex` CLI with the current account's folder, which asks OpenAI's service as the CLI always does.
 
 - **Local storage**: account lists, display names and hidden-account records are saved in `~/.config/planswap/state.json` inside each WSL environment (on Windows, `%USERPROFILE%\.config\planswap\state.json`). The selected sidebar tab is saved in the editor's extension storage.
+- **Usage observations**: the same local state file stores Codex quota values, collection times, account directory paths and sign-in file metadata, without tokens or account identity claims. Observations survive restarts, hide when the sign-in file changes, and expire after their reset time or 24 hours.
 - **Account information**: email and plan details are read locally for display. PlanSwap never reads the contents of Claude's `.credentials.json`. It reads Codex's `auth.json` locally and decodes the `id_token` payload for account information and identity comparison, but never copies, swaps or rewrites the file, or sends raw tokens to the sidebar. Account identifiers used to detect two accounts signed in to the same account stay in memory and are never shown or saved.
 - **Configuration changes**: switching updates the settings that select an account. Enabling Codex switching adds configuration to `~/.profile` and `~/.bashrc` after confirmation (on Windows it sets the user environment variable `CODEX_HOME` instead). Linking accounts shares settings and history; it never links or copies their login credential files.
 - **Deleting accounts**: removing a row does not delete its files unless you separately confirm directory deletion. Deleting the directory permanently removes that account's login and local data. Shared data in the default account is kept.
@@ -156,6 +161,7 @@ Your account directories (`~/.claude-<name>` and `~/.codex-<name>`) are kept. To
 
 ## Documentation
 
+- [Changelog](CHANGELOG.md): changes in **0.2.1** and earlier versions.
 - [Feature reference](docs/features.md): detailed instructions for managing accounts, switching and using panel tools.
 - [Documentation map](docs/README.md): development, design, module contracts and verification guides.
 - [Blog post](https://n2ns.com/blog/switch-claude-code-codex-accounts-planswap): why PlanSwap exists and how it switches accounts without copying or swapping credentials.

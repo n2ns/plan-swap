@@ -379,7 +379,7 @@ describe('removal and conversion re-check the account after every modal', () => 
     const shown: string[] = [];
     ctx.mock.method(window, 'showWarningMessage', async (message: string) => {
       shown.push(message);
-      if (message === t('share.confirmCodex', { label: 'conv', dir: a.dir })) {
+      if (message === t(onWindows ? 'share.confirmCodexWindows' : 'share.confirmCodex', { label: 'conv', dir: a.dir })) {
         writeSelectedDir(a.dir);
         return t('share.confirmButton');
       }
