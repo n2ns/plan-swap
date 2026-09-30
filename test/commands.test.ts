@@ -13,7 +13,7 @@ import { accountDir } from '../src/paths';
 import type { FromWebview, ToWebview } from '../src/protocol';
 import type { StatusBar } from '../src/statusBar';
 import { commands, resetConfig, setConfig, updates, window } from './stubs/vscode';
-import { LINUX_ONLY, makeTempHome, MemoryMemento, type TempHome } from './helpers';
+import { LINUX_ONLY, makeTempHome, MemoryMemento, snapshot, type TempHome } from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -75,6 +75,23 @@ describe('validateName', () => {
     process.env.CLAUDE_CONFIG_DIR = dir;
     try {
       assert.equal(validateName('main', store, labels), t('name.sameAsDefaultDir'));
+    } finally {
+      delete process.env.CLAUDE_CONFIG_DIR;
+      fs.rmSync(dir, { recursive: true });
+    }
+  });
+
+  test('a name whose directory contains the default directory is rejected without writing', async () => {
+    const { store, labels } = await make();
+    const dir = accountDir('parent');
+    const nested = path.join(dir, 'agents', 'main');
+    fs.mkdirSync(nested, { recursive: true });
+    fs.writeFileSync(path.join(nested, 'settings.json'), '{}');
+    process.env.CLAUDE_CONFIG_DIR = nested;
+    try {
+      const before = snapshot(home);
+      assert.equal(validateName('parent', store, labels), t('account.containsDefaultDir', { dir, default: nested }));
+      assert.deepEqual(snapshot(home), before);
     } finally {
       delete process.env.CLAUDE_CONFIG_DIR;
       fs.rmSync(dir, { recursive: true });

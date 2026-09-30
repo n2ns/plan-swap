@@ -131,6 +131,7 @@ export const en = {
   'name.exists': 'An account with this name already exists',
   'name.dupLabel': "Same as an existing account's display name",
   'name.sameAsDefaultDir': 'This account directory is the same as the default account directory',
+  'account.containsDefaultDir': 'Cannot use {dir} as an account: it contains the default account directory {default}.',
   'name.dirIsSymlink': 'This account directory is a symbolic link',
   'name.dirCaseDiffers': 'A folder {dir} already exists in your home folder; Windows treats it as the same folder as this name. Use the name with the same letter case, or remove that folder first.',
 
@@ -447,6 +448,7 @@ export const zhCn: Record<MessageKey, string> = {
   'name.exists': '已存在同名账号',
   'name.dupLabel': '与已有账号的显示名相同',
   'name.sameAsDefaultDir': '该账号目录与默认账号目录相同',
+  'account.containsDefaultDir': '无法将 {dir} 用作账号目录：它包含默认账号目录 {default}。',
   'name.dirIsSymlink': '该账号目录是符号链接',
   'name.dirCaseDiffers': '用户目录中已存在文件夹 {dir}，Windows 会把它和这个名字视为同一个文件夹。请使用大小写相同的名字，或先删除该文件夹。',
 
@@ -739,6 +741,7 @@ export const es: Record<MessageKey, string> = {
   'name.exists': 'Ya existe una cuenta con ese nombre',
   'name.dupLabel': 'Coincide con el nombre visible de otra cuenta',
   'name.sameAsDefaultDir': 'Este directorio coincide con el de la cuenta predeterminada',
+  'account.containsDefaultDir': 'No se puede usar {dir} como cuenta: contiene el directorio de la cuenta predeterminada {default}.',
   'name.dirIsSymlink': 'Este directorio es un enlace simbólico',
   'name.dirCaseDiffers': 'Ya existe la carpeta {dir} en tu carpeta de usuario; Windows la considera la misma carpeta que este nombre. Usa el nombre con las mismas mayúsculas y minúsculas o elimina antes esa carpeta.',
   'label.empty': 'Introduce un nombre visible',
@@ -1017,6 +1020,7 @@ export const ja: Record<MessageKey, string> = {
   'name.exists': '同名のアカウントが既にあります',
   'name.dupLabel': '既存のアカウントの表示名と重複しています',
   'name.sameAsDefaultDir': '既定のアカウントと同じディレクトリです',
+  'account.containsDefaultDir': '{dir} は既定のアカウントディレクトリ {default} を含むため、アカウントとして使用できません。',
   'name.dirIsSymlink': 'このディレクトリはシンボリックリンクです',
   'name.dirCaseDiffers': 'ユーザーフォルダーに {dir} が既にあり、Windows ではこの名前と同じフォルダーとして扱われます。大文字と小文字が同じ名前を使うか、先にそのフォルダーを削除してください。',
   'label.empty': '表示名を入力してください',

@@ -13,7 +13,7 @@ import { RC_BEGIN, STATE_FILE, installRcBlocks, rcBlock, rcStatus, readSelectedD
 import { CODEX_DEFAULT_NAME, codexAccountDir, deleteCodexDir, readCodexAccountInfo, type CodexAccount } from '../src/codex/codexPaths';
 import { isSharedCodexAccount } from '../src/codex/codexShare';
 import { labelFor } from '../src/labels';
-import { assertTempHome, inLocale, LINUX_ONLY, makeTempHome, MemoryMemento, read, restoreEnv, type TempHome } from './helpers';
+import { assertTempHome, inLocale, LINUX_ONLY, makeTempHome, MemoryMemento, read, restoreEnv, snapshot, type TempHome } from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -207,6 +207,27 @@ describe('validateName (Codex)', () => {
     } finally {
       fs.rmSync(path.join(home, '.codex-main'));
       fs.rmSync(def, { recursive: true });
+    }
+  });
+
+  test('a name whose directory contains the linked default directory is rejected without changing either tree', () => {
+    const fixture = makeTempHome('codex-name-ancestor');
+    try {
+      const acc = codexAccountDir('work');
+      const def = path.join(fixture.home, '.codex');
+      const target = path.join(acc, 'sessions', 'main');
+      fs.mkdirSync(target, { recursive: true });
+      fs.writeFileSync(path.join(target, 'keep.txt'), 'default data');
+      fs.symlinkSync(target, def, 'junction');
+      const before = snapshot(fixture.home);
+      const state = new MemoryMemento();
+      const store = new CodexAccountStore(state);
+      const labels = new LabelStore(state, 'codex.labels');
+
+      assert.equal(validateName('work', store, labels), t('account.containsDefaultDir', { dir: acc, default: def }));
+      assert.deepEqual(snapshot(fixture.home), before);
+    } finally {
+      fixture.restore();
     }
   });
 });

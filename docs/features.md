@@ -190,7 +190,8 @@ Flow:
    - equals `default`: "Cannot use the reserved name default";
    - same as a registered account: "An account with this name already exists";
    - same as the current display name of any account on this page: "Same as an existing account's display name";
-   - its directory is the same as the default directory: "This account directory is the same as the default account directory".
+   - its directory is the same as the default directory: "This account directory is the same as the default account directory";
+   - its directory contains the default directory after resolving links: "Cannot use {dir} as an account: it contains the default account directory {default}."
    The `default`, existing-name and display-name checks ignore case (`Default`, `WORK` for an account `work`).
 3. The directory `~/.claude-<name>` is created (mode 0700) if it does not exist; an existing one is reused as is, without clearing.
 4. Depending on the checkbox (see "Shared and independent accounts" in section 5):
@@ -472,7 +473,7 @@ Manual warnings and switch confirmations use `vscode.env.remoteName`. A non-WSL 
 
 ### 10.7 Add
 
-1. Name validation as in 4.2 (`^[A-Za-z0-9_-]+$`, not `default`, not equal to the account name or display name of any account on the Codex page, all ignoring case, `~/.codex-<name>` not equal to `~/.codex` after resolving symlinks).
+1. Name validation as in 4.2 (`^[A-Za-z0-9_-]+$`, not `default`, not equal to the account name or display name of any account on the Codex page, all ignoring case, `~/.codex-<name>` neither equal to nor containing `~/.codex` after resolving symlinks).
 2. Create `~/.codex-<name>` (0700; reused if it exists). When this fails, the help line shows "Failed to create account directory: <reason>" and nothing is registered.
 3. Depending on the shared checkbox (see 10.12):
    - **shared** (checked): every shared entry is linked to `~/.codex` (missing entries are first created empty there); when something could not be linked, the warning lists the linking issues without claiming that the account is already linked (e.g. "not linked for safety: config.toml" when the default `config.toml` sets a login-related key);

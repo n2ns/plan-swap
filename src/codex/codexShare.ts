@@ -3,7 +3,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { t } from '../i18n';
-import { samePath, sameRealPath } from '../paths';
+import { realPathInside, samePath, sameRealPath } from '../paths';
 import { comparablePath, fileLinksAvailable, isWindows } from '../platform';
 import {
   type MergeCtx, type MigrateReport, type ShareReport, copyTree, defaultFolder, emptyReport, freeName, linkEntry, recordLink, type LinkOptions,
@@ -56,6 +56,11 @@ const SQLITE_SIDE_FILES = ['-wal', '-shm'];
 
 function isDefault(dir: string): boolean {
   return sameRealPath(dir, codexDefaultDir());
+}
+
+function assertNotContainingDefault(dir: string): void {
+  const def = codexDefaultDir();
+  if (realPathInside(dir, def)) throw new Error(t('account.containsDefaultDir', { dir, default: def }));
 }
 
 // Whether the default config.toml can be shared: missing, or readable text without identity keys/tables
@@ -126,6 +131,7 @@ export function isSharedCodexAccount(dir: string): boolean {
 export function ensureCodexLinks(dir: string, options: LinkOptions = {}, procRoot = '/proc'): ShareReport {
   const report = emptyReport();
   if (isDefault(dir)) return report;
+  assertNotContainingDefault(dir);
   const def = codexDefaultDir();
   const acc = path.resolve(dir);
   const shared = isSharedCodexAccount(acc);
@@ -282,6 +288,7 @@ function backupSqlite(src: string, rel: string, report: MigrateReport): void {
 export function migrateCodexToShared(dir: string, accountName: string, procRoot = '/proc', options: LinkOptions = {}): MigrateReport {
   const report: MigrateReport = { ...emptyReport(), moved: 0, duplicates: 0, keptBoth: [], backups: [] };
   if (isDefault(dir)) return report;
+  assertNotContainingDefault(dir);
   if (codexAccountBusy(dir, procRoot)) throw new Error(t('share.busyCodex', { name: accountName }));
   const def = codexDefaultDir();
   const acc = path.resolve(dir);
@@ -370,6 +377,7 @@ export function copyCodexIndependent(dir: string): { copied: string[]; skipped: 
   const copied: string[] = [];
   const skipped: Array<{ file: string; reason: string }> = [];
   if (isDefault(dir)) return { copied, skipped };
+  assertNotContainingDefault(dir);
   const def = codexDefaultDir();
   const acc = path.resolve(dir);
   fs.mkdirSync(acc, { recursive: true, mode: 0o700 });
@@ -420,6 +428,7 @@ const INDEPENDENT_CONFIG_ENTRIES = new Set(['config.toml', ...INDEPENDENT_COPY_F
 
 export function makeCodexIndependent(dir: string, accountName: string, procRoot = '/proc'): { removed: string[]; copied: string[]; skipped: Array<{ file: string; reason: string }> } {
   if (isDefault(dir)) throw new Error(t('unshare.default', { dir }));
+  assertNotContainingDefault(dir);
   if (!isSharedCodexAccount(dir)) throw new Error(t('unshare.notShared', { dir }));
   if (codexAccountBusy(dir, procRoot)) throw new Error(t('share.busyCodex', { name: accountName }));
   const def = codexDefaultDir();

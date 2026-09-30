@@ -55,6 +55,49 @@ const LINK_ONLY = CODEX_SHARED_ENTRIES.filter((e) => e.kind === 'link-only').map
 const linkedHere = (name: string): boolean => !(onWindows && name.endsWith('.sqlite'));
 const LINKED_ENTRIES = CODEX_SHARED_ENTRIES.filter((e) => linkedHere(e.name));
 
+describe('default directory ancestor safety', () => {
+  test('link repair, conversion and copying refuse an account containing the linked default directory without writes', () => {
+    const acc = newAccount('work');
+    const target = path.join(acc, 'sessions', 'main');
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.renameSync(def, target);
+    fs.symlinkSync(target, def, 'junction');
+    write(path.join(def, 'keep.txt'), 'default data');
+    write(path.join(def, 'config.toml'), 'model = "default"\n');
+    write(path.join(acc, 'AGENTS.md'), 'account rules');
+    const proc = fakeProc({});
+    const before = snapshot(home);
+
+    for (const operation of [
+      () => ensureCodexLinks(acc, {}, proc),
+      () => migrateCodexToShared(acc, 'work', proc),
+      () => copyCodexIndependent(acc),
+    ]) {
+      assert.throws(operation, { message: t('account.containsDefaultDir', { dir: acc, default: def }) });
+      assert.deepEqual(snapshot(home), before);
+    }
+  });
+
+  test('unlinking refuses a shared account containing the linked default directory without writes', () => {
+    const acc = newAccount('work');
+    const target = path.join(acc, 'local', 'default');
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.renameSync(def, target);
+    fs.symlinkSync(target, def, 'junction');
+    write(path.join(def, 'sessions', 'keep.jsonl'), 'default session');
+    write(path.join(def, 'config.toml'), 'model = "default"\n');
+    fs.symlinkSync(path.join(def, 'sessions'), path.join(acc, 'sessions'), 'junction');
+    const proc = fakeProc({});
+    const before = snapshot(home);
+
+    assert.equal(isSharedCodexAccount(acc), true);
+    assert.throws(() => makeCodexIndependent(acc, 'work', proc), {
+      message: t('account.containsDefaultDir', { dir: acc, default: def }),
+    });
+    assert.deepEqual(snapshot(home), before);
+  });
+});
+
 describe('ensureCodexLinks', SHARING, () => {
   test('creates absolute links and empty default entries with modes; link-only targets are not created; idempotent', () => {
     const acc = newAccount('a');

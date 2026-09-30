@@ -48,6 +48,40 @@ const exists = (p: string): boolean => {
   }
 };
 
+describe('Claude account writes protect a nested default directory', () => {
+  for (const linkedDefault of [false, true]) {
+    test(`refuses account writes when the default directory is ${linkedDefault ? 'linked into' : 'inside'} the account`, () => {
+      const acc = accountDir('parent');
+      const nested = path.join(acc, 'agents', 'main');
+      const configured = linkedDefault ? path.join(home, 'linked-default') : nested;
+      const fromJson = path.join(nested, '.claude.json');
+      const procRoot = path.join(home, 'fakeproc');
+      write(path.join(nested, '000-default-user-file.md'), 'default content');
+      write(fromJson, JSON.stringify({ mcpServers: { server: { command: 'server' } } }));
+      write(path.join(acc, 'own.md'), 'account content');
+      fs.mkdirSync(procRoot);
+      if (linkedDefault) fs.symlinkSync(nested, configured, 'junction');
+      process.env.CLAUDE_CONFIG_DIR = configured;
+      try {
+        const before = snapshot(home);
+        const operations = [
+          () => ensureClaudeLinks(acc, procRoot),
+          () => migrateClaudeToShared(acc, 'parent', procRoot),
+          () => mirrorClaudeJson(fromJson, acc),
+          () => copyClaudeIndependent(fromJson, acc),
+          () => makeClaudeIndependent(fromJson, acc),
+        ];
+        for (const operation of operations) {
+          assert.throws(operation, { message: t('account.containsDefaultDir', { dir: acc, default: configured }) });
+          assert.deepEqual(snapshot(home), before);
+        }
+      } finally {
+        delete process.env.CLAUDE_CONFIG_DIR;
+      }
+    });
+  }
+});
+
 describe('ensureClaudeLinks', SHARING, () => {
   test('creates absolute links and empty default entries with modes; idempotent', () => {
     const acc = accountDir('a');

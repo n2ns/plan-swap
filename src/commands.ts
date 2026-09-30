@@ -11,6 +11,7 @@ import {
   ensureAccountDir,
   findSameDir,
   readAccountInfo,
+  realPathInside,
   samePath,
   sameRealPath,
   caseVariantOf,
@@ -447,7 +448,10 @@ export function validateName(name: string, store: AccountStore, labels: LabelSto
   if (sameName(name, DEFAULT_NAME)) return t('name.reserved', { name: DEFAULT_NAME });
   if (store.all().some((a) => sameName(a.name, name))) return t('name.exists');
   if (store.all().some((a) => sameName(labelFor(a.name, labels), name))) return t('name.dupLabel');
-  if (sameRealPath(accountDir(name), defaultDir())) return t('name.sameAsDefaultDir');
+  const dir = accountDir(name);
+  const def = defaultDir();
+  if (sameRealPath(dir, def)) return t('name.sameAsDefaultDir');
+  if (realPathInside(dir, def)) return t('account.containsDefaultDir', { dir, default: def });
   // Windows: a kept folder that differs only in case is the same folder (its old sign-in would be reused)
   const variant = caseVariantOf(accountDir(name));
   if (variant) return t('name.dirCaseDiffers', { dir: variant });

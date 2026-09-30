@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { t } from './i18n';
-import { claudeJsonName, copySettingsStripped, defaultDir, samePath, sameRealPath, syncMcpServers, unchangedSince } from './paths';
+import { claudeJsonName, copySettingsStripped, defaultDir, realPathInside, samePath, sameRealPath, syncMcpServers, unchangedSince } from './paths';
 import {
   comparablePath, isOpaqueReparseDir, JunctionError, LinkPrivilegeError, copyLink, createLink, fileLinksAvailable, isWindows, pidAlive, renameReplacing, type StartTimeProbe,
   stripBom, windowsStartTimes,
@@ -81,6 +81,11 @@ export function linksTo(link: string, target: string): boolean {
 
 function isDefault(dir: string): boolean {
   return sameRealPath(dir, defaultDir());
+}
+
+function assertNotDefaultAncestor(dir: string): void {
+  const def = defaultDir();
+  if (realPathInside(dir, def)) throw new Error(t('account.containsDefaultDir', { dir: path.resolve(dir), default: def }));
 }
 
 export function emptyReport(): ShareReport {
@@ -214,6 +219,7 @@ export function mergeLines(src: string, dst: string): number {
 export function ensureClaudeLinks(dir: string, procRoot = '/proc', options: LinkOptions = {}): ShareReport {
   const report = emptyReport();
   if (isDefault(dir)) return report;
+  assertNotDefaultAncestor(dir);
   const def = defaultDir();
   const acc = path.resolve(dir);
   fs.mkdirSync(def, { recursive: true, mode: 0o700 });
@@ -312,6 +318,7 @@ function readSourceJson(file: string): Record<string, unknown> {
 export function mirrorClaudeJson(fromJson: string, dir: string, beforeCommit?: () => void): { changed: string[] } {
   const changed: string[] = [];
   if (isDefault(dir)) return { changed };
+  assertNotDefaultAncestor(dir);
   const source = readSourceJson(fromJson);
 
   const file = path.join(path.resolve(dir), claudeJsonName());
@@ -566,6 +573,7 @@ function appendHistory(src: string, dst: string): void {
 export function migrateClaudeToShared(dir: string, accountName: string, procRoot = '/proc', label = accountName, options: LinkOptions = {}): MigrateReport {
   const report: MigrateReport = { ...emptyReport(), moved: 0, duplicates: 0, keptBoth: [], backups: [] };
   if (isDefault(dir)) return report;
+  assertNotDefaultAncestor(dir);
   if (claudeAccountBusy(dir, procRoot)) throw new Error(t('share.busy', { name: label }));
   const def = defaultDir();
   const acc = path.resolve(dir);
@@ -697,6 +705,7 @@ function existsError(dst: string, existing: 'skip' | 'throw'): void {
 export function copyClaudeIndependent(fromJson: string, dir: string): { copied: string[] } {
   const copied: string[] = [];
   if (isDefault(dir)) return { copied };
+  assertNotDefaultAncestor(dir);
   const def = defaultDir();
   const acc = path.resolve(dir);
   fs.mkdirSync(acc, { recursive: true, mode: 0o700 });
@@ -758,6 +767,7 @@ const INDEPENDENT_CONFIG_ENTRIES = new Set(['settings.json', 'CLAUDE.md', ...IND
 
 export function makeClaudeIndependent(fromJson: string, dir: string): { removed: string[]; copied: string[] } {
   if (isDefault(dir)) throw new Error(t('unshare.default', { dir }));
+  assertNotDefaultAncestor(dir);
   if (!isSharedClaudeAccount(dir)) throw new Error(t('unshare.notShared', { dir }));
   const def = defaultDir();
   const acc = path.resolve(dir);
