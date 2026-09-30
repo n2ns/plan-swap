@@ -1,9 +1,10 @@
+import * as fs from 'node:fs';
 import * as vscode from 'vscode';
 import type { AccountStore } from './accounts';
 import { currentDir, settingEnvNames } from './claudeSettings';
 import { codexRunsInWsl, restartInfo } from './codex/codexCommands';
 import { codexDefaultDir } from './codex/codexPaths';
-import { effectiveDir, isEnabled, preCheck, readSelectedDir } from './codex/codexState';
+import { effectiveDir, isEnabled, preCheck, readSelectedDir, STATE_FILE } from './codex/codexState';
 import type { CodexAccountStore } from './codex/codexStore';
 import { buildDiagnosticsReport, type DiagnosticAccount, type DiagnosticSnapshot } from './diagnostics';
 import { claudeCredentialOverrides } from './environmentWarnings';
@@ -66,7 +67,7 @@ export async function collectDiagnostics(deps: DiagnosticsDeps): Promise<Diagnos
       selected: accountFor(selected, codexDefaultDir(), codexNamed),
       count: codexNamed.length,
       enabled,
-      pending: !samePath(effective, selected),
+      pending: (enabled === true || fs.existsSync(STATE_FILE())) && !samePath(effective, selected),
       runsInWsl,
       precheck,
       restart: restartMode,

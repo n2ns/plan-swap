@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import fsDefault from 'node:fs';
 import * as path from 'node:path';
+import { writeSelectedDir } from '../src/codex/codexState';
+import { buildDiagnosticsReport } from '../src/diagnostics';
 import { collectDiagnostics, registerDiagnosticsCommand, type DiagnosticsDeps } from '../src/diagnosticsCommand';
 import { t } from '../src/i18n';
 import { makeTempHome, withEnv } from './helpers';
@@ -52,6 +54,37 @@ test('diagnostics uses stable anonymous account numbers and reads no credentials
     });
   } finally { resetConfig(); tmp.restore(); }
 });
+
+for (const scenario of [
+  { name: 'does not request a restart for an unmanaged external CODEX_HOME', enabled: false, selection: 'absent', pending: false },
+  { name: 'reports a pending default when management is enabled without a state file', enabled: true, selection: 'absent', pending: true },
+  { name: 'reports a stored default selection even when management is incomplete', enabled: false, selection: 'default', pending: true },
+  { name: 'reports a stored named selection even when management is incomplete', enabled: false, selection: 'named', pending: true },
+] as const) {
+  test(`diagnostics ${scenario.name}`, async () => {
+    const tmp = makeTempHome('diagnostics-pending');
+    try {
+      const selected = path.join(tmp.home, '.codex-work');
+      if (scenario.selection !== 'absent') writeSelectedDir(scenario.selection === 'named' ? selected : undefined);
+      await withEnv({ CODEX_HOME: path.join(tmp.home, 'external-codex') }, async () => {
+        const snapshot = await collectDiagnostics({
+          store: { named: () => [] },
+          codexStore: { named: () => [{ name: 'work', dir: selected }] },
+          extensionVersion: '0.2.0', versions,
+          check: () => ({ ok: true }), enabled: () => scenario.enabled,
+          restart: () => ({ context: 'local', auto: false }),
+        });
+        assert.deepEqual(snapshot.codex.effective, { kind: 'external' });
+        assert.deepEqual(snapshot.codex.selected, scenario.selection === 'named' ? { kind: 'named', number: 1 } : { kind: 'default' });
+        assert.equal(snapshot.codex.pending, scenario.pending);
+        const report = buildDiagnosticsReport(snapshot);
+        const restartAdvice = t(process.platform === 'win32' ? 'diagnostics.nextManualWindows' : 'diagnostics.nextManualLocal');
+        assert.equal(report.includes(restartAdvice), scenario.pending);
+        assert.equal(report.includes(t('diagnostics.nextNone')), !scenario.pending);
+      });
+    } finally { tmp.restore(); }
+  });
+}
 
 test('diagnostics previews before copying and cancellation leaves clipboard unchanged', async (ctx) => {
   const tmp = makeTempHome('diagnostics-preview');
