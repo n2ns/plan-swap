@@ -108,7 +108,11 @@ async function interactions() {
   await page.locator(`${row('codex', 'work')} [data-action="rename"]`).click();
   const input = page.locator(`${row('codex', 'work')} .rename-field input`);
   await input.fill('Renamed Work');
-  await page.evaluate(() => window.preview.post({ type: 'state', state: window.preview.state() }));
+  await page.evaluate(() => {
+    const state = structuredClone(window.preview.state());
+    state.codex.accounts[0].email = 'updated@example.test';
+    window.preview.post({ type: 'state', state });
+  });
   assert.equal(await input.inputValue(), 'Renamed Work');
   assert.equal(await input.evaluate((el) => el === document.activeElement || el.getRootNode().activeElement === el), true);
   results.interactions.push('state push preserved rename input and focus');
@@ -131,6 +135,27 @@ async function interactions() {
   });
   assert.equal(await page.locator('#panel-codex .row-usage').count(), 0);
   results.interactions.push('host state without usage removed historical rows');
+
+  for (const mode of ['claude', 'codex']) {
+    await page.evaluate((mode) => window.preview.apply({ locale: 'en', width: 420, active: mode }), mode);
+    await page.locator(`${row(mode, 'work')} [data-action="rename"]`).click();
+    const rename = page.locator(`${row(mode, 'work')} .rename-field input`);
+    await rename.fill('');
+    const add = page.locator(`#panel-${mode} .add vscode-textfield input`);
+    await add.fill('fresh');
+    await page.evaluate((mode) => {
+      const state = structuredClone(window.preview.state());
+      state[mode].accounts[0].email = 'another@example.test';
+      window.preview.post({ type: 'state', state });
+    }, mode);
+    assert.equal(await add.evaluate((el) => el.getRootNode().activeElement === el), true, `${mode} add input lost focus to rename`);
+    await page.keyboard.type('-account');
+    assert.equal(await add.inputValue(), 'fresh-account');
+    assert.equal(await rename.inputValue(), '');
+    await page.screenshot({ path: path.join(output, `${mode}-focus-preserved.png`) });
+    results.interactions.push(`${mode} state rebuild preserved add focus while an invalid rename stayed open`);
+    await rename.press('Escape');
+  }
 }
 
 try {

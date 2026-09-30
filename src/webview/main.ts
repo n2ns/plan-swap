@@ -750,6 +750,7 @@ class Page {
     this.renderedKey = this.renderKey();
     // A rebuild replaces the focused node; remember what it was so the replacement gets the focus back
     const focused = this.focusedControl();
+    const renameFocused = this.renameField !== undefined && document.activeElement === this.renameField;
     this.rendering = true;
     try {
       this.updateSyncButton();
@@ -771,8 +772,8 @@ class Page {
     } finally {
       this.rendering = false;
     }
-    // Re-rendering moved the field node and lost focus; restore it
-    if (this.renameField && !this.root.hidden) this.renameField.focus();
+    // Restore the moved rename field only when it actually held focus before the rebuild.
+    if (renameFocused && this.renameField && !this.root.hidden) this.renameField.focus();
     else if (focused) this.focusControl(focused.dir, focused.action);
   }
 }
