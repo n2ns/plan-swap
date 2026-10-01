@@ -5,17 +5,21 @@ is still missing. Remove an item once it is done or decided.
 
 ## Known gaps
 
-- **Onboarding state is not mirrored.** A new shared Claude account gets `mcpServers` and the per-project keys, but not
-  `hasCompletedOnboarding` / `lastOnboardingVersion` (or `githubRepoPaths`) from the default `.claude.json`, so the CLI may
-  run its first-start onboarding again. Decide whether `mirrorClaudeJson` should copy these keys.
 - **Mirroring only runs on add, before a switch, after a conversion and on "Re-link".** MCP servers or project settings
   changed in the default account while a shared account is current are not propagated until the next switch or sync.
   Consider watching the default `.claude.json` and mirroring automatically.
-- **Claude prompt history "storage v5".** Claude Code 2.1.274 has a feature-flagged history backend that opens
-  `history.jsonl` with `O_NOFOLLOW`; when that flag is on for an account, its prompt history is silently not recorded
-  through the link. Still present in 2.1.284 on Windows too ("history.jsonl is a symlink or not a regular file, which the
-  storage interface never reads or writes through"; the default path reads and appends through the link, retention
-  pruning skips a link). Not detected or reported by the extension.
+- **Claude prompt history "storage v5" (watch on upgrades).** Claude Code has a history storage backend behind the
+  remote feature flag `tengu_hover_rest` (env override `CLAUDE_CODE_HOVER_REST`, cached per account in
+  `.claude.json` under `cachedGrowthBookFeatures`) whose code opens `history.jsonl` with `O_NOFOLLOW`. In the public
+  builds 2.1.274, 2.1.284 and 2.1.287 (Linux and Windows) its factory `tryCreateV5Backend` is an empty stub that always
+  returns `undefined`, so even with the flag on prompt history takes the old path and reads and appends through the
+  link (checked in the npm packages on 2026-10-02; no changelog entry or issue about it). The `claude project purge`
+  refusal text ("history.jsonl is a symlink or not a regular file…") belongs to the same unreachable branch. Nothing to
+  detect today; after each Claude Code upgrade, check whether the factory still returns nothing. Detecting the flag
+  would need reading named accounts' `.claude.json` beyond the current contract.
+- **History retention pruning skips the link.** Independent of the flag, Claude Code's old history path skips its
+  retention pruning when `history.jsonl` is not a regular file (only a debug log line), so the shared history is never
+  pruned by Claude Code.
 - **`claude project purge` in a shared account.** The repair merges lines back into the default `history.jsonl` by
   appending only, so the purged prompts stay in the shared history.
 - **Codex schema-versioned databases.** `state_5.sqlite`, `thread_history_1.sqlite`, `goals_1.sqlite`, `queue_1.sqlite`

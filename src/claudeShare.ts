@@ -36,6 +36,9 @@ const PROJECT_KEYS = [
   'allowedTools', 'mcpServers', 'enabledMcpjsonServers', 'disabledMcpjsonServers', 'mcpContextUris',
   'hasTrustDialogAccepted', 'hasClaudeMdExternalIncludesApproved', 'hasClaudeMdExternalIncludesWarningShown',
 ];
+// Top-level onboarding keys of .claude.json added from the default account when a signed-in account lacks them, so the
+// CLI does not run its first-start onboarding again; never for a signed-out account, whose onboarding is its sign-in
+const ONBOARDING_KEYS = ['hasCompletedOnboarding', 'lastOnboardingVersion'];
 // Folders copied once when an independent account is created
 const INDEPENDENT_COPY_DIRS = ['agents', 'commands', 'output-styles', 'hooks', 'rules'];
 const EMPTY_CONTENT: Record<string, string> = { 'settings.json': '{}\n' };
@@ -345,6 +348,18 @@ export function mirrorClaudeJson(fromJson: string, dir: string, beforeCommit?: (
   if (!isDeepStrictEqual(currentMcp, mcp)) {
     data.mcpServers = mcp;
     changed.push('mcpServers');
+  }
+
+  // Signed in as readAccountInfo decides it: an email in the file, or only the existence of the credentials file
+  const oauth = data.oauthAccount;
+  const signedIn = (isPlainObject(oauth) && typeof oauth.emailAddress === 'string' && oauth.emailAddress !== '')
+    || fs.existsSync(path.join(path.resolve(dir), '.credentials.json'));
+  if (signedIn) {
+    for (const k of ONBOARDING_KEYS) {
+      if (!Object.hasOwn(source, k) || Object.hasOwn(data, k)) continue;
+      data[k] = source[k];
+      changed.push(k);
+    }
   }
 
   const srcProjects = isPlainObject(source.projects) ? source.projects : {};

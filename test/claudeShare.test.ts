@@ -365,6 +365,32 @@ describe('mirrorClaudeJson', () => {
     assert.deepEqual(mirrorClaudeJson(src(), acc).changed, ['mcpServers']);
     assert.deepEqual(JSON.parse(read(file)), { userID: 'u', numStartups: 2, mcpServers: { a: { command: 'a' } } });
   });
+
+  test('onboarding keys are added only to a signed-in account that lacks them', () => {
+    write(src(), JSON.stringify({ hasCompletedOnboarding: true, lastOnboardingVersion: '2.1.286', githubRepoPaths: { 'o/r': ['/r'] } }));
+    // Signed out: its first-start onboarding is how it signs in, so nothing is added
+    const out = accountDir('out');
+    write(path.join(out, '.claude.json'), JSON.stringify({ userID: 'u' }));
+    assert.deepEqual(mirrorClaudeJson(src(), out).changed, []);
+    assert.equal(Object.hasOwn(JSON.parse(read(path.join(out, '.claude.json'))), 'hasCompletedOnboarding'), false);
+
+    // Signed in by email in the info file
+    const byEmail = accountDir('mail');
+    write(path.join(byEmail, '.claude.json'), JSON.stringify({ oauthAccount: { emailAddress: 'a@x' } }));
+    assert.deepEqual(mirrorClaudeJson(src(), byEmail).changed, ['hasCompletedOnboarding', 'lastOnboardingVersion']);
+    const data = JSON.parse(read(path.join(byEmail, '.claude.json')));
+    assert.equal(data.hasCompletedOnboarding, true);
+    assert.equal(data.lastOnboardingVersion, '2.1.286');
+    assert.equal(Object.hasOwn(data, 'githubRepoPaths'), false, 'githubRepoPaths is not mirrored');
+
+    // Signed in by the credentials file (existence only); a value of its own is kept
+    const byFile = accountDir('file');
+    write(path.join(byFile, '.claude.json'), JSON.stringify({ hasCompletedOnboarding: false, mcpServers: {} }));
+    write(path.join(byFile, '.credentials.json'), 'dummy');
+    assert.deepEqual(mirrorClaudeJson(src(), byFile).changed, ['lastOnboardingVersion']);
+    assert.equal(JSON.parse(read(path.join(byFile, '.claude.json'))).hasCompletedOnboarding, false);
+    assert.equal(read(path.join(byFile, '.credentials.json')), 'dummy');
+  });
 });
 
 // Fake /proc: <root>/<pid>/environ
