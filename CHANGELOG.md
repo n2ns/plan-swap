@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.2] - 2026-10-01
+
+### Added
+
+- Claude usage limits for subscription sign-ins, in the status bar tooltip and on every signed-in Claude row: session, weekly and model-specific windows with remaining percentage and reset time. Model-specific windows are collapsed by default under a "Model-specific limits" toggle in the sidebar.
+- Values come from the official `claude` CLI (`claude -p /usage`, which sends no prompt) and the usage cache in each account's own folder. Values older than 24 hours or past their reset are hidden, and missing data never shows as 0%.
+- The status bar text shows what is left of the current Claude account's tightest window, for example "Claude: work 58% left".
+- **Refresh Claude Usage Limits** checks the current account on demand, and a new **Refresh Usage Limits of All Claude Accounts** command (also a "Refresh all accounts" link in the tooltip) checks every signed-in Claude account one at a time with a cancellable progress notification and reports failures.
+- Scheduled Claude usage checks are skipped while the account's cached values are younger than 15 minutes, so several editor windows no longer each start `claude`. Manual refresh always checks.
+
 ## [0.2.1] - 2026-10-01
 
 ### Added
