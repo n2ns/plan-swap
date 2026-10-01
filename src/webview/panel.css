@@ -69,8 +69,12 @@ body {
 }
 .tab {
   flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   margin: 0;
-  padding: 4px 8px;
+  padding: 4px 6px;
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -81,11 +85,10 @@ body {
   cursor: pointer;
   outline: none;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   transition: background var(--ease), color var(--ease), box-shadow var(--ease);
 }
+.tab vscode-icon { flex: none; color: inherit; }
+.tab-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tab:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 6%, transparent); }
 .tab:focus-visible { box-shadow: 0 0 0 1px var(--accent) inset; }
 .tab.is-active {

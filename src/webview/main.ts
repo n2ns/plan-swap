@@ -907,8 +907,13 @@ class Page {
 
 // ---------- Tab bar and page assembly ----------
 const pages: Record<PanelMode, Page> = { claude: new Page('claude'), codex: new Page('codex') };
+// Codicon product glyphs; Codex has none of its own, so it uses the OpenAI mark
+const TAB_ICONS: Record<PanelMode, string> = { claude: 'claude', codex: 'openai' };
+const tabLabels: Record<PanelMode, HTMLElement> = { claude: h('span', { class: 'tab-label' }), codex: h('span', { class: 'tab-label' }) };
 function tabButton(mode: PanelMode): HTMLElement {
-  return onClick(h('button', { class: 'tab', type: 'button', role: 'tab', id: `tab-${mode}`, 'aria-controls': `panel-${mode}` }), () => {
+  const button = h('button', { class: 'tab', type: 'button', role: 'tab', id: `tab-${mode}`, 'aria-controls': `panel-${mode}` },
+    h('vscode-icon', { name: TAB_ICONS[mode], size: '14', 'aria-hidden': 'true' }), tabLabels[mode]);
+  return onClick(button, () => {
     if (activeTab === mode) return;
     setActiveTab(mode);
     send({ type: 'setTab', mode });
@@ -1006,7 +1011,7 @@ app.after(versionsCard, footer, footerVersion);
 // Re-translates everything built once; render() rebuilds the rest
 function applyLocale(): void {
   setLocale(state.locale);
-  for (const mode of MODES) tabButtons[mode].textContent = t(`tab.${mode}`);
+  for (const mode of MODES) tabLabels[mode].textContent = t(`tab.${mode}`);
   tabBar.setAttribute('aria-label', t('tabs.ariaLabel'));
   renderFooter();
   renderVersions();

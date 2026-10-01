@@ -7,6 +7,7 @@
 - Status bar settings: hide the PlanSwap item (`planswap.statusBar.enabled`), show only Claude or only Codex (`planswap.statusBar.products`), set the remaining percentages at which it turns to the warning and error colors (`planswap.statusBar.warningThreshold`, default 30, and `planswap.statusBar.errorThreshold`, default 10, both 0–100), and move it to the left side (`planswap.statusBar.alignment`).
 - `planswap.claude.confirmSwitch` (default on): turn it off to switch Claude accounts from the sidebar without the confirmation dialog. Codex switching still asks, because it needs an editor restart.
 - `planswap.claude.usageTimeoutSeconds` (default 30, 10–120) and `planswap.codex.usageTimeoutSeconds` (default 15, 5–120): how many seconds one usage limit check may run before it is reported as timed out, for automatic checks, manual refreshes and refresh-all alike.
+- The sidebar tabs show the Claude and OpenAI logos next to their names.
 
 ## [0.2.3] - 2026-10-02
 
