@@ -78,7 +78,7 @@ PlanSwap 让你同时保持多个 Claude Code 和 Codex 账号的登录状态，
 ## 切换 Claude 账号
 
 1. 在非当前账号的行上点击 **切换到此账号** 箭头图标。也可以双击卡片，或用 Tab 键聚焦卡片后按回车。
-2. 确认 **切换**。新的 Claude 会话将使用所选账号。
+2. 确认 **切换**。新的 Claude 会话将使用所选账号。关闭 `planswap.claude.confirmSwitch` 后，切换时不再弹出此对话框。
 3. 点击横幅中的 **重新加载窗口**，让已打开的 Claude 面板改用新账号。重新加载之前，已有会话仍使用旧账号。
 
 命令面板中的 **Claude 账号: 切换账号**（Claude Account: Switch Account）命令会显示账号选择器，切换时不弹出确认对话框。
@@ -179,7 +179,7 @@ PlanSwap 让你同时保持多个 Claude Code 和 Codex 账号的登录状态，
 
 ### 状态栏
 
-状态栏显示每个产品的短周期额度还剩多少，例如 `Claude 97% · Codex 82%`。当任一通用额度（包括较长周期的额度）剩余 30% 或更少时，其背景会变为主题的警告色；剩余 10% 或更少时变为错误色。
+状态栏显示每个产品的短周期额度还剩多少，例如 `Claude 97% · Codex 82%`。当任一通用额度（包括较长周期的额度）剩余 30% 或更少时，其背景会变为主题的警告色；剩余 10% 或更少时变为错误色。你可以更改这些阈值、只显示一个产品、把该项移到左侧或隐藏它（[更改语言和显示设置](#更改语言和显示设置)）。
 
 悬停可查看一张表格：每个产品一行表头（邮箱、套餐，以及账号可查询时的刷新图标），每项通用额度一行。点击它可打开 PlanSwap。
 
@@ -244,6 +244,12 @@ PlanSwap 启动或刷新时，会把在你的主目录中找到的、名称有�
 | `planswap.claude.usageRefreshMinutes` | `15` | 自动查询 Claude 的间隔分钟数，10–1440。 |
 | `planswap.codex.usageAutoRefresh` | `true` | 自动查询 Codex 用量额度。 |
 | `planswap.codex.usageRefreshMinutes` | `15` | 自动查询 Codex 的间隔分钟数，5–1440。 |
+| `planswap.claude.confirmSwitch` | `true` | 从侧边栏切换 Claude 账号前先确认。Codex 切换始终需要确认。关闭后，在有焦点的行上双击或按回车会立即切换。 |
+| `planswap.statusBar.enabled` | `true` | 在状态栏中显示 PlanSwap 项。 |
+| `planswap.statusBar.products` | `both` | 状态栏项包含的产品：`both`、`claude` 或 `codex`。 |
+| `planswap.statusBar.warningThreshold` | `30` | 剩余百分比小于或等于此值时显示警告色，0–100。 |
+| `planswap.statusBar.errorThreshold` | `10` | 剩余百分比小于或等于此值时显示错误色，0–100。优先于警告色。 |
+| `planswap.statusBar.alignment` | `right` | 所在的状态栏一侧：`left` 或 `right`。 |
 
 关闭自动查询后，刷新图标和命令仍然可用。侧边栏显示设置不影响状态栏。命令面板标题和侧边栏名称跟随编辑器的显示语言，而不是 `planswap.language`。
 

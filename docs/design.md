@@ -46,7 +46,7 @@ The following facts about usage limits were verified with Claude Code CLI 2.1.28
 ## 3. Overall design
 
 ```
-User clicks the "Switch" button in the sidebar panel (or double-clicks an account row) and confirms the modal
+User clicks the "Switch" button in the sidebar panel (or double-clicks an account row) and confirms the modal (skipped when `planswap.claude.confirmSwitch` is off)
   → the extension rewrites CLAUDE_CONFIG_DIR in claudeCode.environmentVariables
   → the official extension refreshes its panels 1 second later; new sessions use the new directory
   → a reload banner appears at the top of the sidebar panel (a notification when the panel is not visible); the user may reload the window (all panels start over with the new account)
@@ -102,7 +102,7 @@ The sidebar is a `WebviewView` (one view, `planswap.accounts`, holding a Claude 
 - The keyboard focus of a card is a `focusBorder` outline outside the card, so it never looks like the current card's (often blue) plan outline.
 - Avatars: dark and high-contrast themes draw the letter in the dark base color, because their chart colors are too light for white text; light themes keep the white letter and darken the disc.
 - On light themes `tier2` mixes the chart yellow with the foreground instead of white, since a softened yellow outline is nearly invisible on a light card; small error and warning text uses the theme color darkened there, where the raw colors are below 4.5:1 on the card (`panel.css`; `test/webviewColors.test.ts` only checks that colors are theme variables, not contrast).
-- A single click on a row does nothing, to avoid accidental switches; double-click or Enter switches after the same confirmation as the Switch button (6.1).
+- A single click on a row does nothing, to avoid accidental switches; double-click or Enter switches after the same confirmation as the Switch button (6.1); with `planswap.claude.confirmSwitch` off they switch directly, by the user's choice.
 - The usage refresh buttons need no pending state, because the host joins concurrent queries and guards refresh-all against re-entry.
 - The "Tools" section is collapsed by default to keep rarely used buttons out of the way; Re-link is shown only while the page has a linked account, since it does nothing otherwise.
 - The add-account form is created once and only shown or hidden, so list refreshes keep its typed text and focus.
@@ -132,7 +132,7 @@ The rule is in [AGENTS.md](../AGENTS.md#implementation-boundaries); the reasons:
 Text, tooltip layout and conditions: [Features §3](features.md#3-status-bar). The decisions behind them:
 
 - The text shows product names with the remaining percentage of their short window and no account label; the icon is `$(dashboard)` (a gauge), because the text is a quota reading, not an account label.
-- The background color is chosen separately from the text, from the lowest remaining percentage over all general windows of both products, long windows included (10% or less error, 30% or less warning; VS Code allows only `statusBarItem.errorBackground` and `statusBarItem.warningBackground`). A used-up 7-day window therefore colors the item even though the text shows the 5-hour figure. Model-specific windows never count. This is a decision about information, not styling: the text must stay short, while the color must not hide that something will run out soon.
+- The background color is chosen separately from the text, from the lowest remaining percentage over all general windows of the shown products, long windows included (at or below `planswap.statusBar.errorThreshold`, default 10%, error; at or below `planswap.statusBar.warningThreshold`, default 30%, warning; VS Code allows only `statusBarItem.errorBackground` and `statusBarItem.warningBackground`). A used-up 7-day window therefore colors the item even though the text shows the 5-hour figure. Model-specific windows never count. This is a decision about information, not styling: the text must stay short, while the color must not hide that something will run out soon.
 - The tooltip is deliberately terse, because a hover is a glance: one HTML table for all vendors (`MarkdownString.supportHtml`), so bars, percentages and reset times share their columns, with the email header spanning columns (`colspan`). A Markdown table cannot do this: it has no column spans, so an email in the first column widened the name column and left a wide gap between "5h" and its bar, and separate tables per vendor did not line up (both tried on 2026-10-02). Names, paths and collection times were dropped: they cost space and the sidebar shows them. The failure line is one short message for every reason, since the refresh-all warning still gives the detailed reasons.
 - VS Code's hover sanitizer keeps `table`/`tr`/`td`, `colspan`/`align`, `strong`/`em`, `a` and `span class="codicon codicon-<name>"` (source: `src/vs/base/browser/markdownRenderer.ts` and `domSanitize.ts`); markdown and `$(icon)` syntax are not parsed inside the HTML, so icons are codicon spans and the refresh link an `<a href="command:…">`.
 - Trust is limited to the two refresh commands (`isTrusted = { enabledCommands: [planswap.claude.refreshUsage, planswap.codex.refreshUsage] }`), so the hover itself can refresh the product it shows; every piece of outside text is escaped.
@@ -153,7 +153,7 @@ Panel actions call the flow functions in `commands.ts` directly through Webview 
 
 ### 6.1 Switch
 
-1. A target that already is the current account returns immediately. From the panel (switch button, double-click, Enter) a modal confirmation comes first; the Command Palette pick is already an explicit choice and has no extra confirmation. A named account whose directory does not exist is refused.
+1. A target that already is the current account returns immediately. From the panel (switch button, double-click, Enter) a modal confirmation comes first, unless `planswap.claude.confirmSwitch` is off; the Command Palette pick is already an explicit choice and has no extra confirmation. A named account whose directory does not exist is refused.
 2. A shared target is re-linked first (`ensureClaudeLinks` + `mirrorClaudeJson`, 6.7); steps that would move or unlink files of a running Claude process of that account are skipped and reported; any report or error only warns, and the switch continues.
 3. `setConfigDir` (`claudeSettings.ts`) writes a new array (never mutating the value returned by `get()`): other entries kept, every `CLAUDE_CONFIG_DIR` entry removed, and for a non-default target `{ name: "CLAUDE_CONFIG_DIR", value: <absolute path> }` appended; the object form is written back as an array. It writes with `ConfigurationTarget.Global` (fact 9); a failure shows `claude.switchFailed`, naming the two preconditions.
 4. On success the panel's `switchedTo` is set and the reload banner appears; when the panel is not visible, a non-modal notification with "Reload Window" is shown instead (not awaited). The status bar is updated.

@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { AccountStore } from '../src/accounts';
 import type { AccountsPanel } from '../src/accountsPanel';
 import { CLAUDE_SHARED_ENTRIES, ensureClaudeLinks, isSharedClaudeAccount } from '../src/claudeShare';
-import { registerCommands, shQuote, validateName } from '../src/commands';
+import { CONFIRM_SWITCH_SETTING, registerCommands, shQuote, validateName } from '../src/commands';
 import { t } from '../src/i18n';
 import { LabelStore } from '../src/labels';
 import { accountDir } from '../src/paths';
@@ -341,6 +341,26 @@ describe('panel message handlers (Claude)', () => {
       await h.handle({ type: 'switch', mode: 'claude', dir: solo });
       assert.equal(warning.mock.callCount(), 2);
       assert.equal(configured(), solo);
+    } finally {
+      h.dispose();
+    }
+  });
+
+  test('switch with planswap.claude.confirmSwitch on asks first, off switches without asking', async (ctx) => {
+    const h = harness();
+    const dir = await add(h, 'quick', false);
+    const asked = (calls: ReadonlyArray<{ arguments: unknown[] }>): number =>
+      calls.filter((c) => c.arguments[0] === t('claude.switchConfirm', { label: 'quick' })).length;
+    const info = ctx.mock.method(window, 'showInformationMessage', async () => undefined);
+    try {
+      setConfig('planswap', CONFIRM_SWITCH_SETTING, true);
+      await h.handle({ type: 'switch', mode: 'claude', dir });
+      assert.equal(asked(info.mock.calls), 1);
+      assert.notEqual(configured(), dir, 'a dismissed confirmation does not switch');
+      setConfig('planswap', CONFIRM_SWITCH_SETTING, false);
+      await h.handle({ type: 'switch', mode: 'claude', dir });
+      assert.equal(asked(info.mock.calls), 1, 'no second confirmation');
+      assert.equal(configured(), dir);
     } finally {
       h.dispose();
     }

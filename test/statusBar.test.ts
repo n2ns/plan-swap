@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
   StatusBar,
-  backgroundIdFor, codexUsageFailureText, codexUsageParts, escapeHtml, liveCodexUsage, relativeReset, remainingOf, shortWindow,
+  backgroundIdFor, statusBarSettings, codexUsageFailureText, codexUsageParts, escapeHtml, liveCodexUsage, relativeReset, remainingOf, shortWindow,
   refreshLink, statusAccessibilityLabel, statusText, usageBar, usageTable, windowRow,
 } from '../src/statusBar';
 import { AccountStore } from '../src/accounts';
@@ -13,7 +13,7 @@ import { CodexAccountStore } from '../src/codex/codexStore';
 import { LabelStore } from '../src/labels';
 import { setLocale, type Locale } from '../src/i18n';
 import { LINUX_ONLY, makeTempHome, MemoryMemento } from './helpers';
-import { htmlText, MarkdownString, resetConfig, setConfig, statusBarItems, StatusBarAlignment, ThemeColor, tooltipText } from './stubs/vscode';
+import { fireConfigurationChange, htmlText, MarkdownString, resetConfig, setConfig, statusBarItems, StatusBarAlignment, ThemeColor, tooltipText } from './stubs/vscode';
 import { installRcBlocks, writeSelectedDir } from '../src/codex/codexState';
 import type { CodexUsageState } from '../src/codex/codexUsageMonitor';
 import type { UsageResult } from '../src/codex/codexUsage';
@@ -109,6 +109,27 @@ describe('pure helpers', () => {
     assert.equal(backgroundIdFor(11), 'statusBarItem.warningBackground');
     assert.equal(backgroundIdFor(10), 'statusBarItem.errorBackground');
     assert.equal(backgroundIdFor(0), 'statusBarItem.errorBackground');
+  });
+
+  test('statusBarSettings: defaults, thresholds clamped to 0..100, unknown values fall back', () => {
+    resetConfig();
+    try {
+      assert.deepEqual(statusBarSettings(), { enabled: true, claude: true, codex: true, warningThreshold: 30, errorThreshold: 10, alignment: 'right' });
+      setConfig('planswap', 'statusBar.warningThreshold', 150);
+      setConfig('planswap', 'statusBar.errorThreshold', -5);
+      setConfig('planswap', 'statusBar.products', 'nope');
+      setConfig('planswap', 'statusBar.alignment', 'top');
+      assert.deepEqual(statusBarSettings(), { enabled: true, claude: true, codex: true, warningThreshold: 100, errorThreshold: 0, alignment: 'right' });
+      setConfig('planswap', 'statusBar.warningThreshold', 'x');
+      assert.equal(statusBarSettings().warningThreshold, 30);
+    } finally { resetConfig(); }
+  });
+
+  test('backgroundIdFor: custom thresholds, error winning when it is the higher one', () => {
+    assert.equal(backgroundIdFor(40, { warningThreshold: 50, errorThreshold: 20 }), 'statusBarItem.warningBackground');
+    assert.equal(backgroundIdFor(20, { warningThreshold: 50, errorThreshold: 20 }), 'statusBarItem.errorBackground');
+    assert.equal(backgroundIdFor(40, { warningThreshold: 30, errorThreshold: 60 }), 'statusBarItem.errorBackground');
+    assert.equal(backgroundIdFor(1, { warningThreshold: 0, errorThreshold: 0 }), undefined);
   });
 
   test('relativeReset is a short two-unit duration in the UI language', () => {
@@ -434,6 +455,115 @@ describe('both products in the status bar', LINUX_ONLY, () => {
       bar.setCodexUsage(codexOk(18, 91));
       assert.equal(color(item), 'statusBarItem.errorBackground');
     } finally { bar.dispose(); }
+  });
+
+  test('statusBar.enabled off hides the item and on shows it again', () => {
+    writeClaude([session(3)]);
+    const { bar, item } = make();
+    try {
+      setConfig('planswap', 'statusBar.enabled', false);
+      bar.update();
+      assert.equal(item.visible, false);
+      setConfig('planswap', 'statusBar.enabled', true);
+      bar.update();
+      assert.equal(item.visible, true);
+    } finally { bar.dispose(); resetConfig(); }
+  });
+
+  test('statusBar.products leaves the other product out of the text, tooltip and background', () => {
+    writeClaude([session(3), weekly(40)]);
+    const { bar, item } = make();
+    try {
+      bar.setClaudeUsage({ checking: false });
+      bar.setCodexUsage(codexOk(18, 95));
+      assert.equal(color(item), 'statusBarItem.errorBackground');
+      setConfig('planswap', 'statusBar.products', 'claude');
+      bar.update();
+      assert.equal(item.text, '$(dashboard) Claude 97%');
+      assert.ok(!tooltipText(item.tooltip).includes('codex.refreshUsage'));
+      assert.equal(color(item), undefined, 'the hidden Codex window does not color the item');
+      setConfig('planswap', 'statusBar.products', 'codex');
+      bar.update();
+      assert.equal(item.text, '$(dashboard) Codex 82%');
+      assert.ok(!tooltipText(item.tooltip).includes('me@example.com'));
+      assert.equal(color(item), 'statusBarItem.errorBackground');
+    } finally { bar.dispose(); resetConfig(); }
+  });
+
+  test('statusBar thresholds pick the background color', () => {
+    writeClaude([session(50), weekly(40)]);
+    const { bar, item } = make();
+    try {
+      bar.setClaudeUsage({ checking: false });
+      bar.setCodexUsage(codexOk(18, 50));
+      assert.equal(color(item), undefined);
+      setConfig('planswap', 'statusBar.warningThreshold', 50);
+      bar.update();
+      assert.equal(color(item), 'statusBarItem.warningBackground');
+      setConfig('planswap', 'statusBar.errorThreshold', 50);
+      bar.update();
+      assert.equal(color(item), 'statusBarItem.errorBackground');
+    } finally { bar.dispose(); resetConfig(); }
+  });
+
+  test('a statusBar setting change updates the item at once, and no longer after dispose', () => {
+    writeClaude([session(3)]);
+    const { bar, item } = make();
+    let disposed = false;
+    try {
+      setConfig('planswap', 'statusBar.enabled', false);
+      fireConfigurationChange('planswap.statusBar.enabled');
+      assert.equal(item.visible, false);
+      setConfig('planswap', 'statusBar.enabled', true);
+      fireConfigurationChange('planswap.sidebar.showEmail');
+      assert.equal(item.visible, false, 'other settings do not update the status bar');
+      fireConfigurationChange('planswap.statusBar.enabled');
+      assert.equal(item.visible, true);
+      bar.dispose();
+      disposed = true;
+      const count = statusBarItems.length;
+      setConfig('planswap', 'statusBar.alignment', 'left');
+      fireConfigurationChange('planswap.statusBar.alignment');
+      assert.equal(statusBarItems.length, count, 'a disposed bar creates no item');
+    } finally { if (!disposed) bar.dispose(); resetConfig(); }
+  });
+
+  test('statusBar.alignment replaces the item on the chosen side with the same content', () => {
+    writeClaude([session(3)]);
+    const { bar, item } = make();
+    try {
+      bar.setClaudeUsage({ checking: false });
+      setConfig('planswap', 'statusBar.alignment', 'left');
+      fireConfigurationChange('planswap.statusBar.alignment');
+      const left = statusBarItems.at(-1)!;
+      assert.notEqual(left, item);
+      assert.equal(item.disposed, true, 'the old item is disposed');
+      assert.equal(left.alignment, StatusBarAlignment.Left);
+      assert.equal(left.text, item.text);
+      assert.equal(left.command, 'workbench.view.extension.planswap');
+      assert.equal(left.visible, true);
+      bar.update();
+      assert.equal(statusBarItems.at(-1), left, 'an unchanged alignment keeps the item');
+    } finally { bar.dispose(); resetConfig(); }
+  });
+
+  test('statusBar.alignment changed while disabled: the new item stays hidden until enabled again', () => {
+    writeClaude([session(3)]);
+    const { bar, item } = make();
+    try {
+      bar.setClaudeUsage({ checking: false });
+      setConfig('planswap', 'statusBar.enabled', false);
+      setConfig('planswap', 'statusBar.alignment', 'left');
+      bar.update();
+      const left = statusBarItems.at(-1)!;
+      assert.equal(item.disposed, true);
+      assert.equal(left.alignment, StatusBarAlignment.Left);
+      assert.equal(left.visible, false);
+      setConfig('planswap', 'statusBar.enabled', true);
+      bar.update();
+      assert.equal(left.visible, true);
+      assert.equal(left.text, '$(dashboard) Claude 97% · Codex');
+    } finally { bar.dispose(); resetConfig(); }
   });
 
   test('Codex without a usage result shows its first line only; signed-out Claude shows no usage', () => {

@@ -18,7 +18,20 @@ export function resetConfig(): void {
   updates.length = 0;
 }
 
+type ConfigurationListener = (e: { affectsConfiguration(section: string): boolean }) => void;
+const configurationListeners = new Set<ConfigurationListener>();
+
+/** Fires workspace.onDidChangeConfiguration for a change of `changed` (e.g. 'planswap.statusBar.alignment') */
+export function fireConfigurationChange(changed: string): void {
+  const event = { affectsConfiguration: (section: string) => changed === section || changed.startsWith(`${section}.`) };
+  for (const listener of [...configurationListeners]) listener(event);
+}
+
 export const workspace = {
+  onDidChangeConfiguration(listener: ConfigurationListener) {
+    configurationListeners.add(listener);
+    return { dispose() { configurationListeners.delete(listener); } };
+  },
   async openTextDocument(options: { language: string; content: string }) { return options; },
   getConfiguration(section: string) {
     return {
@@ -87,13 +100,13 @@ export function tooltipText(tooltip: string | MarkdownString): string {
   return tooltip.value.replace(/ {2}\n/g, '\n').replace(/\\(.)/g, '$1');
 }
 
-export const statusBarItems: Array<{ alignment: number; text: string; tooltip: string | MarkdownString; command: string; name?: string; backgroundColor?: ThemeColor; accessibilityInformation?: { label: string; role?: string }; visible: boolean; show(): void; hide(): void; dispose(): void }> = [];
+export const statusBarItems: Array<{ alignment: number; text: string; tooltip: string | MarkdownString; command: string; name?: string; backgroundColor?: ThemeColor; accessibilityInformation?: { label: string; role?: string }; visible: boolean; disposed?: boolean; show(): void; hide(): void; dispose(): void }> = [];
 export const window = {
   state: { focused: true },
   async showTextDocument<T>(document: T): Promise<T> { return document; },
   createStatusBarItem(alignment: number) {
     const item: (typeof statusBarItems)[number] = { alignment, text: '', tooltip: '', command: '', visible: false,
-      show() { this.visible = true; }, hide() { this.visible = false; }, dispose() { this.visible = false; } };
+      show() { this.visible = true; }, hide() { this.visible = false; }, dispose() { this.visible = false; this.disposed = true; } };
     statusBarItems.push(item);
     return item;
   },

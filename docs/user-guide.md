@@ -78,7 +78,7 @@ For a signed-in account, the terminal icon opens the official CLI with that row'
 ## Switch Claude accounts
 
 1. Click the **Switch to this account** arrow icon on a row that is not current. You can also double-click the card, or focus it with Tab and press Enter.
-2. Confirm **Switch**. New Claude sessions use the selected account.
+2. Confirm **Switch**. New Claude sessions use the selected account. With `planswap.claude.confirmSwitch` off, the switch happens without this dialog.
 3. Click **Reload Window** in the banner to move open Claude panels to the new account. Existing sessions keep their old account until you reload.
 
 The Command Palette command **Claude Account: Switch Account** shows an account picker and switches without the confirmation dialog.
@@ -179,7 +179,7 @@ Other rows show the result of their last check. Values disappear after their res
 
 ### Status bar
 
-The status bar shows how much of each product's short limit is left, for example `Claude 97% · Codex 82%`. Its background turns to the theme's warning color when any general limit, including longer ones, is at 30% or less, and to the error color at 10% or less.
+The status bar shows how much of each product's short limit is left, for example `Claude 97% · Codex 82%`. Its background turns to the theme's warning color when any general limit, including longer ones, is at 30% or less, and to the error color at 10% or less. You can change these thresholds, show only one product, move the item to the left or hide it ([Change language and display settings](#change-language-and-display-settings)).
 
 Hover it for a table with one header row per product (email, plan and, when the account can be checked, a refresh icon) and one row per general limit. Click it to open PlanSwap.
 
@@ -244,6 +244,12 @@ Click the settings icon in the panel title bar, or run **PlanSwap: Open PlanSwap
 | `planswap.claude.usageRefreshMinutes` | `15` | Minutes between automatic Claude checks, 10–1440. |
 | `planswap.codex.usageAutoRefresh` | `true` | Check Codex usage limits automatically. |
 | `planswap.codex.usageRefreshMinutes` | `15` | Minutes between automatic Codex checks, 5–1440. |
+| `planswap.claude.confirmSwitch` | `true` | Ask before switching Claude accounts from the sidebar. Codex switching always asks. When off, double-click or Enter on a focused row switches at once. |
+| `planswap.statusBar.enabled` | `true` | Show the PlanSwap item in the status bar. |
+| `planswap.statusBar.products` | `both` | Products in the status bar item: `both`, `claude` or `codex`. |
+| `planswap.statusBar.warningThreshold` | `30` | Warning color at or below this remaining percentage, 0–100. |
+| `planswap.statusBar.errorThreshold` | `10` | Error color at or below this remaining percentage, 0–100. It wins over the warning color. |
+| `planswap.statusBar.alignment` | `right` | Side of the status bar: `left` or `right`. |
 
 With automatic checks off, the refresh icons and commands still work. The sidebar display settings do not change the status bar. Command Palette titles and the sidebar's name follow the editor's display language, not `planswap.language`.
 

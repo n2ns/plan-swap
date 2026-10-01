@@ -78,7 +78,7 @@ En una cuenta con sesión iniciada, el icono de terminal abre la CLI oficial con
 ## Cambiar de cuenta de Claude
 
 1. Haz clic en el icono de flecha **Cambiar a esta cuenta** de una fila que no sea la actual. También puedes hacer doble clic en la tarjeta, o enfocarla con Tab y pulsar Enter.
-2. Confirma con **Cambiar**. Las sesiones nuevas de Claude usan la cuenta seleccionada.
+2. Confirma con **Cambiar**. Las sesiones nuevas de Claude usan la cuenta seleccionada. Con `planswap.claude.confirmSwitch` desactivado, el cambio se hace sin este cuadro de diálogo.
 3. Haz clic en **Recargar ventana** en el aviso para pasar los paneles de Claude abiertos a la nueva cuenta. Las sesiones existentes conservan la cuenta anterior hasta que recargues.
 
 El comando **Cuenta de Claude: Cambiar de cuenta** (Claude Account: Switch Account) de la paleta de comandos muestra un selector de cuentas y cambia sin el diálogo de confirmación.
@@ -179,7 +179,7 @@ Las demás filas muestran el resultado de su última consulta. Los valores desap
 
 ### Barra de estado
 
-La barra de estado muestra cuánto queda del límite corto de cada producto, por ejemplo `Claude 97% · Codex 82%`. Su fondo cambia al color de advertencia del tema cuando algún límite general, incluidos los más largos, está al 30 % o menos, y al color de error al 10 % o menos.
+La barra de estado muestra cuánto queda del límite corto de cada producto, por ejemplo `Claude 97% · Codex 82%`. Su fondo cambia al color de advertencia del tema cuando algún límite general, incluidos los más largos, está al 30 % o menos, y al color de error al 10 % o menos. Puedes cambiar estos umbrales, mostrar un solo producto, mover el elemento a la izquierda u ocultarlo ([Cambiar el idioma y los ajustes de visualización](#cambiar-el-idioma-y-los-ajustes-de-visualización)).
 
 Pasa el puntero sobre ella para ver una tabla con una fila de encabezado por producto (correo, plan y, cuando la cuenta se puede consultar, un icono de actualizar) y una fila por límite general. Haz clic en ella para abrir PlanSwap.
 
@@ -244,6 +244,12 @@ Haz clic en el icono de ajustes de la barra de título del panel, o ejecuta **Pl
 | `planswap.claude.usageRefreshMinutes` | `15` | Minutos entre consultas automáticas de Claude, 10–1440. |
 | `planswap.codex.usageAutoRefresh` | `true` | Consultar automáticamente los límites de uso de Codex. |
 | `planswap.codex.usageRefreshMinutes` | `15` | Minutos entre consultas automáticas de Codex, 5–1440. |
+| `planswap.claude.confirmSwitch` | `true` | Pedir confirmación antes de cambiar de cuenta de Claude desde la barra lateral. El cambio de Codex siempre la pide. Si está desactivado, el doble clic o Enter en una fila con el foco cambia de inmediato. |
+| `planswap.statusBar.enabled` | `true` | Mostrar el elemento de PlanSwap en la barra de estado. |
+| `planswap.statusBar.products` | `both` | Productos del elemento de la barra de estado: `both`, `claude` o `codex`. |
+| `planswap.statusBar.warningThreshold` | `30` | Color de advertencia con este porcentaje restante o menos, 0–100. |
+| `planswap.statusBar.errorThreshold` | `10` | Color de error con este porcentaje restante o menos, 0–100. Tiene prioridad sobre el color de advertencia. |
+| `planswap.statusBar.alignment` | `right` | Lado de la barra de estado: `left` o `right`. |
 
 Con las consultas automáticas desactivadas, los iconos y comandos de actualizar siguen funcionando. Los ajustes de visualización de la barra lateral no cambian la barra de estado. Los títulos de la paleta de comandos y el nombre de la barra lateral siguen el idioma de visualización del editor, no `planswap.language`.
 

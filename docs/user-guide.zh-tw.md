@@ -78,7 +78,7 @@ PlanSwap 讓你同時保持多個 Claude Code 和 Codex 帳號的登入狀態，
 ## 切換 Claude 帳號
 
 1. 在非目前帳號的列上按一下 **切換到此帳號** 箭頭圖示。也可以按兩下卡片，或用 Tab 鍵將焦點移到卡片上後按 Enter。
-2. 確認 **切換**。新的 Claude 工作階段會使用所選帳號。
+2. 確認 **切換**。新的 Claude 工作階段會使用所選帳號。關閉 `planswap.claude.confirmSwitch` 後，切換時不再顯示此對話方塊。
 3. 按一下橫幅中的 **重新載入視窗**，讓已開啟的 Claude 面板改用新帳號。重新載入之前，現有工作階段仍使用舊帳號。
 
 命令選擇區中的 **Claude 帳號: 切換帳號**（Claude Account: Switch Account）命令會顯示帳號選擇器，切換時不會跳出確認對話方塊。
@@ -179,7 +179,7 @@ PlanSwap 讓你同時保持多個 Claude Code 和 Codex 帳號的登入狀態，
 
 ### 狀態列
 
-狀態列會顯示每個產品的短週期額度還剩多少，例如 `Claude 97% · Codex 82%`。當任一一般額度（包括較長週期的額度）剩餘 30% 或更少時，其背景會變為佈景主題的警告色；剩餘 10% 或更少時則變為錯誤色。
+狀態列會顯示每個產品的短週期額度還剩多少，例如 `Claude 97% · Codex 82%`。當任一一般額度（包括較長週期的額度）剩餘 30% 或更少時，其背景會變為佈景主題的警告色；剩餘 10% 或更少時則變為錯誤色。你可以變更這些臨界值、只顯示一個產品、將該項目移到左側或隱藏它（[變更語言和顯示設定](#變更語言和顯示設定)）。
 
 將游標停留在上面可查看一張表格：每個產品一列標題（電子郵件、方案，以及帳號可查詢時的重新整理圖示），每項一般額度一列。按一下它可開啟 PlanSwap。
 
@@ -244,6 +244,12 @@ PlanSwap 啟動或重新整理時，會把在你的主目錄中找到、名稱�
 | `planswap.claude.usageRefreshMinutes` | `15` | 自動查詢 Claude 的間隔分鐘數，10–1440。 |
 | `planswap.codex.usageAutoRefresh` | `true` | 自動查詢 Codex 用量額度。 |
 | `planswap.codex.usageRefreshMinutes` | `15` | 自動查詢 Codex 的間隔分鐘數，5–1440。 |
+| `planswap.claude.confirmSwitch` | `true` | 從側邊欄切換 Claude 帳號前先確認。Codex 切換一律需要確認。關閉後，在有焦點的列上按兩下或按 Enter 會立即切換。 |
+| `planswap.statusBar.enabled` | `true` | 在狀態列中顯示 PlanSwap 項目。 |
+| `planswap.statusBar.products` | `both` | 狀態列項目包含的產品：`both`、`claude` 或 `codex`。 |
+| `planswap.statusBar.warningThreshold` | `30` | 剩餘百分比小於或等於此值時顯示警告色，0–100。 |
+| `planswap.statusBar.errorThreshold` | `10` | 剩餘百分比小於或等於此值時顯示錯誤色，0–100。優先於警告色。 |
+| `planswap.statusBar.alignment` | `right` | 所在的狀態列一側：`left` 或 `right`。 |
 
 關閉自動查詢後，重新整理圖示和命令仍然可用。側邊欄顯示設定不會影響狀態列。命令選擇區標題和側邊欄名稱會跟隨編輯器的顯示語言，而不是 `planswap.language`。
 

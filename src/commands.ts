@@ -39,6 +39,9 @@ import { isWindows } from './platform';
 import { askCopyFallback } from './linkPolicy';
 import { accountTerminalShell } from './terminalShell';
 
+// planswap.claude.confirmSwitch: whether a switch from the panel asks a modal first (default on)
+export const CONFIRM_SWITCH_SETTING = 'claude.confirmSwitch';
+
 export interface Deps {
   store: AccountStore;
   panel: AccountsPanel;
@@ -60,9 +63,10 @@ export interface Deps {
  * re-resolved with panel.resolve and every new name checked with validateName; frontend checks are only hints.
  * QuickPick items, messages and terminal names use the display name (labelFor); logic uses name / dir.
  *
- * - Switch: the panel asks a modal first (the Command Palette pick is the confirmation); a missing non-default folder is
- *   an error; a shared account is re-linked and mirrored first (problems only warn); then setConfigDir, the reload
- *   banner (plus a notification while the panel is hidden). A failed settings write is reported.
+ * - Switch: the panel asks a modal first unless planswap.claude.confirmSwitch is off (the Command Palette pick is the
+ *   confirmation); a missing non-default folder is an error; a shared account is re-linked and mirrored first (problems
+ *   only warn); then setConfigDir, the reload banner (plus a notification while the panel is hidden). A failed settings
+ *   write is reported.
  * - Add: always answers addResult, also when the flow throws. Linking or copying failures only warn and the account is
  *   still registered. A shared add creates the folder, then asks askCopyFallback (Windows) before anything is linked.
  * - Share / unshare: named, non-current accounts only, after a modal; current-account and busy state are re-checked
@@ -350,10 +354,14 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
       case 'switch': {
         const a = panel.resolve(MODE, msg.dir);
         if (!a || isCurrent(a)) return;
-        // Panel entries (switch button, double-click, Enter) confirm first; the Command Palette pick is already explicit
-        const switchLabel = t('claude.switchButton');
-        const ok = await vscode.window.showInformationMessage(t('claude.switchConfirm', { label: labelOf(a) }), { modal: true }, switchLabel);
-        if (ok === switchLabel) await switchTo(a);
+        // Panel entries (switch button, double-click, Enter) confirm first unless planswap.claude.confirmSwitch is off;
+        // the Command Palette pick is already explicit
+        if (vscode.workspace.getConfiguration('planswap').get<boolean>(CONFIRM_SWITCH_SETTING, true) !== false) {
+          const switchLabel = t('claude.switchButton');
+          const ok = await vscode.window.showInformationMessage(t('claude.switchConfirm', { label: labelOf(a) }), { modal: true }, switchLabel);
+          if (ok !== switchLabel) return;
+        }
+        await switchTo(a);
         return;
       }
       case 'terminal': {

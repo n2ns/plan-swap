@@ -48,5 +48,16 @@
   "config.claudeUsageAutoRefresh.description": "自动查询当前 Claude 账号的用量额度（启动几秒后查一次，之后在窗口获得焦点且距上次查询超过间隔时再查）。手动刷新始终可用。",
   "config.claudeUsageRefreshMinutes.description": "自动查询当前 Claude 账号用量额度的间隔（分钟，10–1440）。",
   "config.codexUsageAutoRefresh.description": "自动查询当前生效 Codex 账号的用量额度（启动几秒后、登录变化后查一次，之后在窗口获得焦点且距上次查询超过间隔时再查）。手动刷新始终可用。",
-  "config.codexUsageRefreshMinutes.description": "自动查询当前生效 Codex 账号用量额度的间隔（分钟，5–1440）。"
+  "config.codexUsageRefreshMinutes.description": "自动查询当前生效 Codex 账号用量额度的间隔（分钟，5–1440）。",
+  "config.statusBarEnabled.description": "在状态栏中显示 PlanSwap 用量项。",
+  "config.statusBarProducts.description": "状态栏项包含哪些产品。未选中的产品不出现在其文字、悬停提示和背景色中；所选产品都未配置时隐藏该项。",
+  "config.statusBarProducts.both": "Claude 和 Codex",
+  "config.statusBarProducts.claude": "仅 Claude",
+  "config.statusBarProducts.codex": "仅 Codex",
+  "config.statusBarWarningThreshold.description": "所显示产品的通用用量额度中，最低剩余百分比小于或等于此值时，状态栏项显示警告背景色（0–100）。",
+  "config.statusBarErrorThreshold.description": "所显示产品的通用用量额度中，最低剩余百分比小于或等于此值时，状态栏项显示错误背景色（0–100）。优先于警告阈值。",
+  "config.statusBarAlignment.description": "PlanSwap 状态栏项所在的一侧。",
+  "config.statusBarAlignment.left": "状态栏左侧",
+  "config.statusBarAlignment.right": "状态栏右侧",
+  "config.claudeConfirmSwitch.description": "从侧边栏切换 Claude 账号（切换按钮、双击或回车）前先请求确认。Codex 切换始终需要确认。关闭后，在有焦点的行上双击或按回车会立即切换。"
 }

@@ -48,5 +48,16 @@
   "config.claudeUsageAutoRefresh.description": "Check the usage limits of the current Claude account automatically (a few seconds after start-up, then while the window is focused once the last check is older than the interval). Manual refreshes always work.",
   "config.claudeUsageRefreshMinutes.description": "Minutes between automatic usage limit checks of the current Claude account (10–1440).",
   "config.codexUsageAutoRefresh.description": "Check the usage limits of the effective Codex account automatically (a few seconds after start-up, after a sign-in change, then while the window is focused once the last check is older than the interval). Manual refreshes always work.",
-  "config.codexUsageRefreshMinutes.description": "Minutes between automatic usage limit checks of the effective Codex account (5–1440)."
+  "config.codexUsageRefreshMinutes.description": "Minutes between automatic usage limit checks of the effective Codex account (5–1440).",
+  "config.statusBarEnabled.description": "Show the PlanSwap usage item in the status bar.",
+  "config.statusBarProducts.description": "Products covered by the status bar item. A product left out is dropped from its text, tooltip and background color; the item is hidden when none of the selected products is set up.",
+  "config.statusBarProducts.both": "Claude and Codex",
+  "config.statusBarProducts.claude": "Claude only",
+  "config.statusBarProducts.codex": "Codex only",
+  "config.statusBarWarningThreshold.description": "The status bar item gets the warning background when the lowest remaining percentage of the shown products’ general usage limits is at or below this value (0–100).",
+  "config.statusBarErrorThreshold.description": "The status bar item gets the error background when the lowest remaining percentage of the shown products’ general usage limits is at or below this value (0–100). Takes precedence over the warning threshold.",
+  "config.statusBarAlignment.description": "Side of the status bar the PlanSwap item sits on.",
+  "config.statusBarAlignment.left": "Left side of the status bar",
+  "config.statusBarAlignment.right": "Right side of the status bar",
+  "config.claudeConfirmSwitch.description": "Ask for confirmation before switching Claude accounts from the sidebar (switch button, double-click or Enter). Codex switching always asks. When off, double-click or Enter on a focused row switches at once."
 }

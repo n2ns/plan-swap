@@ -243,6 +243,64 @@
           "scope": "application",
           "description": "%config.sidebarWeekly.description%"
         },
+        "planswap.statusBar.enabled": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "%config.statusBarEnabled.description%"
+        },
+        "planswap.statusBar.products": {
+          "type": "string",
+          "enum": [
+            "both",
+            "claude",
+            "codex"
+          ],
+          "default": "both",
+          "scope": "application",
+          "enumDescriptions": [
+            "%config.statusBarProducts.both%",
+            "%config.statusBarProducts.claude%",
+            "%config.statusBarProducts.codex%"
+          ],
+          "description": "%config.statusBarProducts.description%"
+        },
+        "planswap.statusBar.warningThreshold": {
+          "type": "number",
+          "default": 30,
+          "minimum": 0,
+          "maximum": 100,
+          "scope": "application",
+          "description": "%config.statusBarWarningThreshold.description%"
+        },
+        "planswap.statusBar.errorThreshold": {
+          "type": "number",
+          "default": 10,
+          "minimum": 0,
+          "maximum": 100,
+          "scope": "application",
+          "description": "%config.statusBarErrorThreshold.description%"
+        },
+        "planswap.statusBar.alignment": {
+          "type": "string",
+          "enum": [
+            "left",
+            "right"
+          ],
+          "default": "right",
+          "scope": "application",
+          "enumDescriptions": [
+            "%config.statusBarAlignment.left%",
+            "%config.statusBarAlignment.right%"
+          ],
+          "description": "%config.statusBarAlignment.description%"
+        },
+        "planswap.claude.confirmSwitch": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "%config.claudeConfirmSwitch.description%"
+        },
         "planswap.claude.usageAutoRefresh": {
           "type": "boolean",
           "default": true,

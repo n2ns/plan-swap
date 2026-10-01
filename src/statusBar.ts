@@ -83,13 +83,45 @@ export function shortWindow<W extends { usedPercent: number; windowMinutes?: num
   return best ?? general[0];
 }
 
+export interface StatusBarSettings {
+  enabled: boolean;
+  claude: boolean;
+  codex: boolean;
+  warningThreshold: number;
+  errorThreshold: number;
+  alignment: 'left' | 'right';
+}
+
+// A threshold setting clamped to 0..100 like the manifest range; anything that is not a number takes the default
+function threshold(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : fallback;
+}
+
+/** The planswap.statusBar.* settings, read on every update; unknown enum values take the defaults. */
+export function statusBarSettings(): StatusBarSettings {
+  const config = vscode.workspace.getConfiguration('planswap');
+  const products = config.get<string>('statusBar.products', 'both');
+  return {
+    enabled: config.get<boolean>('statusBar.enabled', true) !== false,
+    claude: products !== 'codex',
+    codex: products !== 'claude',
+    warningThreshold: threshold(config.get<number>('statusBar.warningThreshold'), 30),
+    errorThreshold: threshold(config.get<number>('statusBar.errorThreshold'), 10),
+    alignment: config.get<string>('statusBar.alignment', 'right') === 'left' ? 'left' : 'right',
+  };
+}
+
 /**
  * The only two background colors a status bar item may use; thresholds are on the lowest remaining percentage:
- * <= 10 error, <= 30 warning, otherwise (or undefined) none.
+ * <= errorThreshold error (it wins over warning), <= warningThreshold warning, otherwise (or undefined) none.
  */
-export function backgroundIdFor(lowest: number | undefined): 'statusBarItem.errorBackground' | 'statusBarItem.warningBackground' | undefined {
+export function backgroundIdFor(
+  lowest: number | undefined,
+  thresholds: Pick<StatusBarSettings, 'warningThreshold' | 'errorThreshold'> = { warningThreshold: 30, errorThreshold: 10 },
+): 'statusBarItem.errorBackground' | 'statusBarItem.warningBackground' | undefined {
   if (lowest === undefined) return undefined;
-  return lowest <= 10 ? 'statusBarItem.errorBackground' : lowest <= 30 ? 'statusBarItem.warningBackground' : undefined;
+  return lowest <= thresholds.errorThreshold ? 'statusBarItem.errorBackground'
+    : lowest <= thresholds.warningThreshold ? 'statusBarItem.warningBackground' : undefined;
 }
 
 type DurationFormatConstructor = new (locale: string, options: { style: string }) => { format(duration: Record<string, number>): string };
@@ -277,9 +309,11 @@ function candidatesOf(product: string, windows: ReadonlyArray<UsageWindow | Clau
 }
 
 /**
- * The right-aligned PlanSwap status bar item; a click opens the PlanSwap view.
+ * The PlanSwap status bar item; a click opens the PlanSwap view. The planswap.statusBar.* settings (statusBarSettings)
+ * apply on every update, and a change of any of them updates at once: enabled off hides the item, products leaves a vendor out of the text, tooltip and background,
+ * the thresholds pick the background, and an alignment change replaces the item (a status bar item's side is fixed).
  *
- * A vendor is shown when its effective configuration directory or a registered account directory exists (Claude also
+ * A selected vendor is shown when its effective configuration directory or a registered account directory exists (Claude also
  * when its resolved .claude.json exists); no network access or sign-in is needed, and with neither vendor the item is
  * hidden. Without a Codex store (initialization failed) only Claude is shown. Registered rows are matched with
  * findSameDir, so another spelling of a folder keeps its registered label. Codex identity comes from effectiveDir(),
@@ -297,7 +331,11 @@ function candidatesOf(product: string, windows: ReadonlyArray<UsageWindow | Clau
  * vendor's refresh link appears only when it shows usage and its usage state is set.
  */
 export class StatusBar implements vscode.Disposable {
-  private readonly item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right);
+  private alignment = statusBarSettings().alignment;
+  private item = createItem(this.alignment);
+  private readonly settingsListener = vscode.workspace.onDidChangeConfiguration((e) => {
+    if (e.affectsConfiguration('planswap.statusBar')) this.update();
+  });
   private codexUsage: CodexUsageState | undefined;
   private claudeUsage: ClaudeUsageState | undefined;
 
@@ -306,8 +344,6 @@ export class StatusBar implements vscode.Disposable {
     private readonly labels: LabelStore,
     private readonly codex?: { store: CodexAccountStore; labels: LabelStore },
   ) {
-    this.item.command = 'workbench.view.extension.planswap';
-    this.item.name = 'PlanSwap';
     this.update();
   }
 
@@ -324,14 +360,24 @@ export class StatusBar implements vscode.Disposable {
   }
 
   update(): void {
+    const settings = statusBarSettings();
+    if (settings.alignment !== this.alignment) {
+      this.item.dispose();
+      this.alignment = settings.alignment;
+      this.item = createItem(this.alignment);
+    }
+    if (!settings.enabled) {
+      this.item.hide();
+      return;
+    }
     const now = Date.now();
     const products: Product[] = [];
     const blocks: Block[] = [];
     const candidates: Candidate[] = [];
     const dir = currentDir();
     const explicit = isExplicitConfigDir(dir);
-    const hasClaude = fs.existsSync(dir) || fs.existsSync(claudeJsonPath(dir, explicit)) ||
-      this.store.named().some((account) => fs.existsSync(account.dir));
+    const hasClaude = settings.claude && (fs.existsSync(dir) || fs.existsSync(claudeJsonPath(dir, explicit)) ||
+      this.store.named().some((account) => fs.existsSync(account.dir)));
     if (hasClaude) {
       const account = sameDirAccount(this.store.all(), dir);
       const label = labelFor(account ? account.name : EXTERNAL_NAME, this.labels);
@@ -350,7 +396,7 @@ export class StatusBar implements vscode.Disposable {
       });
     }
     const codexDir = effectiveDir();
-    if (this.codex && (fs.existsSync(codexDir) || this.codex.store.all().some((account) => fs.existsSync(account.dir)))) {
+    if (this.codex && settings.codex && (fs.existsSync(codexDir) || this.codex.store.all().some((account) => fs.existsSync(account.dir)))) {
       const all = this.codex.store.all();
       const account = sameDirAccount(all, codexDir);
       const label = labelFor(account ? account.name : EXTERNAL_NAME, this.codex.labels);
@@ -390,7 +436,7 @@ export class StatusBar implements vscode.Disposable {
     // The color follows the window that runs out first, whichever it is; the text shows the short window only
     let lowest: Candidate | undefined;
     for (const c of candidates) if (!lowest || c.remaining < lowest.remaining) lowest = c;
-    const background = backgroundIdFor(lowest?.remaining);
+    const background = backgroundIdFor(lowest?.remaining, settings);
     this.item.text = products.length ? `$(dashboard) ${statusText(products)}` : '';
     this.item.accessibilityInformation = products.length ? { label: statusAccessibilityLabel(products), role: 'button' } : undefined;
     this.item.backgroundColor = background ? new vscode.ThemeColor(background) : undefined;
@@ -400,8 +446,17 @@ export class StatusBar implements vscode.Disposable {
   }
 
   dispose(): void {
+    this.settingsListener.dispose();
     this.item.dispose();
   }
+}
+
+// A new PlanSwap item on the given side; a click opens the PlanSwap view
+function createItem(alignment: StatusBarSettings['alignment']): vscode.StatusBarItem {
+  const item = vscode.window.createStatusBarItem(alignment === 'left' ? vscode.StatusBarAlignment.Left : vscode.StatusBarAlignment.Right);
+  item.command = 'workbench.view.extension.planswap';
+  item.name = 'PlanSwap';
+  return item;
 }
 
 // The registered account of dir, matched like the panel rows (another spelling of the folder counts as the same)

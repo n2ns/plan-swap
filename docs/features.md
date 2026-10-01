@@ -19,6 +19,7 @@ Settings (application scope, applied immediately):
 
 - `planswap.sidebar.showEmail`, `planswap.sidebar.showFiveHourLimit` and `planswap.sidebar.showWeeklyLimit` (default on) hide a row's email, 5-hour or 7-day window on both pages; `planswap.sidebar.showModelLimits` (default off) adds Claude's model-specific windows. None affects the status bar.
 - `planswap.claude.usageAutoRefresh` / `planswap.codex.usageAutoRefresh` (default on) and `planswap.claude.usageRefreshMinutes` (10–1440) / `planswap.codex.usageRefreshMinutes` (5–1440; both default 15, out-of-range values clamped) control each product's automatic usage checks. Off stops every automatic check while manual refreshes still work and shown values stay (except a Codex result whose sign-in changed); turning on or shortening the interval checks at once if due.
+- `planswap.claude.confirmSwitch` (default on): off switches Claude accounts from the panel without the modal confirmation (4.1). Codex switching always confirms (10.6).
 
 After a switch in this window, a banner names the new account until reload, offering **Reload Window**; closing only hides it, and a later switch updates the name.
 
@@ -41,7 +42,9 @@ The pencil makes the name editable: Enter, save or blur saves, an unchanged name
 
 ## 3. Status bar
 
-One right-side item shows `$(dashboard) Claude 97% · Codex 82%`: per product, the remaining percentage (rounded down) of its shortest general window, normally 5 hours, and no account name. A product without a usable figure (signed out, no subscription or an API key, no fresh result, Codex run inside WSL) shows its name only. A vendor without local configuration is left out; with neither, the item is hidden. A click opens the sidebar. The warning/error background follows the lowest general window of both products ([Claude design 5.4](design.md#54-status-bar)).
+One item shows `$(dashboard) Claude 97% · Codex 82%`: per product, the remaining percentage (rounded down) of its shortest general window, normally 5 hours, and no account name. A product without a usable figure (signed out, no subscription or an API key, no fresh result, Codex run inside WSL) shows its name only. A vendor without local configuration is left out; with none left, the item is hidden. A click opens the sidebar. The background turns to the error color when the lowest general window (never a model-specific one) of the shown products is at or below the error threshold, else to the warning color at or below the warning threshold ([Claude design 5.4](design.md#54-status-bar)).
+
+Settings (application scope, applied immediately): `planswap.statusBar.enabled` (default on) hides the item when off; `planswap.statusBar.products` (`both`, `claude`, `codex`; default `both`) drops a left-out product from the text, tooltip and background; `planswap.statusBar.warningThreshold` (default 30) and `planswap.statusBar.errorThreshold` (default 10), both 0–100, set the background thresholds; `planswap.statusBar.alignment` (`left` / `right`, default `right`) picks the side.
 
 - **Tooltip**, one block per shown product: a header with email and plan (else "API key", the account label, or not signed in) and a refresh link (`planswap.claude.refreshUsage` / `planswap.codex.refreshUsage`) while usage can be shown; one row per general window, shortest first, with bar, remaining percentage, reset time and a used-up mark; short status lines (checking, query failed (signing out is not a failure), limit reached, a Codex selection pending restart, Codex inside WSL on native Windows). A signed-out product shows its header only. The Codex block always describes this window's effective account, never the pending selection.
 - It updates with the sidebar (sections 6 and 10.10) and when `planswap.language` changes. The screen reader label spells the figures out.
@@ -52,7 +55,7 @@ Usage figures come only from the official CLIs run under each account ([account 
 
 ### Codex account usage observations
 
-Rows of signed-in ChatGPT accounts show each last-observed window (duration, time to reset, remaining-percentage bar at the status bar thresholds; a used-up window shows 0%), as Claude rows do ([Claude usage limits](#claude-usage-limits)). Accounts other than the effective one are updated only by `planswap.codex.refreshAllUsage` ([10.3.1](#1031-refresh-usage-limits-of-all-codex-accounts)). Observations survive restarts and expire after 24 hours, each window at its reset; retention and clearing rules: [Codex design 8.7](codex-design.md#87-usage-limits).
+Rows of signed-in ChatGPT accounts show each last-observed window (duration, time to reset, remaining-percentage bar colored at fixed 30% / 10% thresholds, which the `planswap.statusBar.*` threshold settings do not change; a used-up window shows 0%), as Claude rows do ([Claude usage limits](#claude-usage-limits)). Accounts other than the effective one are updated only by `planswap.codex.refreshAllUsage` ([10.3.1](#1031-refresh-usage-limits-of-all-codex-accounts)). Observations survive restarts and expire after 24 hours, each window at its reset; retention and clearing rules: [Codex design 8.7](codex-design.md#87-usage-limits).
 
 ### Claude usage limits
 
@@ -76,7 +79,7 @@ Claude account commands are in the Command Palette category "Claude Account"; pa
 
 ### 4.1 Switch account `planswap.switchAccount`
 
-From the row (switch button, double-click or Enter, with a modal confirmation) or the palette (non-current registered accounts; the pick is the confirmation). New sessions use the target, in every window (section 8); open sessions keep the old account until a reload, offered by the reload banner (or a notification while the sidebar is hidden). A missing named directory is refused; a shared target is re-linked first and problems only warn. A failed settings write is reported and the account stays unchanged.
+From the row (switch button, double-click or Enter, with a modal confirmation unless `planswap.claude.confirmSwitch` is off) or the palette (non-current registered accounts; the pick is the confirmation). New sessions use the target, in every window (section 8); open sessions keep the old account until a reload, offered by the reload banner (or a notification while the sidebar is hidden). A missing named directory is refused; a shared target is re-linked first and problems only warn. A failed settings write is reported and the account stays unchanged.
 
 ### 4.2 Add account `planswap.addAccount`
 
