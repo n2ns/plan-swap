@@ -51,8 +51,8 @@ describe('usage refresh tools from the panel buttons', () => {
     assert.deepEqual(await run(ctx, 'codex', 'refreshUsage'), ['planswap.codex.refreshUsage']);
   });
 
-  test('refreshAllUsage exists for Claude only; a Codex message is ignored', async (ctx) => {
+  test('refreshAllUsage runs the product\'s own refresh-all command', async (ctx) => {
     assert.deepEqual(await run(ctx, 'claude', 'refreshAllUsage'), ['planswap.claude.refreshAllUsage']);
-    assert.deepEqual(await run(ctx, 'codex', 'refreshAllUsage'), []);
+    assert.deepEqual(await run(ctx, 'codex', 'refreshAllUsage'), ['planswap.codex.refreshAllUsage']);
   });
 });

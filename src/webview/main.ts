@@ -268,7 +268,7 @@ class Page {
   private readonly addToggleText = h('span');
   // Usage refresh buttons left of "Add"; shown only while the page has an account whose limits can be queried
   private readonly refreshButton: HTMLElement;
-  private readonly refreshAllButton?: HTMLElement;
+  private readonly refreshAllButton: HTMLElement;
   private addOpen = false;
   private toolsOpen = false;
   private readonly addField: TextField;
@@ -317,8 +317,8 @@ class Page {
       if (this.addOpen) this.focusAdd();
     });
     this.refreshButton = withAction(toolbarButton('refresh', '', () => this.send({ type: 'tool', tool: 'refreshUsage' })), 'refreshUsage');
-    // Refreshing every account exists for Claude only (Codex queries the effective account)
-    if (mode === 'claude') this.refreshAllButton = withAction(toolbarButton('layers', '', () => this.send({ type: 'tool', tool: 'refreshAllUsage' })), 'refreshAllUsage');
+    // Refreshes every registered signed-in account of the page
+    this.refreshAllButton = withAction(toolbarButton('layers', '', () => this.send({ type: 'tool', tool: 'refreshAllUsage' })), 'refreshAllUsage');
     this.listSection = h(
       'section',
       { class: 'section' },
@@ -363,8 +363,8 @@ class Page {
     this.addToggle.title = t('add.title');
     this.listTitle.textContent = t('list.title');
     for (const [button, key] of [[this.refreshButton, 'usage.refreshTitle'], [this.refreshAllButton, 'usage.refreshAllTitle']] as const) {
-      button?.setAttribute('label', t(key));
-      button?.setAttribute('title', t(key));
+      button.setAttribute('label', t(key));
+      button.setAttribute('title', t(key));
     }
     this.addShared.textContent = t('add.shared');
     // A host add error is in the old locale; drop it so the help line shows the local validation in the new one
@@ -679,18 +679,18 @@ class Page {
     if (editing) classes.push('is-editing');
 
     // Built in edit mode too: CSS hides it there (visibility: hidden) so the card keeps its height and columns
-    // Text buttons (Switch, Log in) and icon buttons are two groups, so the icons wrap together and stay on the right
+    // Switch / Log in and the other actions are two groups, so the latter wrap together and stay on the right
     const textButtons = h('div', { class: 'row-btns' });
     const iconButtons = h('div', { class: 'row-icons' });
     {
       // Conversions are refused by the host for the current account and for the Codex account selected but not yet effective
       const convertible = a.kind === 'named' && !a.isCurrent && !selected;
-      // Primary action as a visible text button (double-click / Enter on the row stay as shortcuts);
+      // Switch uses the same toolbar style as the other icons (double-click / Enter on the row stay as shortcuts);
       // the second click of a double-click (detail > 1) would send a duplicate switch
       if (canSwitch) {
         textButtons.append(
           withAction(
-            onClick(h('vscode-button', { class: 'row-btn', secondary: true, title: t('row.switch') }, t('row.switchShort')), (e) => {
+            toolbarButton('arrow-swap', t('row.switch'), (e) => {
               if (e.detail > 1) return;
               this.lastSwitchAt = Date.now();
               this.send({ type: 'switch', dir: a.dir });
@@ -754,7 +754,7 @@ class Page {
           h('span', { class: 'row-name' }, ...nameWithTail(a.label, sharedIcon, renameButton)),
         );
     // Tags (plan, not logged in) sit at the right end of the name line and wrap under it only when they do not fit; the
-    // action buttons get their own line, except icon-only buttons (no Switch / Log in), which join the name line before the tags
+    // action buttons get their own line, except rows with no Switch / Log in, which join the name line before the tags
     const inlineActions = !textButtons.hasChildNodes();
     if (inlineActions) classes.push('inline-actions');
     const actions = h('div', { class: 'row-actions' }, textButtons.hasChildNodes() && textButtons, iconButtons.hasChildNodes() && iconButtons);
@@ -822,12 +822,12 @@ class Page {
     this.syncButton.hidden = !this.tab.accounts.some((a) => a.kind === 'named' && a.shared === true);
   }
 
-  // A refresh button acts on the current account (Claude: also on every registered one), so it needs one that can be queried;
+  // A refresh button acts on the current account (refresh-all: on every registered one), so it needs one that can be queried;
   // a refresh already running is joined by the host, so a repeated click starts nothing new
   private updateUsageButtons(): void {
     const accounts = receivedState && this.tab.enabled ? this.tab.accounts : [];
     this.refreshButton.hidden = !accounts.some((a) => a.isCurrent && a.usageEligible);
-    if (this.refreshAllButton) this.refreshAllButton.hidden = !accounts.some((a) => a.kind !== 'external' && a.usageEligible);
+    this.refreshAllButton.hidden = !accounts.some((a) => a.kind !== 'external' && a.usageEligible);
   }
 
   private renderList(): void {

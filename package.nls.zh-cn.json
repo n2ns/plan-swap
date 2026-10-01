@@ -21,6 +21,7 @@
   "command.claude.refreshAllUsage": "刷新所有 Claude 账号的用量额度",
   "command.claude.refreshUsage": "刷新 Claude 用量额度",
   "command.codex.refreshUsage": "刷新 Codex 用量额度",
+  "command.codex.refreshAllUsage": "刷新所有 Codex 账号的用量额度",
   "command.tools.openClaudeMd": "打开全局 CLAUDE.md",
   "category.tools": "PlanSwap",
   "command.tools.openAgentsMd": "打开全局 AGENTS.md",
@@ -42,5 +43,9 @@
   "config.sidebarModelLimits.description": "在侧边栏中显示 Claude 的按模型用量限额。开启后，直接显示在通用限额下方。",
   "config.sidebarEmail.description": "在侧边栏中显示各账号的邮箱。",
   "config.sidebarFiveHour.description": "在侧边栏中显示各账号的 5 小时用量限额。",
-  "config.sidebarWeekly.description": "在侧边栏中显示各账号的 7 天用量限额。"
+  "config.sidebarWeekly.description": "在侧边栏中显示各账号的 7 天用量限额。",
+  "config.claudeUsageAutoRefresh.description": "自动查询当前 Claude 账号的用量额度（启动几秒后查一次，之后在窗口获得焦点且距上次查询超过间隔时再查）。手动刷新始终可用。",
+  "config.claudeUsageRefreshMinutes.description": "自动查询当前 Claude 账号用量额度的间隔（分钟，10–1440）。",
+  "config.codexUsageAutoRefresh.description": "自动查询当前生效 Codex 账号的用量额度（启动几秒后、登录变化后查一次，之后在窗口获得焦点且距上次查询超过间隔时再查）。手动刷新始终可用。",
+  "config.codexUsageRefreshMinutes.description": "自动查询当前生效 Codex 账号用量额度的间隔（分钟，5–1440）。"
 }

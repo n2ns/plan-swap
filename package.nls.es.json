@@ -21,6 +21,7 @@
   "command.claude.refreshAllUsage": "Actualizar límites de uso de todas las cuentas de Claude",
   "command.claude.refreshUsage": "Actualizar límites de uso de Claude",
   "command.codex.refreshUsage": "Actualizar límites de uso de Codex",
+  "command.codex.refreshAllUsage": "Actualizar límites de uso de todas las cuentas de Codex",
   "command.tools.openClaudeMd": "Abrir CLAUDE.md global",
   "category.tools": "PlanSwap",
   "command.tools.openAgentsMd": "Abrir AGENTS.md global",
@@ -42,5 +43,9 @@
   "config.sidebarModelLimits.description": "Muestra los límites de uso de Claude por modelo en la barra lateral, directamente debajo de los límites generales.",
   "config.sidebarEmail.description": "Muestra el correo de cada cuenta en la barra lateral.",
   "config.sidebarFiveHour.description": "Muestra el límite de uso de 5 horas de cada cuenta en la barra lateral.",
-  "config.sidebarWeekly.description": "Muestra el límite de uso de 7 días de cada cuenta en la barra lateral."
+  "config.sidebarWeekly.description": "Muestra el límite de uso de 7 días de cada cuenta en la barra lateral.",
+  "config.claudeUsageAutoRefresh.description": "Consultar automáticamente los límites de uso de la cuenta actual de Claude (unos segundos después del inicio y luego, con la ventana enfocada, cuando la última consulta sea más antigua que el intervalo). La actualización manual siempre funciona.",
+  "config.claudeUsageRefreshMinutes.description": "Minutos entre consultas automáticas de los límites de uso de la cuenta actual de Claude (10–1440).",
+  "config.codexUsageAutoRefresh.description": "Consultar automáticamente los límites de uso de la cuenta efectiva de Codex (unos segundos después del inicio, tras un cambio de sesión y luego, con la ventana enfocada, cuando la última consulta sea más antigua que el intervalo). La actualización manual siempre funciona.",
+  "config.codexUsageRefreshMinutes.description": "Minutos entre consultas automáticas de los límites de uso de la cuenta efectiva de Codex (5–1440)."
 }

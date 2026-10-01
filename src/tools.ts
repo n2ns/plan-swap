@@ -10,7 +10,7 @@ import { askCopyFallback } from './linkPolicy';
 import { describeShareReport, type ShareReportLike } from './shareReport';
 import type { PanelMode, ToolId } from './protocol';
 import { t } from './i18n';
-import { CLAUDE_REFRESH_ALL_USAGE_COMMAND, CLAUDE_REFRESH_USAGE_COMMAND, REFRESH_USAGE_COMMAND } from './statusBar';
+import { CLAUDE_REFRESH_ALL_USAGE_COMMAND, CLAUDE_REFRESH_USAGE_COMMAND, CODEX_REFRESH_ALL_USAGE_COMMAND, REFRESH_USAGE_COMMAND } from './statusBar';
 import { isWindows } from './platform';
 import { accountTerminalShell } from './terminalShell';
 
@@ -83,8 +83,7 @@ export async function runTool(mode: PanelMode, tool: ToolId, deps: ToolDeps): Pr
       await vscode.commands.executeCommand(mode === 'claude' ? CLAUDE_REFRESH_USAGE_COMMAND : REFRESH_USAGE_COMMAND);
       return;
     case 'refreshAllUsage':
-      // Claude only: the Codex page has no such button, and a message that claims it is ignored
-      if (mode === 'claude') await vscode.commands.executeCommand(CLAUDE_REFRESH_ALL_USAGE_COMMAND);
+      await vscode.commands.executeCommand(mode === 'claude' ? CLAUDE_REFRESH_ALL_USAGE_COMMAND : CODEX_REFRESH_ALL_USAGE_COMMAND);
       return;
     case 'cliVersions':
       if (deps.postVersions) deps.postVersions(await collectVersions());

@@ -194,20 +194,22 @@ export function oneAtATime(): <T>(task: () => Promise<T>) => Promise<T> {
 }
 
 export interface UsageTarget { dir: string; label: string }
+// A query that threw is reported as failed with the error message (both products' results have this shape)
+type QueryThrew = { ok: false; reason: 'failed'; detail: string };
 
 /**
- * Queries the targets one after another (never two claude processes at once); stops before the next target once
+ * Queries the targets one after another (never two claude or codex processes at once); stops before the next target once
  * cancelled() is true. Returns each target's result in order; onStep is called before each query.
  */
-export async function queryEach(
-  targets: UsageTarget[], query: (dir: string) => Promise<ClaudeQueryResult>,
+export async function queryEach<R = ClaudeQueryResult>(
+  targets: UsageTarget[], query: (dir: string) => Promise<R>,
   onStep: (target: UsageTarget, index: number) => void = () => undefined, cancelled: () => boolean = () => false,
-): Promise<Array<{ target: UsageTarget; result: ClaudeQueryResult }>> {
-  const out: Array<{ target: UsageTarget; result: ClaudeQueryResult }> = [];
+): Promise<Array<{ target: UsageTarget; result: R | QueryThrew }>> {
+  const out: Array<{ target: UsageTarget; result: R | QueryThrew }> = [];
   for (const [index, target] of targets.entries()) {
     if (cancelled()) break;
     onStep(target, index);
-    let result: ClaudeQueryResult;
+    let result: R | QueryThrew;
     try {
       result = await query(target.dir);
     } catch (e) {

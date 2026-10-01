@@ -378,18 +378,18 @@ details[open] > summary > .chevron { transform: rotate(90deg); }
 .row-tags:empty { display: none; }
 .row-hint { grid-area: hint; color: var(--secondary); font-size: max(11px, 0.8em); margin-top: 4px; min-width: 0; overflow-wrap: anywhere; }
 .row-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px; flex: none; max-width: 100%; margin-left: auto; }
-/* The text buttons (Switch, Log in) are always fully visible; the icon buttons are dimmed until the row is hovered or focused */
+/* Log in stays fully visible; icon buttons are dimmed until the row is hovered or focused */
 .row-actions .icon-btn { opacity: 0.75; transition: opacity var(--ease); }
 .row:hover .row-actions .icon-btn, .row:focus-within .row-actions .icon-btn { opacity: 1; }
 
 /* The buttons stay on their own line below */
 .row-actions { grid-area: actions; justify-self: stretch; margin-top: 4px; margin-left: 0; }
-/* Text buttons (Switch, Log in) stay on the left, the icon group is pushed to the right; no gap between the two groups
+/* Switch and Log in stay on the left, the other actions are pushed to the right; no gap between the two groups
    (the icons' own padding separates them), so a group that exactly fits is not pushed down by rounding */
 .row-actions { justify-content: flex-start; column-gap: 0; }
 .row-btns, .row-icons { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .row-icons { margin-left: auto; }
-/* Icon buttons only: they sit on the name line, before the tag group, so the plan tag stays at the right end */
+/* Without Switch / Log in, actions sit on the name line before the tag group, so the plan tag stays at the right end */
 .row-head > .row-actions { flex: none; margin-top: 0; }
 .row-sub, .row-hint, .row-error { margin-top: 1px; }
 /* Edit mode: the edit line takes the whole name line (without pushing the hidden buttons onto a new line), and the
@@ -407,7 +407,7 @@ details[open] > summary > .chevron { transform: rotate(90deg); }
   --vscode-toolbar-hoverBackground: color-mix(in srgb, var(--ink) 12%, transparent);
   --vscode-toolbar-activeBackground: color-mix(in srgb, var(--ink) 18%, transparent);
 }
-/* Small text buttons in a card: Switch (secondary) and Log in (primary) */
+/* Small text button in a card: Log in (primary) */
 .row-btn {
   height: 24px;
   --vscode-font-size: 11px;

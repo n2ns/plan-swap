@@ -25,7 +25,7 @@ const SHORT_RESET = `(seconds) => {
   return new Intl.DurationFormat(lang, { style: lang === 'ja' ? 'short' : 'narrow' }).format(parts);
 }`;
 const exhausted = { en: 'Used up', 'zh-cn': '已用完', es: 'Agotado', ja: '使い切り' };
-const switchLabel = { en: 'Switch', 'zh-cn': '切换', es: 'Cambiar', ja: '切り替え' };
+const switchLabel = { en: 'Switch to this account', 'zh-cn': '切换到此账号', es: 'Cambiar a esta cuenta', ja: 'このアカウントに切り替え' };
 const refreshTitle = {
   en: 'Refresh usage limits of the current account', 'zh-cn': '刷新当前账号的用量限额',
   es: 'Actualizar los límites de uso de la cuenta actual', ja: '現在のアカウントの使用上限を更新',
@@ -89,6 +89,9 @@ async function cardChecks(mode, locale, width) {
       return {
         dir: row.dataset.dir, title: row.title, ariaCurrent: row.getAttribute('aria-current'),
         switchText: button?.textContent.trim() ?? null, switchTitle: button?.title ?? null,
+        switchLabel: button?.shadowRoot?.querySelector('button')?.getAttribute('aria-label') ?? null,
+        switchIcon: button?.getAttribute('icon') ?? null,
+        switchSize: button ? `${rect(button).width}x${rect(button).height}` : null,
         switchVisible: !!button && rect(button).width > 0 && rect(button).height > 0,
         switchInside: !!button && rect(button).left >= rect(row).left && rect(button).right <= rect(row).right,
         pillBackground: pill && getComputedStyle(pill).backgroundColor, pillImage: pill && getComputedStyle(pill).backgroundImage,
@@ -121,7 +124,7 @@ async function cardChecks(mode, locale, width) {
         actionsFromContentStart: Math.abs(rect(row.querySelector('.row-actions')).left - rect(row.querySelector('.avatar')).left) <= 1,
         actionsInNameLine: rect(row.querySelector('.row-actions')).top < rect(row.querySelector('.row-title')).bottom,
         textButtonsLeft: (() => {
-          const first = row.querySelector('.row-actions .row-btn');
+          const first = row.querySelector('.row-btns > :first-child');
           return !first || Math.abs(rect(first).left - rect(row.querySelector('.row-actions')).left) <= 1;
         })(),
         iconsRight: (() => {
@@ -153,7 +156,11 @@ async function cardChecks(mode, locale, width) {
       assert.equal(row.switchText, null, `current card has a Switch button at ${where}`);
     } else {
       assert.equal(row.ariaCurrent, null);
-      assert.equal(row.switchText, switchLabel[locale], `Switch button text at ${where}`);
+      assert.equal(row.switchText, '', `Switch button must have no visible text at ${where}`);
+      assert.equal(row.switchTitle, switchLabel[locale], `Switch button tooltip at ${where}`);
+      assert.equal(row.switchLabel, switchLabel[locale], `Switch button accessible name at ${where}`);
+      assert.equal(row.switchIcon, 'arrow-swap', `Switch button icon at ${where}`);
+      assert.equal(row.switchSize, '24x24', `Switch button size at ${where}`);
       assert.equal(row.switchVisible && row.switchInside, true, `Switch button hidden or outside the card at ${where}`);
     }
     // Every plan tag is a neutral outline, the current card's included
@@ -161,7 +168,7 @@ async function cardChecks(mode, locale, width) {
       assert.equal(row.pillBackground, 'rgba(0, 0, 0, 0)', `plan tag is filled at ${where}`);
       assert.equal(row.pillImage, 'none');
     }
-    // Icon-only button groups move to the name line; otherwise text buttons sit left and icons right
+    // Without Switch / Log in, actions move to the name line; otherwise the two groups stay left and right
     assert.equal(row.actionsInNameLine, row.inlineActions, `button group line at ${where}`);
     assert.equal(row.pillRightmost, true, `plan tag is not at the right end of the name line at ${where}`);
     assert.equal(row.tagsWrappedNeedlessly, false, `tag group wrapped although it fits beside the name at ${where}`);
@@ -405,7 +412,7 @@ async function refreshButtons(locale, width) {
   for (const mode of ['claude', 'codex']) {
     const where = `${mode} ${name(locale, width)}`;
     await page.evaluate(({ locale, width, mode }) => { window.preview.apply({ locale, width, active: mode }); window.preview.clearMessages(); }, { locale, width, mode });
-    const tools = mode === 'claude' ? ['refreshUsage', 'refreshAllUsage'] : ['refreshUsage'];
+    const tools = ['refreshUsage', 'refreshAllUsage'];
     const data = await page.evaluate(({ mode, tools }) => {
       const panel = document.querySelector(`#panel-${mode}`);
       const rect = (el) => {
@@ -468,18 +475,26 @@ async function refreshButtonVisibility() {
   for (const mode of ['claude', 'codex']) {
     await page.evaluate((mode) => window.preview.apply({ locale: 'en', width: 280, active: mode }), mode);
     const visible = () => page.locator(`#panel-${mode} .section-title [data-action^="refresh"]`).evaluateAll((els) => els.filter((el) => el.getBoundingClientRect().width > 0).map((el) => el.dataset.action));
-    assert.deepEqual(await visible(), mode === 'claude' ? ['refreshUsage', 'refreshAllUsage'] : ['refreshUsage']);
-    // The current account cannot be queried: the current button goes (Claude keeps "all" while another account can be)
+    assert.deepEqual(await visible(), ['refreshUsage', 'refreshAllUsage']);
+    // The current account cannot be queried: the current button goes ("all" stays while another account can be)
     await page.evaluate((mode) => {
       const state = structuredClone(window.preview.state());
       state[mode].accounts.find((a) => a.isCurrent).usageEligible = undefined;
       window.preview.post({ type: 'state', state });
     }, mode);
-    assert.deepEqual(await visible(), mode === 'claude' ? ['refreshAllUsage'] : []);
+    assert.deepEqual(await visible(), ['refreshAllUsage']);
     // No account can be queried
     await page.evaluate((mode) => {
       const state = structuredClone(window.preview.state());
       for (const account of state[mode].accounts) account.usageEligible = undefined;
+      window.preview.post({ type: 'state', state });
+    }, mode);
+    assert.deepEqual(await visible(), []);
+    // Only an external directory can be queried: "all" covers registered accounts, so it stays hidden
+    await page.evaluate((mode) => {
+      const state = structuredClone(window.preview.state());
+      const dir = `/fixture/.${mode}-external`;
+      state[mode].accounts.push({ kind: 'external', name: '<external>', label: dir, dir, dirLabel: dir, loggedIn: true, usageEligible: true, isCurrent: false });
       window.preview.post({ type: 'state', state });
     }, mode);
     assert.deepEqual(await visible(), []);
@@ -492,7 +507,7 @@ async function refreshButtonVisibility() {
     }, mode);
     if (mode === 'codex') assert.deepEqual(await visible(), []);
   }
-  results.interactions.push('refresh buttons follow usageEligible: current button needs the current account, Claude "all" any registered one');
+  results.interactions.push('refresh buttons follow usageEligible: current button needs the current account, "all" any registered one on both pages');
 }
 
 async function restartControls(locale, width) {

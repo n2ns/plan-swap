@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
   StatusBar,
-  backgroundIdFor, codexUsageParts, escapeMarkdown, liveCodexUsage, relativeReset, remainingOf, shortWindow,
+  backgroundIdFor, codexUsageFailureText, codexUsageParts, escapeMarkdown, liveCodexUsage, relativeReset, remainingOf, shortWindow,
   refreshLink, statusAccessibilityLabel, statusText, usageBar, usageTable, windowRow,
 } from '../src/statusBar';
 import { AccountStore } from '../src/accounts';
@@ -469,4 +469,14 @@ describe('both products in the status bar', LINUX_ONLY, () => {
       assert.match(tooltipText(item.tooltip), /^\| default \| \| \| \|\n\|:--\|:--\|--:\|--:\|\n\| \*\*/);
     } finally { bar.dispose(); fs.rmSync(path.join(temp.home, '.claude', '.credentials.json'), { force: true }); }
   });
+});
+
+test('codexUsageFailureText gives the long text used by the refresh-all warning', () => {
+  setLocale('en');
+  assert.equal(codexUsageFailureText({ reason: 'authExpired' }), 'Usage limits unavailable: the sign-in has expired; sign in again.');
+  assert.equal(codexUsageFailureText({ reason: 'cliMissing' }), 'Usage limits unavailable: the codex command was not found.');
+  assert.equal(codexUsageFailureText({ reason: 'failed', detail: 'discarded' }), 'Usage limits unavailable: the sign-in changed during the check.');
+  assert.equal(codexUsageFailureText({ reason: 'failed', detail: 'boom' }), 'Usage limits unavailable: boom');
+  assert.equal(codexUsageFailureText({ reason: 'noRateLimits' }), 'Usage limits unavailable: noRateLimits');
+  assert.equal(codexUsageFailureText({ reason: 'failed' }), 'Usage limits unavailable: unknown error');
 });

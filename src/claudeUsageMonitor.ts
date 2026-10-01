@@ -18,7 +18,8 @@ export interface ClaudeUsageMonitorOptions {
   // than staleMs makes a scheduled query unnecessary. Default: unknown
   cachedAt?: (dir: string) => number | undefined;
   now?: () => number;
-  staleMs?: number;
+  // A function is read on every check, so a changed setting applies at once
+  staleMs?: number | (() => number);
 }
 
 export const CLAUDE_USAGE_STALE_MS = 15 * 60_000;
@@ -33,7 +34,7 @@ export class ClaudeUsageMonitor {
   private readonly eligible: (dir: string) => boolean;
   private readonly cachedAt: (dir: string) => number | undefined;
   private readonly now: () => number;
-  private readonly staleMs: number;
+  private readonly staleMs: () => number;
 
   constructor(
     private readonly dirOf: () => string,
@@ -44,7 +45,8 @@ export class ClaudeUsageMonitor {
     this.eligible = options.eligible ?? (() => true);
     this.cachedAt = options.cachedAt ?? (() => undefined);
     this.now = options.now ?? Date.now;
-    this.staleMs = options.staleMs ?? CLAUDE_USAGE_STALE_MS;
+    const staleMs = options.staleMs ?? CLAUDE_USAGE_STALE_MS;
+    this.staleMs = typeof staleMs === 'number' ? () => staleMs : staleMs;
   }
 
   current(): ClaudeUsageState {
@@ -70,9 +72,10 @@ export class ClaudeUsageMonitor {
     const dir = this.dirOf();
     if (!this.eligible(dir)) return Promise.resolve();
     const now = this.now();
-    if (this.last && samePath(this.last.dir, dir) && now - this.last.at < this.staleMs) return Promise.resolve();
+    const staleMs = this.staleMs();
+    if (this.last && samePath(this.last.dir, dir) && now - this.last.at < staleMs) return Promise.resolve();
     const cached = this.cachedAt(dir);
-    if (cached !== undefined && cached <= now + FUTURE_TOLERANCE_MS && now - cached < this.staleMs) {
+    if (cached !== undefined && cached <= now + FUTURE_TOLERANCE_MS && now - cached < staleMs) {
       // Refreshed elsewhere after this window's failed attempt: that failure no longer describes the shown values
       const failure = this.state.failure;
       if (failure && samePath(failure.dir, dir) && this.last && samePath(this.last.dir, dir) && cached > this.last.at) this.set({ checking: false });

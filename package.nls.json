@@ -21,6 +21,7 @@
   "command.claude.refreshAllUsage": "Refresh Usage Limits of All Claude Accounts",
   "command.claude.refreshUsage": "Refresh Claude Usage Limits",
   "command.codex.refreshUsage": "Refresh Codex Usage Limits",
+  "command.codex.refreshAllUsage": "Refresh Usage Limits of All Codex Accounts",
   "command.tools.openClaudeMd": "Open Global CLAUDE.md",
   "category.tools": "PlanSwap",
   "command.tools.openAgentsMd": "Open Global AGENTS.md",
@@ -42,5 +43,9 @@
   "config.sidebarModelLimits.description": "Show Claude’s model-specific usage limits in the sidebar. When enabled, they appear below the general limits.",
   "config.sidebarEmail.description": "Show the email of each account in the sidebar.",
   "config.sidebarFiveHour.description": "Show the 5-hour usage limit of each account in the sidebar.",
-  "config.sidebarWeekly.description": "Show the 7-day usage limit of each account in the sidebar."
+  "config.sidebarWeekly.description": "Show the 7-day usage limit of each account in the sidebar.",
+  "config.claudeUsageAutoRefresh.description": "Check the usage limits of the current Claude account automatically (a few seconds after start-up, then while the window is focused once the last check is older than the interval). Manual refreshes always work.",
+  "config.claudeUsageRefreshMinutes.description": "Minutes between automatic usage limit checks of the current Claude account (10–1440).",
+  "config.codexUsageAutoRefresh.description": "Check the usage limits of the effective Codex account automatically (a few seconds after start-up, after a sign-in change, then while the window is focused once the last check is older than the interval). Manual refreshes always work.",
+  "config.codexUsageRefreshMinutes.description": "Minutes between automatic usage limit checks of the effective Codex account (5–1440)."
 }

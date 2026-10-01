@@ -140,6 +140,12 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "planswap.codex.refreshAllUsage",
+        "title": "%command.codex.refreshAllUsage%",
+        "category": "%category.codex%",
+        "icon": "$(refresh)"
+      },
+      {
         "command": "planswap.tools.openClaudeMd",
         "title": "%command.tools.openClaudeMd%",
         "category": "%category.tools%",
@@ -234,6 +240,34 @@
           "default": true,
           "scope": "application",
           "description": "%config.sidebarWeekly.description%"
+        },
+        "planswap.claude.usageAutoRefresh": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "%config.claudeUsageAutoRefresh.description%"
+        },
+        "planswap.claude.usageRefreshMinutes": {
+          "type": "number",
+          "default": 15,
+          "minimum": 10,
+          "maximum": 1440,
+          "scope": "application",
+          "description": "%config.claudeUsageRefreshMinutes.description%"
+        },
+        "planswap.codex.usageAutoRefresh": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "%config.codexUsageAutoRefresh.description%"
+        },
+        "planswap.codex.usageRefreshMinutes": {
+          "type": "number",
+          "default": 15,
+          "minimum": 5,
+          "maximum": 1440,
+          "scope": "application",
+          "description": "%config.codexUsageRefreshMinutes.description%"
         }
       }
     },

@@ -331,6 +331,24 @@ test('the monitor skips a scheduled query while the account cache is fresh, but 
   assert.equal(calls, 3, 'a cache time far in the future (clock moved back) is not fresh');
 });
 
+test('a staleMs function is read on every check, so a changed interval applies at once', async () => {
+  let now = 0;
+  let staleMs = 1000;
+  let calls = 0;
+  const m = new ClaudeUsageMonitor(() => '/a', () => undefined, {
+    now: () => now, staleMs: () => staleMs,
+    query: async () => { calls++; return { ok: true }; },
+  });
+  await m.refreshIfStale();
+  assert.equal(calls, 1);
+  now = 600;
+  await m.refreshIfStale();
+  assert.equal(calls, 1, 'within the interval');
+  staleMs = 500;
+  await m.refreshIfStale();
+  assert.equal(calls, 2, 'the shorter interval has passed');
+});
+
 test('a cache refreshed elsewhere after a failed attempt clears that failure without querying', async () => {
   let now = 0;
   let cached: number | undefined;

@@ -2,7 +2,7 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { authFileStamp, CodexUsageMonitor, type CodexUsageState } from '../src/codex/codexUsageMonitor';
+import { authFileStamp, CodexUsageMonitor, queryCodexAccount, type CodexUsageState } from '../src/codex/codexUsageMonitor';
 import type { UsageResult } from '../src/codex/codexUsage';
 import { makeTempHome } from './helpers';
 
@@ -138,6 +138,23 @@ describe('CodexUsageMonitor', () => {
     assert.equal(h.calls.length, 2);
   });
 
+  test('a staleMs function is read on every check, so a changed interval applies at once', async () => {
+    let staleMs = 1000;
+    let now = 0;
+    const calls: string[] = [];
+    const monitor = new CodexUsageMonitor(() => '/home/u/.codex-work', () => undefined, {
+      now: () => now, staleMs: () => staleMs, authStamp: () => 'x', authIdentity: () => 'user-a',
+      read: async (d) => { calls.push(d); return okResult(now); },
+    });
+    await monitor.refreshIfStale();
+    now = 600;
+    await monitor.refreshIfStale();
+    assert.equal(calls.length, 1, 'within the interval');
+    staleMs = 500;
+    await monitor.refreshIfStale();
+    assert.equal(calls.length, 2, 'the shorter interval has passed');
+  });
+
   test('refreshIfStale while a query runs joins it', async () => {
     const h = harness(undefined, 1000);
     const a = h.monitor.refreshIfStale();
@@ -245,6 +262,37 @@ describe('CodexUsageMonitor', () => {
     await p;
     await h.monitor.refreshIfAuthChanged();
     assert.equal(h.calls.length, 1);
+  });
+
+  test('clearIfAuthChanged drops the live result for another identity or a sign-out without querying', async () => {
+    const h = harness();
+    h.queue.push(okResult(0));
+    await h.monitor.refresh();
+    assert.equal(h.calls.length, 1);
+
+    h.stamp.v = 'y'; // token refresh, same identity
+    h.monitor.clearIfAuthChanged();
+    assert.deepEqual(h.monitor.current(), { checking: false, result: okResult(0) });
+
+    h.identity.v = 'user-b';
+    h.monitor.clearIfAuthChanged();
+    assert.deepEqual(h.monitor.current(), { checking: false });
+    assert.equal(h.calls.length, 1, 'nothing is queried');
+
+    h.queue.push(okResult(5));
+    await h.monitor.refreshIfStale();
+    assert.equal(h.calls.length, 2, 'the next check is due at once');
+
+    h.identity.v = undefined;
+    h.stamp.v = 'missing';
+    h.monitor.clearIfAuthChanged();
+    assert.deepEqual(h.monitor.current(), { checking: false });
+  });
+
+  test('clearIfAuthChanged does nothing before the first result', () => {
+    const h = harness();
+    h.monitor.clearIfAuthChanged();
+    assert.deepEqual(h.states, []);
   });
 
   test('refreshIfAuthChanged while a query runs joins it', async () => {
@@ -362,6 +410,46 @@ describe('CodexUsageMonitor', () => {
     await monitor.refreshIfAuthChanged();
     assert.equal(calls, 1);
     assert.deepEqual(saved, ['before']);
+  });
+});
+
+describe('queryCodexAccount', () => {
+  const dir = '/home/u/.codex-other';
+
+  test('an unchanged sign-in hands the result and the verified stamp to onAccepted', async () => {
+    const accepted: Array<{ dir: string; result: UsageResult; stamp: string }> = [];
+    const result = await queryCodexAccount(dir, async () => okResult(5), (d, r, stamp) => { accepted.push({ dir: d, result: r, stamp }); },
+      { authStamp: () => 's1', authIdentity: () => 'user-a' });
+    assert.deepEqual(result, okResult(5));
+    assert.deepEqual(accepted, [{ dir, result: okResult(5), stamp: 's1' }]);
+  });
+
+  test('a token refresh for the same identity is accepted with the new stamp', async () => {
+    let stamp = 's1';
+    const accepted: string[] = [];
+    await queryCodexAccount(dir, async () => { stamp = 's2'; return okResult(5); }, (_d, _r, s) => { accepted.push(s); },
+      { authStamp: () => stamp, authIdentity: () => 'user-a' });
+    assert.deepEqual(accepted, ['s2']);
+  });
+
+  test('a changed identity discards the response', async () => {
+    let identity = 'user-a';
+    const accepted: unknown[] = [];
+    const result = await queryCodexAccount(dir, async () => { identity = 'user-b'; return okResult(5); }, () => { accepted.push(1); },
+      { authStamp: () => 's1', authIdentity: () => identity });
+    assert.deepEqual(result, { ok: false, reason: 'failed', detail: 'discarded' });
+    assert.equal(accepted.length, 0);
+  });
+
+  test('a read that throws is a failure that is still recorded; a history failure keeps the result', async () => {
+    const accepted: UsageResult[] = [];
+    const result = await queryCodexAccount(dir, async () => { throw new Error('boom'); }, (_d, r) => { accepted.push(r); },
+      { authStamp: () => 's1', authIdentity: () => 'user-a' });
+    assert.deepEqual(result, failed);
+    assert.deepEqual(accepted, [failed]);
+    const kept = await queryCodexAccount(dir, async () => okResult(7), () => { throw new Error('disk full'); },
+      { authStamp: () => 's1', authIdentity: () => 'user-a' });
+    assert.deepEqual(kept, okResult(7));
   });
 });
 

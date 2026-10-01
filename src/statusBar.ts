@@ -10,7 +10,7 @@ import { codexDefaultDir, readCodexAccountInfo } from './codex/codexPaths';
 import { effectiveDir, isEnabled, readSelectedDir } from './codex/codexState';
 import { codexRunsInWsl } from './codex/codexCommands';
 import type { CodexUsageState } from './codex/codexUsageMonitor';
-import type { CodexUsage, UsageWindow } from './codex/codexUsage';
+import type { CodexUsage, UsageFailure, UsageWindow } from './codex/codexUsage';
 import { USAGE_HISTORY_MAX_AGE_MS } from './codex/codexUsageHistory';
 import { readClaudeUsage, type ClaudeUsage, type ClaudeUsageFailure, type ClaudeUsageWindow } from './claudeUsage';
 import type { ClaudeUsageState } from './claudeUsageMonitor';
@@ -18,6 +18,7 @@ import type { ClaudeUsageState } from './claudeUsageMonitor';
 export const REFRESH_USAGE_COMMAND = 'planswap.codex.refreshUsage';
 export const CLAUDE_REFRESH_USAGE_COMMAND = 'planswap.claude.refreshUsage';
 export const CLAUDE_REFRESH_ALL_USAGE_COMMAND = 'planswap.claude.refreshAllUsage';
+export const CODEX_REFRESH_ALL_USAGE_COMMAND = 'planswap.codex.refreshAllUsage';
 
 const INTL_LOCALES: Record<Locale, string> = { en: 'en', 'zh-cn': 'zh-CN', es: 'es', ja: 'ja' };
 const CLAUDE_USAGE_FAILURE_MESSAGES: Record<ClaudeUsageFailure, MessageKey> = {
@@ -26,6 +27,12 @@ const CLAUDE_USAGE_FAILURE_MESSAGES: Record<ClaudeUsageFailure, MessageKey> = {
   notRefreshed: 'status.claudeUsageNotRefreshed',
   noUsage: 'status.claudeUsageNone',
   failed: 'status.usageFailed',
+};
+const CODEX_USAGE_FAILURE_MESSAGES: Partial<Record<UsageFailure, MessageKey>> = {
+  notLoggedIn: 'status.codexUsageNotLoggedIn',
+  authExpired: 'status.codexUsageAuthExpired',
+  cliMissing: 'status.codexUsageCliMissing',
+  timeout: 'status.codexUsageTimeout',
 };
 
 // 300 → 5h, 10080 → 7d; anything that is not a whole hour stays in minutes
@@ -206,6 +213,16 @@ export function claudeUsageFailureText(failure: { reason: ClaudeUsageFailure; de
   return failure.reason === 'failed' && !failure.detail ? t('status.usageUnknownError', { detail: '' })
     : failure.reason === 'notRefreshed' && !hasUsage ? t('status.claudeUsageRefreshFailed')
       : t(CLAUDE_USAGE_FAILURE_MESSAGES[failure.reason], { detail: failure.detail ?? '' });
+}
+
+/** Localized plain text of one failed Codex query, used by the refresh-all warning. */
+export function codexUsageFailureText(failure: { reason: UsageFailure; detail?: string }): string {
+  const key = CODEX_USAGE_FAILURE_MESSAGES[failure.reason];
+  if (key) return t(key);
+  // A response discarded because the sign-in changed while the query ran
+  if (failure.reason === 'failed' && failure.detail === 'discarded') return t('status.codexUsageDiscarded');
+  return failure.detail || failure.reason !== 'failed' ? t('status.usageFailed', { detail: failure.detail ?? failure.reason })
+    : t('status.usageUnknownError', { detail: '' });
 }
 
 interface Block {

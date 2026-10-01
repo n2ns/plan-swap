@@ -50,6 +50,8 @@ export interface UsageOptions {
   platform?: NodeJS.Platform;
   /** Ends the process tree of a child started through cmd.exe (Windows codex.cmd fallback); default taskkill /T /F */
   killTree?: (pid: number) => void;
+  /** Aborting ends the query as failed with detail 'cancelled' and ends the child it started */
+  signal?: AbortSignal;
 }
 
 // kill() on a child started through cmd.exe ends only cmd.exe; taskkill /T also ends the codex it started. Only the
@@ -174,6 +176,8 @@ function onPath(file: string): boolean {
 
 type Attempt = { kind: 'done'; result: UsageResult } | { kind: 'enoent' };
 
+const CANCELLED: UsageResult = { ok: false, reason: 'failed', detail: 'cancelled' };
+
 /**
  * Starts `codex app-server` with CODEX_HOME=dir, performs the handshake, reads the limits, and always ends the child
  * it started (closes stdin, then kills it if it has not exited within graceMs). Only that child is ever signalled.
@@ -181,6 +185,7 @@ type Attempt = { kind: 'done'; result: UsageResult } | { kind: 'enoent' };
 export async function readCodexUsage(dir: string, options: UsageOptions = {}): Promise<UsageResult> {
   // Existence check only; the file is never read
   if (!fs.existsSync(path.join(dir, 'auth.json'))) return { ok: false, reason: 'notLoggedIn' };
+  if (options.signal?.aborted) return CANCELLED;
   const spawn: UsageSpawn = options.spawn ?? ((c, a, o) => childProcess.spawn(c, a, o));
   const platform = options.platform ?? process.platform;
   const now = options.now ?? Date.now;
@@ -200,7 +205,7 @@ export async function readCodexUsage(dir: string, options: UsageOptions = {}): P
   // npm installs a codex.cmd shim, which spawn without a shell neither finds nor may start. The command and arguments
   // are fixed literals (no user input reaches the command line), so running the shim through cmd.exe is safe. The app
   // server ends when its stdin closes; if it does not, the whole cmd.exe tree is ended (kill() would reach cmd.exe only).
-  if (a.kind === 'enoent' && platform === 'win32' && options.command === undefined && onPath('codex.cmd')) {
+  if (a.kind === 'enoent' && platform === 'win32' && options.command === undefined && !options.signal?.aborted && onPath('codex.cmd')) {
     a = await run('codex.cmd', { shell: true });
   }
   return a.kind === 'enoent' ? { ok: false, reason: 'cliMissing' } : a.result;
@@ -285,6 +290,8 @@ function attempt(
     };
 
     const timer = setTimeout(() => finish({ ok: false, reason: 'timeout' }), timeoutMs);
+    const onAbort = (): void => finish(CANCELLED);
+    options.signal?.addEventListener('abort', onAbort);
 
     function finish(result: UsageResult): void {
       finishWith({ kind: 'done', result });
@@ -294,6 +301,7 @@ function attempt(
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      options.signal?.removeEventListener('abort', onAbort);
       stdout?.removeListener('data', onData);
       stdout?.resume(); // drain whatever else arrives so the child never blocks on a full pipe
       child.removeListener('error', onError);

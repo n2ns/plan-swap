@@ -285,6 +285,20 @@ describe('readCodexUsage', () => {
     assert.equal(child.killed, 1);
   });
 
+  test('aborting ends the query as cancelled and the child is ended; an aborted signal starts nothing', async () => {
+    const f = fakeSpawn(() => undefined);
+    const abort = new AbortController();
+    const pending = readCodexUsage(acct, { ...base(f.spawn), signal: abort.signal });
+    await settle(10);
+    abort.abort();
+    assert.deepEqual(await pending, { ok: false, reason: 'failed', detail: 'cancelled' });
+    await settle();
+    assert.equal(f.children[0]!.stdinEnded, true);
+    assert.equal(f.children[0]!.killed, 1);
+    assert.deepEqual(await readCodexUsage(acct, { ...base(f.spawn), signal: abort.signal }), { ok: false, reason: 'failed', detail: 'cancelled' });
+    assert.equal(f.calls.length, 1);
+  });
+
   test('a child that stays alive after answering is killed', async () => {
     const f = fakeSpawn(server((id) => ({ id, result: LIMITS })));
     const r = await readCodexUsage(acct, base(f.spawn));
