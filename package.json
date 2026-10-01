@@ -315,6 +315,14 @@
           "scope": "application",
           "description": "%config.claudeUsageRefreshMinutes.description%"
         },
+        "planswap.claude.usageTimeoutSeconds": {
+          "type": "number",
+          "default": 30,
+          "minimum": 10,
+          "maximum": 120,
+          "scope": "application",
+          "description": "%config.claudeUsageTimeoutSeconds.description%"
+        },
         "planswap.codex.usageAutoRefresh": {
           "type": "boolean",
           "default": true,
@@ -328,6 +336,14 @@
           "maximum": 1440,
           "scope": "application",
           "description": "%config.codexUsageRefreshMinutes.description%"
+        },
+        "planswap.codex.usageTimeoutSeconds": {
+          "type": "number",
+          "default": 15,
+          "minimum": 5,
+          "maximum": 120,
+          "scope": "application",
+          "description": "%config.codexUsageTimeoutSeconds.description%"
         }
       }
     },

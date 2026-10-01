@@ -242,8 +242,10 @@ Haz clic en el icono de ajustes de la barra de título del panel, o ejecuta **Pl
 | `planswap.sidebar.showModelLimits` | `false` | Añadir a las tarjetas los límites de Claude por modelo. |
 | `planswap.claude.usageAutoRefresh` | `true` | Consultar automáticamente los límites de uso de Claude. |
 | `planswap.claude.usageRefreshMinutes` | `15` | Minutos entre consultas automáticas de Claude, 10–1440. |
+| `planswap.claude.usageTimeoutSeconds` | `30` | Segundos que puede durar una consulta de Claude antes de agotar el tiempo, 10–120. |
 | `planswap.codex.usageAutoRefresh` | `true` | Consultar automáticamente los límites de uso de Codex. |
 | `planswap.codex.usageRefreshMinutes` | `15` | Minutos entre consultas automáticas de Codex, 5–1440. |
+| `planswap.codex.usageTimeoutSeconds` | `15` | Segundos que puede durar una consulta de Codex antes de agotar el tiempo, 5–120. |
 | `planswap.claude.confirmSwitch` | `true` | Pedir confirmación antes de cambiar de cuenta de Claude desde la barra lateral. El cambio de Codex siempre la pide. Si está desactivado, el doble clic o Enter en una fila con el foco cambia de inmediato. |
 | `planswap.statusBar.enabled` | `true` | Mostrar el elemento de PlanSwap en la barra de estado. |
 | `planswap.statusBar.products` | `both` | Productos del elemento de la barra de estado: `both`, `claude` o `codex`. |
@@ -262,7 +264,7 @@ Con las consultas automáticas desactivadas, los iconos y comandos de actualizar
 | No se puede activar el cambio de cuenta de Codex | Lee el conflicto de shell o de `CODEX_HOME` indicado. En Windows, comprueba si Codex está configurado para ejecutarse dentro de WSL. |
 | Una cuenta sigue mostrando **Sin sesión** | Inicia sesión con el botón **Acceder** de esa fila y actualiza. Un inicio de sesión de Codex guardado solo en el llavero del sistema operativo no se puede detectar, porque PlanSwap busca el `auth.json` de la cuenta. |
 | Dos cuentas generan un aviso de inicio de sesión duplicado | Ambas tienen la sesión iniciada con la misma cuenta y espacio de trabajo, así que cambiar entre ellas no te da límites separados. Inicia sesión con la identidad que corresponda en una de ellas. |
-| No hay barras de uso, o una consulta falló | Comprueba que la cuenta tiene un inicio de sesión con suscripción (Claude) o de ChatGPT (Codex) y que el comando `claude` está instalado (Claude). Actualiza a mano y lee el mensaje de error; si indica un tiempo de espera, espera antes de reintentar. |
+| No hay barras de uso, o una consulta falló | Comprueba que la cuenta tiene un inicio de sesión con suscripción (Claude) o de ChatGPT (Codex) y que el comando `claude` está instalado (Claude). Actualiza a mano y lee el mensaje de error; si indica un tiempo de espera, espera antes de reintentar. Si dice que la CLI no respondió a tiempo, aumenta `planswap.claude.usageTimeoutSeconds` o `planswap.codex.usageTimeoutSeconds`. |
 | Los ajustes o el historial no se comparten como esperabas | Revisa la insignia de enlace y el resultado de la conversión o de Revincular. Algunos archivos siguen siendo independientes o requieren fusión manual; en Windows, comprueba si los enlaces de archivo están disponibles. |
 | Una lista parece desactualizada | Haz clic en el botón de actualizar de la barra de título del panel. Los cambios hechos en otra ventana aparecen tras actualizar. |
 

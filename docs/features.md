@@ -19,6 +19,7 @@ Settings (application scope, applied immediately):
 
 - `planswap.sidebar.showEmail`, `planswap.sidebar.showFiveHourLimit` and `planswap.sidebar.showWeeklyLimit` (default on) hide a row's email, 5-hour or 7-day window on both pages; `planswap.sidebar.showModelLimits` (default off) adds Claude's model-specific windows. None affects the status bar.
 - `planswap.claude.usageAutoRefresh` / `planswap.codex.usageAutoRefresh` (default on) and `planswap.claude.usageRefreshMinutes` (10–1440) / `planswap.codex.usageRefreshMinutes` (5–1440; both default 15, out-of-range values clamped) control each product's automatic usage checks. Off stops every automatic check while manual refreshes still work and shown values stay (except a Codex result whose sign-in changed); turning on or shortening the interval checks at once if due.
+- `planswap.claude.usageTimeoutSeconds` (10–120, default 30) / `planswap.codex.usageTimeoutSeconds` (5–120, default 15; out-of-range values clamped) limit how long one usage check may run before it is ended and reported as timed out. They apply to automatic checks, manual refreshes and refresh-all, from the next check on.
 - `planswap.claude.confirmSwitch` (default on): off switches Claude accounts from the panel without the modal confirmation (4.1). Codex switching always confirms (10.6).
 
 After a switch in this window, a banner names the new account until reload, offering **Reload Window**; closing only hides it, and a later switch updates the name.

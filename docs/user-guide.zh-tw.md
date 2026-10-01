@@ -242,8 +242,10 @@ PlanSwap 啟動或重新整理時，會把在你的主目錄中找到、名稱�
 | `planswap.sidebar.showModelLimits` | `false` | 在卡片上額外顯示 Claude 的各模型額度。 |
 | `planswap.claude.usageAutoRefresh` | `true` | 自動查詢 Claude 用量額度。 |
 | `planswap.claude.usageRefreshMinutes` | `15` | 自動查詢 Claude 的間隔分鐘數，10–1440。 |
+| `planswap.claude.usageTimeoutSeconds` | `30` | 單次查詢 Claude 逾時前允許執行的秒數，10–120。 |
 | `planswap.codex.usageAutoRefresh` | `true` | 自動查詢 Codex 用量額度。 |
 | `planswap.codex.usageRefreshMinutes` | `15` | 自動查詢 Codex 的間隔分鐘數，5–1440。 |
+| `planswap.codex.usageTimeoutSeconds` | `15` | 單次查詢 Codex 逾時前允許執行的秒數，5–120。 |
 | `planswap.claude.confirmSwitch` | `true` | 從側邊欄切換 Claude 帳號前先確認。Codex 切換一律需要確認。關閉後，在有焦點的列上按兩下或按 Enter 會立即切換。 |
 | `planswap.statusBar.enabled` | `true` | 在狀態列中顯示 PlanSwap 項目。 |
 | `planswap.statusBar.products` | `both` | 狀態列項目包含的產品：`both`、`claude` 或 `codex`。 |
@@ -262,7 +264,7 @@ PlanSwap 啟動或重新整理時，會把在你的主目錄中找到、名稱�
 | 無法啟用 Codex 切換 | 查看列出的 shell 或 `CODEX_HOME` 衝突。在 Windows 上，檢查 Codex 是否設定為在 WSL 中執行。 |
 | 某個帳號仍顯示 **未登入** | 使用該列的 **登入** 按鈕登入，然後重新整理。僅儲存在作業系統金鑰圈中的 Codex 登入無法偵測到，因為 PlanSwap 尋找的是該帳號的 `auth.json`。 |
 | 兩個帳號觸發重複登入警告 | 兩者登入的是同一個帳號和工作區，因此在它們之間切換不會得到各自獨立的額度。請在其中一個帳號中登入你想要的身分。 |
-| 沒有用量條，或查詢失敗 | 檢查該帳號是否以訂閱（Claude）或 ChatGPT（Codex）方式登入，以及是否已安裝 `claude` 命令（Claude）。手動重新整理並閱讀失敗訊息；如果提示正在冷卻，請稍候再重試。 |
+| 沒有用量條，或查詢失敗 | 檢查該帳號是否以訂閱（Claude）或 ChatGPT（Codex）方式登入，以及是否已安裝 `claude` 命令（Claude）。手動重新整理並閱讀失敗訊息；如果提示正在冷卻，請稍候再重試。如果提示未及時回應，可調大 `planswap.claude.usageTimeoutSeconds` 或 `planswap.codex.usageTimeoutSeconds`。 |
 | 設定或記錄沒有如預期共用 | 檢查連結標記，以及轉換或重新連結的結果。有些檔案會保持獨立或需要手動合併；在 Windows 上，檢查是否能建立檔案連結。 |
 | 清單看起來不是最新的 | 按一下面板標題列中的重新整理按鈕。在其他視窗中所做的變更要重新整理後才會顯示。 |
 

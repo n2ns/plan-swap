@@ -51,6 +51,21 @@ function usageSchedule(product: PanelMode): { auto: boolean; staleMs: number } {
   };
 }
 
+// planswap.<product>.usageTimeoutSeconds, clamped to the range the manifest declares; the defaults are the query
+// modules' own defaults
+const USAGE_TIMEOUT_SECONDS: Record<PanelMode, { min: number; max: number; default: number }> = {
+  claude: { min: 10, max: 120, default: 30 },
+  codex: { min: 5, max: 120, default: 15 },
+};
+
+/** The time limit in ms of one usage query of a product (scheduled, manual or refresh-all), read for every query. */
+export function usageTimeoutMs(product: PanelMode): number {
+  const range = USAGE_TIMEOUT_SECONDS[product];
+  const seconds = vscode.workspace.getConfiguration('planswap').get<number>(`${product}.usageTimeoutSeconds`, range.default);
+  const valid = typeof seconds === 'number' && Number.isFinite(seconds) ? seconds : range.default;
+  return Math.min(range.max, Math.max(range.min, valid)) * 1000;
+}
+
 interface CooldownSplit<T> { due: T[]; skipped: T[]; waitMs: number }
 
 /** Refresh-all targets that may be queried now, and those still in the manual cooldown (with the shortest wait left). */
@@ -131,7 +146,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     : readCodexUsageWithFallback(dir, () => {
       const ext = vscode.extensions.getExtension(CODEX_EXTENSION_ID);
       return ext && findBundledCodex(ext.extensionPath);
-    }, { clientVersion: version, signal });
+    }, { clientVersion: version, signal, timeoutMs: usageTimeoutMs('codex') });
   // Every query of an account (scheduled, manual, refresh-all) starts its manual-refresh cooldown
   const codexCooldown = new UsageCooldown();
   const usage = codex
@@ -157,7 +172,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   const claudeCooldownLeft = (dir: string): number => claudeCooldown.remaining(dir, readUsageFetchedAt(dir, isExplicitConfigDir(dir)));
   const claudeQuery = (dir: string, signal?: AbortSignal) => claudeQueue(() => {
     claudeCooldown.mark(dir);
-    return queryClaudeUsage(dir, isExplicitConfigDir(dir), { env: settingEnv(), signal });
+    return queryClaudeUsage(dir, isExplicitConfigDir(dir), { env: settingEnv(), signal, timeoutMs: usageTimeoutMs('claude') });
   });
   const claudeUsage = new ClaudeUsageMonitor(currentDir, (s) => {
     statusBar.setClaudeUsage(s);

@@ -242,8 +242,10 @@ PlanSwap がホームディレクトリで見つけた、有効な名前を持�
 | `planswap.sidebar.showModelLimits` | `false` | カードに Claude のモデル別の上限を追加します。 |
 | `planswap.claude.usageAutoRefresh` | `true` | Claude の使用量の上限を自動で確認します。 |
 | `planswap.claude.usageRefreshMinutes` | `15` | Claude を自動確認する間隔（分、10–1440）。 |
+| `planswap.claude.usageTimeoutSeconds` | `30` | Claude の 1 回の確認がタイムアウトするまでの時間（秒、10–120）。 |
 | `planswap.codex.usageAutoRefresh` | `true` | Codex の使用量の上限を自動で確認します。 |
 | `planswap.codex.usageRefreshMinutes` | `15` | Codex を自動確認する間隔（分、5–1440）。 |
+| `planswap.codex.usageTimeoutSeconds` | `15` | Codex の 1 回の確認がタイムアウトするまでの時間（秒、5–120）。 |
 | `planswap.claude.confirmSwitch` | `true` | サイドバーから Claude アカウントを切り替える前に確認します。Codex の切り替えは常に確認します。オフにすると、フォーカスのある行でのダブルクリックまたは Enter ですぐに切り替わります。 |
 | `planswap.statusBar.enabled` | `true` | ステータスバーに PlanSwap の項目を表示します。 |
 | `planswap.statusBar.products` | `both` | ステータスバー項目に含める製品：`both`、`claude`、`codex`。 |
@@ -262,7 +264,7 @@ PlanSwap がホームディレクトリで見つけた、有効な名前を持�
 | Codex の切り替えを有効化できない | 表示されたシェルまたは `CODEX_HOME` の競合を確認してください。Windows では、Codex が WSL 内で実行するよう設定されていないか確認してください。 |
 | アカウントに **未ログイン** と表示されたまま | その行の **ログイン** ボタンでサインインしてから、更新してください。PlanSwap はアカウントの `auth.json` を探すため、オペレーティングシステムのキーリングにのみ保存された Codex のサインインは検出できません。 |
 | 2 つのアカウントで重複サインインの警告が出る | 両方が同じアカウントとワークスペースでサインインしているため、切り替えても使用量の上限は別になりません。どちらかで目的のアカウントにサインインし直してください。 |
-| 使用量のバーが表示されない、または確認に失敗した | アカウントがサブスクリプション（Claude）または ChatGPT（Codex）でサインインしていること、`claude` コマンドがインストールされていること（Claude）を確認してください。手動で更新して失敗メッセージを確認し、確認間隔の制限（クールダウン）が表示された場合は、しばらく待ってから再試行してください。 |
+| 使用量のバーが表示されない、または確認に失敗した | アカウントがサブスクリプション（Claude）または ChatGPT（Codex）でサインインしていること、`claude` コマンドがインストールされていること（Claude）を確認してください。手動で更新して失敗メッセージを確認し、確認間隔の制限（クールダウン）が表示された場合は、しばらく待ってから再試行してください。CLI が時間内に応答しなかったと表示された場合は、`planswap.claude.usageTimeoutSeconds` または `planswap.codex.usageTimeoutSeconds` を大きくしてください。 |
 | 設定や履歴が期待どおりに共有されない | リンクバッジと、変換または再リンクの結果を確認してください。一部のファイルは別々のまま残るか、手動でのマージが必要です。Windows では、ファイルのリンクが利用できるか確認してください。 |
 | 一覧が古いように見える | パネルのタイトルバーにある更新ボタンをクリックしてください。別のウィンドウで行った変更は、更新後に反映されます。 |
 

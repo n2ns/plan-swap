@@ -242,8 +242,10 @@ Click the settings icon in the panel title bar, or run **PlanSwap: Open PlanSwap
 | `planswap.sidebar.showModelLimits` | `false` | Add Claude's model-specific limits to cards. |
 | `planswap.claude.usageAutoRefresh` | `true` | Check Claude usage limits automatically. |
 | `planswap.claude.usageRefreshMinutes` | `15` | Minutes between automatic Claude checks, 10–1440. |
+| `planswap.claude.usageTimeoutSeconds` | `30` | Seconds one Claude check may run before it times out, 10–120. |
 | `planswap.codex.usageAutoRefresh` | `true` | Check Codex usage limits automatically. |
 | `planswap.codex.usageRefreshMinutes` | `15` | Minutes between automatic Codex checks, 5–1440. |
+| `planswap.codex.usageTimeoutSeconds` | `15` | Seconds one Codex check may run before it times out, 5–120. |
 | `planswap.claude.confirmSwitch` | `true` | Ask before switching Claude accounts from the sidebar. Codex switching always asks. When off, double-click or Enter on a focused row switches at once. |
 | `planswap.statusBar.enabled` | `true` | Show the PlanSwap item in the status bar. |
 | `planswap.statusBar.products` | `both` | Products in the status bar item: `both`, `claude` or `codex`. |
@@ -262,7 +264,7 @@ With automatic checks off, the refresh icons and commands still work. The sideba
 | Codex switching cannot be enabled | Read the listed shell or `CODEX_HOME` conflict. On Windows, check whether Codex is set to run inside WSL. |
 | An account still says **Not logged in** | Sign in with that row's **Log in** button, then refresh. A Codex sign-in kept only in the operating system's keyring cannot be detected, because PlanSwap looks for the account's `auth.json`. |
 | Two accounts trigger a duplicate sign-in warning | Both are signed in to the same account and workspace, so switching between them does not give you separate limits. Sign in to the intended identity in one of them. |
-| No usage bars, or a check failed | Check that the account has a subscription (Claude) or ChatGPT (Codex) sign-in and that the `claude` command is installed (Claude). Refresh by hand and read the failure message; if it reports a cooldown, wait before retrying. |
+| No usage bars, or a check failed | Check that the account has a subscription (Claude) or ChatGPT (Codex) sign-in and that the `claude` command is installed (Claude). Refresh by hand and read the failure message; if it reports a cooldown, wait before retrying. If it says the CLI did not answer in time, raise `planswap.claude.usageTimeoutSeconds` or `planswap.codex.usageTimeoutSeconds`. |
 | Settings or history are not shared as expected | Check the link badge and the conversion or Re-link result. Some files stay separate or need merging by hand; on Windows, check whether file links are available. |
 | A list looks outdated | Click the refresh button in the panel title bar. Changes made in another window appear after a refresh. |
 
