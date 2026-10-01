@@ -37,7 +37,6 @@ const scopedDurations = {
   es: ['Límite de 5 h', 'Límite de 7 días', 'Límite de 7 días · Fable'],
   ja: ['5 時間の上限', '7 日間の上限', '7 日間の上限 · Fable'],
 };
-const modelLimits = { en: 'Model-specific limits (1)', 'zh-cn': '按模型限额（1）', es: 'Límites por modelo (1)', ja: 'モデル別の上限 (1)' };
 const remaining = {
   en: (percent) => `${percent}% remaining`,
   'zh-cn': (percent) => `剩余 ${percent}%`,
@@ -290,12 +289,6 @@ async function runCase(locale, width) {
       usageActionsOverlap: intersects(rect(usage), rect(actions)),
       emptyUsage: !!document.querySelector('#panel-claude .row[data-dir="/fixture/.claude-empty"] .row-usage'),
       defaultUsage: !!document.querySelector('#panel-claude .row[data-dir="/fixture/.claude"] .row-usage'),
-      moreOpen: usage.querySelector('details.usage-more')?.open ?? null,
-      summaryText: usage.querySelector('.usage-more-label')?.textContent ?? null,
-      summaryValue: usage.querySelector('.usage-more-value')?.textContent ?? null,
-      summaryChevron: !!usage.querySelector('.usage-more-summary vscode-icon.chevron'),
-      summaryVisible: (() => { const el = usage.querySelector('.usage-more-summary'); return !!el && rect(el).width > 0 && rect(el).height > 0; })(),
-      summaryActionsOverlap: (() => { const el = usage.querySelector('.usage-more-summary'); return !!el && intersects(rect(el), rect(actions)); })(),
       windows: [...usage.querySelectorAll('.usage-window')].map((item, index) => {
         const labels = item.querySelector('.usage-labels');
         const track = item.querySelector('.usage-track');
@@ -324,30 +317,10 @@ async function runCase(locale, width) {
       }),
     };
   });
-  // Model-specific limits start collapsed: the general windows and the toggle show, the scoped window does not
-  const collapsed = await measureClaude();
-  assert.equal(collapsed.moreOpen, false, `model limits must start collapsed at ${name(locale, width)}`);
-  assert.equal(collapsed.summaryText, modelLimits[locale]);
-  assert.equal(collapsed.summaryValue, remaining[locale](75), `summary shows the lowest remaining value at ${name(locale, width)}`);
-  assert.equal(collapsed.summaryChevron, true);
-  assert.equal(collapsed.summaryVisible, true);
-  assert.equal(collapsed.summaryActionsOverlap, false, `model-limit toggle overlaps actions at ${name(locale, width)}`);
-  assert.deepEqual(collapsed.windows.map((w) => w.shown), [true, true, false]);
-  assert.equal(collapsed.horizontalOverflow, false, `claude horizontal overflow (collapsed) at ${name(locale, width)}`);
+  // Model-specific limits (sent while sidebar.showModelLimits is on) are shown right away, with no fold
   await cardChecks('claude', locale, width);
   await shot(`${name(locale, width)}-claude.png`, 'claude');
-  await page.click('#panel-claude .row[data-dir="/fixture/.claude-work"] .usage-more-summary');
-  // The expanded state survives a re-render that replaces the row (another locale and back forces new DOM)
-  const rerendered = await page.evaluate(({ locale, width }) => {
-    const sel = '#panel-claude .row[data-dir="/fixture/.claude-work"] details.usage-more';
-    const before = document.querySelector(sel);
-    window.preview.apply({ locale: locale === 'en' ? 'ja' : 'en', width, active: 'claude' });
-    window.preview.apply({ locale, width, active: 'claude' });
-    return document.querySelector(sel) !== before;
-  }, { locale, width });
-  assert.equal(rerendered, true, `the row must be re-rendered at ${name(locale, width)}`);
   const claude = await measureClaude();
-  assert.equal(claude.moreOpen, true, `model limits must stay expanded after a re-render at ${name(locale, width)}`);
   assert.equal(claude.rows, 3);
   assert.equal(claude.visible, true);
   assert.equal(claude.horizontalOverflow, false, `claude horizontal overflow at ${name(locale, width)}`);
@@ -371,10 +344,6 @@ async function runCase(locale, width) {
     assert.equal(window.overflow, false, `claude usage window overflow at ${name(locale, width)}`);
     assert.equal(window.shown, true);
   }
-  await shot(`${name(locale, width)}-claude-expanded.png`, 'claude');
-  // Collapse again so the next case starts from the default
-  await page.click('#panel-claude .row[data-dir="/fixture/.claude-work"] .usage-more-summary');
-  assert.equal(await page.evaluate(() => document.querySelector('#panel-claude .row[data-dir="/fixture/.claude-work"] details.usage-more').open), false);
   // The host omits scoped windows while sidebar.showModelLimits is disabled.
   await page.evaluate(() => {
     const state = structuredClone(window.preview.state());
@@ -383,7 +352,7 @@ async function runCase(locale, width) {
     }
     window.preview.post({ type: 'state', state });
   });
-  assert.equal(await page.locator('#panel-claude .usage-more').count(), 0);
+  assert.equal(await page.locator('#panel-claude details').count(), 1, 'only the Tools section folds');
   assert.equal(await page.locator('#panel-claude .row[data-dir="/fixture/.claude-work"] .usage-window').count(), 2);
   await shot(`${name(locale, width)}-claude-model-limits-hidden.png`, 'claude');
   results.cases.push({ locale, width, mode: 'claude', passed: true, ...claude });

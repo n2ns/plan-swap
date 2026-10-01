@@ -4,7 +4,7 @@
 
 ### Added
 
-- Claude usage limits for subscription sign-ins, in the status bar tooltip and on every signed-in Claude row: session, weekly and model-specific windows with remaining percentage and reset time. Model-specific windows appear under a collapsed "Model-specific limits" toggle in the sidebar only when `planswap.sidebar.showModelLimits` is on (default off). The status bar tooltip shows general limits only.
+- Claude usage limits for subscription sign-ins, in the status bar tooltip and on every signed-in Claude row: session, weekly and model-specific windows with remaining percentage and reset time. Model-specific windows appear in the sidebar, after the general ones and not folded, only when `planswap.sidebar.showModelLimits` is on (default off). The status bar tooltip shows general limits only.
 - Values come from the official `claude` CLI (`claude -p /usage`, which sends no prompt) and the usage cache in each account's own folder. Values older than 24 hours or past their reset are hidden, and missing data never shows as 0%.
 - The status bar text now shows the product names with what is left of their short (normally 5-hour) usage window, for example "Claude 97% · Codex 82%", instead of account names. The background turns to the warning color at 30% or less and the error color at 10% or less of any general window, the weekly one included.
 - Icon buttons left of "+ Add" in the account list header refresh the usage limits of the current account (both pages) and of all Claude accounts (Claude page); they appear only when the account can be queried. The Command Palette entries remain.
@@ -15,7 +15,7 @@
 
 - The status bar tooltip is now compact: one table for both products so their columns line up, each product a header row with the email, plan and a refresh button followed by one row per usage window (shortest first) with a remaining bar, remaining percentage, an explicit "Used up" mark at 0% and the relative reset time, plus a short italic line only when something needs saying (checking, failed, Codex restart pending or running in WSL, limit reached). The account name, directory, collection time, lowest-remaining line, detailed failure reasons and text refresh links are gone from it. Codex limits use the same layout.
 - Refreshed sidebar account cards: the current account is marked by a highlighted card only (no check badge), other accounts show a neutral plan tag and a visible **Switch** button, and the directory moved into the card's tooltip.
-- Usage windows show reset times as relative times next to their own window, an explicit "Used up" mark at 0%, and a model-limits row with a chevron and its lowest remaining value.
+- Usage windows show reset times as relative times next to their own window, an explicit "Used up" mark at 0%.
 - **Add account** is collapsed behind a "+ Add" button, the page tools are collapsed by default, and the footer toolbar is grouped with the destructive reload and restart actions side by side.
 
 ## [0.2.1] - 2026-10-01

@@ -184,9 +184,6 @@ function loginStatus(a: AccountView): HTMLElement | null {
 
 type UsageWindowView = NonNullable<AccountView['usage']>['windows'][number];
 
-// Rows whose model-specific limits the user expanded; kept across re-renders for this Webview's lifetime
-const expandedScoped = new Set<string>();
-
 function usageLevel(remaining: number): 'empty' | 'low' | 'warn' | 'ok' {
   return remaining <= 0 ? 'empty' : remaining <= 10 ? 'low' : remaining <= 30 ? 'warn' : 'ok';
 }
@@ -234,32 +231,14 @@ function usageWindow(w: UsageWindowView): HTMLElement {
   );
 }
 
-// Model-specific limits (Claude) are folded into a collapsed section below the general windows
+// Model-specific limits (Claude; only sent by the host while planswap.sidebar.showModelLimits is on) follow the general
+// windows, always shown
 function usageHistory(a: AccountView): HTMLElement | null {
   if (!a.usage) return null;
   const time = new Date(a.usage.checkedAt).toLocaleString(getLocale());
   const general = a.usage.windows.filter((w) => !w.scope);
   const scoped = a.usage.windows.filter((w) => w.scope);
-  let more: HTMLElement | null = null;
-  if (scoped.length) {
-    // data-action lets a re-render restore focus to the toggle instead of the row (whose Enter switches accounts)
-    const lowest = Math.min(...scoped.map(remainingPercent));
-    const summary = h('summary', { class: 'usage-more-summary', 'data-action': 'usageMore', title: t('usage.lowestTitle') },
-      h('vscode-icon', { name: 'chevron-right', size: '12', class: 'chevron' }),
-      h('span', { class: 'usage-more-label' }, t('usage.modelLimits', { n: scoped.length })),
-      h('span', { class: 'usage-more-value', 'data-level': usageLevel(lowest) }, t('usage.remaining', { percent: lowest })));
-    // A double-click on the toggle must not reach the row's dblclick (which switches accounts)
-    summary.addEventListener('dblclick', (e) => e.stopPropagation());
-    const details = h('details', { class: 'usage-more', open: expandedScoped.has(a.dir) }, summary, ...scoped.map(usageWindow)) as HTMLDetailsElement;
-    // Recorded on the click itself (also fired by Enter/Space), before the asynchronous toggle event, so a re-render
-    // right after the click keeps the new state
-    summary.addEventListener('click', () => {
-      if (details.open) expandedScoped.delete(a.dir);
-      else expandedScoped.add(a.dir);
-    });
-    more = details;
-  }
-  return h('div', { class: 'row-usage', title: t('usage.observed', { time }) }, ...general.map(usageWindow), more);
+  return h('div', { class: 'row-usage', title: t('usage.observed', { time }) }, ...general.map(usageWindow), ...scoped.map(usageWindow));
 }
 
 /** One tab page: its own add section, adding state, confirmingDir and inline-rename state */

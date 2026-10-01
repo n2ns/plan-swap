@@ -339,18 +339,12 @@ body {
 /* High contrast: the track is outlined with the theme's contrast border, so the bar length reads without color */
 .vscode-high-contrast .usage-track, .vscode-high-contrast-light .usage-track { background: transparent; box-shadow: 0 0 0 1px var(--vscode-contrastBorder, var(--ink)); }
 .vscode-high-contrast .usage-fill, .vscode-high-contrast-light .usage-fill { box-shadow: 0 0 0 1px var(--vscode-contrastBorder, var(--ink)); }
-/* Expandable rows (model-specific limits, Tools): chevron, label, optional summary value */
-.usage-more { margin-top: 8px; border-top: 1px solid var(--line); }
-.usage-more-summary, .tools-summary { display: flex; align-items: center; gap: 6px; list-style: none; cursor: pointer; }
-.usage-more-summary { padding: 5px 0; color: var(--secondary); }
-.usage-more-summary::-webkit-details-marker, .tools-summary::-webkit-details-marker { display: none; }
-.usage-more-summary:focus-visible, .tools-summary:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 1px; }
+/* Expandable Tools row: chevron and label */
+.tools-summary { display: flex; align-items: center; gap: 6px; list-style: none; cursor: pointer; }
+.tools-summary::-webkit-details-marker { display: none; }
+.tools-summary:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 1px; }
 .chevron { flex: none; color: inherit; transition: transform var(--ease); }
 details[open] > summary > .chevron { transform: rotate(90deg); }
-.usage-more-label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.usage-more-value { flex: none; margin-left: auto; color: var(--ink); font-variant-numeric: tabular-nums; }
-.usage-more-value[data-level="low"], .usage-more-value[data-level="empty"] { color: var(--error); }
-.usage-more[open] > .usage-more-summary { margin-bottom: 6px; }
 .row-foot { grid-area: foot; margin-top: 4px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; min-width: 0; }
 .row-tags { flex: 1 1 auto; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; min-width: 0; }
 .row-tags:empty { display: none; }

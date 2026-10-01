@@ -39,5 +39,5 @@
   "config.language.es": "Español",
   "config.language.ja": "日本語",
   "config.language.description": "Language of the PlanSwap panel, status bar and messages. Takes effect immediately. Command titles and other static contributions follow the VS Code display language.",
-  "config.sidebarModelLimits.description": "Show Claude’s model-specific usage limits in the sidebar. When enabled, they appear in an expandable section below the general limits."
+  "config.sidebarModelLimits.description": "Show Claude’s model-specific usage limits in the sidebar. When enabled, they appear below the general limits."
 }
