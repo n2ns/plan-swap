@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { type Locale, setLocale } from './i18n';
+import { LOCALES, type Locale, matchLocale, setLocale } from './i18n';
 
 const SECTION = 'planswap';
 const KEY = 'language';
@@ -7,10 +7,8 @@ const KEY = 'language';
 /** Resolves the UI locale from `planswap.language`; `auto` follows the editor display language. */
 export function resolveLocale(): Locale {
   const setting = vscode.workspace.getConfiguration(SECTION).get<string>(KEY, 'auto');
-  if (setting === 'en' || setting === 'zh-cn' || setting === 'es' || setting === 'ja') return setting;
-  const language = vscode.env.language.toLowerCase().split('-')[0];
-  if (language === 'zh') return 'zh-cn';
-  return language === 'es' || language === 'ja' ? language : 'en';
+  if ((LOCALES as readonly string[]).includes(setting)) return setting as Locale;
+  return matchLocale(vscode.env.language);
 }
 
 // Before the rename to PlanSwap (0.1.0 - 0.1.3) the setting was `aiSwitcher.language`

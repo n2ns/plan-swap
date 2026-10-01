@@ -4,7 +4,7 @@ import { claudeJsonPath, findSameDir, readAccountInfo, samePath } from './paths'
 import { currentDir, isExplicitConfigDir } from './claudeSettings';
 import type { AccountStore } from './accounts';
 import { EXTERNAL_NAME, labelFor, type LabelStore } from './labels';
-import { getLocale, t, type Locale, type MessageKey } from './i18n';
+import { getLocale, LOCALE_INFO, t, type MessageKey } from './i18n';
 import type { CodexAccountStore } from './codex/codexStore';
 import { codexDefaultDir, readCodexAccountInfo } from './codex/codexPaths';
 import { effectiveDir, isEnabled, readSelectedDir } from './codex/codexState';
@@ -20,7 +20,6 @@ export const CLAUDE_REFRESH_USAGE_COMMAND = 'planswap.claude.refreshUsage';
 export const CLAUDE_REFRESH_ALL_USAGE_COMMAND = 'planswap.claude.refreshAllUsage';
 export const CODEX_REFRESH_ALL_USAGE_COMMAND = 'planswap.codex.refreshAllUsage';
 
-const INTL_LOCALES: Record<Locale, string> = { en: 'en', 'zh-cn': 'zh-CN', es: 'es', ja: 'ja' };
 const CLAUDE_USAGE_FAILURE_MESSAGES: Record<ClaudeUsageFailure, MessageKey> = {
   cliMissing: 'status.claudeUsageCliMissing',
   timeout: 'status.claudeUsageTimeout',
@@ -96,15 +95,13 @@ export function relativeReset(epochSeconds: number, now: number = Date.now()): s
   const total = Math.max(1, Math.ceil((epochSeconds * 1000 - now) / 60000));
   const days = Math.floor(total / 1440), hours = Math.floor((total % 1440) / 60), minutes = total % 60;
   const parts = Object.entries(days ? { days, hours } : hours ? { hours, minutes } : { minutes }).filter(([, n]) => n > 0);
-  const locale = INTL_LOCALES[getLocale()];
-  // Japanese narrow units are Latin letters ("2d5h"); the short style gives "2 日 5 時間"
+  const { intl: locale, durationStyle, durationUnitSeparator } = LOCALE_INFO[getLocale()];
   const DurationFormat = (Intl as unknown as { DurationFormat?: DurationFormatConstructor }).DurationFormat;
-  if (DurationFormat) return new DurationFormat(locale, { style: locale === 'ja' ? 'short' : 'narrow' }).format(Object.fromEntries(parts));
-  // Without DurationFormat (Node 22): unit numbers in the same widths, unspaced in Chinese, as DurationFormat writes them
+  if (DurationFormat) return new DurationFormat(locale, { style: durationStyle }).format(Object.fromEntries(parts));
+  // Without DurationFormat (Node 22): unit numbers in the same widths, joined as DurationFormat writes them
   const unit = { days: 'day', hours: 'hour', minutes: 'minute' } as Record<string, string>;
-  const display = locale === 'ja' ? 'short' : 'narrow';
-  return parts.map(([k, n]) => new Intl.NumberFormat(locale, { style: 'unit', unit: unit[k], unitDisplay: display }).format(n))
-    .join(locale.toLowerCase().startsWith('zh') ? '' : ' ');
+  return parts.map(([k, n]) => new Intl.NumberFormat(locale, { style: 'unit', unit: unit[k], unitDisplay: durationStyle }).format(n))
+    .join(durationUnitSeparator);
 }
 
 /** Status bar text: product names with the remaining percentage of their short window when known. */

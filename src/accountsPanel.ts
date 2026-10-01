@@ -9,7 +9,7 @@ import { EXTERNAL_NAME, labelFor, type LabelStore } from './labels';
 import type { AccountView, FromWebview, PanelMode, PanelState, RestartInfo, TabState, ToWebview } from './protocol';
 import { isSharedClaudeAccount } from './claudeShare';
 import { readClaudeUsage } from './claudeUsage';
-import { getLocale, t } from './i18n';
+import { getLocale, intlLocale, t } from './i18n';
 import { comparablePath, isWindows } from './platform';
 
 export const SHOW_MODEL_LIMITS_SETTING = 'sidebar.showModelLimits';
@@ -280,7 +280,7 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
       `script-src 'nonce-${nonce}'`,
     ].join('; ');
     return `<!DOCTYPE html>
-<html lang="${getLocale() === 'zh-cn' ? 'zh-CN' : getLocale()}">
+<html lang="${intlLocale()}">
 <head>
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="${csp}">

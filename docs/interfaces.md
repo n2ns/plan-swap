@@ -12,10 +12,23 @@ All files live in `src/`, TypeScript strict, ESM-style imports.
 ## src/i18n.ts (host i18n, no vscode import)
 
 ```ts
-export type Locale = 'en' | 'zh-cn' | 'es' | 'ja';
+export const LOCALES = ['en', 'zh-cn', 'es', 'ja'] as const;   // every supported locale id; English first
+export type Locale = (typeof LOCALES)[number];
+export interface LocaleInfo {
+  intl: string;                       // BCP 47 tag for Intl APIs and <html lang>: en, zh-CN, es, ja
+  match: string[];                    // lowercase editor language tags or primary subtags that select the locale: zh-cn ['zh-cn', 'zh'], others their id
+  sentenceSeparator: '' | ' ';        // between translated sentences: '' for zh-cn and ja
+  durationStyle: 'narrow' | 'short';  // Intl.DurationFormat style / NumberFormat unitDisplay: 'short' for ja
+  durationUnitSeparator: '' | ' ';    // joins unit parts without Intl.DurationFormat: '' for zh-cn
+  userGuide: string;                  // file under docs/: user-guide.md, user-guide.<locale>.md
+}
+export const LOCALE_INFO: Record<Locale, LocaleInfo>;
+export function matchLocale(language: string): Locale;   // lowercased tag; a locale whose match has the full tag, then one with the primary subtag (before '-'), else 'en'
 export function setLocale(l: Locale): void;
 export function getLocale(): Locale;
-export function t(key: MessageKey, params?: Record<string, string | number>): string; // `{name}` placeholders are replaced from params; unknown placeholders are left as is
+export function intlLocale(locale?: Locale): string;      // LOCALE_INFO[locale ?? getLocale()].intl
+export function formatMessage(text: string, params: Record<string, string | number> | undefined, intl: string): string; // plural blocks, then `{name}` placeholders (see below)
+export function t(key: MessageKey, params?: Record<string, string | number>): string; // formatMessage(table[current][key], params, intlLocale())
 export function translationsOf(key: MessageKey): string[]; // the message in every locale (used to reserve all localized external-directory names)
 export const en: { ... };                                 // English table, the source of truth
 export type MessageKey = keyof typeof en;
@@ -23,6 +36,8 @@ export const zhCn: Record<MessageKey, string>;            // Simplified Chinese,
 export const es: Record<MessageKey, string>;              // Spanish
 export const ja: Record<MessageKey, string>;              // Japanese
 ```
+- `LOCALES` and `LOCALE_INFO` are the single list of locales and their per-locale metadata; callers use them instead of comparing locale ids (`statusBar.relativeReset` and the Webview's relative time take `intl` / `durationStyle` / `durationUnitSeparator`, `tools.ts` takes `userGuide`, `<html lang>` and `toLocaleString` take `intlLocale()`). Adding a locale adds its id to `LOCALES`, its `LOCALE_INFO` row, its table, the Webview twins (`WEB_LOCALE_INFO` and table), the `planswap.language` enum entry with its `config.language.*` label, `package.nls.<locale>.json` and `docs/<userGuide>`; the tests check that these agree.
+- `formatMessage` (and so `t()`): without params the text is returned unchanged. Otherwise it first replaces each ICU-subset plural block `{name, plural, CAT {text} ... other {text}}` (CAT one of `zero` / `one` / `two` / `few` / `many` / `other`, no `=N` selectors, `other` required, whitespace between parts allowed): the branch is `new Intl.PluralRules(intl).select(Number(params[name]))`, falling back to `other`, and every `#` in it becomes `String(params[name])`; a block whose param is missing or not a finite number is left unchanged. Branches may contain simple `{placeholder}`s but no nested plural blocks or other braces. It then replaces `{name}` placeholders from params in one pass (unknown placeholders are left as is; substituted values are not interpolated again). Locales whose integer plural categories are only `other` (`zh-cn`, `ja`) use plain `{n}` text. `src/webview/i18n.ts` keeps an identical copy.
 - Contains four tables, `en`, `zhCn` (locale `zh-cn`), `es` and `ja`. Each translated table is typed `Record<MessageKey, string>`, so it must have exactly the same keys as `en` (key-parity rule, enforced by the type checker). Keys are grouped by prefix (`common.*`, `account.*`, `ext.*`, `name.*`, `label.*`, `claude.*`, `codex.*`, `server.*`, `del.*`, `tools.*`, `mcp.*`, `share.*`, `unshare.*`, `sync.*`, `status.*`, `identity.*`).
 - Has no `vscode` import, so the pure modules (`paths.ts`, `labels.ts`, `claudeShare.ts`, `shareReport.ts`, `codex/codexPaths.ts`, `codex/codexShare.ts`, `codex/codexState.ts`, `codex/codexServer.ts`) can use it for the reasons and errors they return or throw.
 - Every user-visible host string goes through `t()`: messages, errors, warnings, modal text and buttons in `commands.ts`, `codex/codexCommands.ts`, `tools.ts`, `statusBar.ts`, `extension.ts`; reasons returned or thrown by pure modules (`paths.checkSafeToDelete`, the `claudeShare` / `codexShare` errors, `describeShareReport` summaries, `codexPaths.checkCodexSafeToDelete` / `copyCodexSeed` reasons, `codexState.preCheck` reasons and thrown errors, `codexServer.planRestart` errors, `labels.validate` messages); QuickPick labels and placeholders. Terminal names stay `Claude (<label>)` / `Codex (<label>)`.
@@ -31,7 +46,7 @@ export const ja: Record<MessageKey, string>;              // Japanese
 ## src/i18nVscode.ts (imports vscode)
 
 ```ts
-export function resolveLocale(): Locale;                                    // explicit en / zh-cn / es / ja; auto maps VS Code language families zh → zh-cn, es → es, ja → ja, otherwise en
+export function resolveLocale(): Locale;                                    // a setting equal to a LOCALES id returns it; auto (or any other value) returns matchLocale(vscode.env.language)
 export function watchLocale(onChange: () => void): vscode.Disposable;      // onDidChangeConfiguration affecting 'planswap.language' → setLocale(resolveLocale()), then onChange()
 export function migrateLegacyLanguage(state: vscode.Memento): Promise<void>; // once (flag 'legacy.languageMigrated' in state = ctx.globalState): aiSwitcher.language globalValue 'en' / 'zh-cn' and planswap.language globalValue undefined → update('language', value, Global); flag set after success; errors only console.error (retried next activation)
 ```
@@ -344,7 +359,7 @@ export interface TabState {
   restart?: RestartInfo;     // codex only: host-owned wording input for the disabled text and pending banner
 }
 
-export interface PanelState { active: PanelMode; locale: Locale; claude: TabState; codex: TabState } // locale: 'en' | 'zh-cn' | 'es' | 'ja', filled by the host from getLocale()
+export interface PanelState { active: PanelMode; locale: Locale; claude: TabState; codex: TabState } // locale: one of the host LOCALES, filled by the host from getLocale()
 
 export type ToWebview =
   | { type: 'state'; state: PanelState }
@@ -416,16 +431,22 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
 
 ```ts
 export type Locale = PanelState['locale'];
+export const WEB_LOCALE_INFO: Record<Locale, { intl; match; sentenceSeparator; durationStyle; durationUnitSeparator }>; // the host LOCALE_INFO rows without userGuide
 export const en: { ... };                                  // English table, the source of truth
 export type MessageKey = keyof typeof en;
 export const zhCn: Record<MessageKey, string>;             // same keys as en (key-parity rule)
 export const es: Record<MessageKey, string>;
 export const ja: Record<MessageKey, string>;
+export function matchLocale(language: string): Locale;     // same semantics as the host matchLocale
 export function getLocale(): Locale;
 export function setLocale(locale: Locale): void;           // unknown locale falls back to 'en'
-export function t(key: MessageKey, params?: Record<string, string | number>): string; // `{name}` placeholders
+export function intlLocale(locale?: Locale): string;      // WEB_LOCALE_INFO[locale ?? getLocale()].intl
+export function formatMessage(text: string, params: Record<string, string | number> | undefined, intl: string): string; // copy of the host formatMessage
+export function t(key: MessageKey, params?: Record<string, string | number>): string; // formatMessage with the current locale: plural blocks and `{name}` placeholders
+export function joinSentences(...sentences: string[]): string; // joins with the current locale's sentenceSeparator
 ```
-- The HTML `lang` attribute matches the current locale at startup and after language changes.
+- The Webview cannot import host code, so `WEB_LOCALE_INFO`, `matchLocale` and `formatMessage` duplicate the host versions; tests assert that the shared `LOCALE_INFO` fields match, that the table set equals `LOCALES` and that both `formatMessage` copies behave the same.
+- Before the first state, the locale is `matchLocale` of the host-provided HTML `lang`. The HTML `lang` attribute is `intlLocale()` at startup and after language changes; dates and numbers use `intlLocale()`.
 - `main.ts` calls `setLocale(state.locale)` when a `state` message arrives, so `t()` always uses the locale of the most recent state.
 - Keys added with the usage refresh buttons: `usage.refreshTitle`, `usage.refreshAllTitle`.
 - All Webview strings go through it: tabs, section titles, banners, buttons, titles/tooltips, aria-labels, placeholders, help text, validation messages, version card, disabled Codex page, tools.
@@ -570,7 +591,7 @@ export function registerToolCommands(deps: ToolDeps): vscode.Disposable[];
 ```
 
 Tool behavior (all texts via `t()`):
-- `openHelp` / `openStar`: footer-only actions; call `vscode.env.openExternal` with `https://github.com/n2ns/planswap/blob/main/docs/<file>`, where `<file>` follows `getLocale()` (`en` → `user-guide.md`, `zh-cn` / `es` / `ja` → `user-guide.<locale>.md`), / `https://github.com/n2ns/planswap`. Both only open the corresponding GitHub page; no GitHub account action is performed.
+- `openHelp` / `openStar`: footer-only actions; call `vscode.env.openExternal` with `https://github.com/n2ns/planswap/blob/main/docs/<file>`, where `<file>` is `LOCALE_INFO[getLocale()].userGuide` (`en` → `user-guide.md`, others → `user-guide.<locale>.md`), / `https://github.com/n2ns/planswap`. Both only open the corresponding GitHub page; no GitHub account action is performed.
 - `updateCli`: panel-only action; creates and shows a terminal named with `t('tools.updateCli', { vendor: 'Claude' | 'Codex' })`, sends `claude update` for Claude or `env -u CODEX_HOME codex update` for Codex. No pre-check, account-state write or process-environment mutation; update progress and interaction stay in the terminal. Available even when Codex switching is disabled or uninitialized.
 - `openGlobalMd`: claude → `<currentDir()>/CLAUDE.md`; codex → `<effectiveDir()>/AGENTS.md`. When the file does not exist, a modal asks "File does not exist. Create it?\n<target>" (button "Create"); on confirmation `writeFileSync(target, '', { mode: 0o600, flag: 'wx' })`, where `target` is the link target (resolved against the real path of the link's directory) when `file` is a dangling symlink to a file of the same name, otherwise `file`, and then `showTextDocument`; create / open failures → `showErrorMessage`.
 - `openSettings`: `workbench.action.openSettings` with the argument `claudeCode.` (claude) or `chatgpt.` (codex).

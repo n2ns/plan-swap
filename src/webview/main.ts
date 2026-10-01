@@ -5,7 +5,7 @@ import '@vscode-elements/elements/dist/vscode-textfield/index.js';
 import '@vscode-elements/elements/dist/vscode-toolbar-button/index.js';
 import '@vscode-elements/elements/dist/vscode-icon/index.js';
 import type { AccountView, FromWebview, PanelMode, PanelState, RestartInfo, TabState, ToolId, ToWebview } from '../protocol';
-import { getLocale, joinSentences, setLocale, t, type MessageKey } from './i18n';
+import { getLocale, intlLocale, joinSentences, matchLocale, setLocale, t, WEB_LOCALE_INFO, type MessageKey } from './i18n';
 
 declare const __PLANSWAP_VERSION__: string;
 
@@ -32,8 +32,7 @@ type DistributiveOmit<T, K extends keyof any> = T extends unknown ? Omit<T, K> :
 type PageMessage = DistributiveOmit<Exclude<FromWebview, { type: 'ready' } | { type: 'setTab' }>, 'mode'>;
 
 // The host sets the configured language before the first state arrives.
-const pageLanguage = document.documentElement.lang.toLowerCase();
-setLocale(pageLanguage === 'zh-cn' || pageLanguage === 'es' || pageLanguage === 'ja' ? pageLanguage : 'en');
+setLocale(matchLocale(document.documentElement.lang.toLowerCase()));
 let state: PanelState = {
   active: 'claude',
   claude: { enabled: true, accounts: [] },
@@ -199,15 +198,15 @@ function relativeTime(epochSeconds: number): string {
   const total = Math.max(1, Math.ceil((epochSeconds * 1000 - Date.now()) / 60000));
   const days = Math.floor(total / 1440), hours = Math.floor((total % 1440) / 60), minutes = total % 60;
   const parts = Object.entries(days ? { days, hours } : hours ? { hours, minutes } : { minutes }).filter(([, n]) => n > 0);
-  const locale = getLocale();
+  const locale = intlLocale();
+  const { durationStyle, durationUnitSeparator } = WEB_LOCALE_INFO[getLocale()];
   // Japanese narrow units are Latin letters ("2d5h"); the short style gives "2 日 5 時間"
   const DurationFormat = (Intl as unknown as { DurationFormat?: DurationFormatConstructor }).DurationFormat;
-  if (DurationFormat) return new DurationFormat(locale, { style: locale === 'ja' ? 'short' : 'narrow' }).format(Object.fromEntries(parts));
+  if (DurationFormat) return new DurationFormat(locale, { style: durationStyle }).format(Object.fromEntries(parts));
   // Without DurationFormat (Node 22): unit numbers in the same widths, unspaced in Chinese, as DurationFormat writes them
   const unit = { days: 'day', hours: 'hour', minutes: 'minute' } as Record<string, string>;
-  const display = locale === 'ja' ? 'short' : 'narrow';
-  return parts.map(([k, n]) => new Intl.NumberFormat(locale, { style: 'unit', unit: unit[k], unitDisplay: display }).format(n))
-    .join(locale.toLowerCase().startsWith('zh') ? '' : ' ');
+  return parts.map(([k, n]) => new Intl.NumberFormat(locale, { style: 'unit', unit: unit[k], unitDisplay: durationStyle }).format(n))
+    .join(durationUnitSeparator);
 }
 
 function usageWindow(w: UsageWindowView): HTMLElement {
@@ -227,7 +226,7 @@ function usageWindow(w: UsageWindowView): HTMLElement {
   // part of the bar's screen reader value
   const resetText = w.resetsAt !== undefined && t('usage.resetsIn', {
     time: relativeTime(w.resetsAt),
-    date: new Date(w.resetsAt * 1000).toLocaleString(getLocale(), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }),
+    date: new Date(w.resetsAt * 1000).toLocaleString(intlLocale(), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }),
   });
   const reset = resetText && h('span', { class: 'usage-reset', title: resetText, 'aria-hidden': 'true' },
     h('vscode-icon', { name: 'clock', size: '12' }), h('span', { class: 'usage-reset-time' }, relativeTime(w.resetsAt!)));
@@ -248,7 +247,7 @@ function usageWindow(w: UsageWindowView): HTMLElement {
 // windows, always shown
 function usageHistory(a: AccountView): HTMLElement | null {
   if (!a.usage) return null;
-  const time = new Date(a.usage.checkedAt).toLocaleString(getLocale());
+  const time = new Date(a.usage.checkedAt).toLocaleString(intlLocale());
   const general = a.usage.windows.filter((w) => !w.scope);
   const scoped = a.usage.windows.filter((w) => w.scope);
   return h('div', { class: 'row-usage', title: t('usage.observed', { time }) }, ...general.map(usageWindow), ...scoped.map(usageWindow));
@@ -1027,7 +1026,7 @@ window.addEventListener('message', (e: MessageEvent<ToWebview>) => {
     if (firstState) console.info(`[planswap] first state received: ${(renderStartedAt - startedAt).toFixed(1)}ms since script start`);
     state = msg.state;
     // The host sets <html lang> only once when it creates the webview; keep it in sync on every push
-    document.documentElement.lang = state.locale === 'zh-cn' ? 'zh-CN' : state.locale;
+    document.documentElement.lang = intlLocale(state.locale);
     if (state.locale !== getLocale()) applyLocale();
     // No local record yet: adopt the host's tab and remember it
     if (!activeTab) setActiveTab(state.active);

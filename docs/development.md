@@ -81,6 +81,8 @@ English is the source of every visible string; the translations live in `src/i18
 | Signed-out state | Not logged in | 未登录 | Sin sesión | 未ログイン | |
 | Switch accounts | Switch | 切换 | Cambiar | 切り替え | |
 
+Counts use ICU plural blocks in `src/i18n.ts` and `src/webview/i18n.ts` (not in `package.nls*.json`): `{n, plural, one {# account} other {# accounts}}`. `#` stands for the number; a branch may also contain ordinary `{placeholder}`s, but no nested plural block. `other` is required; use only the CLDR categories of the locale (`Intl.PluralRules(<intl>).resolvedOptions().pluralCategories`): English `one` / `other`; Spanish `one` / `other` (its `many`, for millions, falls back to `other` and may be left out). Chinese and Japanese have only `other` for whole numbers, so they write plain text with `{n}` instead of a block. Do not write `account(s)` / `cuenta(s)`. `test/i18n.test.ts` checks every block.
+
 A file or folder link as an object (a symbolic link or junction) is not the account mode: Spanish keeps `enlace` there ("enlaces de archivo"). Product names, setting keys, command ids, file names, rc marker text and account terminal names are never translated (see AGENTS.md).
 
 ## Automated test coverage

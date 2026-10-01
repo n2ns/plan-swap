@@ -9,7 +9,7 @@ import { ensureClaudeLinks, isSharedClaudeAccount, mirrorClaudeJson, type LinkOp
 import { askCopyFallback } from './linkPolicy';
 import { describeShareReport, type ShareReportLike } from './shareReport';
 import type { PanelMode, ToolId } from './protocol';
-import { getLocale, t, type Locale } from './i18n';
+import { getLocale, LOCALE_INFO, t } from './i18n';
 import { CLAUDE_REFRESH_ALL_USAGE_COMMAND, CLAUDE_REFRESH_USAGE_COMMAND, CODEX_REFRESH_ALL_USAGE_COMMAND, REFRESH_USAGE_COMMAND } from './statusBar';
 import { isWindows } from './platform';
 import { accountTerminalShell } from './terminalShell';
@@ -52,9 +52,8 @@ const errText = (err: unknown): string => (err instanceof Error ? err.message : 
 
 /** Tool entry shared by the panel toolbar and the Command Palette */
 // The user guide on GitHub in the UI language; English is the source and has no suffix
-const USER_GUIDE_FILES: Record<Locale, string> = { en: 'user-guide.md', 'zh-cn': 'user-guide.zh-cn.md', es: 'user-guide.es.md', ja: 'user-guide.ja.md' };
 function userGuideUrl(): string {
-  return `https://github.com/n2ns/planswap/blob/main/docs/${USER_GUIDE_FILES[getLocale()]}`;
+  return `https://github.com/n2ns/planswap/blob/main/docs/${LOCALE_INFO[getLocale()].userGuide}`;
 }
 
 export async function runTool(mode: PanelMode, tool: ToolId, deps: ToolDeps): Promise<void> {

@@ -600,7 +600,7 @@ describe('panel message handlers', () => {
       assert.equal(isSharedCodexAccount(a.dir), false);
       assert.equal(read(path.join(a.dir, 'config.toml')), 'model = "m"\n');
       assert.ok(!fs.existsSync(path.join(a.dir, 'sessions')));
-      assert.match(String(infos.mock.calls[1].arguments[0]), /^conv is now independent: removed \d+ link\(s\), copied /);
+      assert.match(String(infos.mock.calls[1].arguments[0]), /^conv is now independent: removed \d+ links?, copied /);
       assert.equal(h.refreshes(), 2);
 
       writeSelectedDir(a.dir);

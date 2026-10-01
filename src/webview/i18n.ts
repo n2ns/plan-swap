@@ -55,7 +55,7 @@ export const en = {
   'confirm.cancel': 'Cancel',
 
   'validate.labelEmpty': 'Enter a display name',
-  'validate.labelTooLong': 'Display name can be at most {max} characters',
+  'validate.labelTooLong': 'Display name can be at most {max, plural, one {# character} other {# characters}}',
   'validate.labelNewline': 'Display name cannot contain line breaks',
   'validate.labelDuplicate': "Same as another account's name",
   'validate.nameChars': 'Only A-Z, a-z, 0-9, underscores (_) and hyphens (-) are allowed',
@@ -220,7 +220,7 @@ export const es: Record<MessageKey, string> = {
   'usage.observed': 'Última consulta: {time}',
   'usage.remaining': '{percent}% restante',
   'usage.window': 'Límite',
-  'usage.days': 'Límite de {n} días',
+  'usage.days': '{n, plural, one {Límite de # día} other {Límite de # días}}',
   'usage.hours': 'Límite de {n} h',
   'usage.minutes': 'Límite de {n} min',
   'usage.scoped': '{limit} · {scope}',
@@ -267,7 +267,7 @@ export const es: Record<MessageKey, string> = {
   'confirm.cancel': 'Cancelar',
 
   'validate.labelEmpty': 'Introduce un nombre visible',
-  'validate.labelTooLong': 'El nombre visible admite hasta {max} caracteres',
+  'validate.labelTooLong': 'El nombre visible admite hasta {max, plural, one {# carácter} other {# caracteres}}',
   'validate.labelNewline': 'El nombre visible no admite saltos de línea',
   'validate.labelDuplicate': 'Coincide con el nombre de otra cuenta',
   'validate.nameChars': 'Solo se admiten A-Z, a-z, 0-9, guiones bajos (_) y guiones (-)',
@@ -426,9 +426,34 @@ export const ja: Record<MessageKey, string> = {
 
 const TABLES: Record<Locale, Record<MessageKey, string>> = { en, 'zh-cn': zhCn, es, ja };
 
+// Per-locale metadata the Webview needs; the same fields as LOCALE_INFO in src/i18n.ts (keep both in step)
+export const WEB_LOCALE_INFO: Record<Locale, {
+  intl: string;
+  match: string[];
+  sentenceSeparator: '' | ' ';
+  durationStyle: 'narrow' | 'short';
+  durationUnitSeparator: '' | ' ';
+}> = {
+  en: { intl: 'en', match: ['en'], sentenceSeparator: ' ', durationStyle: 'narrow', durationUnitSeparator: ' ' },
+  'zh-cn': { intl: 'zh-CN', match: ['zh-cn', 'zh'], sentenceSeparator: '', durationStyle: 'narrow', durationUnitSeparator: '' },
+  es: { intl: 'es', match: ['es'], sentenceSeparator: ' ', durationStyle: 'narrow', durationUnitSeparator: ' ' },
+  ja: { intl: 'ja', match: ['ja'], sentenceSeparator: '', durationStyle: 'short', durationUnitSeparator: ' ' },
+};
+
+const LOCALE_IDS = Object.keys(WEB_LOCALE_INFO) as Locale[];
+
+// Picks the locale for a language tag (lowercased first): a full-tag match first, then the primary subtag; English otherwise.
+// A copy of matchLocale in src/i18n.ts
+export function matchLocale(language: string): Locale {
+  const tag = language.toLowerCase();
+  const primary = tag.split('-')[0];
+  return LOCALE_IDS.find((l) => WEB_LOCALE_INFO[l].match.includes(tag))
+    ?? LOCALE_IDS.find((l) => WEB_LOCALE_INFO[l].match.includes(primary))
+    ?? 'en';
+}
+
 // Before the first state arrives, guess from the webview's language (it follows the editor's display language)
-const language = navigator.language.toLowerCase().split('-')[0];
-let current: Locale = language === 'zh' ? 'zh-cn' : language === 'es' || language === 'ja' ? language : 'en';
+let current: Locale = matchLocale(navigator.language.toLowerCase());
 
 export function getLocale(): Locale {
   return current;
@@ -438,14 +463,38 @@ export function setLocale(locale: Locale): void {
   current = TABLES[locale] ? locale : 'en';
 }
 
-// Replaces `{name}` placeholders with params; unknown placeholders are left as-is
-export function t(key: MessageKey, params?: Record<string, string | number>): string {
-  const text = TABLES[current][key];
+// BCP 47 tag of a locale (the current one by default) for Intl APIs and <html lang>
+export function intlLocale(locale?: Locale): string {
+  return WEB_LOCALE_INFO[locale ?? current].intl;
+}
+
+const PLURAL_RE = /\{(\w+)\s*,\s*plural\s*,((?:\s*(?:zero|one|two|few|many|other)\s*\{[^{}]*(?:\{\w+\}[^{}]*)*\})+)\s*\}/g;
+const BRANCH_RE = /(zero|one|two|few|many|other)\s*\{([^{}]*(?:\{\w+\}[^{}]*)*)\}/g;
+const pluralRules = new Map<string, Intl.PluralRules>();
+
+// Fills a message: ICU plural blocks `{name, plural, one {…} other {…}}` pick a branch by Intl.PluralRules of `intl`
+// with `#` replaced by the count (left as-is when the count is missing or not a finite number), then `{name}`
+// placeholders are replaced with params (unknown placeholders are left as-is). A copy of formatMessage in src/i18n.ts
+export function formatMessage(text: string, params: Record<string, string | number> | undefined, intl: string): string {
   if (!params) return text;
-  return text.replace(/\{(\w+)\}/g, (m, name: string) => (name in params ? String(params[name]) : m));
+  const plural = text.replace(PLURAL_RE, (block, name: string, body: string) => {
+    const count = Number(params[name]);
+    if (!(name in params) || !Number.isFinite(count)) return block;
+    const branches: Record<string, string> = {};
+    for (const [, cat, branch] of body.matchAll(BRANCH_RE)) branches[cat] = branch;
+    if (!('other' in branches)) return block;
+    let rules = pluralRules.get(intl);
+    if (!rules) pluralRules.set(intl, rules = new Intl.PluralRules(intl));
+    return (branches[rules.select(count)] ?? branches.other).replaceAll('#', String(params[name]));
+  });
+  return plural.replace(/\{(\w+)\}/g, (m, name: string) => (name in params ? String(params[name]) : m));
+}
+
+export function t(key: MessageKey, params?: Record<string, string | number>): string {
+  return formatMessage(TABLES[current][key], params, WEB_LOCALE_INFO[current].intl);
 }
 
 // Joins translated sentences: Chinese and Japanese end sentences with a full-width stop and use no space after it
 export function joinSentences(...sentences: string[]): string {
-  return sentences.join(current === 'zh-cn' || current === 'ja' ? '' : ' ');
+  return sentences.join(WEB_LOCALE_INFO[current].sentenceSeparator);
 }

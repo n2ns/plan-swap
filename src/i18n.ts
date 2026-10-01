@@ -1,6 +1,42 @@
 // Host-side message tables and lookup. Must not import vscode so pure modules can use it.
 
-export type Locale = 'en' | 'zh-cn' | 'es' | 'ja';
+// Adding a locale: add its id here, its row to LOCALE_INFO, its message table to `tables`, the webview twins in
+// src/webview/i18n.ts and the `planswap.language` enum in package.json.
+export const LOCALES = ['en', 'zh-cn', 'es', 'ja'] as const;
+export type Locale = (typeof LOCALES)[number];
+
+export interface LocaleInfo {
+  /** BCP 47 tag for Intl APIs and `<html lang>` */
+  intl: string;
+  /** Lowercase editor language tags or primary subtags that select this locale */
+  match: string[];
+  /** Between translated sentences */
+  sentenceSeparator: '' | ' ';
+  /** Intl.DurationFormat style / Intl.NumberFormat unitDisplay for durations */
+  durationStyle: 'narrow' | 'short';
+  /** Joins unit parts when Intl.DurationFormat is unavailable */
+  durationUnitSeparator: '' | ' ';
+  /** User guide file under docs/ */
+  userGuide: string;
+}
+
+// src/webview/i18n.ts keeps the same rows without userGuide (the Webview cannot import host code); keep both in step
+export const LOCALE_INFO: Record<Locale, LocaleInfo> = {
+  en: { intl: 'en', match: ['en'], sentenceSeparator: ' ', durationStyle: 'narrow', durationUnitSeparator: ' ', userGuide: 'user-guide.md' },
+  'zh-cn': { intl: 'zh-CN', match: ['zh-cn', 'zh'], sentenceSeparator: '', durationStyle: 'narrow', durationUnitSeparator: '', userGuide: 'user-guide.zh-cn.md' },
+  es: { intl: 'es', match: ['es'], sentenceSeparator: ' ', durationStyle: 'narrow', durationUnitSeparator: ' ', userGuide: 'user-guide.es.md' },
+  // Japanese narrow units are Latin letters ("2d5h"); the short style gives "2 日 5 時間"
+  ja: { intl: 'ja', match: ['ja'], sentenceSeparator: '', durationStyle: 'short', durationUnitSeparator: ' ', userGuide: 'user-guide.ja.md' },
+};
+
+/** The locale for an editor language tag: an exact tag match first, then the primary subtag, else English. */
+export function matchLocale(language: string): Locale {
+  const tag = language.toLowerCase();
+  const primary = tag.split('-')[0];
+  return LOCALES.find((l) => LOCALE_INFO[l].match.includes(tag))
+    ?? LOCALES.find((l) => LOCALE_INFO[l].match.includes(primary))
+    ?? 'en';
+}
 
 // English is the source of truth for the key set.
 export const en = {
@@ -75,19 +111,19 @@ export const en = {
   'status.usageUnknownError': 'Usage limits unavailable: unknown error{detail}',
   'status.remainingShort': '{percent}% left',
   'claude.usageAllProgress': 'Checking Claude usage limits: {label} ({done}/{total})',
-  'claude.usageAllDone': 'Checked the usage limits of {n} Claude accounts.',
-  'claude.usageAllFailed': 'Checked {ok} of {n} Claude accounts. Failed: {failures}',
+  'claude.usageAllDone': 'Checked the usage limits of {n, plural, one {# Claude account} other {# Claude accounts}}.',
+  'claude.usageAllFailed': 'Checked {ok} of {n, plural, one {# Claude account} other {# Claude accounts}}. Failed: {failures}',
   'claude.usageAllNone': 'No signed-in Claude account to check.',
-  'claude.usageAllCancelled': 'Cancelled after checking {ok} of {n} Claude accounts.',
+  'claude.usageAllCancelled': 'Cancelled after checking {ok} of {n, plural, one {# Claude account} other {# Claude accounts}}.',
   'claude.usageAllMore': '{n} more',
   'usage.cooldown': 'Usage limits were checked less than a minute ago; try again in {seconds} s.',
   'usage.allCooldown': 'Every account was checked less than a minute ago; try again in {seconds} s.',
-  'usage.allSkipped': 'Skipped {n} account(s) checked less than a minute ago.',
+  'usage.allSkipped': 'Skipped {n, plural, one {# account} other {# accounts}} checked less than a minute ago.',
   'codex.usageAllProgress': 'Checking Codex usage limits: {label} ({done}/{total})',
-  'codex.usageAllDone': 'Checked the usage limits of {n} Codex accounts.',
-  'codex.usageAllFailed': 'Checked {ok} of {n} Codex accounts. Failed: {failures}',
+  'codex.usageAllDone': 'Checked the usage limits of {n, plural, one {# Codex account} other {# Codex accounts}}.',
+  'codex.usageAllFailed': 'Checked {ok} of {n, plural, one {# Codex account} other {# Codex accounts}}. Failed: {failures}',
   'codex.usageAllNone': 'No signed-in Codex account to check.',
-  'codex.usageAllCancelled': 'Cancelled after checking {ok} of {n} Codex accounts.',
+  'codex.usageAllCancelled': 'Cancelled after checking {ok} of {n, plural, one {# Codex account} other {# Codex accounts}}.',
   'status.codexUsageNotLoggedIn': 'Usage limits unavailable: not signed in.',
   'status.codexUsageAuthExpired': 'Usage limits unavailable: the sign-in has expired; sign in again.',
   'status.codexUsageCliMissing': 'Usage limits unavailable: the codex command was not found.',
@@ -284,8 +320,8 @@ export const en = {
   'tools.syncNotInit': 'The {vendor} part is not initialized; cannot re-link linked accounts.',
   'tools.pick.sync': 'Select the vendor whose linked accounts to re-link',
   'sync.none': 'No linked {vendor} accounts to re-link.',
-  'sync.attempted': 'Attempted to re-link {count} linked {vendor} account(s).',
-  'sync.done': 'Re-linked {count} linked {vendor} account(s) to the default account.',
+  'sync.attempted': 'Attempted to re-link {count, plural, one {# linked {vendor} account} other {# linked {vendor} accounts}}.',
+  'sync.done': 'Re-linked {count, plural, one {# linked {vendor} account} other {# linked {vendor} accounts}} to the default account.',
   'sync.issues': 'Needs attention: {list}',
   'sync.item': '{name}: {notes}',
   'share.addNotes': 'Account {name} was added. Linking reported: {notes}',
@@ -305,15 +341,15 @@ export const en = {
   'unshare.confirmCodex': 'Unlink {label} from the default account? The links in {dir} are removed and the account gets its own copy of the default configuration, rules and skills. Shared sessions, history and thread databases stay in the default account and are not copied. The login, memories and any existing local data stay. This cannot be undone automatically.',
   'unshare.confirmCodexWindows': 'Unlink {label} from the default account? The links in {dir} are removed and the account gets its own copy of the default configuration, rules and skills. Shared sessions and history stay in the default account and are not copied. The login, memories, independent thread databases and any other existing local data stay. This cannot be undone automatically.',
   'unshare.confirmButton': 'Unlink',
-  'unshare.done': '{label} is now independent: removed {removed} link(s), copied {copied}.',
+  'unshare.done': '{label} is now independent: removed {removed, plural, one {# link} other {# links}}, copied {copied}.',
   'unshare.nothingCopied': 'nothing',
   'unshare.skipped': 'Not copied: {list}.',
   'unshare.failed': 'Unlinking {label} stopped: {error}',
   'unshare.default': 'The default directory cannot be made independent: {dir}',
   'unshare.notShared': 'Not a linked account: {dir}',
   'share.refreshWarning': 'Re-linking {label} to the default account reported: {notes}',
-  'share.r.moved': 'moved {count} file(s) into the default account',
-  'share.r.duplicates': 'dropped {count} identical file(s)',
+  'share.r.moved': 'moved {count, plural, one {# file} other {# files}} into the default account',
+  'share.r.duplicates': 'dropped {count, plural, one {# identical file} other {# identical files}}',
   'share.r.keptBoth': 'kept both versions, merge manually: {list}',
   'share.r.backups': 'backed up: {list}',
   'share.r.conflicts': 'kept the account\'s own: {list}',
@@ -730,19 +766,19 @@ export const es: Record<MessageKey, string> = {
   'status.usageUnknownError': 'Límites de uso no disponibles: error desconocido{detail}',
   'status.remainingShort': '{percent}% restante',
   'claude.usageAllProgress': 'Consultando límites de uso de Claude: {label} ({done}/{total})',
-  'claude.usageAllDone': 'Se consultaron los límites de uso de {n} cuentas de Claude.',
-  'claude.usageAllFailed': 'Se consultaron {ok} de {n} cuentas de Claude. Errores: {failures}',
+  'claude.usageAllDone': 'Se consultaron los límites de uso de {n, plural, one {# cuenta} other {# cuentas}} de Claude.',
+  'claude.usageAllFailed': '{ok, plural, one {Se consultó} other {Se consultaron}} {ok} de {n, plural, one {# cuenta} other {# cuentas}} de Claude. Errores: {failures}',
   'claude.usageAllNone': 'No hay ninguna cuenta de Claude con sesión iniciada para consultar.',
-  'claude.usageAllCancelled': 'Cancelado tras consultar {ok} de {n} cuentas de Claude.',
+  'claude.usageAllCancelled': 'Cancelado tras consultar {ok} de {n, plural, one {# cuenta} other {# cuentas}} de Claude.',
   'claude.usageAllMore': '{n} más',
   'usage.cooldown': 'Los límites de uso se consultaron hace menos de un minuto; vuelve a intentarlo en {seconds} s.',
   'usage.allCooldown': 'Todas las cuentas se consultaron hace menos de un minuto; vuelve a intentarlo en {seconds} s.',
-  'usage.allSkipped': 'Se omitieron {n} cuenta(s) consultadas hace menos de un minuto.',
+  'usage.allSkipped': '{n, plural, one {Se omitió # cuenta consultada} other {Se omitieron # cuentas consultadas}} hace menos de un minuto.',
   'codex.usageAllProgress': 'Consultando límites de uso de Codex: {label} ({done}/{total})',
-  'codex.usageAllDone': 'Se consultaron los límites de uso de {n} cuentas de Codex.',
-  'codex.usageAllFailed': 'Se consultaron {ok} de {n} cuentas de Codex. Errores: {failures}',
+  'codex.usageAllDone': 'Se consultaron los límites de uso de {n, plural, one {# cuenta} other {# cuentas}} de Codex.',
+  'codex.usageAllFailed': '{ok, plural, one {Se consultó} other {Se consultaron}} {ok} de {n, plural, one {# cuenta} other {# cuentas}} de Codex. Errores: {failures}',
   'codex.usageAllNone': 'No hay ninguna cuenta de Codex con sesión iniciada para consultar.',
-  'codex.usageAllCancelled': 'Cancelado tras consultar {ok} de {n} cuentas de Codex.',
+  'codex.usageAllCancelled': 'Cancelado tras consultar {ok} de {n, plural, one {# cuenta} other {# cuentas}} de Codex.',
   'status.codexUsageNotLoggedIn': 'Límites de uso no disponibles: no hay sesión iniciada.',
   'status.codexUsageAuthExpired': 'Límites de uso no disponibles: la sesión ha caducado; vuelve a iniciar sesión.',
   'status.codexUsageCliMissing': 'Límites de uso no disponibles: no se encontró el comando codex.',
@@ -900,8 +936,8 @@ export const es: Record<MessageKey, string> = {
   'tools.syncNotInit': '{vendor} no está inicializado; no se pueden revincular las cuentas.',
   'tools.pick.sync': 'Elige el proveedor cuyas cuentas quieres revincular',
   'sync.none': 'No hay cuentas vinculadas de {vendor} para revincular.',
-  'sync.attempted': 'Se intentó revincular {count} cuentas de {vendor}.',
-  'sync.done': 'Se revincularon {count} cuentas de {vendor} a la cuenta predeterminada.',
+  'sync.attempted': 'Se intentó revincular {count, plural, one {# cuenta} other {# cuentas}} de {vendor}.',
+  'sync.done': '{count, plural, one {Se revinculó # cuenta} other {Se revincularon # cuentas}} de {vendor} a la cuenta predeterminada.',
   'sync.issues': 'Requiere atención: {list}',
   'sync.item': '{name}: {notes}',
   'share.addNotes': 'Se añadió la cuenta {name}. Resultado del enlace: {notes}',
@@ -921,15 +957,15 @@ export const es: Record<MessageKey, string> = {
   'unshare.confirmCodex': '¿Desvincular {label} de la cuenta predeterminada? Se eliminarán los enlaces de {dir} y la cuenta recibirá su propia copia de la configuración, reglas y skills predeterminadas. Las sesiones, el historial y las bases de datos de hilos compartidos quedarán en la cuenta predeterminada y no se copiarán. Se conservan el inicio de sesión, Memories y los datos locales existentes. No se puede deshacer automáticamente.',
   'unshare.confirmCodexWindows': '¿Desvincular {label} de la cuenta predeterminada? Se eliminarán los enlaces de {dir} y la cuenta recibirá su propia copia de la configuración, reglas y skills predeterminadas. Las sesiones y el historial compartidos quedarán en la cuenta predeterminada y no se copiarán. Se conservan el inicio de sesión, Memories, las bases de datos de hilos independientes y los demás datos locales existentes. No se puede deshacer automáticamente.',
   'unshare.confirmButton': 'Desvincular',
-  'unshare.done': '{label} ya es independiente: {removed} enlaces eliminados; copiado: {copied}.',
+  'unshare.done': '{label} ya es independiente: {removed, plural, one {# enlace eliminado} other {# enlaces eliminados}}; copiado: {copied}.',
   'unshare.nothingCopied': 'nada',
   'unshare.skipped': 'Sin copiar: {list}.',
   'unshare.failed': 'Se detuvo la desvinculación de {label}: {error}',
   'unshare.default': 'El directorio predeterminado no se puede hacer independiente: {dir}',
   'unshare.notShared': 'No es una cuenta vinculada: {dir}',
   'share.refreshWarning': 'Al revincular {label} a la cuenta predeterminada: {notes}',
-  'share.r.moved': '{count} archivos movidos a la cuenta predeterminada',
-  'share.r.duplicates': '{count} archivos idénticos eliminados',
+  'share.r.moved': '{count, plural, one {# archivo movido} other {# archivos movidos}} a la cuenta predeterminada',
+  'share.r.duplicates': '{count, plural, one {# archivo idéntico eliminado} other {# archivos idénticos eliminados}}',
   'share.r.keptBoth': 'ambas versiones conservadas; fusión manual necesaria: {list}',
   'share.r.backups': 'copia de seguridad creada: {list}',
   'share.r.conflicts': 'se conservaron los archivos de la cuenta: {list}',
@@ -1268,11 +1304,39 @@ export function getLocale(): Locale {
   return current;
 }
 
-/** Looks up a message in the current locale and fills `{name}` placeholders; unknown placeholders are left as-is. */
-export function t(key: MessageKey, params?: Record<string, string | number>): string {
-  const text = tables[current][key];
+/** The BCP 47 tag of a locale (default: the current one) for Intl APIs and `<html lang>`. */
+export function intlLocale(locale?: Locale): string {
+  return LOCALE_INFO[locale ?? current].intl;
+}
+
+const PLURAL_RE = /\{(\w+)\s*,\s*plural\s*,((?:\s*(?:zero|one|two|few|many|other)\s*\{[^{}]*(?:\{\w+\}[^{}]*)*\})+)\s*\}/g;
+const BRANCH_RE = /(zero|one|two|few|many|other)\s*\{([^{}]*(?:\{\w+\}[^{}]*)*)\}/g;
+const pluralRules = new Map<string, Intl.PluralRules>();
+
+/**
+ * Fills a message: first ICU-style plural blocks `{name, plural, one {# file} other {# files}}` (CLDR categories
+ * zero/one/two/few/many/other, `other` required, `#` is the count; a block whose count is missing or not a number
+ * is left as-is), then `{name}` placeholders (unknown ones are left as-is). src/webview/i18n.ts keeps a copy (the
+ * Webview cannot import host code); keep both in step.
+ */
+export function formatMessage(text: string, params: Record<string, string | number> | undefined, intl: string): string {
   if (!params) return text;
-  return text.replace(/\{(\w+)\}/g, (m, name: string) => (name in params ? String(params[name]) : m));
+  const plural = text.replace(PLURAL_RE, (block, name: string, body: string) => {
+    const count = Number(params[name]);
+    if (!(name in params) || !Number.isFinite(count)) return block;
+    const branches: Record<string, string> = {};
+    for (const [, cat, branch] of body.matchAll(BRANCH_RE)) branches[cat] = branch;
+    if (!('other' in branches)) return block;
+    let rules = pluralRules.get(intl);
+    if (!rules) pluralRules.set(intl, rules = new Intl.PluralRules(intl));
+    return (branches[rules.select(count)] ?? branches.other).replaceAll('#', String(params[name]));
+  });
+  return plural.replace(/\{(\w+)\}/g, (m, name: string) => (name in params ? String(params[name]) : m));
+}
+
+/** Looks up a message in the current locale and fills its plural blocks and `{name}` placeholders (see formatMessage). */
+export function t(key: MessageKey, params?: Record<string, string | number>): string {
+  return formatMessage(tables[current][key], params, LOCALE_INFO[current].intl);
 }
 
 /** The message in every locale (e.g. to reserve all localized display names). */
