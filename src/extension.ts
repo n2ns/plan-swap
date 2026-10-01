@@ -11,7 +11,7 @@ import { ensureCodexLinks, isSharedCodexAccount } from './codex/codexShare';
 import { CLAUDE_REFRESH_USAGE_COMMAND, REFRESH_USAGE_COMMAND, StatusBar } from './statusBar';
 import { registerCommands } from './commands';
 import { affectsSetting, currentDir, isExplicitConfigDir, settingEnv, settingEnvNames } from './claudeSettings';
-import { queryClaudeUsage } from './claudeUsage';
+import { queryClaudeUsage, readUsageFetchedAt } from './claudeUsage';
 import { ClaudeUsageMonitor } from './claudeUsageMonitor';
 import { CodexAccountStore } from './codex/codexStore';
 import { codexPanelSource, codexRunsInWsl, registerCodexCommands, restartServerInteractive } from './codex/codexCommands';
@@ -109,6 +109,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   }, {
     query: (dir) => queryClaudeUsage(dir, isExplicitConfigDir(dir), { env: settingEnv() }),
     eligible: (dir) => readAccountInfo(dir, isExplicitConfigDir(dir)).identity !== undefined,
+    cachedAt: (dir) => readUsageFetchedAt(dir, isExplicitConfigDir(dir)),
   });
   statusBar.setClaudeUsage(claudeUsage.current());
   // Account-info changes re-check Claude usage only after the first scheduled check, not during start-up

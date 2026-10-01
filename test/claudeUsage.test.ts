@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { PassThrough } from 'node:stream';
 import type { SpawnOptions } from 'node:child_process';
 import {
-  CLAUDE_USAGE_MAX_AGE_MS, parseUsageCache, queryClaudeUsage, readClaudeUsage, usageEnv,
+  CLAUDE_USAGE_MAX_AGE_MS, parseUsageCache, queryClaudeUsage, readClaudeUsage, readUsageFetchedAt, usageEnv,
   type ClaudeUsageChild, type ClaudeUsageSpawn,
 } from '../src/claudeUsage';
 import { ClaudeUsageMonitor, type ClaudeUsageState } from '../src/claudeUsageMonitor';
@@ -300,6 +300,63 @@ test('the monitor joins concurrent refreshes, re-checks only when stale or for a
   await stale;
   assert.equal(calls.length, 3);
   assert.ok(states.some((s) => s.checking));
+});
+
+test('the monitor skips a scheduled query while the account cache is fresh, but not a manual refresh', async () => {
+  let now = 10_000;
+  let cached: number | undefined = now - 500;
+  let calls = 0;
+  const m = new ClaudeUsageMonitor(() => '/a', () => undefined, {
+    now: () => now, staleMs: 1000, cachedAt: () => cached,
+    query: async () => { calls++; return { ok: true }; },
+  });
+  await m.refreshIfStale();
+  assert.equal(calls, 0, 'refreshed elsewhere less than staleMs ago');
+  now += 600;
+  await m.refreshIfStale();
+  assert.equal(calls, 1, 'the cache is older than staleMs');
+  cached = undefined;
+  await m.refreshIfStale();
+  assert.equal(calls, 1, 'this window just tried: no retry before staleMs');
+  await m.refresh();
+  assert.equal(calls, 2, 'a manual refresh always queries');
+  now += 1000;
+  cached = now - 10;
+  await m.refreshIfStale();
+  assert.equal(calls, 2);
+  now += 1000;
+  cached = now + 10 * 60_000;
+  await m.refreshIfStale();
+  assert.equal(calls, 3, 'a cache time far in the future (clock moved back) is not fresh');
+});
+
+test('a cache refreshed elsewhere after a failed attempt clears that failure without querying', async () => {
+  let now = 0;
+  let cached: number | undefined;
+  let calls = 0;
+  const m = new ClaudeUsageMonitor(() => '/a', () => undefined, {
+    now: () => now, staleMs: 1000, cachedAt: () => cached,
+    query: async () => { calls++; return { ok: false, reason: 'timeout' }; },
+  });
+  await m.refresh();
+  assert.equal(m.current().failure?.reason, 'timeout');
+  now = 1500;
+  cached = 1400;
+  await m.refreshIfStale();
+  assert.equal(calls, 1);
+  assert.equal(m.current().failure, undefined);
+});
+
+test('readUsageFetchedAt returns the attributable cache time of any age', LINUX_ONLY, () => {
+  const tmp = makeTempHome('claude-usage-fetched');
+  try {
+    const dir = path.join(tmp.home, '.claude-work');
+    fs.mkdirSync(dir);
+    fs.writeFileSync(path.join(dir, '.claude.json'), JSON.stringify(cache({ fetchedAtMs: 5 })));
+    assert.equal(readUsageFetchedAt(dir, true), 5);
+    fs.writeFileSync(path.join(dir, '.claude.json'), JSON.stringify(cache({}, 'acct-2')));
+    assert.equal(readUsageFetchedAt(dir, true), undefined);
+  } finally { tmp.restore(); }
 });
 
 test('the monitor follows up once when the current account changes during a query', async () => {

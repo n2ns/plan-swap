@@ -183,33 +183,56 @@ function loginStatus(a: AccountView): HTMLElement | null {
   return null;
 }
 
+type UsageWindowView = NonNullable<AccountView['usage']>['windows'][number];
+
+// Rows whose model-specific limits the user expanded; kept across re-renders for this Webview's lifetime
+const expandedScoped = new Set<string>();
+
+function usageWindow(w: UsageWindowView): HTMLElement {
+  const minutes = w.windowMinutes;
+  const limit = minutes === undefined ? t('usage.window')
+    : minutes % 1440 === 0 ? t('usage.days', { n: minutes / 1440 })
+      : minutes % 60 === 0 ? t('usage.hours', { n: minutes / 60 })
+        : t('usage.minutes', { n: minutes });
+  // Claude model-specific limits carry the model name (account-independent text, rendered via textContent)
+  const duration = w.scope ? t('usage.scoped', { limit, scope: w.scope }) : limit;
+  const remaining = Number((100 - w.usedPercent).toFixed(2));
+  const label = t('usage.remaining', { percent: remaining });
+  return h('div', { class: 'usage-window' },
+    h('div', { class: 'usage-labels' }, h('span', {}, duration), h('span', {}, label)),
+    h('div', {
+      class: 'usage-track', role: 'progressbar', 'aria-label': duration,
+      'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(remaining), 'aria-valuetext': label,
+    }, h('div', { class: 'usage-fill', style: `width: ${remaining}%` })),
+    w.resetsAt !== undefined && h('div', { class: 'usage-reset' },
+      t('usage.resets', { time: new Date(w.resetsAt * 1000).toLocaleString(getLocale(), {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+      }) })),
+  );
+}
+
+// Model-specific limits (Claude) are folded into a collapsed section below the general windows
 function usageHistory(a: AccountView): HTMLElement | null {
   if (!a.usage) return null;
   const time = new Date(a.usage.checkedAt).toLocaleString(getLocale());
-  return h('div', { class: 'row-usage', title: t('usage.observed', { time }) },
-    ...a.usage.windows.map((w) => {
-      const minutes = w.windowMinutes;
-      const limit = minutes === undefined ? t('usage.window')
-        : minutes % 1440 === 0 ? t('usage.days', { n: minutes / 1440 })
-          : minutes % 60 === 0 ? t('usage.hours', { n: minutes / 60 })
-            : t('usage.minutes', { n: minutes });
-      // Claude model-specific limits carry the model name (account-independent text, rendered via textContent)
-      const duration = w.scope ? t('usage.scoped', { limit, scope: w.scope }) : limit;
-      const remaining = Number((100 - w.usedPercent).toFixed(2));
-      const label = t('usage.remaining', { percent: remaining });
-      return h('div', { class: 'usage-window' },
-        h('div', { class: 'usage-labels' }, h('span', {}, duration), h('span', {}, label)),
-        h('div', {
-          class: 'usage-track', role: 'progressbar', 'aria-label': duration,
-          'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(remaining), 'aria-valuetext': label,
-        }, h('div', { class: 'usage-fill', style: `width: ${remaining}%` })),
-        w.resetsAt !== undefined && h('div', { class: 'usage-reset' },
-          t('usage.resets', { time: new Date(w.resetsAt * 1000).toLocaleString(getLocale(), {
-            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
-          }) })),
-      );
-    }),
-  );
+  const general = a.usage.windows.filter((w) => !w.scope);
+  const scoped = a.usage.windows.filter((w) => w.scope);
+  let more: HTMLElement | null = null;
+  if (scoped.length) {
+    // data-action lets a re-render restore focus to the toggle instead of the row (whose Enter switches accounts)
+    const summary = h('summary', { class: 'usage-more-summary', 'data-action': 'usageMore' }, t('usage.modelLimits', { n: scoped.length }));
+    // A double-click on the toggle must not reach the row's dblclick (which switches accounts)
+    summary.addEventListener('dblclick', (e) => e.stopPropagation());
+    const details = h('details', { class: 'usage-more', open: expandedScoped.has(a.dir) }, summary, ...scoped.map(usageWindow)) as HTMLDetailsElement;
+    // Recorded on the click itself (also fired by Enter/Space), before the asynchronous toggle event, so a re-render
+    // right after the click keeps the new state
+    summary.addEventListener('click', () => {
+      if (details.open) expandedScoped.delete(a.dir);
+      else expandedScoped.add(a.dir);
+    });
+    more = details;
+  }
+  return h('div', { class: 'row-usage', title: t('usage.observed', { time }) }, ...general.map(usageWindow), more);
 }
 
 /** One tab page: its own add section, adding state, confirmingDir and inline-rename state */

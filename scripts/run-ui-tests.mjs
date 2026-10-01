@@ -19,6 +19,7 @@ const scopedDurations = {
   es: ['Límite de 5 h', 'Límite de 7 días', 'Límite de 7 días · Fable'],
   ja: ['5 時間の上限', '7 日間の上限', '7 日間の上限 · Fable'],
 };
+const modelLimits = { en: 'Model-specific limits (1)', 'zh-cn': '按模型限额（1）', es: 'Límites por modelo (1)', ja: 'モデル別の上限 (1)' };
 const remaining = {
   en: (percent) => `${percent}% remaining`,
   'zh-cn': (percent) => `剩余 ${percent}%`,
@@ -156,7 +157,7 @@ async function runCase(locale, width) {
   await page.screenshot({ path: path.join(output, `${name(locale, width)}-codex-hover.png`) });
   results.cases.push({ locale, width, mode: 'codex', passed: true, hoverPreserved: true, ...data });
   await page.evaluate(({ locale, width }) => window.preview.apply({ locale, width, active: 'claude' }), { locale, width });
-  const claude = await page.evaluate(() => {
+  const measureClaude = () => page.evaluate(() => {
     const app = document.querySelector('#app');
     const rows = [...document.querySelectorAll('#panel-claude .row')];
     const rect = (el) => {
@@ -178,11 +179,16 @@ async function runCase(locale, width) {
       usageActionsOverlap: intersects(rect(usage), rect(actions)),
       emptyUsage: !!document.querySelector('#panel-claude .row[data-dir="/fixture/.claude-empty"] .row-usage'),
       defaultUsage: !!document.querySelector('#panel-claude .row[data-dir="/fixture/.claude"] .row-usage'),
+      moreOpen: usage.querySelector('details.usage-more')?.open ?? null,
+      summaryText: usage.querySelector('.usage-more-summary')?.textContent ?? null,
+      summaryVisible: (() => { const el = usage.querySelector('.usage-more-summary'); return !!el && rect(el).width > 0 && rect(el).height > 0; })(),
+      summaryActionsOverlap: (() => { const el = usage.querySelector('.usage-more-summary'); return !!el && intersects(rect(el), rect(actions)); })(),
       windows: [...usage.querySelectorAll('.usage-window')].map((item, index) => {
         const labels = item.querySelector('.usage-labels');
         const track = item.querySelector('.usage-track');
         const reset = item.querySelector('.usage-reset');
         return {
+          shown: item.checkVisibility({ contentVisibilityAuto: true }) && rect(item).height > 0,
           text: labels.textContent, label: track.getAttribute('aria-label'),
           first: labels.firstElementChild.textContent,
           value: track.getAttribute('aria-valuenow'),
@@ -198,6 +204,27 @@ async function runCase(locale, width) {
       }),
     };
   });
+  // Model-specific limits start collapsed: the general windows and the toggle show, the scoped window does not
+  const collapsed = await measureClaude();
+  assert.equal(collapsed.moreOpen, false, `model limits must start collapsed at ${name(locale, width)}`);
+  assert.equal(collapsed.summaryText, modelLimits[locale]);
+  assert.equal(collapsed.summaryVisible, true);
+  assert.equal(collapsed.summaryActionsOverlap, false, `model-limit toggle overlaps actions at ${name(locale, width)}`);
+  assert.deepEqual(collapsed.windows.map((w) => w.shown), [true, true, false]);
+  assert.equal(collapsed.horizontalOverflow, false, `claude horizontal overflow (collapsed) at ${name(locale, width)}`);
+  await page.screenshot({ path: path.join(output, `${name(locale, width)}-claude.png`) });
+  await page.click('#panel-claude .row[data-dir="/fixture/.claude-work"] .usage-more-summary');
+  // The expanded state survives a re-render that replaces the row (another locale and back forces new DOM)
+  const rerendered = await page.evaluate(({ locale, width }) => {
+    const sel = '#panel-claude .row[data-dir="/fixture/.claude-work"] details.usage-more';
+    const before = document.querySelector(sel);
+    window.preview.apply({ locale: locale === 'en' ? 'ja' : 'en', width, active: 'claude' });
+    window.preview.apply({ locale, width, active: 'claude' });
+    return document.querySelector(sel) !== before;
+  }, { locale, width });
+  assert.equal(rerendered, true, `the row must be re-rendered at ${name(locale, width)}`);
+  const claude = await measureClaude();
+  assert.equal(claude.moreOpen, true, `model limits must stay expanded after a re-render at ${name(locale, width)}`);
   assert.equal(claude.rows, 3);
   assert.equal(claude.visible, true);
   assert.equal(claude.horizontalOverflow, false, `claude horizontal overflow at ${name(locale, width)}`);
@@ -218,8 +245,12 @@ async function runCase(locale, width) {
     assert.equal(window.resetActionsOverlap, false, `claude reset date overlaps actions at ${name(locale, width)}`);
     assert.equal(window.overlap, false, `claude usage labels overlap track at ${name(locale, width)}`);
     assert.equal(window.overflow, false, `claude usage window overflow at ${name(locale, width)}`);
+    assert.equal(window.shown, true);
   }
-  await page.screenshot({ path: path.join(output, `${name(locale, width)}-claude.png`) });
+  await page.screenshot({ path: path.join(output, `${name(locale, width)}-claude-expanded.png`) });
+  // Collapse again so the next case starts from the default
+  await page.click('#panel-claude .row[data-dir="/fixture/.claude-work"] .usage-more-summary');
+  assert.equal(await page.evaluate(() => document.querySelector('#panel-claude .row[data-dir="/fixture/.claude-work"] details.usage-more').open), false);
   results.cases.push({ locale, width, mode: 'claude', passed: true, ...claude });
 }
 

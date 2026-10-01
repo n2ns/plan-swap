@@ -327,6 +327,10 @@ body {
 .usage-track { height: 4px; border-radius: var(--radius-pill); overflow: hidden; background: var(--line-strong); }
 .usage-fill { height: 100%; border-radius: inherit; background: var(--ink); }
 .usage-reset { margin-top: 4px; color: var(--muted); font-size: 0.95em; overflow-wrap: anywhere; }
+.usage-more { margin-top: 7px; }
+.usage-more-summary { cursor: pointer; color: var(--muted); overflow-wrap: anywhere; }
+.usage-more-summary:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 1px; }
+.usage-more[open] > .usage-more-summary { margin-bottom: 7px; }
 /* Directory of the current row: monospace, secondary color */
 .row-dir { grid-area: dir; margin-top: 2px; color: var(--muted); font-size: 0.82em; font-family: var(--vscode-editor-font-family); min-width: 0; overflow-wrap: anywhere; }
 .row-foot { grid-area: foot; margin-top: 4px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; min-width: 0; }

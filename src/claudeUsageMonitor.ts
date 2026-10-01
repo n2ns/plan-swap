@@ -14,11 +14,16 @@ export interface ClaudeUsageMonitorOptions {
   query: (dir: string) => Promise<ClaudeQueryResult>;
   // Whether the account can have usage limits (a subscription sign-in); others are never queried. Default: always
   eligible?: (dir: string) => boolean;
+  // fetchedAtMs of the account's usage cache, whoever refreshed it (Claude Code itself, another window); a cache younger
+  // than staleMs makes a scheduled query unnecessary. Default: unknown
+  cachedAt?: (dir: string) => number | undefined;
   now?: () => number;
   staleMs?: number;
 }
 
 export const CLAUDE_USAGE_STALE_MS = 15 * 60_000;
+// A cache time further in the future than this (clock moved back) does not count as fresh
+const FUTURE_TOLERANCE_MS = 2 * 60_000;
 
 export class ClaudeUsageMonitor {
   private state: ClaudeUsageState = { checking: false };
@@ -26,6 +31,7 @@ export class ClaudeUsageMonitor {
   private last: { dir: string; at: number } | undefined;
   private readonly query: ClaudeUsageMonitorOptions['query'];
   private readonly eligible: (dir: string) => boolean;
+  private readonly cachedAt: (dir: string) => number | undefined;
   private readonly now: () => number;
   private readonly staleMs: number;
 
@@ -36,6 +42,7 @@ export class ClaudeUsageMonitor {
   ) {
     this.query = options.query;
     this.eligible = options.eligible ?? (() => true);
+    this.cachedAt = options.cachedAt ?? (() => undefined);
     this.now = options.now ?? Date.now;
     this.staleMs = options.staleMs ?? CLAUDE_USAGE_STALE_MS;
   }
@@ -53,13 +60,23 @@ export class ClaudeUsageMonitor {
   }
 
   /**
-   * Queries when the current account changed or its last attempt, failed ones included, is older than staleMs. An
-   * account that is not eligible is skipped without counting as an attempt, so its sign-in is checked at once.
+   * Queries only when the account's usage cache is older than staleMs (or missing) and this window's last attempt for
+   * it, failed ones included, is too. A cache refreshed elsewhere (Claude Code in use, another window) therefore starts
+   * nothing, and a failure is not retried in a loop. An account that is not eligible is skipped without counting as an
+   * attempt, so its sign-in is checked at once.
    */
   refreshIfStale(): Promise<void> {
+    if (this.running) return this.running;
     const dir = this.dirOf();
-    if (this.running || !this.eligible(dir) || (this.last && samePath(this.last.dir, dir) && this.now() - this.last.at < this.staleMs)) {
-      return this.running ?? Promise.resolve();
+    if (!this.eligible(dir)) return Promise.resolve();
+    const now = this.now();
+    if (this.last && samePath(this.last.dir, dir) && now - this.last.at < this.staleMs) return Promise.resolve();
+    const cached = this.cachedAt(dir);
+    if (cached !== undefined && cached <= now + FUTURE_TOLERANCE_MS && now - cached < this.staleMs) {
+      // Refreshed elsewhere after this window's failed attempt: that failure no longer describes the shown values
+      const failure = this.state.failure;
+      if (failure && samePath(failure.dir, dir) && this.last && samePath(this.last.dir, dir) && cached > this.last.at) this.set({ checking: false });
+      return Promise.resolve();
     }
     return this.refresh();
   }

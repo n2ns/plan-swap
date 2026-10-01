@@ -138,6 +138,11 @@ function readInfo(dir: string, explicit: boolean): unknown {
   }
 }
 
+/** fetchedAtMs of the account's own usage cache, of any age; undefined when there is none attributable to the sign-in. */
+export function readUsageFetchedAt(dir: string, explicit = false): number | undefined {
+  return ownCache(readInfo(dir, explicit))?.checkedAt;
+}
+
 /** Usage cache of the account in dir (explicit: as for claudeJsonPath); undefined when missing or unreadable. */
 export function readClaudeUsage(dir: string, explicit = false, now: number = Date.now()): ClaudeUsage | undefined {
   return parseUsageCache(readInfo(dir, explicit), now);
