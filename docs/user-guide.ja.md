@@ -1,6 +1,6 @@
 # PlanSwap ユーザーガイド
 
-[English](user-guide.md) · [简体中文](user-guide.zh-cn.md) · [Español](user-guide.es.md) · **日本語**
+[English](user-guide.md) · [简体中文](user-guide.zh-cn.md) · [繁體中文](user-guide.zh-tw.md) · [Español](user-guide.es.md) · **日本語**
 
 PlanSwap を使うと、複数の Claude Code アカウントと Codex アカウントをサインインしたまま保持し、エディターがどのアカウントを使うかを選べます。このガイドでは、サイドバーの操作、アカウントの準備、切り替え、使用量の上限、日常のメンテナンスについて説明します。Claude と Codex は別々に管理され、一方を切り替えてももう一方は切り替わりません。
 
@@ -181,7 +181,7 @@ Codex タブでは、Codex の切り替えが無効な間、また Windows で C
 
 ステータスバーには、各製品の短期の上限の残りが表示されます（例：`Claude 97% · Codex 82%`）。長期のものも含め、いずれかの一般的な上限の残りが 30% 以下になると背景がテーマの警告色に、10% 以下になるとエラー色に変わります。
 
-マウスを重ねると、製品ごとに 1 行のヘッダー行（メールアドレス、プラン、更新アイコン）と、上限ごとに 1 行を持つ表が表示されます。クリックすると PlanSwap が開きます。
+マウスを重ねると、製品ごとに 1 行のヘッダー行（メールアドレス、プラン、確認できるアカウントでは更新アイコン）と、一般的な上限ごとに 1 行を持つ表が表示されます。クリックすると PlanSwap が開きます。
 
 ## アカウントの名前変更と削除
 
@@ -235,7 +235,7 @@ PlanSwap がホームディレクトリで見つけた、有効な名前を持�
 
 | 設定 | デフォルト | 用途 |
 | --- | --- | --- |
-| `planswap.language` | `auto` | エディターに合わせるか、`en`、`zh-cn`、`es`、`ja` から選びます。 |
+| `planswap.language` | `auto` | エディターに合わせるか、`en`、`zh-cn`、`zh-tw`、`es`、`ja` から選びます。 |
 | `planswap.sidebar.showEmail` | `true` | サイドバーのカードにアカウントのメールアドレスを表示します。 |
 | `planswap.sidebar.showFiveHourLimit` | `true` | カードに 5 時間の上限を表示します。 |
 | `planswap.sidebar.showWeeklyLimit` | `true` | カードに 7 日間の上限を表示します。 |

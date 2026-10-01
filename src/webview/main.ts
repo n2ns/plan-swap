@@ -155,6 +155,8 @@ function planPill(a: AccountView): HTMLElement | null {
 
 // Plan string -> color class (frontend-only mapping, written to data-plan for CSS)
 // Both sides share tiers by price: tier1 standard paid (Claude Pro / ChatGPT Plus), tier2 high (Claude Max 5x / ChatGPT Pro Lite), tier3 top (Claude Max 20x / ChatGPT Pro)
+// Colors (panel.css; shown on the current row only, other rows keep a neutral tag): tier0 Free/Go gray, tier1 blue,
+// tier2 champagne gold, tier3 amber, team (Team/Business) teal, enterprise slate, apikey orange; none keeps the normal outline
 function planClass(plan: string | undefined, mode: PanelMode): string {
   if (!plan) return 'none';
   if (/API/i.test(plan)) return 'apikey';
@@ -188,6 +190,7 @@ function usageLevel(remaining: number): 'empty' | 'low' | 'warn' | 'ok' {
   return remaining <= 0 ? 'empty' : remaining <= 10 ? 'low' : remaining <= 30 ? 'warn' : 'ok';
 }
 
+// Remaining percentage of a usage window: 100 - usedPercent with at most two decimals (the status bar rounds down, see remainingOf in src/statusBar.ts)
 const remainingPercent = (w: UsageWindowView): number => Number((100 - w.usedPercent).toFixed(2));
 
 type DurationFormatConstructor = new (locale: string, options: { style: string }) => { format(duration: Record<string, number>): string };
@@ -200,10 +203,10 @@ function relativeTime(epochSeconds: number): string {
   const parts = Object.entries(days ? { days, hours } : hours ? { hours, minutes } : { minutes }).filter(([, n]) => n > 0);
   const locale = intlLocale();
   const { durationStyle, durationUnitSeparator } = WEB_LOCALE_INFO[getLocale()];
-  // Japanese narrow units are Latin letters ("2d5h"); the short style gives "2 日 5 時間"
+  // Japanese narrow units are Latin letters ("2d5h") and Traditional Chinese narrow spacing is uneven ("2 天5 小時"); the short style gives "2 日 5 時間" / "2 天 5 小時"
   const DurationFormat = (Intl as unknown as { DurationFormat?: DurationFormatConstructor }).DurationFormat;
   if (DurationFormat) return new DurationFormat(locale, { style: durationStyle }).format(Object.fromEntries(parts));
-  // Without DurationFormat (Node 22): unit numbers in the same widths, unspaced in Chinese, as DurationFormat writes them
+  // Without DurationFormat (Node 22): unit numbers in the same widths, unspaced in Simplified Chinese, as DurationFormat writes them
   const unit = { days: 'day', hours: 'hour', minutes: 'minute' } as Record<string, string>;
   return parts.map(([k, n]) => new Intl.NumberFormat(locale, { style: 'unit', unit: unit[k], unitDisplay: durationStyle }).format(n))
     .join(durationUnitSeparator);

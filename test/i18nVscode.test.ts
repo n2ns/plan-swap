@@ -16,7 +16,7 @@ test('explicit language overrides the editor language', () => {
 
 test('auto resolves supported languages and regional display-language variants', () => {
   setConfig('planswap', 'language', 'auto');
-  for (const [language, expected] of [['es', 'es'], ['es-MX', 'es'], ['es-ES', 'es'], ['ja', 'ja'], ['ja-JP', 'ja'], ['zh-TW', 'zh-cn'], ['en-US', 'en'], ['fr', 'en']] as const) {
+  for (const [language, expected] of [['es', 'es'], ['es-MX', 'es'], ['es-ES', 'es'], ['ja', 'ja'], ['ja-JP', 'ja'], ['zh-TW', 'zh-tw'], ['zh-HK', 'zh-tw'], ['zh-CN', 'zh-cn'], ['zh', 'zh-cn'], ['en-US', 'en'], ['fr', 'en']] as const) {
     env.language = language;
     assert.equal(resolveLocale(), expected, language);
   }

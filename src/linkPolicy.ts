@@ -25,6 +25,7 @@ export async function openDeveloperSettings(): Promise<void> {
  * Off Windows, or when file links work, returns {} without asking. Otherwise shows a modal explaining that Windows
  * cannot link files and offers a one-time copy of the small config files, or to open the Developer Mode settings
  * (then nothing is copied: once Developer Mode is on, Re-link links the files). Dismissing means "do not copy".
+ * Returns only copyConfig; the caller adds its own busy check. The files offered are those of COPYABLE_ON_NO_LINK.
  * dir: an existing directory on the same volume as the accounts, where the probe link is tried.
  */
 export async function askCopyFallback(dir: string, vendor: 'Claude' | 'Codex'): Promise<LinkOptions> {

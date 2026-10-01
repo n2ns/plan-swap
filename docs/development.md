@@ -1,97 +1,127 @@
 # Development
 
-Purpose: repository layout, setup, dependency and build constraints, automated checks, packaging, and editor troubleshooting. Runtime design belongs in [Claude design](design.md) / [Codex design](codex-design.md); module contracts belong in [Interfaces](interfaces.md) / [Codex interfaces](codex-interfaces.md). UI and real-account acceptance steps live in [Manual Verification](manual-verification.md). See the [documentation map](README.md) for ownership.
+Purpose: repository layout, build, test and release mechanics, localization terminology, and editor troubleshooting. Rules for agents live in [AGENTS.md](../AGENTS.md); runtime design in [Claude design](design.md) / [Codex design](codex-design.md); UI and real-account acceptance steps in [Manual Verification](manual-verification.md). Exact dependency versions and scripts are in `package.json`. See [AGENTS.md](../AGENTS.md#read-the-documents-relevant-to-the-task) for ownership.
 
 ## Repository layout
 
 | Path | Responsibility |
 |---|---|
-| `src/` | Extension activation, Claude flows and shared host modules; [module contracts](interfaces.md). |
-| `src/codex/` | Codex account, environment and restart modules; [module contracts](codex-interfaces.md). |
-| `src/webview/` | Frontend rendering, translations and theme-based CSS; shared protocol types come from `src/protocol.ts`. |
-| `test/` | Pure-module tests, temporary-HOME helpers, in-memory Memento and the VS Code stub. |
-| `scripts/run-tests.mjs` | esbuild test bundling and the `node --test` runner. |
-| `resources/` | Marketplace icon (`icon.png`), activity-bar icon (`account.svg`) and README artwork. |
-| `docs/` | Specialized documentation; responsibilities and task routing in [the documentation map](README.md). |
+| `src/` | Extension activation, Claude flows and shared host modules. |
+| `src/codex/` | Codex account, environment and restart modules. |
+| `src/webview/` | Sidebar frontend; shared message types come from `src/protocol.ts`. |
+| `test/` | Unit tests, temporary-HOME helpers, in-memory Memento and the VS Code stub; `test/integration/` holds the real-editor smoke suite. |
+| `scripts/` | Test, UI-test, preview and measurement runners. |
+| `resources/` | Marketplace, activity-bar and README artwork. |
+| `docs/` | Claude/Codex design (rationale, verified external facts), `features.md` (user-visible behavior), `manual-verification.md`, this file, and the user guides (`user-guide*.md`). Agent rules and the document routing table are in [AGENTS.md](../AGENTS.md#read-the-documents-relevant-to-the-task). |
+| `docs/research/` | Dated upstream evidence and reproducible measurements. |
+| `docs/branding/candidates/` | Image-generation prompts and candidate designs; not runtime behavior or coding rules. |
 | `.vscode/` | F5 launch configuration and its pre-launch build task. |
-| `.github/workflows/publish.yml` | `v*` tag workflow for VS Code Marketplace and Open VSX publication. |
-| `.github/workflows/test.yml` | Type check, tests and build on every push and pull request, on `ubuntu-latest` and `windows-latest` (elevated, so the `SHARING` and `FILE_SYMLINKS` tests run on real Windows links); failing tests are also reported as an annotation. |
-| `package.json`, `package.nls*.json` | Extension manifest, commands, settings and localized static strings. |
+| `.github/workflows/` | `test.yml` (every push and pull request) and `publish.yml` (`v*` tags); see [CI](#ci). |
+| `package.json`, `package.nls*.json` | Extension manifest and localized static strings. |
 | `esbuild.mjs`, `tsconfig.json`, `src/webview/tsconfig.json`, `test/tsconfig.json` | Host/frontend bundles and separate type-check scopes. |
-| `.vscodeignore`, `.gitignore` | Packaging and Git exclusions. |
 
-## Commands
+## Testing, build and release
+
+The rules (what must pass before committing, temporary HOME, fake processes, no restart tests, release authorization) are in [AGENTS.md](../AGENTS.md#commands-and-verification). This section describes the mechanics.
+
+### Commands
 
 ```bash
 npm install
-npm run typecheck    # tsc --noEmit for host (root), src/webview and test
-npm test             # scripts/run-tests.mjs: bundle test/*.test.ts, run node --test
-npm run build        # bundle host to dist/extension.js, frontend to dist/media/
-npm run watch        # esbuild watch (both entries)
-npm run package      # vsce package (prepublish runs typecheck and build)
+npm run typecheck          # host, Webview and test type-check scopes
+npm test                   # bundle test/*.test.ts, run node --test
+npm run build              # host to dist/extension.js, frontend to dist/media/
+npm run watch              # esbuild watch (both entries)
+npm run test:integration   # real VS Code smoke tests (Linux/WSL with a display)
+npm run test:ui            # Webview layout and interaction checks in Chromium
+npm run preview            # Webview preview at http://127.0.0.1:8768/
+npm run perf --silent > report.json   # synthetic account-read measurements
+npm run package            # vsce package; prepublish runs typecheck and build
 ```
 
-## Dependencies and build
+F5 in a WSL window uses the "Run Extension" launch configuration; `.vscode/tasks.json` runs `npm run build` first, then starts the Extension Development Host.
 
-Dependency versions below describe the recorded project baseline; `package.json` and the lockfile contain the exact installed pins. The npm tag observation is from the existing 2026-09-25 dependency notes and must be checked again when upgrading.
+### Dependencies and build
 
-- Runtime dependencies (`dependencies`, pinned exactly):
-  - `@vscode-elements/elements` 2.5.1: Web Components library for the Webview frontend (based on Lit).
-  - `@vscode/codicons` 0.0.45: icon font. The npm `latest` tag points to the prerelease 0.0.46-24, which does not satisfy the component library's peer dependency `>=0.0.40` (prereleases do not take part in normal range matching), so the latest stable 0.0.45 is pinned.
-  - Both are only bundled into the frontend artifacts, never into the extension host.
-- Development dependencies (2026-09-27): typescript 7.0.2, esbuild 0.28.2, @vscode/vsce 4.0.0 are the latest stable versions; @types/vscode is pinned to 1.107.0. @types/node is pinned to the latest 22.x (22.20.4) because the extension host runs on the Node bundled with the oldest supported editor server (Antigravity with the VS Code 1.107 core ships Node 22); raise it only together with the `engines.vscode` baseline.
-- `engines.vscode` is `^1.107.0`. The editor actually used is Antigravity IDE with a VS Code 1.107.0 core; an extension whose `engines` is higher than the editor version is refused. `@types/vscode` must not be higher than `engines`, so the latest version cannot be used; check the editor's core version before upgrading. New frontend dependencies must not require newer editor APIs either.
-- Build (`esbuild.mjs`, two entries):
-  - Extension host: `src/extension.ts` → `dist/extension.js` (cjs, platform node, target node22, external vscode, with sourcemap).
-  - Webview frontend: `src/webview/main.ts` → `dist/media/panel.js`, `src/webview/panel.css` → `dist/media/panel-style.css` (iife, platform browser, target es2022; regular builds minify without sourcemaps, watch mode does not minify and emits sourcemaps).
-  - At build start, `codicon.css` and `codicon.ttf` are copied from `node_modules/@vscode/codicons/dist/` to `dist/media/` (`node_modules` is not included in the vsix).
-  - With `--watch` both entries are watched.
-- Type checking uses separate tsconfigs: `npm run typecheck` runs `tsc --noEmit` (root `tsconfig.json`, host, types node and vscode, excludes `src/webview`), `tsc --noEmit -p src/webview` (frontend, lib includes dom, no node/vscode types, includes `../protocol.ts`) and `tsc --noEmit -p test` (tests).
-- Tests: `npm test` runs `scripts/run-tests.mjs`, which bundles `test/*.test.ts` with esbuild into `.test-out/` (with `vscode` aliased to `test/stubs/vscode.ts`) and runs `node --test`. Tests cover the pure modules and run every file-system operation under a temporary HOME. The test runner needs Node 21 or later because the Webview i18n module reads the global `navigator` at load time; the extension host itself runs on the Node bundled with the editor (Node 22 for VS Code 1.107).
-- Packaging: `vsce package` produces the `.vsix` (`vscode:prepublish` runs typecheck and build first; `.vscodeignore` excludes `src/`, `test/`, `scripts/`, `node_modules/`, `*.map`, docs, etc.; `package.nls*.json` are included). Installation: in a WSL window via "Extensions: Install from VSIX". This extension is never installed into the user's VS Code automatically.
+- The runtime dependencies (`@vscode-elements/elements`, `@vscode/codicons`) are bundled into the frontend only, never into the extension host. Frontend assets must all be emitted into `dist/media/` ([`esbuild.mjs`](../esbuild.mjs) documents the entries, the codicon copy and `__PLANSWAP_VERSION__`).
+- `@vscode/codicons` is pinned to the latest stable release: on 2026-09-25 the npm `latest` tag pointed to the prerelease 0.0.46-24, which does not satisfy the component library's peer range `>=0.0.40` (prereleases do not take part in normal range matching). Re-check when upgrading.
+- `engines.vscode` stays at `^1.107.0` because the editor actually used is Antigravity IDE with a VS Code 1.107.0 core, and an editor refuses an extension whose `engines` is higher than its version. `@types/vscode` must not be higher than `engines`, and new frontend dependencies must not require newer editor APIs. Check the editor's core version before upgrading.
+- `@types/node` stays on the 22.x line because the extension host runs on the Node bundled with the oldest supported editor server (Node 22 for the 1.107 core); raise it only together with the `engines.vscode` baseline.
+- Type checking uses three scopes: the root `tsconfig.json` (host, excludes `src/webview`), `src/webview/tsconfig.json` (DOM, no Node or vscode types) and `test/tsconfig.json`.
 
-Frontend assets must all be emitted into `dist/media/`, the Webview's only `localResourceRoots` entry. Frontend dependencies cannot be loaded from `node_modules` at runtime. `esbuild.mjs` also injects the manifest version as `__PLANSWAP_VERSION__`.
+### Tests
 
-## Verification and release boundaries
+- `npm test` runs `scripts/run-tests.mjs`: it bundles `test/*.test.ts` into `.test-out/` with `vscode` aliased to `test/stubs/vscode.ts` and loads `scripts/test-guard.cjs` first, which refuses `reg` / `powershell` / `pwsh` / `setx` so no test can touch the real user-level `CODEX_HOME`. The runner needs Node 21 or later because the Webview i18n module reads the global `navigator` at load time.
+- `makeTempHome` (`test/helpers.ts`) points both `HOME` and `USERPROFILE` (read by `os.homedir()` on Windows) at a temporary directory, clears inherited account variables and asserts the real home is not used. The account stores are tested with `MemoryMemento`.
+- On native Windows, `test/helpers.ts` skips the categories it defines (`LINUX_ONLY`, `FILE_SYMLINKS`, `SHARING`, `CASE_SENSITIVE_FS`) with the reasons given there; Linux/WSL remains the full run.
+- Unit tests use disposable fixtures. UI integration and real-account acceptance are separate and follow [Manual Verification](manual-verification.md). Record what ran and what remains unverified.
 
-- Before committing, `npm run typecheck`, `npm test` and `npm run build` must pass.
-- File-system tests use a temporary HOME via `makeTempHome` in `test/helpers.ts` (it sets both `HOME` and `USERPROFILE`, which `os.homedir()` reads on Windows), which asserts the real home is not used. Never run account, rc-file or state-file write/delete tests under the real home. Busy checks and migrations use a fake `procRoot` where applicable; never test `executeRestart` or signal the editor server or its children.
-- Tests also run on native Windows. Linux/WSL remains the full run; on Windows `test/helpers.ts` skips `LINUX_ONLY` tests (rc files and bash, `/proc`, the WSL server, fifos and chmod), `SHARING` and `FILE_SYMLINKS` tests when file symbolic links are refused (Developer Mode off; `windowsNoDevMode.test.ts` covers that case) and `CASE_SENSITIVE_FS` tests; `assertMode` checks POSIX modes only off Windows. Directory link fixtures pass the `'junction'` type (ignored on Linux). On Windows the test process refuses to run `reg` / `powershell.exe`, so nothing can touch the real user-level `CODEX_HOME`.
-- The local tests use disposable fixtures; UI integration and real-account acceptance are separate and follow [Manual Verification](manual-verification.md). Record what ran and what remains unverified.
-- Before releasing, check `README.md` and `CHANGELOG.md`: neither may contain `[Unreleased]` content, including an empty heading. Packaging does not authorize installation or publication. Never install the `.vsix` into the user's editor automatically; the user installs it after packaging. Publish only under the user's explicit release authorization.
+### CI
+
+- `test.yml` runs type check, tests and build on `ubuntu-latest` and `windows-latest` with Node 22 and 24. The Windows runner is elevated, so the `SHARING` and `FILE_SYMLINKS` tests run on real Windows links; a step fails the job if they are skipped there. Failing tests are reported as an annotation. A separate Linux job runs the [real editor smoke tests](#real-editor-smoke-tests).
+- `publish.yml` runs on every pushed `v*` tag: it checks that the tag matches the `package.json` version, tests on Linux and Windows, packages the `.vsix` and publishes it to the VS Code Marketplace and Open VSX. Pushing such a tag is therefore a release.
+
+### Real editor smoke tests
+
+`npm run test:integration` builds the extension, then uses `@vscode/test-electron` to download and launch VS Code **1.107.0**, matching the engine baseline. It runs on Linux/WSL with a graphical display; use `xvfb-run -a npm run test:integration` on a headless Linux machine. The downloaded editor is cached in `.vscode-test/` and excluded from packaging.
+
+The launcher uses `makeTempHome`, clears inherited account/editor variables, and gives the editor disposable HOME, XDG, user-data, extensions and workspace directories, removed after the test process exits. Only empty account folders are created. Tests exercise real extension activation, contributed command registration, repeated sidebar focus/refresh, signed-out usage refresh and account discovery. They do not install the extension into the user's editor, log in, run account CLIs, mutate the registry or restart an editor/server. They do not assert Webview DOM rendering, real-account usage values or native Windows behavior; those remain separate preview and manual acceptance checks.
+
+### Repeatable Webview checks
+
+The preview serves the production `dist/media` bundle with synthetic protocol fixtures and a simulated host transport. `npm run preview` builds the extension and starts a loopback-only page at `http://127.0.0.1:8768/`; stop it with Ctrl+C. Query parameters `locale`, `width` and `active` choose an initial language, sidebar width and provider. Fixtures use only `/fixture/` paths and example identities, and no account files or CLIs are accessed.
+
+`npm run test:ui` drives the same preview in Playwright's Chromium (install it once with `npx playwright install chromium`). It runs locally on demand; CI does not run browser UI tests. By default it is headless with a fixed viewport at 100% zoom, so no window opens; `npm run test:ui -- --headed` uses a full-screen window instead (headless Linux then needs Xvfb and a window manager such as Openbox; bare Xvfb can report a full-screen state without filling the display). The runner creates and closes its own browser, page and server, and only the sidebar container changes width. It covers every locale and width in [preview verification](manual-verification.md#preview-verification), including tab/switch/rename behavior, input preservation, delete cancellation and usage observations. Screenshots and a JSON result summary are written under `.test-out/ui/`.
+
+These checks use synthetic theme colors and a fake host. They verify layout and frontend behavior, not actual VS Code theme injection, host-side account mutations, real login state or usage values. The editor smoke suite and user-operated acceptance still apply.
+
+### Performance measurements
+
+`npm run perf` uses isolated synthetic fixtures and imposes no timing threshold; see the [baseline record](research/account-read-performance.md).
+
+### Release
+
+- At the version bump, `## [Unreleased]` in `CHANGELOG.md` is renamed to `## [x.y.z] - <date>`. `test/changelog.test.ts` compares every section in the newest `v*` tag's `CHANGELOG.md` with the current file; it is skipped without git or tags (e.g. a shallow CI checkout).
+- `npm run package` (`vsce package`) produces the `.vsix`; `.vscodeignore` excludes sources, tests, scripts, docs and sourcemaps, and keeps `package.nls*.json`. The user installs it with "Extensions: Install from VSIX..." in a WSL window or a local Windows window.
 
 ## Localization terminology
 
-English is the source of every visible string; the translations live in `src/i18n.ts` (host messages), `src/webview/i18n.ts` (sidebar) and `package.nls.<locale>.json` (Command Palette titles and settings). Use the terms below whenever you add or change a string in any of them, and in the translated user guides (`docs/user-guide.<locale>.md`), which quote the UI labels exactly. If a term must change, change it everywhere in the same commit and update this table. The "Avoid" column lists variants that were used before and were unified on 2026-10-02.
+English is the source of every visible string; the translations live in `src/i18n.ts` (host messages), `src/webview/i18n.ts` (sidebar) and `package.nls.<locale>.json` (Command Palette titles and settings). Use the terms below whenever you add or change a string in any of them, and in the translated user guides (`docs/user-guide.<locale>.md`), which quote the UI labels exactly. If a term must change, change it everywhere in the same commit and update this table. The "Avoid" column lists variants that were used before.
 
-| Concept | English | 简体中文 | Español | 日本語 | Avoid |
-| --- | --- | --- | --- | --- | --- |
-| The `default` account | default account | 默认账号 | cuenta predeterminada | 既定のアカウント | ja デフォルトアカウント |
-| The account in use (Claude) | current account | 当前账号 | cuenta actual | 現在のアカウント | |
-| Codex account in effect in this window | effective account | 当前生效账号 / 生效账号 | cuenta efectiva | 現在有効なアカウント / 有効なアカウント | |
-| Codex account applied after restart | selected account | 已选择账号 | cuenta seleccionada | 選択されたアカウント | |
-| Account list heading | All accounts | 全部账号 | Todas las cuentas | すべてのアカウント | |
-| Link (verb, mode) | link, linked account | 链接，已链接账号 | vincular, cuenta vinculada | リンク、リンク済みアカウント | es enlazar / enlazada |
-| Unlink | unlink | 拆分（与默认账号拆分） | desvincular | リンク解除 | |
-| Re-link tool | Re-link | 重新链接 | Revincular | 再リンク | es Volver a enlazar |
-| Independent mode | independent | 独立 | independiente | 独立 | |
-| Usage limits | usage limits | 用量额度 | límites de uso | 使用量の上限 | zh 用量限额; ja 使用上限, 使用量上限 |
-| One limit window label | 5-hour limit, 7-day limit | 5 小时额度，7 天额度 | Límite de 5 h, Límite de 7 días | 5 時間の上限、7 日間の上限 | zh 小时限额 / 天限额 |
-| Sign-in action | sign in (button: Log in) | 登录 | iniciar sesión (button: Acceder) | サインイン (button: ログイン) | |
-| Signed-out state | Not logged in | 未登录 | Sin sesión | 未ログイン | |
-| Switch accounts | Switch | 切换 | Cambiar | 切り替え | |
+| Concept | English | 简体中文 | 繁體中文 | Español | 日本語 | Avoid |
+| --- | --- | --- | --- | --- | --- | --- |
+| The `default` account | default account | 默认账号 | 預設帳號 | cuenta predeterminada | 既定のアカウント | ja デフォルトアカウント |
+| The account in use (Claude) | current account | 当前账号 | 目前帳號 | cuenta actual | 現在のアカウント | |
+| Codex account in effect in this window | effective account | 当前生效账号 / 生效账号 | 目前生效帳號 / 生效帳號 | cuenta efectiva | 現在有効なアカウント / 有効なアカウント | |
+| Codex account applied after restart | selected account | 已选择账号 | 已選擇帳號 | cuenta seleccionada | 選択されたアカウント | |
+| Account list heading | All accounts | 全部账号 | 全部帳號 | Todas las cuentas | すべてのアカウント | |
+| Link (verb, mode) | link, linked account | 链接，已链接账号 | 連結，已連結帳號 | vincular, cuenta vinculada | リンク、リンク済みアカウント | es enlazar / enlazada |
+| Unlink | unlink | 拆分（与默认账号拆分） | 拆分（與預設帳號拆分） | desvincular | リンク解除 | |
+| Re-link tool | Re-link | 重新链接 | 重新連結 | Revincular | 再リンク | es Volver a enlazar |
+| Independent mode | independent | 独立 | 獨立 | independiente | 独立 | |
+| Usage limits | usage limits | 用量额度 | 用量額度 | límites de uso | 使用量の上限 | zh 用量限额; ja 使用上限, 使用量上限 |
+| One limit window label | 5-hour limit, 7-day limit | 5 小时额度，7 天额度 | 5 小時額度，7 天額度 | Límite de 5 h, Límite de 7 días | 5 時間の上限、7 日間の上限 | zh 小时限额 / 天限额 |
+| Sign-in action | sign in (button: Log in) | 登录 | 登入 | iniciar sesión (button: Acceder) | サインイン (button: ログイン) | |
+| Signed-out state | Not logged in | 未登录 | 未登入 | Sin sesión | 未ログイン | |
+| Switch accounts | Switch | 切换 | 切換 | Cambiar | 切り替え | |
 
-Counts use ICU plural blocks in `src/i18n.ts` and `src/webview/i18n.ts` (not in `package.nls*.json`): `{n, plural, one {# account} other {# accounts}}`. `#` stands for the number; a branch may also contain ordinary `{placeholder}`s, but no nested plural block. `other` is required; use only the CLDR categories of the locale (`Intl.PluralRules(<intl>).resolvedOptions().pluralCategories`): English `one` / `other`; Spanish `one` / `other` (its `many`, for millions, falls back to `other` and may be left out). Chinese and Japanese have only `other` for whole numbers, so they write plain text with `{n}` instead of a block. Do not write `account(s)` / `cuenta(s)`. `test/i18n.test.ts` checks every block.
+Counts use ICU plural blocks in `src/i18n.ts` and `src/webview/i18n.ts` (not in `package.nls*.json`), e.g. `{n, plural, one {# account} other {# accounts}}`; the supported syntax is documented on `formatMessage`. Use only the CLDR categories of the locale: English and Spanish `one` / `other` (Spanish `many`, for millions, falls back to `other` and may be left out). Chinese (Simplified and Traditional) and Japanese have only `other` for whole numbers, so they write plain text with `{n}` instead of a block. Do not write `account(s)` / `cuenta(s)`. `test/i18n.test.ts` checks every block.
 
-A file or folder link as an object (a symbolic link or junction) is not the account mode: Spanish keeps `enlace` there ("enlaces de archivo"). Product names, setting keys, command ids, file names, rc marker text and account terminal names are never translated (see AGENTS.md).
+A file or folder link as an object (a symbolic link or junction) is not the account mode: Spanish keeps `enlace` there ("enlaces de archivo"). Product names, rc marker text, shell commands, file names, setting ids, command ids and account terminal names are never translated (see [AGENTS.md](../AGENTS.md#implementation-boundaries)).
 
-## Automated test coverage
+### Adding a locale
 
-- Tests cover the panel provider readiness/focus lifecycle using in-memory Webview stubs, the pure modules (paths, fileState, labels, identity, claudeSettings, claudeShare, codexPaths, codexShare, codexState, codexServer, codexUsage, codexUsageMonitor, claudeUsage, claudeUsageMonitor, usageCooldown; `claudeAccountBusy` / `codexAccountBusy` / the migrations take a fake `procRoot`; `readCodexUsage` and `queryClaudeUsage` take a fake `spawn`, so tests never start a real `codex` or `claude`), `IdentityWarnings` with fake sources and a warn callback, the two account stores (accounts, codexStore) with an in-memory Memento (`MemoryMemento` in `test/helpers.ts`), i18n key and placeholder parity across all four locales, locale resolution and manifest localization, and the pure helpers exported by `commands.ts` (`validateName`, `shQuote`) and `codex/codexCommands.ts` (`validateName`); every test that touches the file system runs under a temporary HOME created by `test/helpers.ts` (`makeTempHome`, which also asserts that the real home is not used). UI behavior is verified with [Manual Verification](manual-verification.md).
+Add the locale id to `LOCALES` and its `LOCALE_INFO` row in `src/i18n.ts`, its host message table, the Webview twins in `src/webview/i18n.ts` (`WEB_LOCALE_INFO` row and table), the `planswap.language` enum entry with its `config.language.*` label, `package.nls.<locale>.json`, the user guide named by `userGuide` in `docs/`, the locale list in `scripts/run-ui-tests.mjs`, and a column in the table above. `test/i18n.test.ts` and `test/docs.test.ts` check that the code, manifest, user guide and UI test list agree.
+
+## Panel startup diagnostics
+
+Search for `[planswap]` in the extension host log for activation start/completion, panel document creation, document-ready latency, and account-state read duration/counts. In the Webview developer tools console, the same prefix identifies frontend initialization, first-state wait, and first-card DOM update duration. Host and frontend durations use separate monotonic clocks; do not subtract timestamps across them. DOM update duration is not a browser-paint measurement. These diagnostics contain timings and counts, not account names, emails, paths or credentials.
+
+For a cold-start investigation, record both logs from editor startup through the first visible cards. For a connectivity investigation, also record whether the document reloads and whether another `ready`/first-state sequence occurs. Logging does not itself establish the cause of a delay or an offline failure.
 
 ## 1. F5 does not load the extension in VS Code 1.139 (js-debug attach regression)
 
-Recorded: 2026-09-26. This is an editor/environment issue, not extension behavior.
+Recorded: 2026-09-26. This is an editor/environment issue, not extension behavior. Remove this section once the upstream fix has shipped.
 
 ### Symptoms
 
@@ -102,36 +132,23 @@ Error processing attach: Error: Could not connect to debug target at http://loca
 Socket closed before the connection was established
 ```
 
-The remote extension host log (`~/.vscode-server/data/logs/<session>/exthost*/remoteexthost.log`) is flooded with:
+The remote extension host log (`~/.vscode-server/data/logs/<session>/exthost*/remoteexthost.log`) is flooded with `RequestError: connect ECONNREFUSED ::1:<port>` and ``Error: The `onCancel` handler was attached after the promise settled.`` The Windows-side `renderer.log` shows "An unknown error occurred. Please consult the log for more details." about once per second while attaching.
 
-- `RequestError: connect ECONNREFUSED ::1:<port>`
-- ``Error: The `onCancel` handler was attached after the promise settled.``
-
-The Windows-side `renderer.log` shows "An unknown error occurred. Please consult the log for more details." about once per second while attaching.
-
-Ctrl+F5 (Run Without Debugging) loads the extension normally, and F5 works in Antigravity (VS Code 1.107 core). The extension code is not involved.
+Ctrl+F5 (Run Without Debugging) loads the extension normally, and F5 works in Antigravity (VS Code 1.107 core).
 
 ### Cause
 
 - For `extensionHost` launches the development extension host is started with `--inspect-brk=<port>`. It stops at the first line until a debugger attaches, and its inspector listens on `127.0.0.1` only.
 - The bundled js-debug 1.117.0 looks up the target at `http://localhost:<port>` and probes `127.0.0.1` and `[::1]` in parallel.
 - The race helper rejects as soon as one probe fails. The `[::1]` probe fails, the in-flight `127.0.0.1` probe is cancelled, and the lookup is retried every 200 ms until the 10 s timeout.
-- So the debugger never attaches, and the extension host never runs past its first line.
 
 Upstream reports: microsoft/vscode-js-debug#2416 and #2420, microsoft/vscode#337488 and #337774; the fix is milestoned for VS Code 1.140.
 
-Checked and ruled out:
-
-- **Proxy resolution.** VS Code's extension-host proxy support always treats `localhost` / `127.0.0.1` as DIRECT.
-- **System certificates V2.** `http.experimental.systemCertificatesV2` defaults to `false`, and V1 only affects HTTPS.
-- **WSL mirrored networking.** `curl` to the inspector URL from WSL answers instantly.
-- **Port forwarding.** No debug port was forwarded or bound on the Windows side.
+Ruled out: proxy resolution (`localhost` / `127.0.0.1` are always DIRECT), system certificates (`http.experimental.systemCertificatesV2` defaults to `false`; V1 only affects HTTPS), WSL mirrored networking (`curl` to the inspector URL answers instantly) and port forwarding (no debug port forwarded or bound on Windows).
 
 ### Workaround
 
-Patch the js-debug that VS Code runs on the WSL side so it asks for IPv4 directly.
-
-In `~/.vscode-server/bin/<commit>/extensions/ms-vscode.js-debug/src/extension.js`, in `launchProgram` of the extension host attach, replace:
+Patch the js-debug that VS Code runs on the WSL side so it asks for IPv4 directly. In `~/.vscode-server/bin/<commit>/extensions/ms-vscode.js-debug/src/extension.js`, in `launchProgram` of the extension host attach, replace:
 
 ```
 $l(`http://localhost:${t.params.port}`
@@ -143,22 +160,12 @@ with:
 $l(`http://127.0.0.1:${t.params.port}`
 ```
 
-Steps:
-
-1. Back up the file first.
-2. Check that the string occurs exactly once. The minified names (`$l`, `t.params.port`) can differ between builds.
-3. Check the result with `node --check`.
-4. Run "Developer: Reload Window" and press F5 again.
-5. If something goes wrong, restore the backup.
-
-Only this occurrence is used by F5. The similar `` Wv(`http://localhost:${t.connection}` `` belongs to the plain Node attach path and does not help.
+Back up the file, check that the string occurs exactly once (the minified names `$l` and `t.params.port` can differ between builds), check the result with `node --check`, then run "Developer: Reload Window" and press F5 again; restore the backup if anything goes wrong. Only this occurrence is used by F5. The similar `` Wv(`http://localhost:${t.connection}` `` belongs to the plain Node attach path and does not help.
 
 Notes:
 
-- This edits the editor installation, not the repository. A VS Code update replaces the server directory and drops the patch. Re-check after each update, and drop the workaround once the upstream fix has shipped.
-- Alternatives that change nothing:
-  - Use Ctrl+F5 in VS Code and debug with breakpoints in Antigravity.
-  - Stay on VS Code 1.138 until the fix is released.
+- This edits the editor installation, not the repository. A VS Code update replaces the server directory and drops the patch; re-check after each update.
+- Alternatives that change nothing: use Ctrl+F5 in VS Code and debug with breakpoints in Antigravity, or stay on VS Code 1.138 until the fix is released.
 - An extension host left over from a failed attempt stays paused at `--inspect-brk`. Close its window, or reload the WSL window, to reclaim it.
 
 ## 2. Local Linux desktop testing through WSLg
@@ -197,40 +204,12 @@ exec dbus-run-session -- sh -c '
 ' vscode-linux-test "$@"
 ```
 
-Run `vscode-linux-test` (optionally with a workspace path) from the Ubuntu terminal and keep that terminal open. The launcher reads the saved selection before startup: a named selection sets `CODEX_HOME`, an empty selection unsets it for default, and an absent file preserves the unmanaged environment. An unreadable selection or a missing selected directory stops launch.
-
-When ready to apply another selection, save work and fully exit the intended editor instance before relaunching; an existing instance with the same user data directory can absorb a new launch and keep the old environment. Preserve the original profile/extensions arguments and workspace. The separate editor directories isolate editor configuration and extensions, **not HOME or account data**. Automated account/state tests still require a temporary HOME.
+Run `vscode-linux-test` (optionally with a workspace path) from the Ubuntu terminal and keep that terminal open. The launcher reads the saved selection before startup: a named selection sets `CODEX_HOME`, an empty selection unsets it for default, and an absent file preserves the unmanaged environment. An unreadable selection or a missing selected directory stops launch. Applying another selection follows [Codex design §5.1](codex-design.md#51-local-desktop-editor-manual-restart). The separate editor directories isolate editor configuration and extensions, **not HOME or account data**.
 
 ### Keyring and display observations
 
-- The test session initially pointed to a missing `/run/user/1000/bus`. Starting GNOME Keyring and the editor under `dbus-run-session` allowed startup. A private bus ends with its wrapped process: use the launcher again to create a fresh session, rather than reuse the ended bus address. Secure-storage persistence/unlock across fresh sessions was not separately verified.
+- The test session initially pointed to a missing `/run/user/1000/bus`. Starting GNOME Keyring and the editor under `dbus-run-session` allowed startup. A private bus ends with its wrapped process: run the launcher again to create a fresh bus/keyring session; do not reuse the ended session's `DBUS_SESSION_BUS_ADDRESS`. Secure-storage persistence/unlock across fresh sessions was not separately verified.
 - WSLg displayed `xeyes` successfully. The VS Code test profile used `"window.titleBarStyle": "native"`.
-- Multiple monitors with mixed scaling produced mouse-coordinate offsets. Moving the window between monitors was followed by a user report that dragging worked; this was an observed workaround, not a verified permanent fix. Relevant upstream reports: [WSLg #324](https://github.com/microsoft/wslg/issues/324) and [WSLg #1233](https://github.com/microsoft/wslg/issues/1233).
+- Multiple monitors with mixed scaling produced mouse-coordinate offsets. Moving the window between monitors was followed by a user report that dragging worked; this was an observed workaround, not a verified permanent fix. Upstream reports: [WSLg #324](https://github.com/microsoft/wslg/issues/324) and [WSLg #1233](https://github.com/microsoft/wslg/issues/1233).
 
-The current manual switching contract is in [Codex design §5.1](codex-design.md#51-local-desktop-editor-manual-restart), procedures in [Manual Verification](manual-verification.md#codex-in-a-local-linux-desktop-vs-code), and remaining acceptance in [TODO](../TODO.md).
-
-## Panel startup diagnostics
-
-Search for `[planswap]` in the extension host log for activation start/completion, panel document creation, document-ready latency, and account-state read duration/counts. In the Webview developer tools console, the same prefix identifies frontend initialization, first-state wait, and first-card DOM update duration. Host and frontend durations use separate monotonic clocks; do not subtract timestamps across them. DOM update duration is not a browser-paint measurement. These diagnostics contain timings and counts, not account names, emails, paths or credentials.
-
-For a cold-start investigation, record both logs from editor startup through the first visible cards. For a connectivity investigation, also record whether the document reloads and whether another `ready`/first-state sequence occurs. Logging does not itself establish the cause of a delay or an offline failure.
-
-## Real editor smoke tests
-
-`npm run test:integration` builds the extension, then uses the exact dev dependency `@vscode/test-electron` 3.1.0 to download and launch VS Code **1.107.0**, matching the engine baseline. This suite runs on Linux/WSL with a graphical display; use `xvfb-run -a npm run test:integration` on a headless Linux machine. CI runs it in a separate Linux job. The downloaded editor is cached in `.vscode-test/` and excluded from packaging.
-
-The launcher uses `makeTempHome`, clears inherited account/editor variables, and gives the editor disposable HOME, XDG, user-data, extensions and workspace directories. It removes those fixtures after the test process exits. Only empty account folders are created. Tests exercise real extension activation, contributed command registration, repeated sidebar focus/refresh, signed-out usage refresh and account discovery. They do not install the extension into the user's editor, log in, run account CLIs, mutate the registry or restart an editor/server. These smoke tests do not assert Webview DOM rendering, real-account usage values or native Windows behavior; those remain separate preview and manual acceptance checks.
-
-## Repeatable Webview checks
-
-The preview serves the production `dist/media` bundle with synthetic protocol fixtures and a simulated host transport. `npm run preview` builds the extension and starts a loopback-only page at `http://127.0.0.1:8768/`; stop it with Ctrl+C. Query parameters `locale`, `width` and `active` choose an initial language, sidebar width and provider. Fixtures use only `/fixture/` paths and example identities, and no account files or CLIs are accessed.
-
-The exact development dependency is `playwright` 1.63.0. UI previews run locally on demand; CI does not run browser UI tests. Install its pinned Chromium with `npx playwright install chromium`, then run `npm run test:ui`. By default the runner uses a headless browser with a fixed 1920×1080 viewport at device scale 1, so no window opens and no display is needed; it checks those viewport dimensions and 100% zoom. `npm run test:ui -- --headed` instead opens a full-screen window in a graphical session (headless Linux then needs Xvfb and a window manager such as Openbox; bare Xvfb can report a full-screen state without filling the display) and checks that both window and page dimensions match the display at 100% zoom, with no emulated viewport. Either way the runner creates its own browser, one reused page, and a loopback server, and closes them on completion; only the sidebar container changes width. Four locales and five widths exercise the real DOM and message protocol, including tab/switch/rename behavior, input preservation, delete cancellation and usage observations. Screenshots and a JSON result summary are written under `.test-out/ui/`. Screenshots capture the viewport after checking that the page has no vertical overflow.
-
-These checks use synthetic theme colors and a fake host. They verify layout and frontend behavior, not actual VS Code theme injection, host-side account mutations, real login state or usage values. The separate editor smoke suite and user-operated acceptance still apply. Production Webview dependencies and CSP remain unchanged.
-
-The test browser disables GPU acceleration because the hosted Linux runner failed GPU initialization immediately before screenshot capture. This keeps the layout/interaction checks independent of that runner's GPU; it does not validate hardware-accelerated rendering.
-
-## Synthetic account-read measurements
-
-`npm run perf --silent > report.json` measures Claude account-info reads with isolated synthetic fixtures and reports durations plus read/parse counts. It does not access real accounts or impose a timing threshold. See the [baseline record](research/account-read-performance.md) for measured layers, sample sizes, results and the decision to defer production optimization until relevant workload evidence exists.
+Procedures are in [Manual Verification](manual-verification.md#codex-in-a-local-linux-desktop-vs-code) and remaining acceptance in [TODO](../TODO.md).

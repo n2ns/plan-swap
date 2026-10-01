@@ -44,11 +44,16 @@ import type { CodexAccountStore } from './codexStore';
 import { runTool, type TerminalCheck, type ToolDeps } from '../tools';
 import { t } from '../i18n';
 import type { CodexUsageHistory } from './codexUsageHistory';
+// Codex commands, panel message handling and the Codex panel data source. Command ids and restart behavior:
+// codex-design.md section 8 and docs/features.md. QuickPick items, messages and terminal names use labelFor; logic
+// uses account name and dir. Panel account messages resolve their directory through panel.resolve.
 
 export interface CodexDeps {
   store: CodexAccountStore;
   panel: AccountsPanel;
+  // The Codex LabelStore (codex.labels)
   labels: LabelStore;
+  // Passed to runTool for Codex page tool messages
   tools: ToolDeps;
   // Receives this module's "account terminal open" check, so the toolbar's Re-link can treat such an account as busy
   provideTerminalCheck?: (check: TerminalCheck) => void;
@@ -74,7 +79,10 @@ export function codexRunsInWsl(windows: boolean = isWindows()): boolean {
   return windows && vscode.workspace.getConfiguration('chatgpt').get<boolean>('runCodexInWindowsSubsystemForLinux', false) === true;
 }
 
-/** Uses the editor connection context, not the kernel, so WSLg desktop windows get local guidance. */
+/** Pure localized guidance selector (hint, the "restart required" warning and the switch confirmation): native Windows
+ *  local window → quit and relaunch the editor; other local → restart the editor; non-WSL remote → remote guidance;
+ *  WSL → per editor kind. Callers pass vscode.env.remoteName; uses the editor connection context, not the kernel, so
+ *  WSLg desktop windows get local guidance. windows is a test seam. */
 export function manualRestartMessages(kind: ServerKind, remoteName: string | undefined, windows: boolean = isWindows()): { hint: string; required: string; switchConfirm: string } {
   if (remoteName === undefined && windows) {
     const hint = t('codex.manualRestartHintWin');
@@ -110,7 +118,9 @@ export function manualRestartMessages(kind: ServerKind, remoteName: string | und
   };
 }
 
-/** Automatic restart is restricted to the existing supported WSL servers. kind: the caller's detectServerKind() result. */
+/** Automatic restart is restricted to the existing supported WSL servers: auto only for a WSL remote with
+ *  canAutoRestart(kind); local and other remotes never. userEnv: true on native Windows. kind: the caller's
+ *  detectServerKind() result, so one flow detects the kind once. */
 export function restartInfo(kind: ServerKind = detectServerKind()): RestartInfo {
   const remoteName = vscode.env.remoteName;
   const context = remoteName === undefined ? 'local' : remoteName === 'wsl' ? 'wsl' : 'remote';
@@ -156,7 +166,17 @@ export async function restartServerInteractive(): Promise<void> {
   restart(kind);
 }
 
-/** Data source of the Codex panel tab */
+/**
+ * Data source of the Codex panel tab.
+ * - accounts(): store.all() rows with readCodexAccountInfo; current and selected rows by findSameDir (alternate
+ *   spellings match), isSelected independent of isCurrent; shared only for named rows; when effectiveDir() matches no
+ *   row, an extra current 'external' row. Usage history only for signed-in non-API-key rows, and none while
+ *   codexRunsInWsl().
+ * - enabled(): isEnabled(); errors count as not enabled.
+ * - pendingDir(): when the selected dir (default when unset) differs from effectiveDir(), the account's display name,
+ *   or the path for an unregistered dir; display text only.
+ * - watchTargets(): auth.json of each row's dir plus STATE_FILE().
+ */
 export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, history?: CodexUsageHistory): PanelSource {
   const accounts = (): AccountView[] => {
     const cur = effectiveDir();
@@ -226,6 +246,25 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, h
   };
 }
 
+/**
+ * Registers the Codex commands and the panel's 'codex' message handler.
+ * - enable / switch: refused with codex.win.runsInWsl while codexRunsInWsl(); switching also requires isEnabled().
+ * - switch: concurrent requests are ignored; a target already effective only realigns the state file; otherwise a
+ *   modal (codex.switchAndRestartButton for automatic WSL editors, codex.saveSelectionButton with manual instructions
+ *   elsewhere), then re-checks the dir and its registration, re-links a shared target (problems only warn), writes the
+ *   selection and restarts only supported WSL editors.
+ * - add: validateName, create the dir; shared asks for the Windows copy fallback then ensureCodexLinks with the
+ *   terminal-busy callback, independent runs copyCodexIndependent; link/copy failures only warn. Add and rename always
+ *   post addResult / renameResult, also when they throw.
+ * - share / unshare: effective or selected accounts (alternate spellings included) are refused before the modal and
+ *   re-checked after it, then the host busy guard (codexAccountBusy or, on Windows, an open account terminal). Share
+ *   passes the copy-fallback and terminal-busy options to migrateCodexToShared (busy checked again at its start; both
+ *   apply to its final link repair).
+ * - remove: one blocked() guard for effective, selected and busy, before the flow and after every modal, including
+ *   right before deleteCodexDir; a successful deletion calls store.unignore.
+ * - terminal: a non-default Linux account whose dir has a C0 or DEL control character is refused; a sign-in terminal
+ *   shows the account login tip. Tool messages go through runTool('codex', …).
+ */
 export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
   const { store, panel, labels, tools } = deps;
   const MODE = 'codex';
@@ -738,7 +777,10 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
   ];
 }
 
-// Name check for a new Codex account; only Codex accounts are compared (the same name as on the Claude side is allowed)
+// Name check for a new Codex account; only Codex accounts are compared (the same name as on the Claude side is allowed).
+// Refuses: empty, not NAME_RE, the reserved name, an existing name or display label (case-insensitive), a dir equal to
+// or containing ~/.codex after resolving links, a Windows case variant of an existing folder, and a dir that is a link
+// or junction
 export function validateName(name: string, store: CodexAccountStore, labels: LabelStore): string | undefined {
   if (!name) return t('name.empty');
   if (!NAME_RE.test(name)) return t('name.invalid');

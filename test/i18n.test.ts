@@ -5,17 +5,17 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
   en as hostEn, formatMessage, getLocale, intlLocale, LOCALE_INFO, LOCALES, matchLocale, setLocale, t, translationsOf,
-  zhCn as hostZh, es as hostEs, ja as hostJa, type Locale,
+  zhCn as hostZh, zhTw as hostZhTw, es as hostEs, ja as hostJa, type Locale,
 } from '../src/i18n';
 import {
-  en as webEn, zhCn as webZh, es as webEs, ja as webJa, formatMessage as webFormatMessage, getLocale as getWebLocale,
+  en as webEn, zhCn as webZh, zhTw as webZhTw, es as webEs, ja as webJa, formatMessage as webFormatMessage, getLocale as getWebLocale,
   matchLocale as webMatchLocale, setLocale as setWebLocale, t as webT, WEB_LOCALE_INFO,
 } from '../src/webview/i18n';
 
 const root = path.join(__dirname, '..');
 const locales = LOCALES.filter((l) => l !== 'en');
-const hostTables: Record<Locale, Record<string, string>> = { en: hostEn, 'zh-cn': hostZh, es: hostEs, ja: hostJa };
-const webTables: Record<Locale, Record<string, string>> = { en: webEn, 'zh-cn': webZh, es: webEs, ja: webJa };
+const hostTables: Record<Locale, Record<string, string>> = { en: hostEn, 'zh-cn': hostZh, 'zh-tw': hostZhTw, es: hostEs, ja: hostJa };
+const webTables: Record<Locale, Record<string, string>> = { en: webEn, 'zh-cn': webZh, 'zh-tw': webZhTw, es: webEs, ja: webJa };
 
 interface PluralBlock { source: string; name: string; branches: Record<string, string> }
 
@@ -133,7 +133,7 @@ describe('all supported translations', () => {
       assert.equal(webT('confirm.text', { name: 'work' }), webTables[locale]['confirm.text'].replace('{name}', 'work'));
     });
   }
-  for (const locale of ['es', 'ja'] as const) {
+  for (const locale of ['zh-tw', 'es', 'ja'] as const) {
     test(`${locale}: product names, commands and configuration identifiers stay unchanged`, () => {
       const terms = ['PlanSwap', 'Claude', 'Codex', 'ChatGPT', 'WSL', 'Linux', 'CLI', 'MCP', 'JSON', 'CODEX_HOME', 'CLAUDE_CONFIG_DIR', 'AGENTS.md', 'CLAUDE.md', 'config.toml', 'settings.json', 'hooks.json', '~/.profile', '~/.bashrc', 'wsl --shutdown', 'dbus-run-session'];
       for (const [source, translated] of [[hostEn, hostTables[locale]], [webEn, webTables[locale]]] as Array<[Record<string, string>, Record<string, string>]>) {
@@ -217,7 +217,8 @@ describe('locale metadata', () => {
 
 describe('matchLocale', () => {
   const cases: Array<[string, Locale]> = [
-    ['en', 'en'], ['EN-us', 'en'], ['zh-CN', 'zh-cn'], ['zh-cn', 'zh-cn'], ['zh-tw', 'zh-cn'], ['zh', 'zh-cn'],
+    ['en', 'en'], ['EN-us', 'en'], ['zh-CN', 'zh-cn'], ['zh-cn', 'zh-cn'], ['zh-tw', 'zh-tw'], ['zh-TW', 'zh-tw'], ['zh-hk', 'zh-tw'], ['zh-mo', 'zh-tw'],
+    ['zh', 'zh-cn'], ['zh-sg', 'zh-cn'],
     ['es', 'es'], ['es-419', 'es'], ['ja', 'ja'], ['ja-jp', 'ja'], ['JA-jp', 'ja'], ['ES', 'es'], ['pt-br', 'en'], ['fr', 'en'], ['', 'en'],
   ];
   for (const [side, match] of [['host', matchLocale], ['webview', webMatchLocale]] as const) {

@@ -2,7 +2,7 @@
   "name": "planswap",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "publisher": "n2ns",
   "private": true,
   "license": "MIT",
@@ -203,6 +203,7 @@
             "auto",
             "en",
             "zh-cn",
+            "zh-tw",
             "es",
             "ja"
           ],
@@ -212,6 +213,7 @@
             "%config.language.auto%",
             "%config.language.en%",
             "%config.language.zhCn%",
+            "%config.language.zhTw%",
             "%config.language.es%",
             "%config.language.ja%"
           ],

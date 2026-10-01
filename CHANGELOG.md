@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.2.3] - 2026-10-02
+
+### Added
+
+- Traditional Chinese (繁體中文) for the panel, status bar, messages, Command Palette titles, settings and the user guide. Choose it with `planswap.language` set to `zh-tw`; with `auto`, a `zh-TW`, `zh-HK` or `zh-MO` editor display language selects it, and other Chinese variants keep Simplified Chinese.
+- **Refresh Usage Limits of All Codex Accounts**, in the Command Palette and as the icon button next to the refresh button on the Codex page, checks every signed-in ChatGPT Codex account (not API key) one at a time with a cancellable progress notification and reports failures, so you can compare accounts before switching.
+- Settings to turn automatic usage checks on or off for each product (`planswap.claude.usageAutoRefresh`, `planswap.codex.usageAutoRefresh`, default on) and to set their interval in minutes (`planswap.claude.usageRefreshMinutes`, 10–1440, and `planswap.codex.usageRefreshMinutes`, 5–1440, default 15). Manual refreshes always work.
+- A step-by-step user guide in English, Simplified Chinese, Traditional Chinese, Spanish and Japanese. The **User guide** button in the panel footer opens it in the UI language.
+
+### Changed
+
+- Manual usage refreshes do not query an account again within a minute of its last check (the usage services are rate limited); a single refresh says when to try again, and refresh-all skips such accounts and says how many it skipped. Scheduled checks are not affected.
+- **Switch** on non-current account cards is now an icon button like the other card actions, dimmed until you hover over or focus the card. Double-click and Enter on a card still switch.
+- Signed-in shared Claude accounts take the default account's onboarding state, so Claude Code no longer runs its first-start setup again in them. Signed-out accounts keep it, because that is where they sign in.
+- In the status bar tooltip, each product's email is a bold header row, window names sit right next to their bars, and status lines span the whole table.
+- Translations use consistent terms for usage limits, the default account and linking in every language, and English and Spanish count messages use correct singular and plural forms ("1 account", "2 accounts").
+- The README was rewritten around the new user guide.
+
+### Fixed
+
+- Reset times now read the same in editors whose runtime lacks `Intl.DurationFormat` (Node 22): Simplified Chinese without spaces ("2天5小时") and Japanese with full units ("2 日 5 時間").
+- Converting an account to a shared one is refused if a PlanSwap terminal for that account was opened while the copy-fallback prompt was showing, instead of going ahead while the account is in use.
+
 ## [0.2.2] - 2026-10-01
 
 ### Added

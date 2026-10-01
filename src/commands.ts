@@ -43,9 +43,11 @@ export interface Deps {
   store: AccountStore;
   panel: AccountsPanel;
   statusBar: StatusBar;
+  // Aliases of Claude accounts (claude.labels)
   labels: LabelStore;
   // Codex-side store; the refresh command applies to both tabs
   codex?: { store: CodexAccountStore; labels: LabelStore };
+  // Panel 'tool' messages of the Claude page go to runTool('claude', tool, tools)
   tools: ToolDeps;
   // Root of the process tree for the busy checks; tests pass a fake, product code leaves the default /proc
   procRoot?: string;
@@ -53,6 +55,27 @@ export interface Deps {
   provideTerminalCheck?: (check: TerminalCheck) => void;
 }
 
+/**
+ * Claude account commands and the Claude page's panel handler. The host is authoritative: every panel `dir` is
+ * re-resolved with panel.resolve and every new name checked with validateName; frontend checks are only hints.
+ * QuickPick items, messages and terminal names use the display name (labelFor); logic uses name / dir.
+ *
+ * - Switch: the panel asks a modal first (the Command Palette pick is the confirmation); a missing non-default folder is
+ *   an error; a shared account is re-linked and mirrored first (problems only warn); then setConfigDir, the reload
+ *   banner (plus a notification while the panel is hidden). A failed settings write is reported.
+ * - Add: always answers addResult, also when the flow throws. Linking or copying failures only warn and the account is
+ *   still registered. A shared add creates the folder, then asks askCopyFallback (Windows) before anything is linked.
+ * - Share / unshare: named, non-current accounts only, after a modal; current-account and busy state are re-checked
+ *   after the modal. Share asks askCopyFallback after those re-checks. Add and share pass the answer plus the
+ *   terminal-busy callback (linkBusy) to ensureClaudeLinks / migrateClaudeToShared; switching re-links with linkBusy only.
+ * - Remove: the current account (any spelling, sameRealPath) and a busy one are refused before the first confirmation,
+ *   after the Command Palette confirmation and again after the delete-directory confirmation. The alias is cleared with
+ *   the account; the directory is deleted only through deleteAccountDir, after which it is no longer ignored.
+ * - Rename: named rows only; always answers renameResult.
+ * - Terminals: on Linux a non-default folder with a control character is refused; closing a PlanSwap terminal refreshes
+ *   the UI and warns when a still-registered named account is still signed out.
+ * - planswap.refresh re-syncs both stores with the disk and refreshes the panel and status bar.
+ */
 export function registerCommands(deps: Deps): vscode.Disposable[] {
   const { store, panel, statusBar, labels, codex, tools } = deps;
   const procRoot = deps.procRoot ?? '/proc';
@@ -441,7 +464,12 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
   ];
 }
 
-// Name check for a new Claude account; only Claude accounts are compared, case-insensitively
+/**
+ * Name check for a new Claude account; only Claude accounts are compared, case-insensitively (sameName). Refuses an
+ * empty name, one not matching NAME_RE, the reserved `default`, the name or display name of any registered account,
+ * a folder that is (sameRealPath) or contains the default directory, a Windows folder differing only in case, and an
+ * existing folder that is a symbolic link. Returns the localized reason, or undefined when valid.
+ */
 export function validateName(name: string, store: AccountStore, labels: LabelStore): string | undefined {
   if (!name) return t('name.empty');
   if (!NAME_RE.test(name)) return t('name.invalid');

@@ -1,12 +1,12 @@
 # Synthetic Claude account-read baseline
 
-Recorded 2026-09-30 on Linux x64, Node v24.21.0. This is a local synthetic measurement, not a UI latency result or a performance gate.
+Recorded 2026-09-30 on Linux x64, Node v24.21.0. This is a local synthetic measurement, not a UI latency result, a performance gate or a real-account workload distribution.
 
 ## Reproduce
 
 Run `npm run perf --silent > report.json`. The runner bundles the benchmark in a disposable directory and uses `makeTempHome` for every case. It creates synthetic account-info JSON only; no real accounts, credentials, CLIs or editor processes are used. Temporary fixtures are removed on completion.
 
-The matrix uses 1, 10 and 50 accounts (including default), each with 1 KiB, 256 KiB or 1 MiB of JSON. Every layer has five warmups and 50 samples, except the 50-account / 1 MiB case, which has 25 samples. Median and p95 use nearest-rank percentiles. Filesystem caches are warm; host load and garbage collection can affect results.
+Account counts include default. Each layer had five warmups and 50 samples (25 for 50 accounts / 1 MiB), with nearest-rank percentiles and warm filesystem caches; host load and garbage collection can affect results.
 
 Three layers are measured independently:
 

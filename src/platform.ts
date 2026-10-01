@@ -7,7 +7,8 @@ import { execFileSync } from 'node:child_process';
 /** A file symlink cannot be created: Windows without Developer Mode or elevation. */
 export class LinkPrivilegeError extends Error {}
 /** A directory junction cannot be created on Windows, e.g. the account folder is not on a local NTFS volume (a network
- *  share, FAT32 / exFAT media); junctions need no privilege, so this is a property of the drive. */
+ *  share, FAT32 / exFAT media); junctions need no privilege, so this is a property of the drive. claudeShare.linkEntry
+ *  reports such an entry as 'failed' and the share run goes on. */
 export class JunctionError extends Error {}
 
 export const isWindows = (): boolean => process.platform === 'win32';
@@ -26,7 +27,9 @@ export function comparablePath(p: string, platform: string = process.platform): 
 /**
  * Creates the link `link` → `target`. On Windows directories get a junction (no privilege needed; the target is
  * always absolute here) and files a symlink, which needs Developer Mode or an elevated editor: EPERM is rethrown as
- * an Error whose message explains that. Elsewhere this is fs.symlinkSync.
+ * a LinkPrivilegeError whose message explains that. A junction refused for any reason other than EEXIST is a
+ * JunctionError; an existing entry (EEXIST) and other file errors are rethrown as is. A missing target is linked as a
+ * file. Elsewhere this is fs.symlinkSync.
  */
 export function createLink(target: string, link: string, platform: string = process.platform): void {
   if (platform !== 'win32') {
@@ -80,7 +83,8 @@ export function fileLinksAvailable(dir: string, platform: string = process.platf
   }
 }
 
-/** Recreates the link `src` at `dst` (target copied verbatim; on Windows resolved to an absolute path first). */
+/** Recreates the link `src` at `dst` (target copied verbatim; on Windows a relative target is resolved against src's
+ *  folder and the link made through createLink). */
 export function copyLink(src: string, dst: string, platform: string = process.platform): void {
   const raw = fs.readlinkSync(src);
   if (platform === 'win32') createLink(path.resolve(path.dirname(src), raw), dst, platform);
@@ -111,9 +115,11 @@ export function parseStartTimes(out: string): Map<number, string> {
 }
 
 /**
- * Windows: the creation times of the given processes, which Claude Code records as `procStart` in its session files,
- * so a pid reused by an unrelated process is not mistaken for a live session. Exited pids are simply absent. The pids
- * are validated integers, so nothing else reaches the command line.
+ * Windows: the creation times of the given processes (FILETIME ticks as decimal strings, from one `Get-Process`
+ * call), which Claude Code records as `procStart` in its session files, so a pid reused by an unrelated process is not
+ * mistaken for a live session. Exited pids are simply absent. Pids that are not positive integers are dropped, so
+ * nothing else reaches the command line; with none left the result is an empty map without running PowerShell.
+ * Undefined when the probe fails (`run` throws, e.g. the 8 s timeout).
  */
 export function windowsStartTimes(pids: number[], run: (script: string) => string = defaultPowerShell): Map<number, string> | undefined {
   const ids = pids.filter((p) => Number.isInteger(p) && p > 0);
@@ -133,7 +139,8 @@ function defaultPowerShell(script: string): string {
 /**
  * Windows only: removes the links (symlinks, junctions and opaque reparse folders) anywhere inside `dir`, walking the
  * whole tree without following a link, before a recursive delete, so a delete can never descend through a junction
- * into the default account however deep it sits. Real files are left.
+ * into the default account however deep it sits. Real files are left. A no-op off win32; unreadable folders and
+ * entries are skipped.
  */
 export function unlinkLinks(dir: string, platform: string = process.platform): void {
   if (platform !== 'win32') return;
@@ -186,9 +193,11 @@ const RENAME_RETRY_CODES = ['EPERM', 'EACCES', 'EBUSY'];
 
 /**
  * fs.renameSync for replacing a file. Windows refuses to replace a file while any handle is open on it (an antivirus
- * or indexer scan, another editor window reading it, the CLI reading its info file): there the rename is retried for
- * about a second before the error is thrown. Elsewhere a single rename. stillValid runs before every attempt (a
- * compare-then-rename must not replace a write made during the retries): false stops without renaming and returns false.
+ * or indexer scan, another editor window reading it, the CLI reading its info file): there a rename failing with
+ * EPERM / EACCES / EBUSY is retried up to 8 times (backoff 10 ms doubling, capped at 200 ms, about a second in all)
+ * before the error is thrown; other errors are thrown at once. Elsewhere a single rename. stillValid runs before
+ * every attempt (a compare-then-rename must not replace a write made during the retries): false stops without
+ * renaming and returns false.
  */
 export function renameReplacing(
   src: string, dst: string, platform: string = process.platform, rename: (a: string, b: string) => void = fs.renameSync, stillValid?: () => boolean,

@@ -1,5 +1,7 @@
 // File-backed Memento at ~/.config/planswap/state.json, so the account lists, ignore lists and aliases follow the
 // WSL distribution (a workspace extension's globalState is stored on the Windows client and shared by every distro).
+// Besides STATE_KEYS the file holds warnings.dismissed (extension.ts) and codex.usageHistory (codexUsageHistory.ts).
+// No cross-process lock: update re-reads the file, but two hosts writing at the same moment can still lose one write.
 // Depends only on vscode's Memento type
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -33,6 +35,7 @@ export class FileMemento implements Memento {
     return Object.keys(this.read());
   }
 
+  // Reads the file on every call (never a cached state); own properties only (Object.hasOwn)
   get<T>(key: string): T | undefined;
   get<T>(key: string, defaultValue: T): T;
   get<T>(key: string, defaultValue?: T): T | undefined {
@@ -40,7 +43,8 @@ export class FileMemento implements Memento {
     return Object.hasOwn(state, key) ? (state[key] as T) : defaultValue;
   }
 
-  /** undefined deletes the key; the file (0600, directory 0700) is rewritten atomically */
+  /** undefined deletes the key; re-reads the file, then rewrites the whole object atomically (pretty JSON; temp file
+   *  0600 + rename, directory 0700) */
   async update(key: string, value: unknown): Promise<void> {
     const entries = Object.entries(this.read()).filter(([k]) => k !== key);
     if (value !== undefined) entries.push([key, value]);

@@ -12,6 +12,8 @@ import { readClaudeUsage } from './claudeUsage';
 import { getLocale, intlLocale, t } from './i18n';
 import { comparablePath, isWindows } from './platform';
 
+// planswap.sidebar.* display settings; extension.ts refreshes the panel when any of them changes. Model-specific
+// (scoped) Claude windows are sent only while showModelLimits is on (off by default)
 export const SHOW_MODEL_LIMITS_SETTING = 'sidebar.showModelLimits';
 export const SHOW_EMAIL_SETTING = 'sidebar.showEmail';
 export const SHOW_FIVE_HOUR_SETTING = 'sidebar.showFiveHourLimit';
@@ -60,13 +62,19 @@ export interface PanelSource {
   enabled(): boolean;
   // Returns a display name
   pendingDir(): string | undefined;
-  // Absolute paths of files to watch (claude: claudeJsonPath of each dir; codex: auth.json of each dir + the state file)
+  // Absolute paths of files to watch (claude: claudeJsonPath(dir, isExplicitConfigDir(dir)) of each dir; codex: auth.json
+  // of each dir + the state file)
   watchTargets(): string[];
-  // codex only
+  // codex only; copied into TabState.restart on every push
   restart?(): RestartInfo;
 }
 
-/** Claude data source: appends an "external directory" row when the current dir matches no registered account */
+/**
+ * Claude data source: one row per store.all() account (label via labelFor; email, plan, usageEligible and usage via
+ * claudeRowInfo; shared via isSharedClaudeAccount for named rows), plus an "external directory" row (EXTERNAL_NAME,
+ * kind 'external') when the current dir matches no registered account (findSameDir). enabled is always true and
+ * pendingDir always undefined.
+ */
 export function claudePanelSource(store: AccountStore, labels: LabelStore): PanelSource {
   const accounts = (): AccountView[] => {
     const cur = currentDir();
@@ -111,6 +119,15 @@ export function claudePanelSource(store: AccountStore, labels: LabelStore): Pane
 
 type Handler = (msg: FromWebview) => void | Promise<void>;
 
+/**
+ * The single sidebar webview provider hosting both tabs; the constructor already syncs the file watchers.
+ *
+ * Incoming messages are checked with checkMessage first (malformed ones are logged and dropped). 'ready' pushes the
+ * state and delivers a queued focusAdd; 'setTab' only writes the memento (no push); every other message goes to the
+ * handler of its mode (dispatch). The state is pushed again when the view becomes visible; when hidden the ready flag
+ * is cleared, so a replacement document must send 'ready' before queued focus requests are delivered. Every state push
+ * fires onDidChange.
+ */
 export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposable {
   private view?: vscode.WebviewView;
   private readonly handlers: Partial<Record<PanelMode, Handler>> = {};
@@ -141,6 +158,7 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
     return this.view?.visible ?? false;
   }
 
+  /** The tab last clicked (memento 'panel.activeTab'); 'claude' by default. */
   get activeTab(): PanelMode {
     return this.memento.get<PanelMode>(ACTIVE_TAB_KEY) === 'codex' ? 'codex' : 'claude';
   }
@@ -150,7 +168,10 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
     return this.sources[mode].accounts();
   }
 
-  /** Finds a displayed account by directory; only accepts directories present in the list */
+  /**
+   * Finds a displayed account by directory (samePath); only accepts directories present in the list, so every `dir`
+   * from the webview is checked here before it is acted on.
+   */
   resolve(mode: PanelMode, dir: string): (Account & { kind: AccountView['kind'] }) | undefined {
     const row = this.accounts(mode).find((r) => samePath(r.dir, dir));
     return row && { name: row.name, dir: row.dir, kind: row.kind };
@@ -168,10 +189,12 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
     this.pushState();
   }
 
+  /** Silently dropped while no view is resolved. */
   post(msg: ToWebview): void {
     void this.view?.webview.postMessage(msg);
   }
 
+  /** Focuses the view, then asks the page to open and focus its add input; queued until the page sent 'ready'. */
   focusAdd(mode: PanelMode): void {
     void vscode.commands.executeCommand(`${VIEW_ID}.focus`).then(() => {
       if (this.ready) this.post({ type: 'focusAdd', mode });
@@ -351,11 +374,8 @@ export function checkMessage(raw: unknown): FromWebview | undefined {
   return raw as FromWebview;
 }
 
-/**
- * The account-info fields a row shows. Picked explicitly rather than spread, so fields meant to stay in the host
- * (the identity comparison key) never reach the Webview.
- */
 // Account info plus the usage Claude Code cached in the same file; only subscription sign-ins (oauthAccount) have usage
+// (and usageEligible). Scoped windows are dropped unless SHOW_MODEL_LIMITS_SETTING is on
 function claudeRowInfo(dir: string): Pick<AccountView, 'email' | 'plan' | 'loggedIn' | 'usage' | 'usageEligible'> {
   const explicit = isExplicitConfigDir(dir);
   const info = readAccountInfo(dir, explicit);
@@ -366,10 +386,15 @@ function claudeRowInfo(dir: string): Pick<AccountView, 'email' | 'plan' | 'logge
   return { ...view, usage: { ...usage, windows: usage.windows.filter((w) => showModelLimits || !w.scope) } };
 }
 
+/**
+ * The account-info fields a row shows. Picked explicitly rather than spread, so fields meant to stay in the host
+ * (the identity comparison key) never reach the Webview; both vendors' row builders go through it.
+ */
 export function viewInfo(info: { email?: string; plan?: string; loggedIn: boolean }): Pick<AccountView, 'email' | 'plan' | 'loggedIn'> {
   return { email: info.email, plan: info.plan, loggedIn: info.loggedIn };
 }
 
+/** Replaces the home directory with ~ (case-insensitive on Windows); other paths are returned unchanged. */
 export function tildify(dir: string): string {
   const home = os.homedir();
   // Windows paths are case-insensitive (a drive letter or folder may differ only in case); the rest keeps its spelling

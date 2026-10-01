@@ -1,6 +1,6 @@
 # Guía de uso de PlanSwap
 
-[English](user-guide.md) · [简体中文](user-guide.zh-cn.md) · **Español** · [日本語](user-guide.ja.md)
+[English](user-guide.md) · [简体中文](user-guide.zh-cn.md) · [繁體中文](user-guide.zh-tw.md) · **Español** · [日本語](user-guide.ja.md)
 
 PlanSwap te permite mantener varias cuentas de Claude Code y Codex con la sesión iniciada y elegir cuál usa tu editor. Esta guía recorre los controles de la barra lateral, la configuración de cuentas, el cambio de cuenta, los límites de uso y el mantenimiento diario. Claude y Codex se gestionan por separado: cambiar uno no cambia el otro.
 
@@ -181,7 +181,7 @@ Las demás filas muestran el resultado de su última consulta. Los valores desap
 
 La barra de estado muestra cuánto queda del límite corto de cada producto, por ejemplo `Claude 97% · Codex 82%`. Su fondo cambia al color de advertencia del tema cuando algún límite general, incluidos los más largos, está al 30 % o menos, y al color de error al 10 % o menos.
 
-Pasa el puntero sobre ella para ver una tabla con una fila de encabezado por producto (correo, plan y un icono de actualizar) y una fila por límite. Haz clic en ella para abrir PlanSwap.
+Pasa el puntero sobre ella para ver una tabla con una fila de encabezado por producto (correo, plan y, cuando la cuenta se puede consultar, un icono de actualizar) y una fila por límite general. Haz clic en ella para abrir PlanSwap.
 
 ## Renombrar o quitar cuentas
 
@@ -235,7 +235,7 @@ Haz clic en el icono de ajustes de la barra de título del panel, o ejecuta **Pl
 
 | Ajuste | Predeterminado | Función |
 | --- | --- | --- |
-| `planswap.language` | `auto` | Seguir el editor, o elegir `en`, `zh-cn`, `es` o `ja`. |
+| `planswap.language` | `auto` | Seguir el editor, o elegir `en`, `zh-cn`, `zh-tw`, `es` o `ja`. |
 | `planswap.sidebar.showEmail` | `true` | Mostrar el correo de las cuentas en las tarjetas de la barra lateral. |
 | `planswap.sidebar.showFiveHourLimit` | `true` | Mostrar el límite de 5 horas en las tarjetas. |
 | `planswap.sidebar.showWeeklyLimit` | `true` | Mostrar el límite de 7 días en las tarjetas. |

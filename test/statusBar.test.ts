@@ -126,6 +126,8 @@ describe('pure helpers', () => {
       setLocale('zh-cn');
       assert.equal(relativeReset(twoDaysFive, now), '2天5小时');
       assert.equal(relativeReset(at(3 * 86400_000), now), '3天');
+      setLocale('zh-tw');
+      assert.equal(relativeReset(twoDaysFive, now), '2 天 5 小時');
       setLocale('ja');
       assert.equal(relativeReset(twoDaysFive, now), '2 日 5 時間');
       setLocale('es');
@@ -141,6 +143,7 @@ describe('pure helpers', () => {
     const samples = [2 * 86400_000 + 5 * 3600_000, 3 * 86400_000, 5 * 3600_000 + 20 * 60_000, 45 * 60_000];
     const expected: Record<string, string[]> = {
       en: ['2d 5h', '3d', '5h 20m', '45m'], 'zh-cn': ['2天5小时', '3天', '5小时20分钟', '45分钟'],
+      'zh-tw': ['2 天 5 小時', '3 天', '5 小時 20 分鐘', '45 分鐘'],
       es: ['2d 5h', '3d', '5h 20min', '45min'], ja: ['2 日 5 時間', '3 日', '5 時間 20 分', '45 分'],
     };
     try {
@@ -270,7 +273,7 @@ describe('Codex usage limits in the tooltip', () => {
     test('a cached failure shows the short failure line in the current locale', () => {
       fs.writeFileSync(path.join(temp.home, '.codex', 'auth.json'), '{}');
       const { bar, item } = make();
-      const expected: Record<Locale, string> = { en: 'Usage check failed', 'zh-cn': '用量查询失败', es: 'Error al consultar el uso', ja: '使用量の確認に失敗' };
+      const expected: Record<Locale, string> = { en: 'Usage check failed', 'zh-cn': '用量查询失败', 'zh-tw': '用量查詢失敗', es: 'Error al consultar el uso', ja: '使用量の確認に失敗' };
       try {
         bar.setCodexUsage({ checking: false, result: { ok: false, reason: 'noRateLimits' } });
         for (const locale of Object.keys(expected) as Locale[]) {

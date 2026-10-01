@@ -4,15 +4,20 @@ import * as path from 'node:path';
 import { realPathInside, samePath, sameRealPath } from '../paths';
 import { isWindows, pidAlive, stripBom, unlinkLinks } from '../platform';
 import { t } from '../i18n';
+// Codex account directories, read-only account info from auth.json, the config.toml seed copy and deletion safety.
+// No vscode import. Credential rules (auth.json read-only, identity never displayed, logged, persisted or sent to the
+// Webview): AGENTS.md "Account and data safety". samePath / sameRealPath come from ../paths.
 
 export const CODEX_DEFAULT_NAME = 'default';
 export const CODEX_DIR_BASENAME_RE = /^\.codex-[A-Za-z0-9_-]+$/;
 
+/** dir is absolute (path.resolve). */
 export interface CodexAccount { name: string; dir: string }
 
 // Seed files copied into an independent account (AGENTS.md and the rest are handled by codexShare.copyCodexIndependent)
 const SEED_FILES = ['config.toml'];
-// Top-level keys in the seed config that must not be carried into a new account dir (design 8.2)
+// Top-level keys in the seed config that must not be carried into a new account dir; with BLOCKED_TABLE they are the
+// default `roots` of blockedConfigReason (codexShare passes its own, longer identity list)
 const BLOCKED_TOP_KEYS = ['forced_login_method', 'forced_chatgpt_workspace_id', 'sqlite_home', 'log_dir', 'model_provider'];
 // Table that must not be carried over in any form ([model_providers], [model_providers.x], dotted keys, inline tables)
 const BLOCKED_TABLE = 'model_providers';
@@ -23,20 +28,24 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
-// The default dir is always ~/.codex regardless of CODEX_HOME (this window's effective dir is codexState.effectiveDir)
+// The default dir is always path.resolve(~/.codex) regardless of CODEX_HOME or any other environment variable
+// (this window's effective dir is codexState.effectiveDir)
 export function codexDefaultDir(): string {
   return path.resolve(os.homedir(), '.codex');
 }
 
+/** path.resolve(~/.codex-<name>); the name is not validated here (see codexCommands.validateName). */
 export function codexAccountDir(name: string): string {
   return path.resolve(os.homedir(), '.codex-' + name);
 }
 
+/** Signed in iff <dir>/auth.json exists (existence check only). */
 export function codexLoggedIn(dir: string): boolean {
   return fs.existsSync(path.join(dir, 'auth.json'));
 }
 
-// identity: opaque comparison key (user + workspace) for detecting duplicate sign-ins; never displayed, logged or persisted
+// identity: opaque comparison key (user + workspace) for detecting duplicate sign-ins and attributing usage results;
+// never displayed, logged, persisted or sent to the Webview
 export interface CodexAccountInfo { email?: string; plan?: string; loggedIn: boolean; identity?: string }
 
 // Decodes the second JWT segment (base64url) without verifying the signature; any error returns undefined
@@ -53,14 +62,24 @@ export function decodeJwtPayload(jwt: string): Record<string, unknown> | undefin
 
 const CODEX_PLAN_NAMES: Record<string, string> = { prolite: 'Pro Lite' };
 
-// chatgpt_plan_type → display text: free/go/plus/pro/team/business/enterprise capitalized, prolite → "Pro Lite"
+// chatgpt_plan_type → display text: lower-cased then capitalized (plus → Plus, team → Team, any unknown value likewise),
+// except the CODEX_PLAN_NAMES overrides (prolite → "Pro Lite"); empty or missing → undefined
 export function formatCodexPlan(planType?: string): string | undefined {
   if (!planType) return undefined;
   const key = planType.toLowerCase();
   return CODEX_PLAN_NAMES[key] ?? key.charAt(0).toUpperCase() + key.slice(1);
 }
 
-// Reads only email and plan from auth.json; never returns or logs raw access_token/refresh_token/id_token
+/**
+ * The only reader of auth.json content. Account info for display and comparison; never returns or logs the raw
+ * access_token / refresh_token / id_token.
+ * - auth.json missing → { loggedIn: false }; present → loggedIn: true, even when it is damaged or being written
+ *   (then email, plan and identity are unknown).
+ * - API key mode (auth_mode 'apikey', or no auth_mode with a non-empty OPENAI_API_KEY and no tokens object) →
+ *   plan 'API key', no email, no identity.
+ * - Otherwise only the payload of tokens.id_token is decoded (decodeJwtPayload, no signature check): email,
+ *   'https://api.openai.com/auth'.chatgpt_plan_type via formatCodexPlan, and identity (see codexIdentity).
+ */
 export function readCodexAccountInfo(dir: string): CodexAccountInfo {
   const file = path.join(dir, 'auth.json');
   if (!fs.existsSync(file)) return { loggedIn: false };
@@ -109,6 +128,8 @@ function codexIdentity(payload: Record<string, unknown>): string | undefined {
   return user && workspace ? `codex:${user}\n${workspace}` : undefined;
 }
 
+/** Real directories ~/.codex-<name> (symlinks excluded), minus any that is or contains the default dir after
+ *  resolving links. An unreadable home → []. */
 export function scanCodexDirs(): CodexAccount[] {
   const home = os.homedir();
   let entries: fs.Dirent[];
@@ -125,6 +146,7 @@ export function scanCodexDirs(): CodexAccount[] {
     .filter((a) => !sameRealPath(a.dir, def) && !realPathInside(a.dir, def));
 }
 
+/** mkdir -p with mode 0700. */
 export function ensureCodexDir(dir: string): void {
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
 }
@@ -196,11 +218,20 @@ function scanValue(s: string, st: ValueState): void {
   }
 }
 
-// Returns a description of the blocked item found in config.toml, or undefined if none. Line-based scan: a table
-// header whose first segment is blocked, or a top-level key (plain, quoted, dotted or inline table) whose first
-// segment is blocked; keys after any other table header are not top-level. Lines inside a multi-line value
-// (array, inline table, """ or ''' string) are skipped, so they are never read as keys or headers.
-// roots: the blocked first segments (default: the seed-copy list)
+/**
+ * Returns the localized reason for the first blocked item in a config.toml text, or undefined if none.
+ * Line-based scan (a leading BOM is ignored):
+ * - a table header ([t] or [[t]]) whose first segment is a root → "[<normalized header>] section", e.g.
+ *   [model_providers], [ model_providers.x ], ["model_providers".x];
+ * - a top-level key whose first segment is a root → "top-level key <root>": plain, "basic" or 'literal' keys,
+ *   dotted keys (model_providers.x.base_url = …) and inline tables (model_providers = { … }).
+ * Whitespace around dots and quotes in keys and headers are normalized; leading whitespace is allowed; # comment
+ * lines are ignored; keys after any other table header are not top-level. Lines inside a multi-line value (array,
+ * inline table, """ or ''' string) are skipped, so they are never read as keys or headers; basic-string escapes are
+ * respected when finding the closing delimiter, literal strings have none.
+ * roots: the blocked first segments; default BLOCKED_TOP_KEYS + BLOCKED_TABLE (seed copy). codexShare passes
+ * CODEX_IDENTITY_CONFIG_KEYS + CODEX_IDENTITY_CONFIG_TABLES.
+ */
 export function blockedConfigReason(text: string, roots: readonly string[] = BLOCKED_ROOTS): string | undefined {
   let topLevel = true;
   const st: ValueState = { depth: 0 };
@@ -233,6 +264,11 @@ export function blockedConfigReason(text: string, roots: readonly string[] = BLO
   return undefined;
 }
 
+/**
+ * Seed copy for a new independent account: only config.toml (the rest is copied by codexShare.copyCodexIndependent;
+ * auth.json is never copied). Skipped, with a localized reason, when the source is missing or unreadable, the target
+ * already exists, or blockedConfigReason finds a blocked key or table. Written with mode 0600 and flag 'wx'.
+ */
 export function copyCodexSeed(fromDir: string, toDir: string): CopyResult {
   const result: CopyResult = { copied: [], skipped: [] };
   for (const file of SEED_FILES) {
@@ -312,12 +348,24 @@ function pidFileAlive(file: string, procRoot: string): boolean {
   return procStartTime(pid, procRoot) === ticks;
 }
 
-/** procRoot is for tests. */
+/**
+ * Whether a Codex daemon owns dir: any of DAEMON_PID_FILES under <dir>/app-server-daemon/ whose JSON pid and start
+ * ticks (processIdentity.startTicks, else processStartTime) match the start time in <procRoot>/<pid>/stat.
+ * A missing file, unparsable JSON or a missing pid / start ticks → not alive. A valid pid file while procRoot itself
+ * is missing → alive (cannot be ruled out). Windows with the default procRoot: a live pid alone counts.
+ * Depends on Codex's pid-file format; re-verify after Codex upgrades. procRoot is for tests.
+ */
 export function codexDaemonAlive(dir: string, procRoot = '/proc'): boolean {
   const base = path.join(dir, 'app-server-daemon');
   return DAEMON_PID_FILES.some((f) => pidFileAlive(path.join(base, f), procRoot));
 }
 
+/**
+ * Localized refusal reason, or undefined when dir may be deleted. In order: a direct child of the home directory
+ * (del.notHomeChild); basename matches CODEX_DIR_BASENAME_RE (del.badName); not the default dir by real path
+ * (del.isDefault); does not contain the default dir after resolving links (del.containsDefault); exists
+ * (del.missing); not a symlink (del.symlink); a directory (del.notDir); no live daemon (del.daemonAlive).
+ */
 export function checkCodexSafeToDelete(dir: string): string | undefined {
   const home = path.resolve(os.homedir());
   const target = path.resolve(dir);
@@ -339,6 +387,9 @@ export function checkCodexSafeToDelete(dir: string): string | undefined {
   return undefined;
 }
 
+/** The only Codex deletion path: throws checkCodexSafeToDelete's reason; otherwise removes links inside the tree
+ *  first (unlinkLinks, Windows only, so no junction is followed) and then fs.promises.rm recursive + force, which
+ *  does not follow symlinks, so a shared account loses only its own files and links. */
 export async function deleteCodexDir(dir: string): Promise<void> {
   const reason = checkCodexSafeToDelete(dir);
   if (reason) throw new Error(reason);

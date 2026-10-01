@@ -400,7 +400,7 @@ describe('panel message handlers', () => {
     }
   });
 
-  for (const locale of ['en', 'zh-cn', 'es', 'ja'] as const) {
+  for (const locale of ['en', 'zh-cn', 'zh-tw', 'es', 'ja'] as const) {
     for (const [serverDir, editor] of [['.antigravity-ide-server', 'Antigravity'], ['.vscodium-server', 'VSCodium']] as const) {
       test(`switch: ${locale} ${editor} offers switch and restart; cancelling preserves selection`, LINUX_ONLY, async (ctx) => {
         fs.writeFileSync(bashrc(), 'x=1\n');

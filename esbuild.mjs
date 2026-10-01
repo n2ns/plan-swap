@@ -1,3 +1,6 @@
+// npm run build / npm run watch: bundles the extension host and the Webview frontend.
+// Every frontend asset must land in dist/media/, the Webview's only localResourceRoots entry; frontend dependencies
+// cannot be loaded from node_modules at runtime. --watch watches both entries.
 import * as esbuild from 'esbuild';
 import { copyFileSync, mkdirSync, readFileSync } from 'node:fs';
 
@@ -11,7 +14,7 @@ for (const f of ['codicon.css', 'codicon.ttf']) {
 }
 
 const contexts = await Promise.all([
-  // Extension host
+  // Extension host: Node 22 is the runtime bundled with the oldest supported editor server (VS Code 1.107 core)
   esbuild.context({
     entryPoints: ['src/extension.ts'],
     outfile: 'dist/extension.js',
@@ -22,7 +25,8 @@ const contexts = await Promise.all([
     external: ['vscode'],
     sourcemap: true,
   }),
-  // Sidebar Webview frontend
+  // Sidebar Webview frontend (panel.js + panel-style.css); regular builds minify without sourcemaps, watch mode keeps
+  // sources readable with sourcemaps. __PLANSWAP_VERSION__ is the manifest version.
   esbuild.context({
     entryPoints: { panel: 'src/webview/main.ts', 'panel-style': 'src/webview/panel.css' },
     outdir: 'dist/media',

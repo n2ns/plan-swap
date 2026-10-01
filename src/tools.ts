@@ -1,3 +1,7 @@
+// Tools of the sidebar: the footer toolbar shared by both tabs (versions, user guide, reload window, restart extension
+// host, star) and each page's "Tools" section (global rules file, settings, Re-link, Update CLI), plus their Command
+// Palette entries. One host implementation serves both entry points; openGlobalMd, openSettings, sync, updateCli and
+// the usage refresh tools depend on the mode, the others ignore it. All texts come from t().
 import * as vscode from 'vscode';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -21,9 +25,11 @@ export interface ShareOps {
 }
 
 export interface ToolDeps {
-  // "Restart WSL server" provided by codexCommands (with modal confirmation and planRestart checks); undefined when Codex is not initialized
+  // "Restart WSL server" provided by codexCommands (with modal confirmation and planRestart checks for Antigravity /
+  // VSCodium; manual-restart guidance only for other editors); undefined when Codex is not initialized
   codexRestart?: () => Promise<void>;
-  // Panel entry: push version info to the sidebar (the editor's quick input position is not under extension control, so no QuickPick)
+  // Panel entry: push version info to the sidebar (the editor's quick input position is not under extension control, so no QuickPick);
+  // the Command Palette entry passes undefined and gets a read-only QuickPick instead
   postVersions?: (items: Array<{ label: string; value: string }>) => void;
   // Directories of each vendor's registered named accounts (for "sync shared"); undefined when not initialized
   claudeDirs?: () => string[];
@@ -50,12 +56,25 @@ export function mirrorClaudeJsonInto(fromJson: string, dir: string): void {
 
 const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
-/** Tool entry shared by the panel toolbar and the Command Palette */
-// The user guide on GitHub in the UI language; English is the source and has no suffix
+// The user guide on GitHub in the UI language (LOCALE_INFO userGuide); English is the source and has no suffix
 function userGuideUrl(): string {
   return `https://github.com/n2ns/planswap/blob/main/docs/${LOCALE_INFO[getLocale()].userGuide}`;
 }
 
+/**
+ * Tool entry shared by the panel (toolbar, Tools section, usage refresh buttons) and the Command Palette.
+ * - openHelp / openStar: open the user guide in the UI language / the repository page on GitHub; nothing else.
+ * - openGlobalMd: <currentDir()>/CLAUDE.md or <effectiveDir()>/AGENTS.md; a missing file is created empty (0600,
+ *   exclusive) after a modal confirmation; for a dangling same-name symlink its target is created instead.
+ * - openSettings: the editor settings filtered to `claudeCode.` or `chatgpt.`.
+ * - reloadWindow / restartExtHost: the editor commands, without confirmation.
+ * - restartServer: deps.codexRestart, or a "not initialized" warning.
+ * - refreshUsage / refreshAllUsage: the vendor's own refresh command, so both entry points share one path.
+ * - cliVersions: collectVersions, pushed to the panel through deps.postVersions or shown in a QuickPick.
+ * - sync: re-links every shared account of the vendor (syncShared).
+ * - updateCli: a terminal running `claude update`, or `codex update` with CODEX_HOME removed from its environment
+ *   (`env -u CODEX_HOME` on Linux); no pre-check and no state change. Available even when Codex is not initialized.
+ */
 export async function runTool(mode: PanelMode, tool: ToolId, deps: ToolDeps): Promise<void> {
   switch (tool) {
     case 'openHelp':
@@ -121,7 +140,9 @@ const claudeShareOps: ShareOps = {
   },
 };
 
-// Re-links every shared account of the vendor to the default account and reports in one notification; independent accounts are untouched
+// Re-links every shared account of the vendor to the default account and reports in one notification; independent accounts are untouched.
+// A failing account is reported and the next one continues; with any issue the result is a warning that does not claim
+// every account was re-linked. Without the vendor's directory list or share ops (not initialized) only a warning is shown
 async function syncShared(mode: PanelMode, deps: ToolDeps): Promise<void> {
   const vendor = mode === 'claude' ? 'Claude' : 'Codex';
   const dirs = mode === 'claude' ? deps.claudeDirs : deps.codexDirs;
@@ -231,6 +252,11 @@ function extVersion(id: string): string {
   return typeof version === 'string' ? version : t('tools.ver.notFound');
 }
 
+/**
+ * Read-only `--version` of the claude and codex CLIs (in parallel, PATH inherited from the extension host, 8 s timeout)
+ * and the versions of the Claude Code and Codex extensions. Not found, timed out, failed (first line of the error) and
+ * no output each get their own text. No network access and no update check.
+ */
 export async function collectVersions(): Promise<Array<{ label: string; value: string }>> {
   const [claudeCli, codexCli] = await Promise.all([cliVersion('claude'), cliVersion('codex')]);
   return [
@@ -247,7 +273,11 @@ async function showCliVersions(): Promise<void> {
   await vscode.window.showQuickPick(items, { canPickMany: false, placeHolder: t('tools.ver.placeholder') });
 }
 
-/** Command Palette entries; restarting the WSL server reuses planswap.codex.restartServer and is not registered here */
+/**
+ * Command Palette entries; restarting the WSL server reuses planswap.codex.restartServer and is not registered here.
+ * Vendor-specific tools without an obvious vendor (settings, Re-link) first ask Claude Code / Codex in a QuickPick;
+ * planswap.openSettings opens PlanSwap's own settings.
+ */
 export function registerToolCommands(deps: ToolDeps): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('planswap.openSettings', () => vscode.commands.executeCommand('workbench.action.openSettings', '@ext:n2ns.planswap')),

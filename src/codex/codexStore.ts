@@ -9,6 +9,11 @@ const STATE_KEY = 'codex.accounts';
 // Accounts deleted but whose directories were kept; skipped by the auto scan
 const IGNORED_KEY = 'codex.ignoredDirs';
 
+/**
+ * Registered Codex accounts in the FileMemento (keys codex.accounts and codex.ignoredDirs); same shape as
+ * AccountStore in src/accounts.ts. The default account { CODEX_DEFAULT_NAME, codexDefaultDir() } is implicit and
+ * always first in all(); named() is sorted by name. Directories are compared with samePath.
+ */
 export class CodexAccountStore {
   constructor(private readonly state: Memento) {}
 
@@ -42,11 +47,14 @@ export class CodexAccountStore {
     return this.state.get<string[]>(IGNORED_KEY, []);
   }
 
+  /** Replaces an entry of the same name and takes its directory off the ignore list. */
   async add(account: CodexAccount): Promise<void> {
     await this.state.update(IGNORED_KEY, this.ignored().filter((d) => !samePath(d, account.dir)));
     await this.save([...this.load().filter((a) => a.name !== account.name), account]);
   }
 
+  /** Unregisters the account and records its directory in codex.ignoredDirs, so the scan does not re-add a kept
+   *  directory. The caller clears the alias (labels.remove). */
   async remove(name: string): Promise<void> {
     const removed = this.load().find((a) => a.name === name);
     if (removed && !this.ignored().some((d) => samePath(d, removed.dir))) {
@@ -55,14 +63,15 @@ export class CodexAccountStore {
     await this.save(this.load().filter((a) => a.name !== name));
   }
 
-  // Called after the directory was deleted, so a recreated directory is auto-discovered again
+  // Called after deleteCodexDir succeeds, so a recreated directory is auto-discovered again
   async unignore(dir: string): Promise<void> {
     await this.state.update(IGNORED_KEY, this.ignored().filter((d) => !samePath(d, dir)));
   }
 
   // Prunes named entries whose directory no longer exists (alias cleared, not added to the ignore list), then
-  // registers scanned directories; a scanned name equal (case-insensitively) to a remaining account's name or,
-  // with labels, display name is skipped until that alias changes
+  // registers scanned directories (scanCodexDirs) that are neither ignored nor registered; a scanned name equal
+  // (sameName, case-insensitive) to 'default', a remaining account's name or, with labels (callers pass the Codex
+  // LabelStore), its display name is skipped until that alias changes. Saves only when something changed
   async syncWithDisk(labels?: LabelStore): Promise<void> {
     const stored = this.load();
     const list = stored.filter((a) => fs.existsSync(a.dir));

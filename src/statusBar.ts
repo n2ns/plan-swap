@@ -1,3 +1,4 @@
+// The PlanSwap status bar item and its HTML tooltip. Imports vscode.
 import * as vscode from 'vscode';
 import * as fs from 'node:fs';
 import { claudeJsonPath, findSameDir, readAccountInfo, samePath } from './paths';
@@ -15,6 +16,7 @@ import { USAGE_HISTORY_MAX_AGE_MS } from './codex/codexUsageHistory';
 import { readClaudeUsage, type ClaudeUsage, type ClaudeUsageFailure, type ClaudeUsageWindow } from './claudeUsage';
 import type { ClaudeUsageState } from './claudeUsageMonitor';
 
+// Refresh commands; only the two single-account ones are trusted command links in the tooltip (buildTooltip)
 export const REFRESH_USAGE_COMMAND = 'planswap.codex.refreshUsage';
 export const CLAUDE_REFRESH_USAGE_COMMAND = 'planswap.claude.refreshUsage';
 export const CLAUDE_REFRESH_ALL_USAGE_COMMAND = 'planswap.claude.refreshAllUsage';
@@ -51,14 +53,17 @@ export function escapeHtml(text: string): string {
 /** A codicon in the HTML tooltip; the sanitizer keeps only `codicon codicon-<name>` classes. */
 const icon = (name: string): string => `<span class="codicon codicon-${name}"></span>`;
 
-/** Remaining percentage of a window, rounded down. */
+/** Remaining percentage of a window, rounded down and clamped to 0..100. */
 export function remainingOf(w: { usedPercent: number }): number {
   return Math.max(0, Math.min(100, Math.floor(100 - w.usedPercent)));
 }
 
 const BAR_CELLS = 10;
 
-/** Fixed-width progress bar of the remaining share; a non-empty window always shows at least one filled cell. */
+/**
+ * Fixed-width progress bar of the remaining share: always 10 cells of █/░ (one Unicode block, so both glyphs share a
+ * width); a non-empty window always shows at least one filled cell.
+ */
 export function usageBar(remaining: number): string {
   const clamped = Math.max(0, Math.min(100, remaining));
   const filled = clamped <= 0 ? 0 : Math.max(1, Math.round(clamped / 100 * BAR_CELLS));
@@ -78,7 +83,10 @@ export function shortWindow<W extends { usedPercent: number; windowMinutes?: num
   return best ?? general[0];
 }
 
-/** The only two background colors a status bar item may use; thresholds are on the lowest remaining percentage. */
+/**
+ * The only two background colors a status bar item may use; thresholds are on the lowest remaining percentage:
+ * <= 10 error, <= 30 warning, otherwise (or undefined) none.
+ */
 export function backgroundIdFor(lowest: number | undefined): 'statusBarItem.errorBackground' | 'statusBarItem.warningBackground' | undefined {
   if (lowest === undefined) return undefined;
   return lowest <= 10 ? 'statusBarItem.errorBackground' : lowest <= 30 ? 'statusBarItem.warningBackground' : undefined;
@@ -88,8 +96,9 @@ type DurationFormatConstructor = new (locale: string, options: { style: string }
 
 /**
  * Time until a reset (unix seconds) as a short duration in the UI language with the two largest units, a zero unit
- * left out: "2d 5h" / "2天5小时", "5h 20m", "45m"; rounded up to the minute, never below one minute. The sidebar's
- * src/webview/main.ts keeps a copy (the Webview cannot import host code); keep both in step.
+ * left out: "2d 5h" / "2天5小时", "5h 20m", "45m"; rounded up to the minute, never below one minute. Uses
+ * Intl.DurationFormat with the locale's LOCALE_INFO durationStyle when available, else Intl.NumberFormat units. The
+ * sidebar's src/webview/main.ts keeps a copy (the Webview cannot import host code); keep both in step.
  */
 export function relativeReset(epochSeconds: number, now: number = Date.now()): string {
   const total = Math.max(1, Math.ceil((epochSeconds * 1000 - now) / 60000));
@@ -104,18 +113,22 @@ export function relativeReset(epochSeconds: number, now: number = Date.now()): s
     .join(durationUnitSeparator);
 }
 
-/** Status bar text: product names with the remaining percentage of their short window when known. */
+/** Status bar text ("Claude 97% · Codex 82%"): product names with the remaining percentage of their short window when known. */
 export function statusText(parts: ReadonlyArray<{ product: string; remaining?: number }>): string {
   return parts.map((p) => p.remaining === undefined ? p.product : t('status.textUsage', { product: p.product, percent: p.remaining })).join(' · ');
 }
 
-/** Screen reader label of the status bar item. */
+/** Screen reader label of the status bar item ("PlanSwap: Claude 97% left, Codex"). */
 export function statusAccessibilityLabel(parts: ReadonlyArray<{ product: string; remaining?: number }>): string {
   const items = parts.map((p) => p.remaining === undefined ? p.product : `${p.product} ${t('status.remainingShort', { percent: p.remaining })}`);
   return `PlanSwap: ${items.join(', ')}`;
 }
 
-/** One usage window as an HTML table row: name, bar, remaining percentage (with a warning mark at 0%), relative reset time. */
+/**
+ * One usage window as an HTML table row: name, bar, remaining percentage (with a warning mark at 0%), relative reset
+ * time. The name is the duration ("5h"), `#n` without one, or "{window} · {scope}" for a model-specific window; the
+ * reset cell is empty without a reset time.
+ */
 export function windowRow(w: UsageWindow | ClaudeUsageWindow, index: number, now: number = Date.now()): string {
   const duration = w.windowMinutes ? formatDuration(w.windowMinutes) : `#${index + 1}`;
   const scope = 'scope' in w ? w.scope : undefined;
@@ -163,7 +176,10 @@ function byDuration<W extends { windowMinutes?: number }>(windows: readonly W[])
 /** What a product block shows below its first line: window table rows and short italic status lines (already markdown). */
 export interface UsageParts { rows: string[]; notes: string[] }
 
-/** The Codex observation as far as it may still be shown: not older than 24 hours, windows past their reset dropped. */
+/**
+ * The Codex observation as far as it may still be shown: undefined when older than 24 hours or dated more than two
+ * minutes ahead; windows past their reset dropped.
+ */
 export function liveCodexUsage(usage: CodexUsage, now: number = Date.now()): CodexUsage | undefined {
   const age = now - usage.checkedAt;
   if (age >= USAGE_HISTORY_MAX_AGE_MS || age < -2 * 60_000) return undefined;
@@ -176,7 +192,11 @@ function codexWindows(state: CodexUsageState | undefined, now: number): UsageWin
   return r?.ok ? liveCodexUsage(r.usage, now)?.windows : undefined;
 }
 
-/** Table rows and status lines for the effective Codex account's usage limits; empty when there is nothing to say (signed out). */
+/**
+ * Table rows and status lines for the effective Codex account's usage limits; empty when there is nothing to say (signed
+ * out). Rows: the live windows sorted by duration. Notes (italic): limit reached, a failure other than notLoggedIn,
+ * then "checking" while a query runs.
+ */
 export function codexUsageParts(state: CodexUsageState | undefined, now: number = Date.now()): UsageParts {
   const parts: UsageParts = { rows: [], notes: [] };
   if (!state) return parts;
@@ -195,8 +215,9 @@ export function codexUsageParts(state: CodexUsageState | undefined, now: number 
 }
 
 /**
- * Table rows and status lines for the current Claude account: the general windows, then the refresh state
- * of that directory (a failure of another directory is not shown).
+ * Table rows and status lines for the current Claude account: the general windows sorted by duration (model-specific
+ * ones are never shown here), then the refresh state of that directory: "checking", else a failure recorded for `dir`
+ * (a failure of another directory is not shown).
  */
 export function claudeUsageParts(
   usage: ClaudeUsage | undefined, state: ClaudeUsageState | undefined, dir: string, now: number = Date.now(),
@@ -210,7 +231,10 @@ export function claudeUsageParts(
   return parts;
 }
 
-/** The localized text of a failed Claude usage query; hasUsage: whether older values are still shown. */
+/**
+ * The localized plain text of a failed Claude usage query, used by the refresh-all warning; hasUsage: whether older
+ * values are still shown. `failed` without detail gives the unknown-error text.
+ */
 export function claudeUsageFailureText(failure: { reason: ClaudeUsageFailure; detail?: string }, hasUsage: boolean): string {
   // Without values to show (too old, or all reset), "could not be refreshed" must not point at shown values
   return failure.reason === 'failed' && !failure.detail ? t('status.usageUnknownError', { detail: '' })
@@ -218,7 +242,11 @@ export function claudeUsageFailureText(failure: { reason: ClaudeUsageFailure; de
       : t(CLAUDE_USAGE_FAILURE_MESSAGES[failure.reason], { detail: failure.detail ?? '' });
 }
 
-/** Localized plain text of one failed Codex query, used by the refresh-all warning. */
+/**
+ * Localized plain text of one failed Codex query, used by the refresh-all warning: notLoggedIn / authExpired / cliMissing /
+ * timeout have their own text; other reasons give the generic failure with the detail (or the reason), and `failed`
+ * without detail the unknown-error text.
+ */
 export function codexUsageFailureText(failure: { reason: UsageFailure; detail?: string }): string {
   const key = CODEX_USAGE_FAILURE_MESSAGES[failure.reason];
   if (key) return t(key);
@@ -248,6 +276,26 @@ function candidatesOf(product: string, windows: ReadonlyArray<UsageWindow | Clau
   }]);
 }
 
+/**
+ * The right-aligned PlanSwap status bar item; a click opens the PlanSwap view.
+ *
+ * A vendor is shown when its effective configuration directory or a registered account directory exists (Claude also
+ * when its resolved .claude.json exists); no network access or sign-in is needed, and with neither vendor the item is
+ * hidden. Without a Codex store (initialization failed) only Claude is shown. Registered rows are matched with
+ * findSameDir, so another spelling of a folder keeps its registered label. Codex identity comes from effectiveDir(),
+ * never from the pending selection.
+ *
+ * Text: `$(dashboard)` + statusText; a product's percentage is the short window of the Claude cache (subscription
+ * sign-in only; readClaudeUsage yields nothing for a cache attributed to another sign-in) or of the live Codex result
+ * (signed in, not API key, not codexRunsInWsl()). The background follows the lowest remaining percentage over the
+ * general windows of both products (never model-specific ones).
+ *
+ * Tooltip: one usageTable with one block per vendor. Identity is the email; without one, a Codex API key account shows
+ * "API key" (and no plan), another signed-in account its label, a signed-out one "Not logged in". Codex notes in order:
+ * the pending selection (only while switching is enabled and the selected and effective directories differ; an
+ * unreadable switching configuration shows none), the run-in-WSL note (instead of usage), then codexUsageParts. A
+ * vendor's refresh link appears only when it shows usage and its usage state is set.
+ */
 export class StatusBar implements vscode.Disposable {
   private readonly item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right);
   private codexUsage: CodexUsageState | undefined;
@@ -370,8 +418,8 @@ function codexSwitchingEnabled(): boolean {
 }
 
 // Everything from outside (labels, emails, plans, model names) is escaped by escapeHtml when the block is assembled, so
-// only our own markup (the table, emphasis, bars, codicons, the refresh links) can act as HTML. Only the refresh commands
-// are trusted.
+// only our own markup (the table, emphasis, bars, codicons, the refresh links) can act as HTML. Only the two
+// single-account refresh commands are trusted (isTrusted.enabledCommands).
 function buildTooltip(blocks: Block[]): vscode.MarkdownString {
   const md = new vscode.MarkdownString();
   md.supportHtml = true;

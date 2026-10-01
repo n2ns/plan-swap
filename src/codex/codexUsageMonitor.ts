@@ -1,5 +1,11 @@
 // Keeps the usage limits of this window's effective Codex account for the status bar tooltip. One query at a time;
 // the caller decides when to ask (focus, a manual refresh, an auth.json change). No vscode import.
+// Attribution: before and after each query the monitor compares the in-memory identity and auth stamp of the
+// directory. A changed stamp is accepted only for the same known identity (a token refresh); otherwise the response is
+// discarded and stays eligible for the next auth-change or stale check. A known identity change permits one
+// sequential follow-up query per refresh chain. onAccepted receives the verified stamp for persistence, and identity is
+// checked again after it settles before the result is published. Identity keys never enter the callback, the live
+// state or persistent history; the state lives in memory only.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { samePath } from '../paths';
@@ -15,13 +21,14 @@ export interface CodexUsageState {
 export interface UsageMonitorOptions {
   read?: (dir: string) => Promise<UsageResult>;
   now?: () => number;
-  // A result older than this is refreshed by refreshIfStale; failures count from the attempt, so they are not retried in a loop.
+  // Default USAGE_STALE_MS. A result older than this is refreshed by refreshIfStale; failures count from the attempt, so they are not retried in a loop.
   // A function is read on every check, so a changed setting applies at once
   staleMs?: number | (() => number);
-  // Cheap fingerprint of <dir>/auth.json (never its content); changes include sign-in, sign-out and token refreshes.
+  // Default authFileStamp. Cheap fingerprint of <dir>/auth.json (never its content); changes include sign-in, sign-out and token refreshes.
   authStamp?: (dir: string) => string;
-  // In-memory comparison only; never included in state or persistence callbacks.
+  // Default readCodexAccountInfo(dir).identity. In-memory comparison only; never included in state or persistence callbacks.
   authIdentity?: (dir: string) => string | undefined;
+  // Persists an accepted result with its verified stamp (CodexUsageHistory.record); a failure here is ignored
   onAccepted?: (dir: string, result: UsageResult, stamp: string) => Promise<void> | void;
 }
 
@@ -35,7 +42,7 @@ function sameAuth(a: AuthSnapshot, b: AuthSnapshot): boolean {
 
 export const USAGE_STALE_MS = 15 * 60_000;
 
-/** mtime and size of auth.json, or 'missing'; only stat is used, the file is never opened. */
+/** `${mtimeMs}:${size}` of <dir>/auth.json, or 'missing'; only stat is used, the file is never opened. */
 export function authFileStamp(dir: string): string {
   try {
     const st = fs.statSync(path.join(dir, 'auth.json'));
@@ -47,8 +54,9 @@ export function authFileStamp(dir: string): string {
 
 /**
  * One query of an account that is not the effective one (refresh of all accounts). The result is handed to onAccepted,
- * with the verified stamp, only when auth.json and the identity did not change while it ran; otherwise it is discarded
- * and returned as failed with detail 'discarded'.
+ * with the verified stamp, only when auth.json and the identity did not change while it ran (as in the monitor);
+ * otherwise it is discarded and returned as failed with detail 'discarded'. A thrown read becomes 'failed'; an
+ * onAccepted failure is ignored.
  */
 export async function queryCodexAccount(
   dir: string,
@@ -104,7 +112,8 @@ export class CodexUsageMonitor {
     return this.state;
   }
 
-  /** Queries now; a call while a query runs joins it instead of starting a second codex process. */
+  /** Queries dirOf() now; a call while a query runs joins it instead of starting a second codex process. A thrown
+   *  read becomes 'failed'. */
   refresh(): Promise<void> {
     this.running ??= this.run().finally(() => {
       this.running = undefined;
@@ -113,7 +122,8 @@ export class CodexUsageMonitor {
     return this.running;
   }
 
-  /** Queries after a discarded response, when nothing was tried yet, or after the stale interval. */
+  /** Queries after a discarded response, when nothing was tried yet, or when the last attempt (failures included) is
+   *  older than staleMs; otherwise joins a running query or does nothing. */
   refreshIfStale(): Promise<void> {
     if (!this.needsRefresh && this.lastAttempt !== undefined && this.now() - this.lastAttempt < this.staleMs()) return this.running ?? Promise.resolve();
     return this.refresh();
@@ -121,7 +131,8 @@ export class CodexUsageMonitor {
 
   /**
    * Queries when auth.json changed since the last accepted response: a sign-in, a re-login after an expired sign-in, or a
-   * sign-out. Other account-info events (tab switches, other accounts' files) start nothing.
+   * sign-out. Other account-info events (tab switches, other accounts' files) start nothing. While a query runs it is
+   * joined, and a changed sign-in marks its response for discarding (a shown result is dropped while checking).
    */
   refreshIfAuthChanged(): Promise<void> {
     if (this.running) {
@@ -138,7 +149,8 @@ export class CodexUsageMonitor {
   /**
    * Without querying (automatic checks off): drops the live result once auth.json no longer belongs to the sign-in it was
    * accepted for (another identity, a sign-out), so the tooltip never shows another account's limits. A token refresh
-   * for the same identity keeps it; a running query discards a changed response itself.
+   * for the same identity keeps it; a running query discards a changed response itself. Such an auth change makes
+   * the next refreshIfStale / refreshIfAuthChanged due at once.
    */
   clearIfAuthChanged(): void {
     if (this.running || !this.accepted || sameAuth(this.accepted, this.snapshot())) return;

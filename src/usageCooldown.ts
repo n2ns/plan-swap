@@ -5,6 +5,8 @@ import { samePath } from './paths';
 
 export const USAGE_COOLDOWN_MS = 60_000;
 
+/** Last query start per directory (samePath). The host marks every query of a product (scheduled, manual, refresh-all)
+ *  and checks remaining() only before a manual refresh. */
 export class UsageCooldown {
   private readonly last: Array<{ dir: string; at: number }> = [];
 

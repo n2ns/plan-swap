@@ -9,7 +9,7 @@ import { LabelStore } from '../src/labels';
 import { readAccountInfo } from '../src/paths';
 import type { FromWebview, ToWebview } from '../src/protocol';
 import { makeTempHome, MemoryMemento } from './helpers';
-import { setLocale, t } from '../src/i18n';
+import { intlLocale, setLocale, t } from '../src/i18n';
 
 function harness() {
   const messages: ToWebview[] = [];
@@ -76,12 +76,12 @@ test('add account waits for the replacement document after hiding the panel', as
   } finally { h.panel.dispose(); }
 });
 
-for (const locale of ['es', 'ja'] as const) {
+for (const locale of ['zh-tw', 'es', 'ja'] as const) {
   test(`${locale}: initial document uses the selected language before frontend startup`, () => {
     setLocale(locale);
     const h = harness();
     try {
-      assert.ok(h.view.webview.html.includes(`<html lang="${locale}">`));
+      assert.ok(h.view.webview.html.includes(`<html lang="${intlLocale(locale)}">`));
       assert.ok(h.view.webview.html.includes(t('panel.loading')));
     } finally { h.panel.dispose(); setLocale('en'); }
   });

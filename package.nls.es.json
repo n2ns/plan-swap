@@ -37,6 +37,7 @@
   "config.language.auto": "Usar el idioma de VS Code",
   "config.language.en": "English",
   "config.language.zhCn": "简体中文",
+  "config.language.zhTw": "繁體中文",
   "config.language.es": "Español",
   "config.language.ja": "日本語",
   "config.language.description": "Idioma del panel, la barra de estado y los mensajes de PlanSwap. Se aplica al instante. Los títulos de comandos y otros textos estáticos usan el idioma de VS Code.",

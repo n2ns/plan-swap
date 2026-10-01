@@ -1,7 +1,9 @@
-// A report assembled from explicit, non-secret fields. Never interpolate raw account or error text.
+// A report assembled from explicit, non-secret fields. Never interpolate raw account or error text. No runtime vscode
+// import: the snapshot is collected by diagnosticsCommand.ts.
 import { CLAUDE_OVERRIDE_VARS } from './environmentWarnings';
 import { t, type MessageKey } from './i18n';
 
+// An account reference without names or paths: its kind and, for a named account, its position in the store
 export type DiagnosticAccount = { kind: 'default' | 'named' | 'external'; number?: number };
 
 export interface DiagnosticSnapshot {
@@ -70,7 +72,13 @@ function enumLabel(value: string, keys: Record<string, MessageKey>): string {
   return t(Object.hasOwn(keys, value) ? keys[value] : 'diagnostics.unknown');
 }
 
-/** Creates a localized Markdown preview; it does not copy, upload or read any credentials. */
+/**
+ * Creates a localized Markdown preview; it does not copy, upload or read any credentials. Only whitelisted values
+ * reach the text: versions matching a known pattern (anything else becomes "unknown"), platform / connection enums,
+ * anonymous account references, counts, known credential-override variable names and the Codex selection,
+ * pre-check and restart states. When Codex runs inside WSL (Windows) the local Codex account and switching lines are
+ * omitted.
+ */
 export function buildDiagnosticsReport(snapshot: DiagnosticSnapshot): string {
   const overrides: string[] = CLAUDE_OVERRIDE_VARS.filter((name) => snapshot.claude.credentialOverrides.includes(name));
   if (snapshot.claude.credentialOverrides.includes('ANTHROPIC_FEDERATION_RULE_ID')) overrides.push('ANTHROPIC_FEDERATION_RULE_ID');

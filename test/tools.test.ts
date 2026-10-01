@@ -60,7 +60,7 @@ describe('usage refresh tools from the panel buttons', () => {
 describe('user guide button', () => {
   test('opens the guide in the UI language; English has no suffix', async (ctx) => {
     const open = ctx.mock.method(env, 'openExternal', async () => true);
-    const expected = { en: 'user-guide.md', 'zh-cn': 'user-guide.zh-cn.md', es: 'user-guide.es.md', ja: 'user-guide.ja.md' } as const;
+    const expected = { en: 'user-guide.md', 'zh-cn': 'user-guide.zh-cn.md', 'zh-tw': 'user-guide.zh-tw.md', es: 'user-guide.es.md', ja: 'user-guide.ja.md' } as const;
     try {
       for (const [locale, file] of Object.entries(expected) as Array<[keyof typeof expected, string]>) {
         setLocale(locale);

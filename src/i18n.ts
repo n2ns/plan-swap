@@ -1,8 +1,15 @@
-// Host-side message tables and lookup. Must not import vscode so pure modules can use it.
+// Host-side message tables and lookup. Must not import vscode so pure modules (paths, labels, claudeShare,
+// shareReport, codex/*) can use t() for the reasons and errors they return or throw. Every user-visible host string
+// goes through t(); account terminal names (`Claude (<label>)` / `Codex (<label>)`) are never localized.
 
-// Adding a locale: add its id here, its row to LOCALE_INFO, its message table to `tables`, the webview twins in
-// src/webview/i18n.ts and the `planswap.language` enum in package.json.
-export const LOCALES = ['en', 'zh-cn', 'es', 'ja'] as const;
+/**
+ * Every supported locale id, English first. This list and LOCALE_INFO are the only place locales are enumerated:
+ * callers read LOCALE_INFO fields instead of comparing locale ids. Adding a locale adds its id here, its LOCALE_INFO
+ * row, its message table in `tables`, the Webview twins (WEB_LOCALE_INFO and table in src/webview/i18n.ts), the
+ * `planswap.language` enum entry with its `config.language.*` label, `package.nls.<locale>.json` and
+ * `docs/<userGuide>`; test/i18n.test.ts checks that these agree.
+ */
+export const LOCALES = ['en', 'zh-cn', 'zh-tw', 'es', 'ja'] as const;
 export type Locale = (typeof LOCALES)[number];
 
 export interface LocaleInfo {
@@ -24,6 +31,8 @@ export interface LocaleInfo {
 export const LOCALE_INFO: Record<Locale, LocaleInfo> = {
   en: { intl: 'en', match: ['en'], sentenceSeparator: ' ', durationStyle: 'narrow', durationUnitSeparator: ' ', userGuide: 'user-guide.md' },
   'zh-cn': { intl: 'zh-CN', match: ['zh-cn', 'zh'], sentenceSeparator: '', durationStyle: 'narrow', durationUnitSeparator: '', userGuide: 'user-guide.zh-cn.md' },
+  // Traditional Chinese narrow units give "2 天5 小時"; the short style gives "2 天 5 小時"
+  'zh-tw': { intl: 'zh-TW', match: ['zh-tw', 'zh-hk', 'zh-mo'], sentenceSeparator: '', durationStyle: 'short', durationUnitSeparator: ' ', userGuide: 'user-guide.zh-tw.md' },
   es: { intl: 'es', match: ['es'], sentenceSeparator: ' ', durationStyle: 'narrow', durationUnitSeparator: ' ', userGuide: 'user-guide.es.md' },
   // Japanese narrow units are Latin letters ("2d5h"); the short style gives "2 日 5 時間"
   ja: { intl: 'ja', match: ['ja'], sentenceSeparator: '', durationStyle: 'short', durationUnitSeparator: ' ', userGuide: 'user-guide.ja.md' },
@@ -38,7 +47,8 @@ export function matchLocale(language: string): Locale {
     ?? 'en';
 }
 
-// English is the source of truth for the key set.
+// English is the source of truth for the key set. Each translated table is typed Record<MessageKey, string>, so the
+// type checker enforces exactly the same keys.
 export const en = {
   'diagnostics.title': 'PlanSwap diagnostics',
   'diagnostics.copy': 'Copy report',
@@ -694,6 +704,321 @@ export const zhCn: Record<MessageKey, string> = {
   'tools.pick.settings': '选择要打开设置的插件',
 };
 
+export const zhTw: Record<MessageKey, string> = {
+  'diagnostics.title': 'PlanSwap 診斷報告',
+  'diagnostics.copy': '複製報告',
+  'diagnostics.previewHint': '請預覽報告並自行決定是否複製。PlanSwap 不會自動上傳報告。',
+  'diagnostics.copied': '已複製診斷報告。',
+  'diagnostics.failed': '無法準備或複製診斷報告。',
+  'diagnostics.environment': '執行環境',
+  'diagnostics.versions': '版本',
+  'diagnostics.planSwapVersion': 'PlanSwap 版本',
+  'diagnostics.editorVersion': '編輯器版本',
+  'diagnostics.platform': '平台',
+  'diagnostics.remote': '編輯器連線',
+  'diagnostics.claudeCli': 'Claude CLI',
+  'diagnostics.codexCli': 'Codex CLI',
+  'diagnostics.claudeExtension': 'Claude 擴充功能',
+  'diagnostics.codexExtension': 'Codex 擴充功能',
+  'diagnostics.configured': '設定中的帳號',
+  'diagnostics.effective': '目前生效帳號',
+  'diagnostics.selected': '已選擇帳號',
+  'diagnostics.count': '已加入的帳號數',
+  'diagnostics.overrides': '憑證覆寫變數名稱',
+  'diagnostics.claudeSelectionNote': 'Claude 的選擇取自編輯器設定；本報告無法驗證官方工作階段的身分。',
+  'diagnostics.enabled': '切換已啟用',
+  'diagnostics.pending': '選擇待生效',
+  'diagnostics.runsInWsl': 'Windows 中的 Codex 在 WSL 執行',
+  'diagnostics.precheck': '切換預先檢查',
+  'diagnostics.restart': '重新啟動方式',
+  'diagnostics.next': '下一步',
+  'diagnostics.default': '預設帳號',
+  'diagnostics.external': '外部帳號',
+  'diagnostics.named': '帳號 #{number}',
+  'diagnostics.yes': '是',
+  'diagnostics.no': '否',
+  'diagnostics.none': '無',
+  'diagnostics.unknown': '未知',
+  'diagnostics.platformLinux': 'Linux',
+  'diagnostics.platformWindows': 'Windows',
+  'diagnostics.remoteLocal': '本機',
+  'diagnostics.remoteWsl': 'WSL',
+  'diagnostics.remoteSsh': 'SSH 遠端',
+  'diagnostics.remoteContainer': '開發容器',
+  'diagnostics.remoteCodespaces': 'Codespaces',
+  'diagnostics.remoteOther': '其他遠端連線',
+  'diagnostics.precheckPassed': '通過',
+  'diagnostics.precheckBlocked': '受阻',
+  'diagnostics.precheckUnavailable': '無法使用',
+  'diagnostics.restartAutomaticWsl': '自動重新啟動 WSL 伺服器',
+  'diagnostics.restartManualWsl': '手動重新啟動 WSL 伺服器',
+  'diagnostics.restartManualLocal': '手動重新啟動本機編輯器',
+  'diagnostics.restartManualRemote': '手動重新啟動遠端伺服器',
+  'diagnostics.restartManualWindows': '手動重新啟動 Windows 編輯器',
+  'diagnostics.nextRunsInWsl': '請從 WSL 視窗管理 Codex 帳號。',
+  'diagnostics.nextAutomaticWsl': '請在編輯器中確認重新啟動 WSL 伺服器，以套用帳號選擇。',
+  'diagnostics.nextManualWsl': '請重新啟動 WSL 編輯器伺服器，以套用帳號選擇。',
+  'diagnostics.nextManualLocal': '請完全結束本機編輯器，再依原本的啟動方式及設定檔、金鑰圈設定重新啟動，並將 CODEX_HOME 設為所選帳號目錄（預設帳號則取消設定）。',
+  'diagnostics.nextManualRemote': '請將 CODEX_HOME 設為所選帳號目錄（預設帳號則取消設定），重新啟動遠端編輯器伺服器後重新連線。',
+  'diagnostics.nextManualWindows': '請完全結束 Windows 編輯器，再從開始功能表或工作列重新開啟，不要從仍帶有舊 CODEX_HOME 的終端機啟動。',
+  'diagnostics.nextNone': '沒有待生效的帳號選擇。',
+  'panel.loading': '正在載入帳號…',
+  'panel.actionFailed': 'PlanSwap 無法完成此操作：{error}',
+  'status.codexPending': '待生效：{label}（需要重新啟動）',
+  'status.codexRunsInWsl': '此處 Codex 在 WSL 中執行（chatgpt.runCodexInWindowsSubsystemForLinux），請在 WSL 視窗中切換其帳號。',
+  'status.usageChecking': '正在查詢用量額度…',
+  'status.usageFailedShort': '用量查詢失敗',
+  'status.exhausted': '已用完',
+  'status.refreshUsage': '重新整理用量額度',
+  'status.textUsage': '{product} {percent}%',
+  'status.usageReached': '已達用量上限',
+  'status.usageFailed': '無法取得用量額度：{detail}',
+  'status.usageUnknownError': '無法取得用量額度：未知錯誤{detail}',
+  'status.remainingShort': '剩餘 {percent}%',
+  'claude.usageAllProgress': '正在查詢 Claude 用量額度：{label}（{done}/{total}）',
+  'claude.usageAllDone': '已查詢 {n} 個 Claude 帳號的用量額度。',
+  'claude.usageAllFailed': '已查詢 {ok}/{n} 個 Claude 帳號。失敗：{failures}',
+  'claude.usageAllNone': '沒有可查詢的已登入 Claude 帳號。',
+  'claude.usageAllCancelled': '已取消；共 {n} 個 Claude 帳號，成功查詢 {ok} 個。',
+  'claude.usageAllMore': '另有 {n} 個',
+  'usage.cooldown': '用量額度在一分鐘內剛查詢過，請於 {seconds} 秒後再試。',
+  'usage.allCooldown': '所有帳號在一分鐘內都剛查詢過，請於 {seconds} 秒後再試。',
+  'usage.allSkipped': '已略過 {n} 個在一分鐘內剛查詢過的帳號。',
+  'codex.usageAllProgress': '正在查詢 Codex 用量額度：{label}（{done}/{total}）',
+  'codex.usageAllDone': '已查詢 {n} 個 Codex 帳號的用量額度。',
+  'codex.usageAllFailed': '已查詢 {ok}/{n} 個 Codex 帳號。失敗：{failures}',
+  'codex.usageAllNone': '沒有可查詢的已登入 Codex 帳號。',
+  'codex.usageAllCancelled': '已取消；共 {n} 個 Codex 帳號，成功查詢 {ok} 個。',
+  'status.codexUsageNotLoggedIn': '無法取得用量額度：未登入。',
+  'status.codexUsageAuthExpired': '無法取得用量額度：登入已過期，請重新登入。',
+  'status.codexUsageCliMissing': '無法取得用量額度：找不到 codex 命令。',
+  'status.codexUsageTimeout': '無法取得用量額度：codex 未及時回應。',
+  'status.codexUsageDiscarded': '無法取得用量額度：查詢期間登入狀態已變更。',
+  'status.scopedWindow': '{window} · {scope}',
+  'status.claudeUsageCliMissing': '無法取得用量額度：找不到 claude 命令。',
+  'status.claudeUsageTimeout': '無法取得用量額度：claude 未及時回應。',
+  'status.claudeUsageNotRefreshed': '無法重新整理用量額度；顯示的是上次成功查詢的數值。',
+  'status.claudeUsageNone': '無法取得用量額度：Claude Code 未回報此帳號的用量額度。',
+  'status.claudeUsageRefreshFailed': '無法取得用量額度：Claude Code 無法重新整理。',
+  'status.minutes': '{n} 分鐘',
+  'status.hours': '{n} 小時',
+  'status.days': '{n} 天',
+  'codex.win.runsInWsl': '此處 Codex 擴充功能在 WSL 中執行 Codex（chatgpt.runCodexInWindowsSubsystemForLinux），因此不會讀取 Windows 的 CODEX_HOME。請開啟 WSL 視窗並在其中管理 Codex 帳號，或關閉該設定。',
+  'account.loginTip': '請在終端機中登入 {vendor}。其他帳號的登入狀態不受影響：每個帳號的登入資訊都儲存在各自的目錄中，不需要先登出。登出會結束該帳號的工作階段。',
+  'terminal.badDir': '帳號資料夾 {dir} 含有控制字元，PlanSwap 不會將它輸入終端機。請先重新命名該資料夾。',
+  'identity.duplicate': '{vendor} 帳號 {labels} 登入的是同一個帳號和工作區，在它們之間切換不會得到各自獨立的用量額度；請將其中一個改用其他帳號登入。',
+  'common.continue': '繼續',
+  'common.delete': '刪除',
+  'common.deleteDir': '刪除目錄',
+  'common.reloadWindow': '重新載入視窗',
+  'common.loggedIn': '已登入',
+  'common.notLoggedIn': '未登入',
+  'common.noAccounts': '沒有可選擇的帳號。',
+  'common.listSep': '；',
+  'common.nameSep': '、',
+  'account.external': '外部目錄',
+  'account.alreadyCurrent': '{label} 已是目前帳號。',
+  'account.dirMissing': '帳號目錄不存在：{dir}',
+  'account.createDirFailed': '建立帳號目錄失敗：{error}',
+  'account.removeDirPrompt': '帳號 {label} 已從清單移除。是否同時刪除目錄 {dir}？',
+  'account.deleteDirFailed': '刪除目錄失敗：{error}',
+
+  'ext.linuxOnly': 'PlanSwap 僅支援 WSL/Linux 和 Windows。',
+  'codex.manualRestartHintWin': '準備好後，請完全結束目前的編輯器（所有視窗），再從開始功能表或工作列重新開啟，不要在仍帶有舊 CODEX_HOME 的終端機中啟動。僅重新載入視窗不會套用新的環境變數。',
+  'codex.manualRestartRequiredWin': 'Windows 上無法自動重新啟動編輯器。{hint}',
+  'codex.switchConfirmManualWin': '要儲存此 Codex 帳號選擇嗎？重新啟動編輯器後才會生效。{hint}',
+  'codex.pre.winUserEnv': '已存在使用者層級的 CODEX_HOME 環境變數。請先移除它（Windows 設定 > 系統 > 關於 > 進階系統設定 > 環境變數），PlanSwap 才能管理它',
+  'codex.notEnabled': '尚未啟用 Codex 帳號切換，請先啟用。',
+  'codex.win.enableConfirm': '允許 PlanSwap 在 Windows 上管理使用者層級的 CODEX_HOME 環境變數嗎？',
+  'claude.win.loginNotLanded': '登入未寫入此目錄：{dir} 下找不到登入資訊。請檢查使用者或系統環境變數 CLAUDE_CONFIG_DIR 是否覆寫了它，或重新開啟終端機後再登入。',
+  'codex.win.selfCheckFailed': '自我檢查失敗；原有的 Codex 切換設定及使用者層級的 CODEX_HOME 均已保留：{detail}',
+  'codex.win.disableConfirm': '將清除已選擇的 Codex 帳號。只有在使用者層級的 CODEX_HOME 仍指向使用者主目錄中的 PlanSwap 帳號資料夾時才會移除該變數；其他值會保留。執行中的編輯器在完全重新啟動前仍保留原本的 CODEX_HOME。要繼續嗎？',
+  'codex.win.enableDetail': 'PlanSwap 會將所選 Codex 帳號儲存在 ~/.config/planswap/codex-home，並在切換帳號時設定或移除使用者環境變數 CODEX_HOME（HKCU\\Environment）。絕不會修改 auth.json。完全重新啟動編輯器後才會套用選擇。',
+  'ext.codexUnavailable': '無法使用 Codex 帳號切換：{error}',
+  'common.dontShowAgain': '不再顯示',
+  'warn.claudeEnvOverride': '此編輯器啟動的 Claude Code 能看到 {names}，並會以它取代所選帳號資料夾中儲存的登入。在從環境變數及 claudeCode.environmentVariables 中移除 {names} 之前，於 PlanSwap 中切換 Claude 帳號不會改變它實際使用的憑證。',
+  'warn.oneDriveHome': '您的使用者資料夾 {home} 位於 OneDrive 中。OneDrive 同步曾因並行寫入而損毀 Claude Code 的 .claude.json，而 PlanSwap 的所有帳號資料夾也都在這裡。建議將使用者資料夾移出 OneDrive，或將 .claude* 和 .codex* 資料夾排除在同步之外。',
+  'warn.pathSpaces': '{names} 的值開頭或結尾有空格。Claude Code 和 Codex 會原樣使用該值，也就是使用名稱以空格開頭或結尾的資料夾，Windows 程式和 PlanSwap 可能無法開啟它。請移除變數值中的這些空格。',
+  'ext.codexLegacyFailed': '無法移轉舊版（ai-switcher）的 Codex 切換設定：{error}',
+
+  'name.empty': '請輸入帳號名稱',
+  'name.invalid': '只能包含 A-Z、a-z、0-9、底線（_）和連字號（-）',
+  'name.reserved': '不能使用保留名稱 {name}',
+  'name.exists': '已存在同名帳號',
+  'name.dupLabel': '與現有帳號的顯示名稱相同',
+  'name.sameAsDefaultDir': '此帳號目錄與預設帳號目錄相同',
+  'account.containsDefaultDir': '無法將 {dir} 用作帳號：它包含預設帳號目錄 {default}。',
+  'name.dirIsSymlink': '此帳號目錄是符號連結',
+  'name.dirCaseDiffers': '使用者資料夾中已存在資料夾 {dir}，Windows 會將它和這個名稱視為同一個資料夾。請使用大小寫相同的名稱，或先移除該資料夾。',
+
+  'label.empty': '請輸入顯示名稱',
+  'label.tooLong': '顯示名稱最多 {max} 個字元',
+  'label.newline': '顯示名稱不能包含換行',
+  'label.dupName': '與現有帳號名稱相同',
+
+  'claude.switchFailed':
+    '切換失敗。可能原因：目前環境未安裝或未啟用官方 Claude Code 擴充功能，或 settings.json 有語法錯誤。原始錯誤：{error}',
+  'claude.switched': '已切換到 {label}。新的工作階段將使用此帳號，已開啟的工作階段仍在使用舊帳號。',
+  'claude.removeCurrent': '{label} 是目前帳號，無法刪除。請先切換到其他帳號。',
+  'claude.removeConfirm': '確定要刪除帳號 {label} 嗎？',
+  'claude.removeDirDetail':
+    '此目錄包含該帳號的登入憑證與工作階段記錄，刪除後無法復原。若剛從此帳號切換離開且尚未重新載入視窗，已開啟的工作階段仍在使用此目錄。',
+  'claude.removeDirDetailShared': '預設帳號中已連結的資料會保留。此帳號目錄及其中本機儲存的所有內容（包括登入憑證、備份和其他未連結的檔案）將被永久刪除。',
+  'share.removeDirDetail': '預設帳號中已連結的資料會保留。此帳號目錄及其中本機儲存的所有內容（包括登入憑證、各帳號獨立的記憶、備份和其他未連結的檔案）將被永久刪除。',
+  'claude.pick.switch': '選擇要切換到的帳號',
+  'claude.pick.share': '選擇要與預設帳號共用的帳號',
+  'claude.pick.remove': '選擇要刪除的帳號',
+  'claude.pick.terminal': '選擇要在終端機中開啟 claude 的帳號',
+  'claude.loginNotLanded':
+    '登入未寫入此目錄：{dir} 下找不到登入資訊。請檢查 ~/.bashrc 等檔案是否覆寫了 CLAUDE_CONFIG_DIR，或重新開啟終端機後再登入。',
+
+  'codex.manualRestartHint': '手動方式：關閉所有連線到此發行版本的 {editor} 視窗，等待至少 5 分鐘後再重新開啟。',
+  'codex.manualRestartHintVscode': '關閉所有連線到此發行版本的 VS Code 視窗，等待幾秒後再重新開啟。',
+  'codex.manualRestartHintUnknown': '關閉所有連線到此發行版本的編輯器視窗，等待至少 5 分鐘後再重新開啟。若帳號仍未變更，請在 Windows 中執行「wsl --shutdown」（會停止所有 WSL 發行版本）後再重新開啟。',
+  'codex.manualRestartRequired': '無法自動重新啟動此編輯器的 WSL 伺服器。{hint}',
+  'codex.manualRestartHintLocal': '準備好後，請完全結束目前的 Linux 編輯器執行個體，並以原本的啟動方式重新啟動，同時將 CODEX_HOME 設為所選帳號目錄（預設帳號則取消設定）。請保留原有的設定檔和金鑰圈設定；使用 dbus-run-session 的啟動方式必須建立新的工作階段。僅重新載入視窗不會套用新的環境變數。',
+  'codex.manualRestartRequiredLocal': '無法自動重新啟動此 Linux 編輯器。{hint}',
+  'codex.switchConfirmManualLocal': '要儲存此 Codex 帳號選擇嗎？手動重新啟動此 Linux 編輯器後才會生效。{hint}',
+  'codex.manualRestartHintRemote': '請在遠端環境中重新啟動編輯器伺服器，並將 CODEX_HOME 設為所選帳號目錄，然後重新連線。若是預設帳號，請在重新啟動伺服器前取消設定 CODEX_HOME。',
+  'codex.manualRestartRequiredRemote': '此遠端環境無法自動重新啟動。{hint}',
+  'codex.switchConfirmManualRemote': '新的 Codex 帳號需要重新啟動遠端編輯器伺服器後才會生效。{hint}要繼續嗎？',
+  'claude.switchConfirm': '要將 Claude 帳號切換到 {label} 嗎？新的工作階段將使用此帳號；已開啟的工作階段在重新載入視窗前仍使用目前帳號。',
+  'claude.switchButton': '切換',
+  'codex.switchAndRestartButton': '切換並重新啟動',
+  'codex.saveSelectionButton': '儲存選擇',
+  'codex.switchConfirm':
+    '切換 Codex 帳號會重新啟動 {editor} 的 WSL 伺服器：所有 WSL 視窗會中斷連線並提示重新載入，所有擴充功能會重新啟動，整合式終端機會關閉。要繼續嗎？',
+  'codex.switchConfirmManual': '新的 Codex 帳號要在 WSL 伺服器重新啟動後才會生效，而此編輯器無法自動重新啟動。{hint}要繼續嗎？',
+  'codex.restartConfirm':
+    '重新啟動 {editor} 的 WSL 伺服器：所有 WSL 視窗會中斷連線並提示重新載入，所有擴充功能會重新啟動，整合式終端機會關閉。要繼續嗎？',
+  'codex.restartPlanFailed': '無法自動重新啟動 WSL 伺服器：{error}\n{hint}',
+  'codex.restartFailed': '重新啟動 WSL 伺服器失敗：{error}\n{hint}',
+  'codex.enableFailed': '無法啟用 Codex 帳號切換：{error}',
+  'codex.enableFailedReasons': '無法啟用 Codex 帳號切換：\n{reasons}',
+  'codex.enableConfirm': '將在 ~/.profile 與 ~/.bashrc 中寫入以下標記區塊，以便在登入 shell 中設定 CODEX_HOME。要繼續嗎？',
+  'codex.enableButton': '寫入',
+  'codex.writeRcFailed': '寫入 rc 檔案失敗：{error}',
+  'codex.rollbackFailedSuffix': '\n復原失敗：{errors}',
+  'codex.selfCheckFailed': '自我檢查失敗，已復原 rc 檔案：{detail}',
+  'codex.selfCheckFailedRollbackFailed': '自我檢查失敗：{detail}\n復原失敗：{errors}',
+  'codex.disableConfirm':
+    '將移除 ~/.profile 與 ~/.bashrc 中的標記區塊，並清除已選擇的 Codex 帳號。已開啟視窗中的 CODEX_HOME 在編輯器或其伺服器重新啟動前不會改變。要繼續嗎？',
+  'codex.disableButton': '停用',
+  'codex.disableFailed': '停用失敗：{error}',
+  'codex.writeStateFailed': '寫入狀態檔案失敗：{error}',
+  'codex.seedSkipped': '帳號 {name} 已建立，但以下檔案未複製：\n{list}',
+  'codex.seedSkippedItem': '{file}：{reason}',
+  'codex.removeEffective': '{label} 是此視窗中目前生效的帳號，無法刪除。請先切換到其他帳號。',
+  'codex.removeSelected': '{label} 是已選擇、正等待重新啟動後生效的帳號，無法刪除。請先切換到其他帳號。',
+  'codex.removeConfirm': '確定要刪除 Codex 帳號 {label} 嗎？',
+  'codex.removeDirDetail': '此目錄包含該帳號的登入憑證、工作階段與本機資料，刪除後無法復原。',
+  'codex.pick.switch': '選擇要切換到的 Codex 帳號',
+  'codex.pick.share': '選擇要與預設帳號共用的 Codex 帳號',
+  'codex.pick.remove': '選擇要刪除的 Codex 帳號',
+  'codex.pick.terminal': '選擇要在終端機中執行 codex 的帳號',
+
+  'codex.seed.srcMissing': '來源檔案不存在',
+  'codex.seed.dstExists': '目標已存在',
+  'codex.seed.readFailed': '讀取來源檔案失敗',
+  'codex.seed.hasSection': '包含 {section} 區段',
+  'codex.seed.hasTopKey': '包含頂層鍵 {key}',
+  'codex.seed.blocked': '{reason}，未複製',
+
+  'codex.pre.notBash': '登入 shell 不是 bash（目前 SHELL={shell}），僅支援 bash',
+  'codex.pre.shellUnset': '未設定',
+  'codex.pre.bashProfile': '{file} 存在且未 source ~/.bashrc，登入 shell 不會讀取 ~/.profile',
+  'codex.pre.broken': '標記區塊不完整，請手動修正 {file}',
+  'codex.pre.userExport': '{file} 中已有您自己的 export CODEX_HOME，兩者衝突',
+  'codex.rc.missingEnd': '標記區塊不完整（缺少結束標記），請手動檢查 {file}',
+  'codex.rc.danglingLink': '{file} 是目標不存在的符號連結，請先修正該連結再重試',
+  'codex.self.bashFailed': '無法執行 bash：{error}',
+  'codex.self.mismatch': '登入 shell 中的 CODEX_HOME 為 "{actual}"，預期為 "{expected}"{stderr}',
+  'codex.self.stderr': '；stderr：{stderr}',
+  'codex.self.error': '自我檢查錯誤：{error}',
+
+  'server.statUnparseable': '無法解析 stat 格式',
+  'server.notFound': '找不到 WSL 伺服器處理程序',
+  'server.unsupported': '父處理程序不是支援自動重新啟動的 WSL 伺服器：{cmdline}',
+  'server.noCommit': '無法從 product.json 讀取伺服器的 commit',
+  'server.pidReadFailed': '讀取 pid 檔案失敗：{file}',
+  'server.pidMismatch': 'pid 檔案與伺服器處理程序不符',
+
+  'del.notHomeChild': '目錄不是使用者主目錄的直接子目錄：{dir}',
+  'del.badName': '目錄名稱不符合 {pattern} 格式：{dir}',
+  'del.isDefault': '無法刪除預設帳號目錄：{dir}',
+  'del.containsDefault': '預設帳號的資料夾（{default}）位於此目錄內，拒絕刪除：{dir}',
+  'del.missing': '目錄不存在：{dir}',
+  'del.symlink': '目錄是符號連結，拒絕刪除：{dir}',
+  'del.notDir': '路徑不是目錄：{dir}',
+  'mcp.badTarget': '不是有效的 JSON 物件，未變更：{file}',
+  'mcp.changed': '同步期間被 Claude Code 修改，未變更，請重試：{file}',
+  'share.busy': '帳號 {name} 仍有 Claude Code 工作階段或 PlanSwap 終端機開啟中。請關閉該帳號的工作階段及 PlanSwap 終端機索引標籤後再試一次。',
+  'share.badSource': '預設帳號的資訊檔案不是有效的 JSON 物件，未進行同步：{file}',
+  'share.busyCodex': '帳號 {name} 仍有 Codex 或 PlanSwap 終端機開啟中。請關閉該帳號的 Codex 工作階段（包括編輯器面板中的工作階段）及 PlanSwap 終端機索引標籤後再試一次。',
+  'del.daemonAlive': '此帳號的 codex 常駐程式仍在執行，拒絕刪除：{dir}',
+
+  'tools.updateCli': '更新 {vendor} CLI',
+  'tools.codexNotInit': 'Codex 部分尚未初始化，無法重新啟動。',
+  'tools.syncNotInit': '{vendor} 部分尚未初始化，無法重新連結已連結帳號。',
+  'tools.pick.sync': '選擇要重新連結已連結帳號的廠商',
+  'sync.none': '沒有可重新連結的已連結 {vendor} 帳號。',
+  'sync.attempted': '已嘗試重新連結 {count} 個已連結的 {vendor} 帳號。',
+  'sync.done': '已將 {count} 個已連結的 {vendor} 帳號重新連結到預設帳號。',
+  'sync.issues': '需要處理：{list}',
+  'sync.item': '{name}：{notes}',
+  'share.addNotes': '帳號 {name} 已新增。連結結果：{notes}',
+  'share.addLinkFailed': '帳號 {name} 已建立，但連結到預設帳號失敗：{error}',
+  'share.addCopyFailed': '帳號 {name} 已建立，但複製預設帳號的設定失敗：{error}',
+  'share.current': '請先切換到其他帳號，再連結 {label}。',
+  'share.confirm': '要將 {label} 連結到預設帳號嗎？{dir} 中的記錄、記憶、設定和其他資料夾會移入預設帳號並以連結取代，登入保持不變。與預設帳號不同的檔案會保留下來供手動合併：已連結資料夾中的檔案以 .from-<name> 字尾儲存在預設檔案旁，帳號目錄中的頂層檔案則改名為 <file>.independent-backup。此操作無法自動復原。',
+  'share.confirmButton': '連結',
+  'share.confirmCodex': '要將 {label} 連結到預設帳號嗎？{dir} 中的工作階段、記錄、設定、規則、技能和對話串資料庫會移入預設帳號並以連結取代；登入和記憶仍由各帳號獨立保存。與預設帳號不同的檔案會保留下來供手動合併：已連結資料夾中的檔案以 .from-<name> 字尾儲存在預設檔案旁；帳號目錄中的 config.toml、AGENTS.md、hooks.json 和對話串資料庫則改名為 <file>.independent-backup。繼續由其他 ChatGPT 帳號開始的工作階段可能會遭伺服器拒絕。此操作無法自動復原。',
+  'share.confirmCodexWindows': '要將 {label} 連結到預設帳號嗎？{dir} 中的工作階段資料夾會合併到預設帳號並以連結取代。設定、規則、技能和記錄會在支援時連結；無法連結的檔案則留在本機。登入、記憶和對話串資料庫仍由各帳號獨立保存。不同的檔案會保留下來供手動合併：已連結資料夾中的檔案以 .from-<name> 字尾儲存在預設檔案旁；帳號目錄中的 config.toml、AGENTS.md 和 hooks.json 被連結取代時改名為 <file>.independent-backup。繼續由其他 ChatGPT 帳號開始的工作階段可能會遭伺服器拒絕。此操作無法自動復原。',
+  'share.done': '{label} 已連結到預設帳號。{summary}',
+  'share.incomplete': '{label} 尚未連結到預設帳號。{summary}',
+  'share.nothingElse': '沒有需要手動處理的項目。',
+  'share.failed': '連結 {label} 時中止：{error}',
+  'unshare.current': '請先切換到其他帳號，再將 {label} 拆分。',
+  'unshare.confirm': '要將 {label} 與預設帳號拆分嗎？會移除 {dir} 中的連結，並為此帳號複製一份預設帳號的設定、規則、技能和 MCP 伺服器。共用的記錄和工作階段會留在預設帳號，不會複製。登入及任何現有的本機資料都會保留。此操作無法自動復原。',
+  'unshare.confirmCodex': '要將 {label} 與預設帳號拆分嗎？會移除 {dir} 中的連結，並為此帳號複製一份預設帳號的設定、規則和技能。共用的工作階段、記錄和對話串資料庫會留在預設帳號，不會複製。登入、記憶及任何現有的本機資料都會保留。此操作無法自動復原。',
+  'unshare.confirmCodexWindows': '要將 {label} 與預設帳號拆分嗎？會移除 {dir} 中的連結，並為此帳號複製一份預設帳號的設定、規則和技能。共用的工作階段和記錄會留在預設帳號，不會複製。登入、記憶、獨立的對話串資料庫及其他現有的本機資料都會保留。此操作無法自動復原。',
+  'unshare.confirmButton': '拆分',
+  'unshare.done': '{label} 已改為獨立帳號：移除了 {removed} 個連結，複製了 {copied}。',
+  'unshare.nothingCopied': '無',
+  'unshare.skipped': '未複製：{list}。',
+  'unshare.failed': '拆分 {label} 時中止：{error}',
+  'unshare.default': '預設目錄無法改為獨立：{dir}',
+  'unshare.notShared': '不是已連結帳號：{dir}',
+  'share.refreshWarning': '將 {label} 重新連結到預設帳號時回報：{notes}',
+  'share.r.moved': '已將 {count} 個檔案移入預設帳號',
+  'share.r.duplicates': '捨棄了 {count} 個完全相同的檔案',
+  'share.r.keptBoth': '兩個版本都已保留，請手動合併：{list}',
+  'share.r.backups': '已備份：{list}',
+  'share.r.conflicts': '保留了帳號自己的版本：{list}',
+  'share.r.copiedNoLink': '由於 Windows 不允許建立檔案連結，已改為複製一次，之後的變更不會共用（開啟開發人員模式並使用「重新連結」即可將內容相同的副本改為連結）：{list}',
+  'share.noFileLinks.prompt': 'Windows 無法連結檔案（未開啟開發人員模式）。帳號切換仍可正常使用，資料夾連結也不受此限制。是否改為將設定檔（{files}）複製到此帳號？副本不會保持同步。',
+  'share.noFileLinks.copy': '複製檔案',
+  'share.noFileLinks.skip': '略過',
+  'share.noFileLinks.openSettings': '開啟開發人員設定',
+  'share.noFileLinks.openFailed': '無法開啟 Windows 設定。請開啟「設定 > 系統 > 開發人員專用」（Windows 10 為「更新與安全性 > 開發人員專用」），開啟開發人員模式，然後使用「重新連結」。',
+  'share.r.needsDevMode': '由於 Windows 不允許建立檔案連結而保持獨立（請在 Windows 設定 > 開發人員專用中開啟開發人員模式，然後使用「重新連結」；帳號已有的檔案會保持原樣）：{list}',
+  'share.r.junctionFailed': '未連結，因為 Windows 無法在此處建立資料夾連結（連接點）；帳號資料夾必須位於本機 NTFS 磁碟，不能是網路共用或 FAT/exFAT 媒體：{list}',
+  'share.r.refused': '基於安全考量未連結：{list}',
+  'share.r.busy': '帳號使用中，維持原狀：{list}',
+  'tools.fileMissingCreate': '檔案不存在，要建立嗎？\n{file}',
+  'tools.create': '建立',
+  'tools.createFailed': '建立檔案失敗：{error}',
+  'tools.openFailed': '開啟檔案失敗：{error}',
+  'tools.ver.notFound': '找不到',
+  'tools.ver.timeout': '逾時',
+  'tools.ver.failed': '失敗：{error}',
+  'tools.ver.noOutput': '（無輸出）',
+  'tools.ver.claudeExt': 'Claude Code 擴充功能',
+  'tools.ver.codexExt': 'Codex 擴充功能',
+  'tools.ver.placeholder': 'CLI 與擴充功能版本（僅供顯示）',
+  'tools.pick.settings': '選擇要開啟設定的擴充功能',
+};
+
 export const es: Record<MessageKey, string> = {
   'diagnostics.title': 'Diagnóstico de PlanSwap',
   'diagnostics.copy': 'Copiar informe',
@@ -1292,10 +1617,11 @@ export const ja: Record<MessageKey, string> = {
   'tools.pick.settings': '設定を開く拡張機能を選択',
 };
 
-const tables: Record<Locale, Record<MessageKey, string>> = { en, 'zh-cn': zhCn, es, ja };
+const tables: Record<Locale, Record<MessageKey, string>> = { en, 'zh-cn': zhCn, 'zh-tw': zhTw, es, ja };
 
 let current: Locale = 'en';
 
+/** Sets the locale used by t(); the host calls it with i18nVscode.resolveLocale() at activation and on setting changes. */
 export function setLocale(l: Locale): void {
   current = l;
 }
@@ -1314,10 +1640,15 @@ const BRANCH_RE = /(zero|one|two|few|many|other)\s*\{([^{}]*(?:\{\w+\}[^{}]*)*)\
 const pluralRules = new Map<string, Intl.PluralRules>();
 
 /**
- * Fills a message: first ICU-style plural blocks `{name, plural, one {# file} other {# files}}` (CLDR categories
- * zero/one/two/few/many/other, `other` required, `#` is the count; a block whose count is missing or not a number
- * is left as-is), then `{name}` placeholders (unknown ones are left as-is). src/webview/i18n.ts keeps a copy (the
- * Webview cannot import host code); keep both in step.
+ * Fills a message. Without params the text is returned unchanged. Otherwise, first ICU-subset plural blocks
+ * `{name, plural, one {# file} other {# files}}`: CLDR categories zero/one/two/few/many/other only (no `=N`
+ * selectors), whitespace between parts allowed, `other` required (a block without it is left as-is). The branch is
+ * `new Intl.PluralRules(intl).select(count)`, falling back to `other`, and every `#` in it becomes the count; a block
+ * whose param is missing or not a finite number is left as-is. Branches may contain simple `{placeholder}`s but no
+ * nested plural blocks or other braces. Then `{name}` placeholders are replaced in one pass (unknown ones are left
+ * as-is; substituted values are not interpolated again). Locales whose integer plural categories are only `other`
+ * (zh-cn, zh-tw, ja) write plain `{n}` text instead of a block. src/webview/i18n.ts keeps an identical copy (the
+ * Webview cannot import host code); test/i18n.test.ts checks both behave the same, so keep them in step.
  */
 export function formatMessage(text: string, params: Record<string, string | number> | undefined, intl: string): string {
   if (!params) return text;
@@ -1339,7 +1670,7 @@ export function t(key: MessageKey, params?: Record<string, string | number>): st
   return formatMessage(tables[current][key], params, LOCALE_INFO[current].intl);
 }
 
-/** The message in every locale (e.g. to reserve all localized display names). */
+/** The message in every locale (labels.ts uses it to reserve every localized external-account name). */
 export function translationsOf(key: MessageKey): string[] {
   return Object.values(tables).map((table) => table[key]);
 }

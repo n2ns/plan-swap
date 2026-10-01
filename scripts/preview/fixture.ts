@@ -23,7 +23,7 @@ declare global {
 }
 
 const params = new URLSearchParams(location.search);
-const locales: Locale[] = ['en', 'zh-cn', 'es', 'ja'];
+const locales: Locale[] = ['en', 'zh-cn', 'zh-tw', 'es', 'ja'];
 const locale = locales.find((value) => value === params.get('locale')) ?? 'en';
 const initialWidth = Number(params.get('width'));
 const width = Number.isInteger(initialWidth) && initialWidth >= 180 && initialWidth <= 1000 ? initialWidth : 340;

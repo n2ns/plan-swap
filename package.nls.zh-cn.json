@@ -37,6 +37,7 @@
   "config.language.auto": "跟随 VS Code 显示语言",
   "config.language.en": "English",
   "config.language.zhCn": "简体中文",
+  "config.language.zhTw": "繁體中文",
   "config.language.es": "Español",
   "config.language.ja": "日本語",
   "config.language.description": "PlanSwap 面板、状态栏与提示消息使用的语言，修改后立即生效。命令标题等静态文案跟随 VS Code 显示语言。",

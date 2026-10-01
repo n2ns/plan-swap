@@ -1,3 +1,5 @@
+// Registered Claude accounts in the state file (FileMemento): key 'accounts' (named accounts only; the default is
+// implicit) and 'ignoredDirs'. Imports vscode only for the Memento type.
 import * as fs from 'node:fs';
 import type { Memento } from 'vscode';
 import type { Account } from './paths';
@@ -19,12 +21,14 @@ export class AccountStore {
     return this.state.update(STATE_KEY, list);
   }
 
+  // Non-default accounts, sorted by name
   named(): Account[] {
     return this.load()
       .filter((a) => a.name !== DEFAULT_NAME)
       .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   }
 
+  // The default account ({DEFAULT_NAME, defaultDir()}) first, then named()
   all(): Account[] {
     return [{ name: DEFAULT_NAME, dir: defaultDir() }, ...this.named()];
   }
@@ -33,6 +37,7 @@ export class AccountStore {
     return this.all().find((a) => a.name === name);
   }
 
+  // samePath match in all()
   findByDir(dir: string): Account | undefined {
     return this.all().find((a) => samePath(a.dir, dir));
   }
@@ -41,11 +46,13 @@ export class AccountStore {
     return this.state.get<string[]>(IGNORED_KEY, []);
   }
 
+  // Replaces an entry with the same name (sameName, case-insensitive) and takes its directory off ignoredDirs
   async add(account: Account): Promise<void> {
     await this.state.update(IGNORED_KEY, this.ignored().filter((d) => !samePath(d, account.dir)));
     await this.save([...this.load().filter((a) => !sameName(a.name, account.name)), account]);
   }
 
+  // Drops the entry and records its directory in ignoredDirs so the scan does not re-add it (the alias is the caller's)
   async remove(name: string): Promise<void> {
     const removed = this.load().find((a) => a.name === name);
     if (removed && !this.ignored().some((d) => samePath(d, removed.dir))) {

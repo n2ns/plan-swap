@@ -2,6 +2,9 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { t } from '../i18n';
+// Detection and restart of the editor's WSL-side server, so a new CODEX_HOME selection takes effect. No vscode import.
+// Design and editor facts: codex-design.md section 5. Everything except executeRestart only reads /proc and files;
+// executeRestart is the one function that signals processes (rules: AGENTS.md "WSL restart").
 
 export type ServerKind = 'antigravity' | 'vscodium' | 'vscode' | 'unknown';
 export interface ServerPlan { serverPid: number; children: number[]; commit: string }
@@ -49,14 +52,18 @@ function realPath(p: string): string {
   }
 }
 
-/** Whitelist mapping; dataDir must be <name> directly under home (symlinks in either path are resolved). */
+/** Whitelist mapping; dataDir must be <name> directly under home (symlinks in either path are resolved):
+ *  .antigravity-ide-server / .antigravity-server → 'antigravity', .vscodium-server → 'vscodium',
+ *  .vscode-server → 'vscode', anything else → 'unknown'. */
 export function classifyDataDir(dataDir: string, home: string): ServerKind {
   const name = path.basename(dataDir);
   if (!Object.hasOwn(DATA_DIR_KINDS, name) || realPath(path.dirname(dataDir)) !== realPath(home)) return 'unknown';
   return DATA_DIR_KINDS[name];
 }
 
-/** Classifies the server that hosts this process (process.ppid). Never throws; any failure → 'unknown'. */
+/** Classifies the server that hosts this process: readArgv(process.ppid) → server root → data dir (the root's parent
+ *  must be named `bin`; the data dir is its parent) → classifyDataDir(dataDir, home). Read-only. Never throws; any
+ *  failure → 'unknown'. */
 export function detectServerKind(): ServerKind {
   try {
     const root = parseServerRoot(readArgv(process.ppid));
@@ -72,7 +79,7 @@ export function canAutoRestart(kind: ServerKind): boolean {
   return kind === 'antigravity' || kind === 'vscodium';
 }
 
-/** Reads the top-level commit of <root>/product.json; must be 40 lowercase hex digits. */
+/** Reads the top-level commit of <root>/product.json; must be 40 lowercase hex digits, else throws t('server.noCommit'). */
 export function readServerCommit(root: string): string {
   let commit: unknown;
   try {
@@ -84,7 +91,7 @@ export function readServerCommit(root: string): string {
   return commit;
 }
 
-/** Reads /proc/<pid>/cmdline as argv (split on \0, so arguments may contain spaces). */
+/** Reads /proc/<pid>/cmdline as argv (split on \0, empty entries dropped, so arguments may contain spaces). */
 export function readArgv(pid: number): string[] {
   return fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0').filter((s) => s !== '');
 }
@@ -113,7 +120,13 @@ export function listChildren(parentPid: number): number[] {
 
 /**
  * Verifies an auto-restartable server from its argv and its parent (wrapper) pid; returns the commit.
- * Only reads product.json and the pid file under home.
+ * Only reads product.json and the pid file under home. Checks, in order (each failure throws the localized error):
+ * 1. the root is parsed from argv, its parent is named `bin`, argv contains `--start-server` and
+ *    canAutoRestart(classifyDataDir(dataDir, home)) (server.unsupported, {cmdline} = first 120 chars of the argv);
+ * 2. commit = readServerCommit(root) (server.noCommit);
+ * 3. basename(root) equals the commit or ends with `-<commit>` (server.noCommit);
+ * 4. the pid file <dataDir>/.<commit>.pid is readable (server.pidReadFailed {file}) and equals wrapperPid
+ *    (server.pidMismatch).
  */
 export function verifyServer(argv: string[], wrapperPid: number, home: string): string {
   const root = parseServerRoot(argv);
@@ -140,6 +153,11 @@ export function verifyServer(argv: string[], wrapperPid: number, home: string): 
   return commit;
 }
 
+/**
+ * Read-only restart plan for the server hosting this extension host (process.ppid): refuses with server.notFound when
+ * ppid <= 1, reads the wrapper pid as field 4 of /proc/<ppid>/stat (server.statUnparseable), then verifyServer.
+ * children: every /proc process whose parent is the server, except this process. Any failure throws a localized Error.
+ */
 export function planRestart(): ServerPlan {
   const ppid = process.ppid;
   if (ppid <= 1) throw new Error(t('server.notFound'));
@@ -149,6 +167,12 @@ export function planRestart(): ServerPlan {
   return { serverPid: ppid, children: listChildren(ppid), commit };
 }
 
+/**
+ * Sends SIGTERM to the server, then to each child (ESRCH and EPERM ignored for children, other errors thrown); no
+ * waiting. Throws t('ext.linuxOnly') without signaling when process.platform is not 'linux'. Disconnects every WSL
+ * window and closes integrated terminals. Product code calls it only after a modal confirmation and only for
+ * 'antigravity' / 'vscodium'; never call it in tests.
+ */
 export function executeRestart(plan: ServerPlan): void {
   // process.kill is TerminateProcess outside Linux; never signal there
   if (process.platform !== 'linux') throw new Error(t('ext.linuxOnly'));

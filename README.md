@@ -23,12 +23,12 @@ Switch between the Claude Code and Codex subscription accounts you own (Claude P
 - **Linked or independent accounts**: reuse the default account's setup, or keep separate settings and session histories.
 - **Display names**: give named accounts labels that are easy to recognize.
 - **Usage limits on account cards**: once an account has been checked, its card shows the remaining limits as bars, with the time until each one resets (for example `2d 5h`; the exact date is in the tooltip). A used-up limit shows its reset time in red. This covers Claude subscription sign-ins and Codex ChatGPT sign-ins, not API key accounts; values older than 24 hours are hidden, and no data is never shown as 0%.
-- **Usage at a glance in the status bar**: the status bar shows what is left of each product's short (5-hour) limit, for example `Claude 97% · Codex 82%`, and turns to the warning or error color when any limit, the weekly one included, is nearly used up. Hover it for a table of every limit with a refresh button per product.
+- **Usage at a glance in the status bar**: the status bar shows what is left of each product's short (5-hour) limit, for example `Claude 97% · Codex 82%`, and turns to the warning or error color when any limit, the weekly one included, is nearly used up. Hover it for a table of the general limits, with a refresh button for each product whose account can be checked.
 - **Refresh on demand**: icons next to **All accounts** check the current account or every signed-in account in that tab, one at a time, so you can compare accounts before switching. The same actions are in the Command Palette (**Refresh Usage Limits of All Claude Accounts**, **Refresh Usage Limits of All Codex Accounts** and the single-account commands). An account checked less than a minute ago is not checked again.
 - **Automatic checks you control**: the current account of each product is checked a few seconds after start-up and then every 15 minutes while the window is focused. Change the interval or turn it off per product with `planswap.claude.usageAutoRefresh` / `planswap.claude.usageRefreshMinutes` (10–1440) and `planswap.codex.usageAutoRefresh` / `planswap.codex.usageRefreshMinutes` (5–1440).
 - **Card display settings**: `planswap.sidebar.showEmail`, `planswap.sidebar.showFiveHourLimit` and `planswap.sidebar.showWeeklyLimit` hide the email, the 5-hour or the 7-day limit on the cards; `planswap.sidebar.showModelLimits` (default off) adds Claude's model-specific limits.
 - **Handy tools**: open your rules and settings, update the CLI, check installed versions and reload the window.
-- **English, Simplified Chinese, Spanish and Japanese UI**, switchable in the settings.
+- **English, Simplified Chinese, Traditional Chinese, Spanish and Japanese UI**, switchable in the settings.
 
 ## Requirements
 
@@ -109,13 +109,13 @@ The Tools section and footer let you open rules and settings, check CLI and exte
 
 **Update CLI** opens a terminal for the selected service. Follow its progress and prompts there. If you installed the CLI another way, you may need to update it that way.
 
-For troubleshooting, run **Preview Diagnostics Report** from the Command Palette. It opens an anonymized report of versions, account-selection state and environment checks. Review it before choosing **Copy report**; nothing is uploaded automatically.
+For troubleshooting, run **Preview Diagnostics Report** from the Command Palette. It opens an anonymized report of PlanSwap, editor, CLI and extension versions, the platform and connection type, account counts and selection state, the Codex switching pre-check and restart method, and the names of any environment variables that override Claude sign-in. Review it before choosing **Copy report**; nothing is uploaded automatically.
 
 **User guide** opens the dedicated [usage instructions](docs/user-guide.md); **Star** opens the GitHub repository. The footer also shows your installed PlanSwap version.
 
 ## Language
 
-In extension settings, set `planswap.language` to `auto` (follow your editor), `en` (English), `zh-cn` (简体中文), `es` (Español) or `ja` (日本語). The panel and messages update immediately; Command Palette titles and the sidebar name follow the editor's display language.
+In extension settings, set `planswap.language` to `auto` (follow your editor), `en` (English), `zh-cn` (简体中文), `zh-tw` (繁體中文), `es` (Español) or `ja` (日本語). The panel and messages update immediately; Command Palette titles and the sidebar name follow the editor's display language.
 
 ## Known limitations
 
@@ -173,7 +173,7 @@ Your account directories (`~/.claude-<name>` and `~/.codex-<name>`) are kept. To
 - [User guide](docs/user-guide.md): step-by-step account setup, switching, usage limits, tools and troubleshooting.
 - [Changelog](CHANGELOG.md): changes in each release.
 - [Feature reference](docs/features.md): detailed behavior of accounts, switching and panel tools.
-- [Documentation map](docs/README.md): development, design, module contracts and verification guides.
+- [AGENTS.md](AGENTS.md#read-the-documents-relevant-to-the-task): which document covers development, design and verification; module contracts are in the code.
 - [Blog post](https://n2ns.com/blog/switch-claude-code-codex-accounts-planswap): why PlanSwap exists and how it switches accounts without copying or swapping credentials.
 
 ## Disclaimer

@@ -14,6 +14,7 @@ function lengthOf(s: string): number {
   return segmenter ? [...segmenter.segment(s)].length : s.length;
 }
 
+// Stored under state[key]: account name → alias; no entry means no alias
 type Labels = Record<string, string>;
 
 export class LabelStore {
@@ -30,7 +31,7 @@ export class LabelStore {
     return typeof value === 'string' && value ? value : undefined;
   }
 
-  /** undefined or equal to name → remove the entry */
+  /** undefined, empty or equal to name → remove the entry (entering the account's own name clears the alias) */
   async set(name: string, label: string | undefined): Promise<void> {
     // Rebuilt with Object.fromEntries (define semantics) so a `__proto__` name is stored as a normal own key
     const entries = Object.entries(this.read()).filter(([k]) => k !== name);
@@ -46,7 +47,10 @@ export class LabelStore {
   /**
    * Returns an error message, or undefined when valid.
    * Trimmed non-empty; ≤32 grapheme clusters; no line breaks; not the external sentinel or any of its localized names;
-   * not equal (case-insensitively) to the name or label of another account of the same vendor (excluding itself)
+   * not equal (case-insensitively) to the name or label of another account of the same vendor (excluding itself).
+   * Checked in that order on the trimmed value: label.empty, label.tooLong, label.newline, name.reserved, label.dupName,
+   * name.dupLabel. `existing` holds the accounts of the same vendor only (the same alias is allowed across vendors);
+   * `name` excludes the account itself by exact name.
    */
   validate(label: string, name: string, existing: Array<{ name: string; label: string }>): string | undefined {
     const value = label.trim();
@@ -65,7 +69,11 @@ export class LabelStore {
   }
 }
 
-/** Account names and aliases are compared case-insensitively when checking for duplicates (`Work` and `work` clash) */
+/**
+ * Account names and aliases are compared case-insensitively when checking for duplicates (`Work` and `work` clash).
+ * The rule applies to new names and aliases only: accounts registered before it that differ only in case are left
+ * as they are, neither renamed nor pruned.
+ */
 export function sameName(a: string, b: string): boolean {
   return a.toLowerCase() === b.toLowerCase();
 }

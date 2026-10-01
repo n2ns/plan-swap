@@ -1,6 +1,6 @@
 # PlanSwap 使用说明
 
-[English](user-guide.md) · **简体中文** · [Español](user-guide.es.md) · [日本語](user-guide.ja.md)
+[English](user-guide.md) · **简体中文** · [繁體中文](user-guide.zh-tw.md) · [Español](user-guide.es.md) · [日本語](user-guide.ja.md)
 
 PlanSwap 让你同时保持多个 Claude Code 和 Codex 账号的登录状态，并选择编辑器使用哪一个。本说明介绍侧边栏的各项控件、账号设置、切换、用量额度和日常维护。Claude 和 Codex 相互独立管理：切换其中一个不会切换另一个。
 
@@ -181,7 +181,7 @@ PlanSwap 让你同时保持多个 Claude Code 和 Codex 账号的登录状态，
 
 状态栏显示每个产品的短周期额度还剩多少，例如 `Claude 97% · Codex 82%`。当任一通用额度（包括较长周期的额度）剩余 30% 或更少时，其背景会变为主题的警告色；剩余 10% 或更少时变为错误色。
 
-悬停可查看一张表格：每个产品一行表头（邮箱、套餐和一个刷新图标），每项额度一行。点击它可打开 PlanSwap。
+悬停可查看一张表格：每个产品一行表头（邮箱、套餐，以及账号可查询时的刷新图标），每项通用额度一行。点击它可打开 PlanSwap。
 
 ## 重命名或删除账号
 
@@ -235,7 +235,7 @@ PlanSwap 启动或刷新时，会把在你的主目录中找到的、名称有�
 
 | 设置 | 默认值 | 用途 |
 | --- | --- | --- |
-| `planswap.language` | `auto` | 跟随编辑器，或选择 `en`、`zh-cn`、`es` 或 `ja`。 |
+| `planswap.language` | `auto` | 跟随编辑器，或选择 `en`、`zh-cn`、`zh-tw`、`es` 或 `ja`。 |
 | `planswap.sidebar.showEmail` | `true` | 在侧边栏卡片上显示账号邮箱。 |
 | `planswap.sidebar.showFiveHourLimit` | `true` | 在卡片上显示 5 小时额度。 |
 | `planswap.sidebar.showWeeklyLimit` | `true` | 在卡片上显示 7 天额度。 |

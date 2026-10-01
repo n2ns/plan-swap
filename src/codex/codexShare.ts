@@ -1,5 +1,9 @@
 // Shared vs independent Codex accounts: a shared account links everything except its login identity to the
-// default account's directory (~/.codex). No vscode import.
+// default account's directory (~/.codex). No vscode import. Design: codex-design.md 8.6; the per-account entries
+// that are never touched (auth.json, memories/ and the rest) are listed there. Reuses the ShareReport / MigrateReport
+// types and the link / merge helpers of claudeShare (same semantics). The public entry points that write
+// (ensureCodexLinks, migrateCodexToShared, copyCodexIndependent, makeCodexIndependent) throw
+// t('account.containsDefaultDir') before any write when the account dir contains ~/.codex after resolving links.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { t } from '../i18n';
@@ -38,7 +42,9 @@ export const CODEX_CHILD_SHARED_DIRS: ReadonlyArray<{ dir: string; excludes: rea
   { dir: 'skills', excludes: ['.system'] },
   { dir: 'plugins/cache', excludes: ['openai-curated-remote'] },
 ];
-// config.toml is not linked (reported in `refused`) when the default config sets any of these top-level keys or tables
+// config.toml is not linked (reported in `refused`) when the default config is unreadable or blockedConfigReason finds
+// any of these top-level keys or tables. Re-evaluated on every link refresh: an existing account link to the default
+// config.toml is then removed (no copy is made); a regular file or a link elsewhere stays
 export const CODEX_IDENTITY_CONFIG_KEYS = [
   'model_provider', 'forced_login_method', 'forced_chatgpt_workspace_id', 'sqlite_home', 'log_dir',
   'cli_auth_credentials_store', 'mcp_oauth_credentials_store', 'chatgpt_base_url', 'openai_base_url', 'profile', 'oss_provider',
@@ -123,11 +129,16 @@ export function isSharedCodexAccount(dir: string): boolean {
   return fs.existsSync(link) && fs.existsSync(target) && sameRealPath(link, target);
 }
 
-/** Creates/repairs every link of a shared account (idempotent). Never touches the default dir's existing content.
- *  In a shared account a real history.jsonl / session_index.jsonl is merged back into the default file and relinked
- *  (reported under `linked`), except while codexAccountBusy(dir, procRoot) or options.busy(): then the file is left
- *  untouched and reported under `busy`. A real sqlite db stays a conflict. dir === default → empty report.
- *  procRoot is for tests. */
+/** Creates/repairs every link of a shared account (idempotent). Never touches the default dir's existing content;
+ *  missing default entries are created empty ('file' 0600, hooks.json '{}', 'dir' 0700; 'link-only' never).
+ *  In a shared account a real history.jsonl / session_index.jsonl is merged back into the default file (mergeLines:
+ *  missing lines appended) and relinked (reported under `linked`), except while codexAccountBusy(dir, procRoot) or
+ *  options.busy() (checked lazily, only when a merge-back comes up): then the file is left untouched and reported
+ *  under `busy`; without file-link privilege it is not merged. A real sqlite db stays a conflict. Nested entries
+ *  ('.tmp/…') need a real account folder (created 0700; otherwise a conflict). A whole-folder skills / plugins/cache
+ *  link from an earlier version is replaced by per-child links; child links whose default target is gone are removed.
+ *  win32: *.sqlite entries are never linked; an existing link is removed by removeWindowsSqliteLink (reported under
+ *  `refused`, or `busy` when a side file is in use). dir === default → empty report. procRoot is for tests. */
 export function ensureCodexLinks(dir: string, options: LinkOptions = {}, procRoot = '/proc'): ShareReport {
   const report = emptyReport();
   if (isDefault(dir)) return report;
@@ -204,9 +215,10 @@ export function ensureCodexLinks(dir: string, options: LinkOptions = {}, procRoo
 }
 
 /** true when a Codex process uses this dir: codexDaemonAlive(dir), or a <procRoot>/<pid> whose exe basename is
- *  'codex' and whose environ CODEX_HOME resolves to dir (for the default dir: unset, empty or ~/.codex).
- *  Unreadable /proc entries are skipped; an unreadable procRoot counts as busy. Windows: codexDaemonAlive only.
- *  procRoot is for tests. */
+ *  'codex' (a ' (deleted)' suffix ignored) and whose environ CODEX_HOME resolves to dir (for the default dir: unset,
+ *  empty or ~/.codex). Environment alone never matches, since shells and MCP servers inherit CODEX_HOME.
+ *  Unreadable /proc entries are skipped; an unreadable procRoot counts as busy. Windows with the default procRoot:
+ *  codexDaemonAlive only (the host adds its own open-terminal check). procRoot is for tests. */
 export function codexAccountBusy(dir: string, procRoot = '/proc'): boolean {
   if (codexDaemonAlive(path.resolve(dir))) return true;
   // Windows cannot read another process's environment, and a codex.exe is nearly always running (the Codex extension's
@@ -248,7 +260,10 @@ export function codexAccountBusy(dir: string, procRoot = '/proc'): boolean {
  * database opened through a link gets its own WAL beside the link and writes through it are lost (verified on the
  * GitHub Windows runner, 2026-09-30; Linux follows the link). Databases are therefore never linked there, and an
  * existing link is removed: its side files are kept as '<file>.windows-link-backup' so a database Codex creates at
- * that path later never replays them. 'busy' when a side file is in use (renames are undone, nothing changes).
+ * that path later never replays them (freeName picks a free backup name). 'busy' when a side file is in use (renames
+ * are undone, nothing changes). 'none' when link is not a link to target. Also used first by makeCodexIndependent
+ * on win32 ('busy' → t('share.busyCodex')); migrateCodexToShared keeps the account's databases there instead of
+ * backing them up.
  */
 export function removeWindowsSqliteLink(link: string, target: string): 'removed' | 'busy' | 'none' {
   if (!linksTo(link, target)) return 'none';
@@ -284,9 +299,18 @@ function backupSqlite(src: string, rel: string, ctx: MergeCtx): void {
   }
 }
 
-/** Converts an independent account into a shared one (see the contract); ends with ensureCodexLinks(dir, options, procRoot).
- *  Throws t('share.busyCodex') when codexAccountBusy(dir, procRoot) or options.busy() (the caller's check, see
- *  migrateClaudeToShared). */
+/** Converts an independent account into a shared one; ends with ensureCodexLinks(dir, options, procRoot) and merges
+ *  its report. Throws t('share.busyCodex') before writing when codexAccountBusy(dir, procRoot) or options.busy() (the
+ *  host's terminal check, read after its copy-fallback prompt; see migrateClaudeToShared). The default dir → empty report.
+ *  - dirs: merged recursively into the default folder (mergeEntry);
+ *  - history.jsonl / session_index.jsonl: missing lines merged into the default file;
+ *  - config.toml / AGENTS.md / hooks.json / .tmp/rollout-maintenance.lock: moved into ~/.codex when it lacks the file
+ *    (a config.toml with identity keys/tables stays, unlinked), dropped when identical, else renamed to
+ *    '<name>.independent-backup'; config.toml also stays when the default config is refused;
+ *  - sqlite dbs: renamed with -wal / -shm to '<db>.independent-backup' (-2, -3… when taken); kept on win32;
+ *  - skills / plugins/cache children merged (excludes kept); nested entries only inside a real account folder;
+ *  - without file-link privilege single files stay and are reported under noPrivilege.
+ *  `moved` counts files moved into ~/.codex and jsonl files that contributed at least one line. */
 export function migrateCodexToShared(dir: string, accountName: string, procRoot = '/proc', options: LinkOptions = {}): MigrateReport {
   const report: MigrateReport = { ...emptyReport(), moved: 0, duplicates: 0, keptBoth: [], backups: [] };
   if (isDefault(dir)) return report;
@@ -380,8 +404,9 @@ export function migrateCodexToShared(dir: string, accountName: string, procRoot 
 }
 
 /** Independent creation: copyCodexSeed (config.toml without identity keys), then copies AGENTS.md, hooks.json
- *  (0600), rules/ hooks/ agents/ themes/ and the skills/ children except .system from the default dir.
- *  Never overwrites; no symlinks followed inside copied folders. */
+ *  (0600), rules/ hooks/ agents/ themes/ and the skills/ children except .system from the default dir. A linked
+ *  folder or skills child is copied from its real location; a dangling child link is skipped. Never overwrites; no
+ *  symlinks followed inside copied folders; `skipped` comes from copyCodexSeed. The default dir → nothing copied. */
 export function copyCodexIndependent(dir: string): { copied: string[]; skipped: Array<{ file: string; reason: string }> } {
   const copied: string[] = [];
   const skipped: Array<{ file: string; reason: string }> = [];
@@ -426,15 +451,20 @@ export function copyCodexIndependent(dir: string): { copied: string[]; skipped: 
   return { copied, skipped };
 }
 
-/** Converts a shared account back into an independent one: removes every link into the default directory (the
- *  CODEX_SHARED_ENTRIES entries, including dangling link-only links, and the skills/ plugins/cache children whose
- *  link resolves into the default directory; anything else, including auth.json and memories/, is left untouched),
- *  then copies the default configuration as copyCodexIndependent does. Sessions and history stay in the default
- *  directory. Throws for the default directory, for an account that is not shared and, as migrateCodexToShared,
- *  t('share.busyCodex') when codexAccountBusy(dir, procRoot). */
 // Entries that get an own copy when the account becomes independent; unlinked before the copy, the rest after it
 const INDEPENDENT_CONFIG_ENTRIES = new Set(['config.toml', ...INDEPENDENT_COPY_FILES, ...INDEPENDENT_COPY_DIRS]);
 
+/** Converts a shared account back into an independent one: removes every link into the default directory (the
+ *  CODEX_SHARED_ENTRIES entries, including dangling link-only links, and the skills/ plugins/cache children whose
+ *  link resolves into the default directory, compared by real path; regular files, links elsewhere and anything
+ *  else, including auth.json and memories/, are left untouched), then copies the default configuration as
+ *  copyCodexIndependent does. Order: win32 database links first (removeWindowsSqliteLink; 'busy' throws
+ *  t('share.busyCodex') before anything else changes), then config.toml, AGENTS.md, hooks.json, the
+ *  INDEPENDENT_COPY_DIRS and the skills/ children, then copyCodexIndependent, then history, session_index, the
+ *  databases, the sessions marker, the other folders and the plugins/cache children — so a failed copy leaves the
+ *  account shared and ensureCodexLinks re-creates the missing links. Sessions, history and thread databases stay in
+ *  the default directory. Throws t('unshare.default') for the default directory, t('unshare.notShared') for an
+ *  account that is not shared and, as migrateCodexToShared, t('share.busyCodex') when codexAccountBusy(dir, procRoot). */
 export function makeCodexIndependent(dir: string, accountName: string, procRoot = '/proc'): { removed: string[]; copied: string[]; skipped: Array<{ file: string; reason: string }> } {
   if (isDefault(dir)) throw new Error(t('unshare.default', { dir }));
   assertNotContainingDefault(dir);

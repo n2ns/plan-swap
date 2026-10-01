@@ -1,4 +1,7 @@
-// Last observed usage per directory. Only quota numbers, collection time and file metadata are persisted.
+// Last observed usage per directory, stored under codex.usageHistory as entries { dir, stamp, usage } (dir compared with
+// samePath). Only quota numbers, collection time and the auth.json stat stamp are persisted: no email, identity key or
+// credentials. Age, stamp and reset checks happen on read; expired entries are pruned when a result is recorded.
+// Imports vscode only for the Memento type.
 import type { Memento } from 'vscode';
 import { samePath } from '../paths';
 import { authFileStamp } from './codexUsageMonitor';
@@ -36,7 +39,9 @@ export class CodexUsageHistory {
     return age >= 0 && age < USAGE_HISTORY_MAX_AGE_MS;
   }
 
-  /** Old windows disappear after their reset time; missing data never means zero usage. */
+  /** The observation for dir when it is younger than USAGE_HISTORY_MAX_AGE_MS and its stamp still equals the current
+   *  auth.json stamp (never for 'missing'); windows past their reset time are omitted, and none left → undefined.
+   *  Missing data never means zero usage. */
   get(dir: string): CodexUsage | undefined {
     const e = this.entries().find((entry) => samePath(entry.dir, dir));
     if (!e || !this.recent(e) || e.stamp === 'missing' || e.stamp !== this.stamp(dir)) return undefined;
@@ -46,7 +51,9 @@ export class CodexUsageHistory {
     return { windows, checkedAt: e.usage.checkedAt, limitReached: e.usage.limitReached };
   }
 
-  /** Capture only completed queries. A temporary query failure leaves the last observation intact. */
+  /** Capture only completed queries. Ignored when acceptedStamp no longer matches auth.json. Success replaces this
+   *  directory's entry under acceptedStamp; notLoggedIn / authExpired clear it; any other failure (temporary) leaves
+   *  the last observation intact. */
   async record(dir: string, result: UsageResult, acceptedStamp: string): Promise<void> {
     if (acceptedStamp !== this.stamp(dir)) return;
     if (!result.ok && result.reason !== 'notLoggedIn' && result.reason !== 'authExpired') return;

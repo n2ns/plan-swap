@@ -1,6 +1,6 @@
 # PlanSwap User Guide
 
-**English** · [简体中文](user-guide.zh-cn.md) · [Español](user-guide.es.md) · [日本語](user-guide.ja.md)
+**English** · [简体中文](user-guide.zh-cn.md) · [繁體中文](user-guide.zh-tw.md) · [Español](user-guide.es.md) · [日本語](user-guide.ja.md)
 
 PlanSwap lets you keep several Claude Code and Codex accounts signed in and choose which one your editor uses. This guide walks through the sidebar controls, account setup, switching, usage limits and everyday maintenance. Claude and Codex are managed independently: switching one does not switch the other.
 
@@ -181,7 +181,7 @@ Other rows show the result of their last check. Values disappear after their res
 
 The status bar shows how much of each product's short limit is left, for example `Claude 97% · Codex 82%`. Its background turns to the theme's warning color when any general limit, including longer ones, is at 30% or less, and to the error color at 10% or less.
 
-Hover it for a table with one header row per product (email, plan and a refresh icon) and one row per limit. Click it to open PlanSwap.
+Hover it for a table with one header row per product (email, plan and, when the account can be checked, a refresh icon) and one row per general limit. Click it to open PlanSwap.
 
 ## Rename or remove accounts
 
@@ -235,7 +235,7 @@ Click the settings icon in the panel title bar, or run **PlanSwap: Open PlanSwap
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `planswap.language` | `auto` | Follow the editor, or choose `en`, `zh-cn`, `es` or `ja`. |
+| `planswap.language` | `auto` | Follow the editor, or choose `en`, `zh-cn`, `zh-tw`, `es` or `ja`. |
 | `planswap.sidebar.showEmail` | `true` | Show account emails on sidebar cards. |
 | `planswap.sidebar.showFiveHourLimit` | `true` | Show the 5-hour limit on cards. |
 | `planswap.sidebar.showWeeklyLimit` | `true` | Show the 7-day limit on cards. |

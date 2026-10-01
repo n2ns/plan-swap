@@ -1,4 +1,4 @@
-// Shell of the account terminals PlanSwap opens on Windows
+// Shell of the account terminals PlanSwap opens on Windows (Claude / Codex account terminals, update-CLI terminal)
 import * as vscode from 'vscode';
 import { isWindows } from './platform';
 
@@ -16,7 +16,8 @@ export function isWslProfile(name: string, profiles: TerminalProfiles = {}): boo
 /**
  * Windows: the shell for PlanSwap's account terminals. Their account travels in the terminal environment, which a WSL
  * shell does not receive (it would also run the Linux CLI with the Linux home), so a WSL default profile is replaced by
- * Windows PowerShell; any other default profile (PowerShell, cmd, Git Bash) is kept. undefined = the default profile.
+ * Windows PowerShell; any other default profile (PowerShell, cmd, Git Bash) is kept. undefined = the default profile
+ * (always undefined off Windows). Reads terminal.integrated.defaultProfile.windows / profiles.windows.
  */
 export function accountTerminalShell(): string | undefined {
   if (!isWindows()) return undefined;

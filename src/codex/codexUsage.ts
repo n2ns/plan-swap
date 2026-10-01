@@ -18,7 +18,14 @@ export interface CodexUsage {
   checkedAt: number;
 }
 
-// authExpired: auth.json exists but the service refused it (401), i.e. the account has to sign in again
+// Failure reasons (the status bar translates them when rendering, so cached failures follow locale changes):
+// notLoggedIn: no auth.json (nothing started) or an authentication-required error; authExpired: auth.json exists but
+// the service refused it (401 / Unauthorized, checked first), i.e. the account has to sign in again; cliMissing: no
+// codex to start (ENOENT); timeout: the whole operation exceeded timeoutMs; homeMismatch: the server reported another
+// codexHome (in detail); noRateLimits: no usable rate-limit result; protocolTooLong: a buffered protocol line over
+// 1 MiB; exited: the child exited early (exit code or signal in detail when available); unknownError: a service error
+// without a message (numeric code in detail when available); failed: any other error with a short truncated detail,
+// including 'cancelled' (aborted signal) and, from the monitor, 'discarded'
 export type UsageFailure = 'notLoggedIn' | 'authExpired' | 'cliMissing' | 'timeout' | 'homeMismatch' |
   'noRateLimits' | 'protocolTooLong' | 'exited' | 'unknownError' | 'failed';
 export type UsageResult = { ok: true; usage: CodexUsage } | { ok: false; reason: UsageFailure; detail?: string };
@@ -50,7 +57,8 @@ export interface UsageOptions {
   platform?: NodeJS.Platform;
   /** Ends the process tree of a child started through cmd.exe (Windows codex.cmd fallback); default taskkill /T /F */
   killTree?: (pid: number) => void;
-  /** Aborting ends the query as failed with detail 'cancelled' and ends the child it started */
+  /** Aborting ends the query as failed with detail 'cancelled' and ends the child it started; an already aborted
+   *  signal starts nothing */
   signal?: AbortSignal;
 }
 
@@ -181,6 +189,13 @@ const CANCELLED: UsageResult = { ok: false, reason: 'failed', detail: 'cancelled
 /**
  * Starts `codex app-server` with CODEX_HOME=dir, performs the handshake, reads the limits, and always ends the child
  * it started (closes stdin, then kills it if it has not exited within graceMs). Only that child is ever signalled.
+ * - No <dir>/auth.json → notLoggedIn without starting anything (existence check only; tokens are never read).
+ * - Windows: when the default `codex` is not found and a PATH entry (quotes allowed) holds codex.cmd, runs the fixed
+ *   command line `codex.cmd app-server` through the shell; its tree is ended with killTree (taskkill /T /F).
+ * - Handshake: initialize (clientInfo name 'planswap', clientVersion) → when the response reports a codexHome, it must
+ *   equal dir (case-insensitive on Windows) else homeMismatch → initialized → account/rateLimits/read.
+ * - Stdout is decoded as a UTF-8 stream before splitting JSON lines; only responses to our ids count. Raw protocol
+ *   lines are never returned or logged. See UsageFailure for the failure mapping.
  */
 export async function readCodexUsage(dir: string, options: UsageOptions = {}): Promise<UsageResult> {
   // Existence check only; the file is never read

@@ -8,12 +8,13 @@ import { startPreview } from './preview/server.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const output = path.join(root, '.test-out', 'ui');
-const locales = ['en', 'zh-cn', 'es', 'ja'];
+const locales = ['en', 'zh-cn', 'zh-tw', 'es', 'ja'];
 const widths = [200, 240, 280, 340, 420];
-const observed = ['Last observed: ', '采集于 ', 'Última consulta: ', '取得日時: '];
+const observed = ['Last observed: ', '采集于 ', '擷取於 ', 'Última consulta: ', '取得日時: '];
 // Reset tooltip: the short duration shown on the card plus the absolute date
 const resetsIn = {
   en: (time, date) => `Resets in ${time} (${date})`, 'zh-cn': (time, date) => `${time}后重置（${date}）`,
+  'zh-tw': (time, date) => `${time}後重設（${date}）`,
   es: (time, date) => `Se restablece en ${time} (${date})`, ja: (time, date) => `${time}後にリセット（${date}）`,
 };
 // Reference for the visible short duration (two largest units, zero unit left out, rounded up to the minute); runs in the page
@@ -22,29 +23,31 @@ const SHORT_RESET = `(seconds) => {
   const d = Math.floor(total / 1440), h = Math.floor((total % 1440) / 60), m = total % 60;
   const parts = Object.fromEntries(Object.entries(d ? { days: d, hours: h } : h ? { hours: h, minutes: m } : { minutes: m }).filter(([, n]) => n > 0));
   const lang = document.documentElement.lang;
-  return new Intl.DurationFormat(lang, { style: lang === 'ja' ? 'short' : 'narrow' }).format(parts);
+  return new Intl.DurationFormat(lang, { style: lang === 'ja' || lang === 'zh-TW' ? 'short' : 'narrow' }).format(parts);
 }`;
-const exhausted = { en: 'Used up', 'zh-cn': '已用完', es: 'Agotado', ja: '使い切り' };
-const switchLabel = { en: 'Switch to this account', 'zh-cn': '切换到此账号', es: 'Cambiar a esta cuenta', ja: 'このアカウントに切り替え' };
+const exhausted = { en: 'Used up', 'zh-cn': '已用完', 'zh-tw': '已用完', es: 'Agotado', ja: '使い切り' };
+const switchLabel = { en: 'Switch to this account', 'zh-cn': '切换到此账号', 'zh-tw': '切換到此帳號', es: 'Cambiar a esta cuenta', ja: 'このアカウントに切り替え' };
 const refreshTitle = {
-  en: 'Refresh usage limits of the current account', 'zh-cn': '刷新当前账号的用量额度',
+  en: 'Refresh usage limits of the current account', 'zh-cn': '刷新当前账号的用量额度', 'zh-tw': '重新整理目前帳號的用量額度',
   es: 'Actualizar los límites de uso de la cuenta actual', ja: '現在のアカウントの使用量の上限を更新',
 };
 const refreshAllTitle = {
-  en: 'Refresh usage limits of all accounts', 'zh-cn': '刷新全部账号的用量额度',
+  en: 'Refresh usage limits of all accounts', 'zh-cn': '刷新全部账号的用量额度', 'zh-tw': '重新整理全部帳號的用量額度',
   es: 'Actualizar los límites de uso de todas las cuentas', ja: 'すべてのアカウントの使用量の上限を更新',
 };
-const addLabel = { en: 'Add', 'zh-cn': '添加', es: 'Añadir', ja: '追加' };
-const durations = { en: ['5-hour limit', '7-day limit'], 'zh-cn': ['5 小时额度', '7 天额度'], es: ['Límite de 5 h', 'Límite de 7 días'], ja: ['5 時間の上限', '7 日間の上限'] };
+const addLabel = { en: 'Add', 'zh-cn': '添加', 'zh-tw': '新增', es: 'Añadir', ja: '追加' };
+const durations = { en: ['5-hour limit', '7-day limit'], 'zh-cn': ['5 小时额度', '7 天额度'], 'zh-tw': ['5 小時額度', '7 天額度'], es: ['Límite de 5 h', 'Límite de 7 días'], ja: ['5 時間の上限', '7 日間の上限'] };
 const scopedDurations = {
   en: ['5-hour limit', '7-day limit', '7-day limit · Fable'],
   'zh-cn': ['5 小时额度', '7 天额度', '7 天额度 · Fable'],
+  'zh-tw': ['5 小時額度', '7 天額度', '7 天額度 · Fable'],
   es: ['Límite de 5 h', 'Límite de 7 días', 'Límite de 7 días · Fable'],
   ja: ['5 時間の上限', '7 日間の上限', '7 日間の上限 · Fable'],
 };
 const remaining = {
   en: (percent) => `${percent}% remaining`,
   'zh-cn': (percent) => `剩余 ${percent}%`,
+  'zh-tw': (percent) => `剩餘 ${percent}%`,
   es: (percent) => `${percent}% restante`,
   ja: (percent) => `残り ${percent}%`,
 };
@@ -281,6 +284,7 @@ async function runCase(locale, width) {
     assert.equal(window.resetText, window.resetRelative);
     assert.equal(window.resetTitle, resetsIn[locale](window.resetRelative, window.resetTime));
     if (locale === 'zh-cn') assert.match(window.resetTitle, /^\d+(天|小时|分钟).*后重置（\d{1,2}月\d{1,2}日 \d{2}:\d{2}）$/);
+    if (locale === 'zh-tw') assert.match(window.resetTitle, /^\d+ (天|小時|分鐘).*後重設（.+）$/);
     assert.ok(!data.usageText.includes(window.resetTime), `absolute reset time must stay in the title at ${name(locale, width)}`);
     assert.equal(window.resetVisible, true);
     assert.equal(window.resetInLabelLine, true, `reset time must sit at the right of its window's label line at ${name(locale, width)}`);
@@ -780,6 +784,8 @@ try {
   profile = await mkdtemp(path.join(os.tmpdir(), 'planswap-ui-'));
   preview = await startPreview();
   context = await chromium.launchPersistentContext(profile, headed
+    // --disable-gpu: the hosted Linux runner failed GPU initialization right before screenshot capture; the checks cover
+    // layout and interaction, not hardware-accelerated rendering
     ? { headless: false, viewport: null, args: ['--start-fullscreen', '--disable-gpu'] }
     : { headless: true, viewport: HEADLESS_VIEWPORT, deviceScaleFactor: 1, args: ['--disable-gpu'] });
   page = context.pages()[0] ?? await context.newPage();

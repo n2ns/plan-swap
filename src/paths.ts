@@ -1,3 +1,5 @@
+// Claude data layer (no vscode import): account directories, the account info file, scanning and deletion. Paths are
+// absolute after path.resolve; compare spellings with samePath and protect the default directory with sameRealPath.
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -9,8 +11,11 @@ export const DEFAULT_NAME = 'default';
 export const NAME_RE = /^[A-Za-z0-9_-]+$/;
 export const DIR_BASENAME_RE = /^\.claude-[A-Za-z0-9_-]+$/;
 
+// dir is always absolute (path.resolve: no '~', no trailing separator)
 export interface Account { name: string; dir: string }
-// identity: opaque comparison key (account + organization) for detecting duplicate sign-ins; never displayed, logged or persisted
+// plan: formatted plan text (formatClaudePlan, e.g. "Max 20x"). identity: opaque comparison key (account + organization)
+// for detecting duplicate sign-ins; never displayed, logged, persisted or sent to the Webview (panel rows copy only
+// email, plan and sign-in state)
 export interface AccountInfo { email?: string; plan?: string; loggedIn: boolean; identity?: string }
 
 const STRIP_ENV_KEYS = ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CONFIG_DIR'];
@@ -20,6 +25,8 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
+/** The default Claude account directory: the extension host's CLAUDE_CONFIG_DIR (see configDirFromEnv), else ~/.claude;
+ *  always path.resolve'd. Use this rather than hard-coding ~/.claude. */
 export function defaultDir(): string {
   return path.resolve(configDirFromEnv() ?? path.join(os.homedir(), '.claude'));
 }
@@ -73,7 +80,8 @@ function sameFileId(a: string, b: string): boolean {
 }
 
 // Whether both point to the same location after resolving links (or are the same file-system object); used wherever a
-// directory must not be mistaken for another, above all the default account's
+// directory must not be mistaken for another, above all the default account's: every default-directory guard (scan,
+// deletion, isDefault, name validation, busy check) compares with it, samePath only compares spellings
 export function sameRealPath(a: string, b: string): boolean {
   return comparablePath(realPath(a)) === comparablePath(realPath(b)) || sameFileId(a, b);
 }
@@ -89,6 +97,7 @@ export function realPathInside(outer: string, inner: string): boolean {
 // kept here by the host (setClaudeSettingEnv) so this module needs no vscode import
 let settingEnv: { set: readonly string[]; cleared: readonly string[] } = { set: [], cleared: [] };
 
+/** The host passes claudeSettings.settingEnvNames() at activation and on every change of the setting. */
 export function setClaudeSettingEnv(names: { set: readonly string[]; cleared: readonly string[] }): void {
   settingEnv = names;
 }
@@ -103,7 +112,8 @@ function claudeSeesSet(name: string): boolean {
 
 /** File name of the account info file: Claude Code (2.1.284) names it '.claude-custom-oauth.json' while
  *  CLAUDE_CODE_CUSTOM_OAUTH_URL is set, '.claude.json' otherwise (its local / staging variants exist only in
- *  development builds). */
+ *  development builds). "Set" as Claude Code started by this editor sees it: the setting's set / cleared names
+ *  (setClaudeSettingEnv) first, then process.env. Used by claudeJsonPath, mirrorClaudeJson and syncMcpServers. */
 export function claudeJsonName(): string {
   return claudeSeesSet('CLAUDE_CODE_CUSTOM_OAUTH_URL') ? '.claude-custom-oauth.json' : '.claude.json';
 }
@@ -117,7 +127,9 @@ export function findSameDir(dirs: readonly string[], dir: string): number {
 }
 
 // Account info file location: without CLAUDE_CONFIG_DIR, Claude Code uses ~/.claude.json (in the home dir, not inside ~/.claude).
-// explicit: CLAUDE_CONFIG_DIR is set to dir for the processes that use it (e.g. by the setting), so <dir>/.claude.json is used
+// explicit: CLAUDE_CONFIG_DIR is set to dir for the processes that use it (e.g. by the setting), so <dir>/.claude.json is used.
+// So: ~/.claude.json only when explicit is false, the host has no CLAUDE_CONFIG_DIR and dir is ~/.claude; otherwise
+// <dir>/<claudeJsonName()>. Every account-info reader and watcher passes explicit = claudeSettings.isExplicitConfigDir(dir)
 export function claudeJsonPath(dir: string, explicit = false): string {
   const home = os.homedir();
   if (!explicit && configDirFromEnv() === undefined && samePath(dir, path.join(home, '.claude'))) return path.join(home, claudeJsonName());
@@ -133,7 +145,9 @@ const CLAUDE_PLAN_NAMES: Record<string, string> = {
   enterprise: 'Enterprise',
 };
 
-// Formats organizationType / organizationRateLimitTier from .claude.json for display, e.g. "Max 20x"; undefined when both are empty
+// Formats organizationType / organizationRateLimitTier from .claude.json for display, e.g. "Max 20x"; undefined when both are empty.
+// Type: CLAUDE_PLAN_NAMES, else the value without a 'claude_' prefix, first letter capitalized. Tier: a trailing
+// '_<n>x' becomes '<n>x'. Both present → '<type> <n>x'; only one → that one
 export function formatClaudePlan(orgType?: string, tier?: string): string | undefined {
   let name: string | undefined;
   if (orgType) {
@@ -153,7 +167,12 @@ function optString(v: unknown): string | undefined {
   return typeof v === 'string' && v ? v : undefined;
 }
 
-// explicit: passed through to claudeJsonPath
+/**
+ * Synchronous; reads oauthAccount from claudeJsonPath(dir, explicit) and never throws (a missing or half-written file
+ * yields no email / plan). email = emailAddress; plan = formatClaudePlan(organizationType, organizationRateLimitTier);
+ * loggedIn = an email, or else <dir>/.credentials.json exists (existence only, never read); identity only when
+ * accountUuid and organizationUuid are both non-empty strings.
+ */
 export function readAccountInfo(dir: string, explicit = false): AccountInfo {
   let email: string | undefined;
   let plan: string | undefined;
@@ -175,6 +194,9 @@ export function readAccountInfo(dir: string, explicit = false): AccountInfo {
   return identity ? { email, plan, loggedIn, identity } : { email, plan, loggedIn };
 }
 
+/** Account directories found on disk: real directories (not links) directly under the home directory whose basename
+ *  matches DIR_BASENAME_RE, excluding the default directory and any directory containing it after resolving links;
+ *  name = basename without '.claude-'. [] when the home directory cannot be read. */
 export function scanAccountDirs(): Account[] {
   const home = os.homedir();
   let entries: fs.Dirent[];
@@ -191,6 +213,9 @@ export function scanAccountDirs(): Account[] {
     .filter((a) => !sameRealPath(a.dir, def) && !realPathInside(a.dir, def));
 }
 
+/** Copies <fromDir>/settings.json to <toDir> (mode 0600, never overwriting) without the credential, login and plugin
+ *  keys (STRIP_TOP_KEYS, and STRIP_ENV_KEYS under env). false, writing nothing, when the source is missing, unparsable
+ *  or not an object, or the target already exists. Used by claudeShare.copyClaudeIndependent. */
 export function copySettingsStripped(fromDir: string, toDir: string): boolean {
   const src = path.join(fromDir, 'settings.json');
   const dst = path.join(toDir, 'settings.json');
@@ -222,6 +247,7 @@ export function caseVariantOf(dir: string): string | undefined {
   }
 }
 
+// Creates dir (and parents) with mode 0700; an existing directory is reused as is
 export function ensureAccountDir(dir: string): void {
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
 }
@@ -259,9 +285,11 @@ function readJsonObject(file: string): Record<string, unknown> | undefined {
  * Merges the user-level MCP servers (mcpServers) of the default account's info file fromJson into <dir>/.claude.json:
  * names the account lacks are added, identical ones skipped, differing ones kept (reported in kept); nothing is ever removed.
  * A missing target file is created (0600) with only mcpServers; an existing one keeps every other key and its mode
- * and is replaced atomically (temporary file + rename, symlinks followed). Throws when the target is not a JSON object
- * or changed while merging (the CLI rewrites it). The default dir itself is never written. beforeCommit runs between
- * writing the temporary file and the change check (tests simulate a concurrent CLI write).
+ * and is replaced atomically (<real>.planswap-<pid>.tmp + rename, symlinks followed). Throws Error(t('mcp.badTarget'))
+ * when the target is not a JSON object, Error(t('mcp.changed')) when it changed between read and rename (the CLI
+ * rewrites it; the file is then left unchanged). No write when dir is the default dir (sameRealPath), the source has
+ * no servers or nothing is added. beforeCommit runs between writing the temporary file and the change check (tests
+ * simulate a concurrent CLI write).
  */
 export function syncMcpServers(fromJson: string, dir: string, beforeCommit?: () => void): McpSyncResult {
   const result: McpSyncResult = { added: [], kept: [] };
@@ -315,6 +343,12 @@ export function syncMcpServers(fromJson: string, dir: string, beforeCommit?: () 
   return result;
 }
 
+/**
+ * Why dir must not be deleted (localized), or undefined when it may. Checked in order: a direct child of the home
+ * directory (del.notHomeChild); basename matches DIR_BASENAME_RE (del.badName); not the default directory after
+ * resolving links (del.isDefault); does not contain it (del.containsDefault); exists (del.missing); is not a link
+ * (del.symlink); is a directory (del.notDir).
+ */
 export function checkSafeToDelete(dir: string): string | undefined {
   const home = path.resolve(os.homedir());
   const target = path.resolve(dir);
@@ -335,6 +369,9 @@ export function checkSafeToDelete(dir: string): string | undefined {
   return undefined;
 }
 
+/** The only way to delete a Claude account directory: throws Error(reason) when checkSafeToDelete refuses; otherwise
+ *  removes the links inside first (Windows, unlinkLinks) and then fs.promises.rm recursively, never a shell. rm does
+ *  not follow links, so the default account's content behind a shared account's links survives. */
 export async function deleteAccountDir(dir: string): Promise<void> {
   const reason = checkSafeToDelete(dir);
   if (reason) throw new Error(reason);

@@ -1,9 +1,15 @@
-// Webview string tables (English, Simplified Chinese, Spanish and Japanese). The host picks the locale and sends it in PanelState.locale.
+// Webview string tables (English, Simplified Chinese, Traditional Chinese, Spanish and Japanese). The host picks the locale and sends it in PanelState.locale.
+// Every Webview string goes through t(). The Webview cannot import host code, so WEB_LOCALE_INFO, matchLocale and
+// formatMessage duplicate src/i18n.ts (do not merge them); test/i18n.test.ts asserts the shared LOCALE_INFO fields match, the table set
+// equals LOCALES and both formatMessage copies behave the same.
+// Locale lifecycle: at module load the locale is guessed from navigator.language; main.ts then sets it from the
+// host-rendered `<html lang>` (intlLocale() at creation) and calls setLocale(state.locale) on every `state` message,
+// keeping `<html lang>` in sync, so t() always uses the locale of the most recent state.
 import type { PanelState } from '../protocol';
 
 export type Locale = PanelState['locale'];
 
-// English is the source of truth; all tables must have exactly the same keys
+// English is the source of truth; all tables must have exactly the same keys (enforced by the Record<MessageKey, string> type)
 export const en = {
   'usage.observed': 'Last observed: {time}',
   'usage.remaining': '{percent}% remaining',
@@ -216,6 +222,111 @@ export const zhCn: Record<MessageKey, string> = {
   'versions.close': '关闭',
 };
 
+export const zhTw: Record<MessageKey, string> = {
+  'usage.observed': '擷取於 {time}',
+  'usage.remaining': '剩餘 {percent}%',
+  'usage.window': '額度',
+  'usage.days': '{n} 天額度',
+  'usage.hours': '{n} 小時額度',
+  'usage.minutes': '{n} 分鐘額度',
+  'usage.scoped': '{limit} · {scope}',
+  'usage.resetsIn': '{time}後重設（{date}）',
+  'usage.exhausted': '已用完',
+  'usage.refreshTitle': '重新整理目前帳號的用量額度',
+  'usage.refreshAllTitle': '重新整理全部帳號的用量額度',
+  'panel.loading': '正在載入帳號…',
+  'tab.claude': 'Claude',
+  'tab.codex': 'Codex',
+  'tabs.ariaLabel': '帳號類型',
+
+  'claude.loginTitle': '在終端機執行 claude 完成登入',
+  'codex.loginTitle': '在終端機執行 codex login',
+  'claude.terminalTitle': '在終端機中以此帳號執行 claude',
+  'codex.terminalTitle': '在終端機中以此帳號執行 codex',
+  'claude.loginHint': '按「登入」在終端機登入，或切換後在 Claude 面板登入',
+  'codex.loginHint': '按「登入」在終端機登入，或切換後在 Codex 面板登入',
+  'claude.mdTitle': '開啟全域 CLAUDE.md',
+  'codex.mdTitle': '開啟全域 AGENTS.md',
+  'claude.settingsTitle': '開啟 Claude Code 擴充功能設定',
+  'codex.settingsTitle': '開啟 Codex 擴充功能設定',
+  'claude.syncTitle': '將已連結帳號重新連結到預設帳號，並同步其 MCP 伺服器',
+  'codex.syncTitle': '將已連結帳號重新連結到預設帳號',
+
+  'account.default': '預設帳號',
+  'account.loggedIn': '已登入',
+  'account.notLoggedIn': '未登入',
+  'account.sharedBadge': '已連結的內容與預設帳號共用；部分檔案可能保持獨立',
+
+  'list.title': '全部帳號',
+  'row.rename': '重新命名',
+  'row.renameAria': '重新命名 {name}',
+  'row.switch': '切換到此帳號',
+  'row.login': '登入',
+  'row.share': '連結到預設帳號：設定、規則、技能、記錄和工作階段會移入預設帳號，之後直接連結使用；登入保持獨立',
+  'row.unshare': '與預設帳號拆分：移除連結，帳號取得一份自己的預設設定副本；記錄和工作階段留在預設帳號',
+  'row.remove': '移除帳號',
+  'rename.ariaLabel': '顯示名稱',
+  'rename.save': '儲存（Enter）',
+  'confirm.text': '要從清單中移除 {name} 嗎？',
+  'confirm.hint': '接下來會另外詢問是否刪除帳號目錄。',
+  'confirm.remove': '移除',
+  'confirm.cancel': '取消',
+
+  'validate.labelEmpty': '請輸入顯示名稱',
+  'validate.labelTooLong': '顯示名稱最多 {max} 個字元',
+  'validate.labelNewline': '顯示名稱不能包含換行',
+  'validate.labelDuplicate': '與其他帳號的名稱重複',
+  'validate.nameChars': '只能包含 A-Z、a-z、0-9、底線（_）和連字號（-）',
+  'validate.nameReserved': '不能使用保留名稱 default',
+  'validate.nameExists': '已有同名帳號',
+
+  'add.title': '新增帳號',
+  'add.placeholder': '帳號名稱，例如 work',
+  'add.ariaLabel': '新帳號名稱',
+  'add.button': '新增',
+  'add.shared': '連結到預設帳號的設定和記錄',
+  'claude.addHelpShared': '將建立 {dir}，設定、規則、技能、記錄和工作階段連結到預設帳號',
+  'codex.addHelpShared': '將建立 {dir}，設定、規則、技能、記錄、工作階段和對話串資料庫連結到預設帳號（記憶仍依帳號獨立）',
+  'codex.addHelpSharedWin': '將建立 {dir}，設定、規則、技能、記錄和工作階段連結到預設帳號（記憶與對話串資料庫仍依帳號獨立）',
+  'add.help.independent': '將建立 {dir}，複製一份預設帳號的設定，之後各自獨立',
+  'add.helpIdle': '每個帳號使用獨立的設定目錄 {prefix}<名稱>',
+
+  'disabled.title': '尚未啟用 Codex 帳號切換',
+  'disabled.text':
+    '啟用後，每個帳號使用獨立的 CODEX_HOME 目錄（預設 ~/.codex，其他為 ~/.codex-<名稱>）。擴充功能會在 ~/.profile 與 ~/.bashrc 寫入一段標記區塊，從狀態檔案讀取所選目錄。',
+  'disabled.textWin': '啟用後，每個帳號使用獨立的 CODEX_HOME 目錄（預設 ~/.codex，其他為 ~/.codex-<名稱>）。擴充功能會把使用者環境變數 CODEX_HOME 設為所選目錄（預設帳號時移除該變數）。',
+  'disabled.restartWsl': '切換帳號需要重新啟動編輯器的 WSL 伺服器，所有 WSL 視窗都會中斷連線。',
+  'disabled.restartLocal': '切換帳號需要重新啟動目前的編輯器，它的所有視窗都會關閉，整合式終端機也會結束。',
+  'disabled.restartRemote': '切換帳號需要在遠端環境中重新啟動編輯器伺服器。',
+  'disabled.enable': '啟用 Codex 切換',
+
+  'pending.title': '已選擇 {name}，重新啟動伺服器後生效',
+  'pending.titleLocal': '已選擇 {name}，重新啟動編輯器後生效',
+  'pending.text': '重新啟動伺服器會中斷所有 WSL 視窗的連線（需重新載入或重新開啟），整合式終端機會關閉。',
+  'pending.textLocalManual': '請完全結束目前的編輯器後再重新啟動，僅重新載入視窗並不夠。',
+  'pending.textRemote': '請在遠端環境中重新啟動編輯器伺服器，然後重新連線。',
+
+  'banner.title': '已切換到 {name}',
+  'banner.text': '新工作階段使用新帳號；已開啟的工作階段仍使用舊帳號。重新載入後，所有面板都會以新帳號重新開始。',
+  'banner.dismiss': '關閉提示',
+
+  'tools.title': '工具',
+  'tools.settings': '擴充功能設定',
+  'tools.sync': '重新連結',
+  'tools.updateCli': '更新 CLI',
+  'tools.updateCliTitle': '在終端機中更新 CLI',
+
+  'footer.versions': '顯示 CLI 與擴充功能版本',
+  'common.reloadWindow': '重新載入視窗',
+  'footer.restartExtHost': '重新啟動擴充功能主機',
+  'footer.help': '使用指南',
+  'footer.star': 'Star',
+  'footer.version': 'v{version}',
+
+  'versions.title': 'CLI 與擴充功能版本',
+  'versions.close': '關閉',
+};
+
 export const es: Record<MessageKey, string> = {
   'usage.observed': 'Última consulta: {time}',
   'usage.remaining': '{percent}% restante',
@@ -424,9 +535,9 @@ export const ja: Record<MessageKey, string> = {
   'versions.close': '閉じる',
 };
 
-const TABLES: Record<Locale, Record<MessageKey, string>> = { en, 'zh-cn': zhCn, es, ja };
+const TABLES: Record<Locale, Record<MessageKey, string>> = { en, 'zh-cn': zhCn, 'zh-tw': zhTw, es, ja };
 
-// Per-locale metadata the Webview needs; the same fields as LOCALE_INFO in src/i18n.ts (keep both in step)
+// Per-locale metadata the Webview needs; the LOCALE_INFO rows of src/i18n.ts without userGuide (keep both in step)
 export const WEB_LOCALE_INFO: Record<Locale, {
   intl: string;
   match: string[];
@@ -436,6 +547,7 @@ export const WEB_LOCALE_INFO: Record<Locale, {
 }> = {
   en: { intl: 'en', match: ['en'], sentenceSeparator: ' ', durationStyle: 'narrow', durationUnitSeparator: ' ' },
   'zh-cn': { intl: 'zh-CN', match: ['zh-cn', 'zh'], sentenceSeparator: '', durationStyle: 'narrow', durationUnitSeparator: '' },
+  'zh-tw': { intl: 'zh-TW', match: ['zh-tw', 'zh-hk', 'zh-mo'], sentenceSeparator: '', durationStyle: 'short', durationUnitSeparator: ' ' },
   es: { intl: 'es', match: ['es'], sentenceSeparator: ' ', durationStyle: 'narrow', durationUnitSeparator: ' ' },
   ja: { intl: 'ja', match: ['ja'], sentenceSeparator: '', durationStyle: 'short', durationUnitSeparator: ' ' },
 };
@@ -459,6 +571,7 @@ export function getLocale(): Locale {
   return current;
 }
 
+/** Sets the locale used by t(); an id without a table falls back to 'en'. */
 export function setLocale(locale: Locale): void {
   current = TABLES[locale] ? locale : 'en';
 }
@@ -474,7 +587,8 @@ const pluralRules = new Map<string, Intl.PluralRules>();
 
 // Fills a message: ICU plural blocks `{name, plural, one {…} other {…}}` pick a branch by Intl.PluralRules of `intl`
 // with `#` replaced by the count (left as-is when the count is missing or not a finite number), then `{name}`
-// placeholders are replaced with params (unknown placeholders are left as-is). A copy of formatMessage in src/i18n.ts
+// placeholders are replaced with params (unknown placeholders are left as-is). An identical copy of formatMessage in
+// src/i18n.ts, whose comment documents the full syntax and edge cases
 export function formatMessage(text: string, params: Record<string, string | number> | undefined, intl: string): string {
   if (!params) return text;
   const plural = text.replace(PLURAL_RE, (block, name: string, body: string) => {
@@ -490,11 +604,13 @@ export function formatMessage(text: string, params: Record<string, string | numb
   return plural.replace(/\{(\w+)\}/g, (m, name: string) => (name in params ? String(params[name]) : m));
 }
 
+/** Looks up a message in the current locale and fills its plural blocks and `{name}` placeholders (see formatMessage). */
 export function t(key: MessageKey, params?: Record<string, string | number>): string {
   return formatMessage(TABLES[current][key], params, WEB_LOCALE_INFO[current].intl);
 }
 
-// Joins translated sentences: Chinese and Japanese end sentences with a full-width stop and use no space after it
+// Joins translated sentences with the current locale's sentenceSeparator: Chinese and Japanese end sentences with a
+// full-width stop and use no space after it
 export function joinSentences(...sentences: string[]): string {
   return sentences.join(WEB_LOCALE_INFO[current].sentenceSeparator);
 }

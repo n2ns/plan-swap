@@ -69,6 +69,14 @@ function splitCooldown<T extends { dir: string }>(targets: T[], remaining: (dir:
 /** Seconds shown for a cooldown wait, rounded up so "try again in N s" is never too early. */
 const cooldownSeconds = (ms: number): number => Math.max(1, Math.ceil(ms / 1000));
 
+/**
+ * Activation order matters: the UI locale is resolved first so every later string is localized; an unsupported
+ * platform (not linux / win32) only warns once and returns. Then the FileMemento state (with its one-time globalState
+ * import), the Claude store, migrateLegacyCodex in its own try/catch (an error only warns), and the Codex store. A
+ * Codex initialization failure is logged and degrades the Codex page to an empty, disabled source: Claude is not
+ * affected, Codex 'tool' messages still run, and every other Codex panel action and planswap.codex.* command shows the
+ * error. Everything created here is disposed through ctx.subscriptions.
+ */
 export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   const startedAt = performance.now();
   console.info('[planswap] activation started');
@@ -162,7 +170,9 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   });
   statusBar.setClaudeUsage(claudeUsage.current());
   // Manual only: every registered signed-in Claude account, one claude process at a time, so rows can be compared
-  // before switching. The result for the current account is handed to the monitor, which owns its tooltip state
+  // before switching. The result for the current account is handed to the monitor, which owns its tooltip state.
+  // A second call while one runs is ignored; the unregistered external directory is not a target; accounts still in
+  // the manual cooldown are skipped (and counted in the final message); cancelling aborts the running claude process
   let refreshingAll = false;
   const refreshAllClaudeUsage = async (): Promise<void> => {
     if (refreshingAll) return;
@@ -221,7 +231,8 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   };
   // Manual only: every registered signed-in ChatGPT Codex account, one codex process at a time. The effective account
   // goes through the monitor, which owns its tooltip state; the others are recorded as observations when their sign-in
-  // did not change while the query ran
+  // did not change while the query ran. Same re-entrancy, cooldown and cancellation rules as the Claude run; refused
+  // with a warning when Codex runs inside WSL
   let refreshingAllCodex = false;
   const refreshAllCodexUsage = async (): Promise<void> => {
     if (!codex || !usage || refreshingAllCodex) return;
@@ -293,6 +304,10 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   };
   // Account-info changes re-check Claude usage only after the first scheduled check, not during start-up
   let usageStarted = false;
+  // Automatic checks of both products: 5 s after activation, every 60 s, on regaining focus, after a usage setting change
+  // and after a claudeCode.environmentVariables change (a switched account is checked at once). Only the focused window
+  // queries; each product needs its usageAutoRefresh, and Codex is skipped while it runs inside WSL. The monitors'
+  // refreshIfStale decides whether a query is actually due
   const checkUsage = (): void => {
     usageStarted = true;
     if (!vscode.window.state.focused) return;
@@ -417,7 +432,8 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   console.info(`[planswap] activation complete: ${(performance.now() - startedAt).toFixed(1)}ms`);
 }
 
-// state.json key: ids of environment warnings the user chose never to see again
+// state.json key: ids of environment warnings the user chose never to see again (`claudeEnv:<names>`,
+// `pathSpaces:<names>`, `oneDriveHome`). The ids are persisted: changing their format makes dismissed warnings reappear.
 const DISMISSED_KEY = 'warnings.dismissed';
 
 /**
@@ -448,4 +464,5 @@ export async function showEnvironmentWarnings(
   await Promise.all(shown);
 }
 
+// No deferred work: timers and watchers are disposed through ctx.subscriptions
 export function deactivate(): void {}

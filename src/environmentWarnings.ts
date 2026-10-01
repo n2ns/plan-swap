@@ -17,7 +17,8 @@ const FEDERATION_VARS = ['ANTHROPIC_FEDERATION_RULE_ID', 'ANTHROPIC_ORGANIZATION
 /**
  * The override variables Claude Code started by this editor would see: set (non-empty) in the extension host
  * environment (unless the setting clears it with an empty entry), or passed by claudeCode.environmentVariables. Names only; values are never read out.
- * Names compare case-insensitively on Windows.
+ * Names compare case-insensitively on Windows. Both federation variables set → ANTHROPIC_FEDERATION_RULE_ID is reported.
+ * `setting` is claudeSettings.settingEnvNames().
  */
 export function claudeCredentialOverrides(
   env: NodeJS.ProcessEnv, setting: { set: readonly string[]; cleared?: readonly string[] }, platform: string = process.platform,
@@ -36,7 +37,7 @@ export function claudeCredentialOverrides(
 /**
  * CLAUDE_CONFIG_DIR / CODEX_HOME values with spaces at the start or end. The CLIs use such a value as is (a folder
  * whose name ends in a space), which Windows programs outside the NT namespace cannot even open, so it is almost
- * certainly a typo. Blank values are ignored (they count as unset).
+ * certainly a typo. Blank values are ignored (they count as unset). Shown as warn.pathSpaces.
  */
 export function pathVarsWithSpaces(env: NodeJS.ProcessEnv): string[] {
   return ['CLAUDE_CONFIG_DIR', 'CODEX_HOME'].filter((name) => {
@@ -47,7 +48,8 @@ export function pathVarsWithSpaces(env: NodeJS.ProcessEnv): string[] {
 
 /**
  * Windows: the OneDrive folder that contains the home directory (and with it ~/.claude, ~/.claude.json and every
- * account folder), or undefined. OneDrive sync has corrupted .claude.json through concurrent writes.
+ * account folder), or undefined. OneDrive sync has corrupted .claude.json through concurrent writes. Checks the
+ * OneDrive / OneDriveCommercial / OneDriveConsumer roots; always undefined off Windows.
  */
 export function oneDriveHome(home: string, env: NodeJS.ProcessEnv, platform: string = process.platform): string | undefined {
   if (platform !== 'win32') return undefined;

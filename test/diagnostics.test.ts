@@ -65,8 +65,8 @@ test('Windows Codex running in WSL shows guidance without presenting local accou
   }
 });
 
-test('report remains readable in all four supported locales', () => {
-  const headings = { en: 'PlanSwap diagnostics', 'zh-cn': 'PlanSwap 诊断报告', es: 'Diagnóstico de PlanSwap', ja: 'PlanSwap 診断レポート' } as const;
+test('report remains readable in all five supported locales', () => {
+  const headings = { en: 'PlanSwap diagnostics', 'zh-cn': 'PlanSwap 诊断报告', 'zh-tw': 'PlanSwap 診斷報告', es: 'Diagnóstico de PlanSwap', ja: 'PlanSwap 診断レポート' } as const;
   for (const [locale, heading] of Object.entries(headings)) {
     setLocale(locale as keyof typeof headings);
     const report = buildDiagnosticsReport(snapshot());

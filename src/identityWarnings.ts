@@ -9,9 +9,10 @@ import { t } from './i18n';
 
 export type Vendor = 'Claude' | 'Codex';
 
+/** One vendor's accounts for the duplicate sign-in check. */
 export interface IdentitySource {
   vendor: Vendor;
-  // Registered accounts (default and named); dir for comparison, label for the message
+  // Registered accounts (default and named); dir for comparison, label (labelFor) for the message
   accounts(): Array<{ dir: string; label: string }>;
   identityOf(dir: string): string | undefined;
 }
@@ -19,15 +20,23 @@ export interface IdentitySource {
 export const claudeIdentity = (dir: string): string | undefined => readAccountInfo(dir, isExplicitConfigDir(dir)).identity;
 export const codexIdentity = (dir: string): string | undefined => readCodexAccountInfo(dir).identity;
 
+/** In-memory duplicate sign-in warnings; identity values never leave the process. */
 export class IdentityWarnings {
   // Groups already warned about, per vendor (keys built from dirs only); a resolved group is forgotten, so a recurrence is warned again
   private readonly warned = new Map<Vendor, Set<string>>();
 
+  // warn defaults to a non-modal warning message
   constructor(
     private readonly sources: IdentitySource[],
     private readonly warn: (message: string) => void = (message) => void vscode.window.showWarningMessage(message),
   ) {}
 
+  /**
+   * Per source, groups the accounts by identity (sameIdentityGroups) and warns identity.duplicate (labels joined with
+   * common.nameSep) for each group whose key (identityGroupsKey, dirs only) was not present at the previous check;
+   * the remembered set is then replaced by the current groups. A source that throws is skipped. The host calls it at
+   * activation and on every account-info change.
+   */
   check(): void {
     for (const source of this.sources) {
       let groups: Array<Array<{ dir: string; label: string; identity?: string }>>;

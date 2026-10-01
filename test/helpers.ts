@@ -40,7 +40,7 @@ function fileSymlinksAllowed(): boolean {
  */
 /** Linux/WSL behavior: rc files and bash, /proc, the WSL server, fifos, chmod-based permissions and the Linux link semantics of sharing. */
 export const LINUX_ONLY = { skip: onWindows && 'Linux/WSL behavior' };
-/** Creates file symbolic links, which Windows refuses without Developer Mode or elevation. */
+/** Creates file symbolic links, which Windows refuses without Developer Mode or elevation (windowsNoDevMode.test.ts covers that case). */
 export const FILE_SYMLINKS = { skip: !fileSymlinksAllowed() && 'file symbolic links need Windows Developer Mode' };
 /**
  * Sharing logic (link, migrate, copy, unshare) on real links. Runs on Windows too when file symbolic links can be

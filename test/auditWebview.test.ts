@@ -1,7 +1,7 @@
 // Tests for webview i18n helpers added by the webview audit fixes (src/webview/i18n.ts)
 import { after, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { en, es, ja, zhCn, joinSentences, setLocale, t } from '../src/webview/i18n';
+import { en, es, ja, zhCn, zhTw, joinSentences, setLocale, t } from '../src/webview/i18n';
 
 describe('webview i18n: joinSentences', () => {
   after(() => setLocale('en'));
@@ -22,7 +22,7 @@ describe('webview i18n: joinSentences', () => {
 describe('webview i18n: rename button label', () => {
   after(() => setLocale('en'));
   test('every locale places the account name through the {name} placeholder', () => {
-    for (const table of [en, zhCn, es, ja]) assert.ok(table['row.renameAria'].includes('{name}'));
+    for (const table of [en, zhCn, zhTw, es, ja]) assert.ok(table['row.renameAria'].includes('{name}'));
     setLocale('ja');
     assert.equal(t('row.renameAria', { name: 'work' }), 'work の名前を変更');
     setLocale('en');

@@ -1,5 +1,9 @@
 // Shared vs independent Claude accounts: a shared account links everything except its login identity to the
-// default account's directory. No vscode import.
+// default account's directory. No vscode import. Design and rationale: docs/design.md 6.7.
+// Invariants of every write entry point (ensureClaudeLinks, mirrorClaudeJson, migrateClaudeToShared,
+// makeClaudeIndependent, copyClaudeIndependent): an account dir that contains the default dir after resolving links
+// throws t('account.containsDefaultDir', { dir, default }) before anything is written; existing content of the default
+// dir is never overwritten or deleted; links are absolute; report names use '/' on every platform.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
@@ -10,7 +14,8 @@ import {
   stripBom, unlinkLinks, windowsStartTimes,
 } from './platform';
 
-// Whole-entry links (kind: file needs an empty-file default, dir needs an empty dir)
+// Whole-entry links (kind: file needs an empty-file default, dir needs an empty dir). 'projects' is the marker entry
+// that isSharedClaudeAccount checks. Not shared: .credentials.json, .claude.json (mirrored instead) and everything else
 export const CLAUDE_SHARED_ENTRIES: ReadonlyArray<{ name: string; kind: 'file' | 'dir' }> = [
   { name: 'settings.json', kind: 'file' },
   { name: 'CLAUDE.md', kind: 'file' },
@@ -25,7 +30,7 @@ export const CLAUDE_SHARED_ENTRIES: ReadonlyArray<{ name: string; kind: 'file' |
 export const CLAUDE_CHILD_SHARED_DIRS = ['skills', 'plugins'] as const;
 export const CLAUDE_CHILD_EXCLUDES = ['synced', '.trash'] as const;   // per-account cloud-synced buckets
 // Keys that must never be shared through settings.json (identity); linking settings.json is refused when the
-// default settings.json has any of them (top-level or inside env)
+// default settings.json has any of them (top-level or inside env), and a link made before is replaced by a stripped copy
 export const CLAUDE_IDENTITY_SETTING_KEYS = {
   top: ['apiKeyHelper', 'forceLoginMethod', 'forceLoginOrgUUID'],
   env: ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CONFIG_DIR'],
@@ -47,17 +52,17 @@ export interface ShareReport {
   linked: string[];     // entry names (children as 'skills/<child>') newly linked
   created: string[];    // entries created empty in the default dir
   conflicts: string[];  // entries the account has as a real file/dir or a link elsewhere; left untouched
-  refused: string[];    // entries refused for safety (e.g. 'settings.json' when the default has identity keys)
+  refused: string[];    // entries refused for safety ('settings.json' when the default has identity keys or is not a readable JSON object)
   copied?: string[];    // config files copied once instead of linked (Windows without file-link privilege); they no longer follow the default
   noPrivilege?: string[]; // single-file entries that could not be linked because Windows refuses file symlinks (Developer Mode off); left independent
-  busy?: string[];      // entries whose repair would move or unlink account files, skipped because the account is busy
+  busy?: string[];      // entries whose repair would move or unlink account files, skipped because the account is busy (own check or LinkOptions.busy)
   failed?: string[];    // folder entries whose junction Windows could not create (not a local NTFS drive); left unlinked
 }
 
 export interface MigrateReport extends ShareReport {
   moved: number;          // files moved into the default dir
   duplicates: number;     // identical files dropped from the account
-  keptBoth: string[];     // relative paths of account copies moved next to the default file as '<name>.from-<account>'
+  keptBoth: string[];     // relative paths ('/'-separated) of account copies moved next to the default file as '<name>.from-<account>'
   backups: string[];      // account-only files replaced by a link, kept as '<entry>.independent-backup' in the account dir
 }
 
@@ -74,7 +79,8 @@ export function lstatOrUndefined(p: string): fs.Stats | undefined {
   }
 }
 
-// Whether link is a symlink pointing at target (relative links resolved against the link's folder)
+// Whether link is a symlink pointing at target (relative links resolved against the link's folder), or a symlink whose
+// real path equals target's (so a link elsewhere that resolves to the default entry counts too)
 export function linksTo(link: string, target: string): boolean {
   const st = lstatOrUndefined(link);
   if (!st?.isSymbolicLink()) return false;
@@ -185,6 +191,7 @@ export function recordLink(report: ShareReport, name: string, result: ReturnType
   record(report, name, result);
 }
 
+/** Files a linkEntry result under its report list; 'ok' (already linked) is not reported. */
 export function record(report: ShareReport, name: string, result: LinkResult): void {
   if (result === 'noprivilege') (report.noPrivilege ??= []).push(name);
   else if (result === 'failed') (report.failed ??= []).push(name);
@@ -192,8 +199,8 @@ export function record(report: ShareReport, name: string, result: LinkResult): v
   else if (result === 'conflict') report.conflicts.push(name);
 }
 
-// Appends the lines of src that dst lacks (whole-line comparison, order kept), then removes src. latin1 keeps the
-// bytes unchanged. Returns the number of appended lines.
+// Appends the lines of src that dst lacks (whole-line comparison, order kept, empty lines and repeats dropped), then
+// removes src. latin1 keeps the bytes unchanged; dst is created 0600 when missing. Returns the number of appended lines.
 export function mergeLines(src: string, dst: string): number {
   const existing = lstatOrUndefined(dst) ? fs.readFileSync(dst, 'latin1') : undefined;
   const have = new Set((existing ?? '').split('\n'));
@@ -213,12 +220,18 @@ export function mergeLines(src: string, dst: string): number {
   return missing.length;
 }
 
-/** Creates/repairs every link of a shared account (idempotent). Never touches the default dir's existing content;
- *  in a shared account a real history.jsonl (replaced by `claude project purge`) is merged back and relinked.
- *  Also removes links in skills/ or plugins/ whose default child no longer exists. Steps that move or unlink account
- *  files are skipped and reported under busy while claudeAccountBusy(dir, procRoot) or options.busy(). When the default
- *  settings.json cannot be shared, a settings.json link is replaced by the account's own copy without identity keys.
- *  dir === default → empty report. */
+/** Creates/repairs every link of a shared account (idempotent). Never touches the default dir's existing content: a
+ *  missing default entry is created empty first (folder 0700, file 0600, settings.json '{}\n'); a missing account entry
+ *  becomes a link; a regular entry or a link elsewhere stays and is reported under conflicts. Exception: in an already
+ *  shared account a regular history.jsonl (replaced by `claude project purge`) is merged back with mergeLines and
+ *  relinked (only while file links work); an independent account's own history.jsonl stays a conflict.
+ *  skills/ plugins/: a whole-folder link from an earlier version is replaced by a real folder with per-child links
+ *  (except CLAUDE_CHILD_EXCLUDES), and child links whose default child no longer exists are removed.
+ *  Those three steps move or unlink account files, so they are skipped and reported under busy while
+ *  claudeAccountBusy(dir, procRoot) or options.busy() is true; that check runs lazily (once, only when such a step
+ *  comes up) and the other links are still made. When the default settings.json cannot be shared, settings.json is
+ *  refused and an existing settings.json link is replaced by the account's own copy without identity keys.
+ *  options.copyConfig enables the one-time Windows copy fallback (recordLink). dir === default → empty report. */
 export function ensureClaudeLinks(dir: string, procRoot = '/proc', options: LinkOptions = {}): ShareReport {
   const report = emptyReport();
   if (isDefault(dir)) return report;
@@ -316,7 +329,17 @@ function readSourceJson(file: string): Record<string, unknown> {
   return data;
 }
 
-/** Mirrors shareable keys of the default account's info file into <dir>/.claude.json (see the contract).
+/** Mirrors shareable keys of the default account's info file (fromJson, read only; missing = empty; not a JSON object →
+ *  throws t('share.badSource')) into <dir>/.claude.json:
+ *  - mcpServers becomes an exact copy of the default's (an absent default list empties it);
+ *  - for every project of the default's `projects`, the PROJECT_KEYS present there are copied (the entry is created
+ *    when missing); other project keys stay;
+ *  - ONBOARDING_KEYS are added only when the account lacks them and is signed in;
+ *  - every other key (e.g. githubRepoPaths, oauthAccount) stays as is.
+ *  changed lists 'mcpServers', the added onboarding keys and 'projects:<path>'. No write when nothing changes. A missing
+ *  file is created 0600; otherwise the write follows a symlink, keeps the mode and replaces atomically (temporary file +
+ *  renameReplacing), refusing with t('mcp.changed') when the file changed since it was read. A target that is not a
+ *  JSON object throws t('mcp.badTarget'). The default dir → no-op.
  *  beforeCommit runs between writing the temporary file and the change check (tests simulate a concurrent CLI write). */
 export function mirrorClaudeJson(fromJson: string, dir: string, beforeCommit?: () => void): { changed: string[] } {
   const changed: string[] = [];
@@ -430,8 +453,10 @@ export function windowsSessionsBusy(sessions: string, startTimes: StartTimeProbe
 }
 
 /** true when a Claude process is running with this config dir: a <dir>/sessions/*.json whose pid is alive and whose
- *  /proc/<pid>/environ has CLAUDE_CONFIG_DIR=<dir> (for the default dir: unset or the default). Without procRoot
- *  (e.g. no /proc) a session file counts as busy. Windows: windowsSessionsBusy. procRoot is for tests. */
+ *  /proc/<pid>/environ has CLAUDE_CONFIG_DIR=<dir> (samePath or sameRealPath; for the default dir: unset or the
+ *  default). Unreadable records, invalid pids and unreadable environ files (not running, another user's process) are
+ *  skipped; no sessions folder → false. Without procRoot (e.g. no /proc) any session file counts as busy.
+ *  Windows with the default procRoot: windowsSessionsBusy. procRoot is for tests. */
 export function claudeAccountBusy(dir: string, procRoot = '/proc'): boolean {
   const sessions = path.join(path.resolve(dir), 'sessions');
   if (isWindows() && procRoot === '/proc') return windowsSessionsBusy(sessions);
@@ -541,8 +566,10 @@ function hasExternalRelativeLink(dir: string, root = dir): boolean {
   return false;
 }
 
-// Moves a file, link or folder without following symlinks. Relative links keep their targets; links inside a whole
-// moved tree still point into that tree. false means link privilege was refused and the original entry is kept.
+// Moves a file, link or folder without following symlinks: rename, or copy + delete across file systems (also for a
+// folder holding relative links that point outside it). Relative links keep their targets; links inside a whole moved
+// tree still point into that tree. An existing destination folder throws EEXIST, a special file EOPNOTSUPP. false
+// means link privilege was refused and the original entry is kept (callers then count nothing as moved).
 export function moveEntry(src: string, dst: string): boolean {
   src = realEntryPath(src);
   const st = fs.lstatSync(src);
@@ -583,6 +610,7 @@ export function freeName(base: string): string {
   for (let i = 2; ; i++) if (!lstatOrUndefined(`${base}-${i}`)) return `${base}-${i}`;
 }
 
+/** Two links resolving to the same target, or two regular files of equal size and bytes. */
 export function sameContent(a: string, b: string, sa: fs.Stats, sb: fs.Stats): boolean {
   if (sa.isSymbolicLink() || sb.isSymbolicLink()) {
     if (!sa.isSymbolicLink() || !sb.isSymbolicLink()) return false;
@@ -600,6 +628,7 @@ export interface MergeCtx {
   sourceDirs?: string[];
 }
 
+/** Records where a moved, backed-up or retained entry now is, so deferred links follow their migrated targets. */
 export function rememberMove(ctx: MergeCtx, src: string, dst: string): void {
   (ctx.movedPaths ??= new Map()).set(realEntryPath(src), dst);
 }
@@ -616,7 +645,11 @@ function movedTarget(ctx: MergeCtx, target: string): string {
   return result;
 }
 
-// Merges the account entry src into the default entry dst (rel: dst relative to the default dir, for the report)
+// Merges the account entry src into the default entry dst (rel: dst relative to the default dir, for the report).
+// Folders recurse; a missing dst → moved (moved++); identical file → src deleted (duplicates++); different → moved to
+// '<dst>.from-<account>' ('-2', '-3' … when taken; keptBoth, whose content is not counted again). Links are deferred to
+// finalizeMerge. Sockets, FIFOs and opaque Windows reparse folders stay in place (their folder then stays a conflict);
+// an entry is never merged into itself (same real path).
 export function mergeEntry(src: string, dst: string, rel: string, ctx: MergeCtx, count = true): void {
   src = realEntryPath(src);
   const ss = fs.lstatSync(src);
@@ -671,7 +704,10 @@ export function mergeEntry(src: string, dst: string, rel: string, ctx: MergeCtx,
 }
 
 /** Completes one account's directory merges after every shared entry has its final location, before re-linking.
- *  Deferred links use those locations, including conflict suffixes, so they survive deletion of the old account. */
+ *  Deferred links use those locations, including conflict suffixes, so they survive deletion of the old account;
+ *  external targets keep their original location. A dst link already resolving to the same moved target counts as a
+ *  duplicate; a link that cannot be recreated (no file-link privilege, or a link it depends on stayed) stays in the
+ *  account and is reported under noPrivilege. Emptied source folders are removed afterwards. */
 export function finalizeMerge(ctx: MergeCtx): void {
   const pending = ctx.pendingLinks ?? [];
   const reserved = new Set<string>();
@@ -742,6 +778,8 @@ function removeIfEmpty(dir: string): void {
   }
 }
 
+// Appends the whole of src to dst (no line comparison; a newline is inserted where needed), creating dst 0600 when
+// missing, then removes src
 function appendHistory(src: string, dst: string): void {
   const add = fs.readFileSync(src);
   if (add.length > 0) {
@@ -757,9 +795,16 @@ function appendHistory(src: string, dst: string): void {
   fs.unlinkSync(src);
 }
 
-/** Converts an independent account into a shared one (see the contract); ends with ensureClaudeLinks(dir, procRoot).
- *  Throws t('share.busy') with the display name label (defaults to accountName) when claudeAccountBusy(dir, procRoot) or
- *  options.busy() (the caller's check, e.g. a PlanSwap terminal opened while the copy-fallback prompt was shown). */
+/** Converts an independent account into a shared one. Throws t('share.busy') with the display name label (defaults to
+ *  accountName; accountName names '<name>.from-<account>') before writing when claudeAccountBusy(dir, procRoot) or
+ *  options.busy() (the caller's check, e.g. a PlanSwap terminal opened while the copy-fallback prompt was shown).
+ *  Moves the account's real shared entries into the default dir, never overwriting there and never following links:
+ *  folders and the non-excluded skills/ plugins/ children through mergeEntry; history.jsonl appended whole
+ *  (appendHistory); settings.json / CLAUDE.md moved when the default lacks them (a settings.json with identity keys
+ *  stays, unlinked), dropped when identical, otherwise renamed to '<name>.independent-backup' (backups); settings.json
+ *  also stays when the default one cannot be shared. Without file-link privilege single files stay (noPrivilege).
+ *  An account file is deleted only when an identical default copy exists. Ends with finalizeMerge and
+ *  ensureClaudeLinks(dir, procRoot, options), whose report is merged in. The default dir → empty report. */
 export function migrateClaudeToShared(dir: string, accountName: string, procRoot = '/proc', label = accountName, options: LinkOptions = {}): MigrateReport {
   const report: MigrateReport = { ...emptyReport(), moved: 0, duplicates: 0, keptBoth: [], backups: [] };
   if (isDefault(dir)) return report;
@@ -897,8 +942,11 @@ function existsError(dst: string, existing: 'skip' | 'throw'): void {
   if (existing === 'throw') throw Object.assign(new Error(`EEXIST: file already exists, copy '${dst}'`), { code: 'EEXIST' });
 }
 
-/** Independent creation: copies settings.json (stripped), CLAUDE.md, the config folders and the non-excluded
- *  skills/ children from the default dir, and merges MCP servers. Never overwrites. */
+/** Independent creation: copies settings.json without the identity keys (copySettingsStripped), CLAUDE.md, the
+ *  INDEPENDENT_COPY_DIRS folders (a folder that is a link is copied from its real location) and the skills/ children
+ *  except CLAUDE_CHILD_EXCLUDES from the default dir (copyTree), then adds missing MCP servers (syncMcpServers;
+ *  'mcpServers' listed in copied when any was added). plugins/, history and sessions are not copied. Never overwrites
+ *  an existing account entry. The default dir → no-op. */
 export function copyClaudeIndependent(fromJson: string, dir: string): { copied: string[] } {
   const copied: string[] = [];
   if (isDefault(dir)) return { copied };
@@ -936,11 +984,6 @@ export function copyClaudeIndependent(fromJson: string, dir: string): { copied: 
   return { copied };
 }
 
-/** Converts a shared account back into an independent one: removes every link into the default directory
- *  (the CLAUDE_SHARED_ENTRIES entries and the skills/ plugins/ children whose link resolves into the default
- *  directory; anything else is left untouched), then copies the default configuration as copyClaudeIndependent
- *  does. History and sessions stay in the default directory. Throws for the default directory and for an
- *  account that is not shared. Returns the removed link names (children as 'skills/<child>') and the copied entries. */
 /** Unlinks `link` when it is a symlink resolving to the default entry `target` (linksTo: real paths compared);
  *  records `name` in `removed`. Regular files and links resolving elsewhere are left alone. */
 export function unlinkIfLinksTo(link: string, target: string, name: string, removed: string[]): boolean {
@@ -962,6 +1005,13 @@ export function unlinkChildLinks(accFolder: string, defFolder: string, rel: stri
 // Entries that get an own copy when the account becomes independent; unlinked before the copy, the rest after it
 const INDEPENDENT_CONFIG_ENTRIES = new Set(['settings.json', 'CLAUDE.md', ...INDEPENDENT_COPY_DIRS]);
 
+/** Converts a shared account back into an independent one. Removes only links that resolve to the default entry
+ *  (unlinkIfLinksTo / unlinkChildLinks; anything else is left untouched), in this order: settings.json, CLAUDE.md, the
+ *  INDEPENDENT_COPY_DIRS and the skills/ children; then copyClaudeIndependent; then history.jsonl, the session folders,
+ *  the projects marker and the plugins/ children. A failed copy therefore leaves the account shared, and
+ *  ensureClaudeLinks re-creates the missing links. History and sessions are neither copied nor moved; the default dir is
+ *  never written. Throws t('unshare.default') for the default dir and t('unshare.notShared') for an account that is not
+ *  shared. Returns the removed link names (children as 'skills/<child>') and the copied entries. */
 export function makeClaudeIndependent(fromJson: string, dir: string): { removed: string[]; copied: string[] } {
   if (isDefault(dir)) throw new Error(t('unshare.default', { dir }));
   assertNotDefaultAncestor(dir);

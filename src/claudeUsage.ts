@@ -1,6 +1,7 @@
 // Usage limits of a Claude account. PlanSwap never reads .credentials.json: it runs the official CLI's local `/usage`
 // command with the account's directory, so Claude Code refreshes the usage cache (cachedUsageUtilization) in that
 // account's own info file with its own credentials, and the values are read from that cache. No vscode import.
+// Design and rationale: docs/design.md 6.9. Raw CLI output is never logged or returned.
 import * as childProcess from 'node:child_process';
 import type { EventEmitter } from 'node:events';
 import * as fs from 'node:fs';
@@ -19,6 +20,10 @@ export interface ClaudeUsage {
   checkedAt: number;
 }
 
+/** cliMissing: no `claude` (nor, on Windows, `claude.cmd` on PATH); timeout: the whole run exceeded timeoutMs;
+ *  notRefreshed: the CLI succeeded but the account's cache is older than the run start minus 2 minutes (e.g. offline,
+ *  also when that cache is too old to show); noUsage: no cache attributable to the signed-in account after the run;
+ *  failed: error result, unparsable output, non-zero exit without output, output over 1 MiB, spawn error or cancel. */
 export type ClaudeUsageFailure = 'cliMissing' | 'timeout' | 'notRefreshed' | 'noUsage' | 'failed';
 export type ClaudeQueryResult = { ok: true } | { ok: false; reason: ClaudeUsageFailure; detail?: string };
 
@@ -119,7 +124,11 @@ function ownCache(data: unknown): { cache: Record<string, unknown>; checkedAt: n
 
 /**
  * Pure: the usage cache of a parsed account info file, or undefined when there is none worth showing. The cache must
- * belong to the signed-in account, be younger than CLAUDE_USAGE_MAX_AGE_MS, and windows past their reset time are dropped.
+ * belong to the signed-in account (cachedUsageUtilization.accountUuid equals a non-empty oauthAccount.accountUuid),
+ * be younger than CLAUDE_USAGE_MAX_AGE_MS and not more than 2 minutes in the future. Windows come from
+ * utilization.limits[] (kind session → 300 min, weekly* → 10080, otherwise none; scope.model.display_name → scope) or,
+ * when limits is missing or empty, five_hour / seven_day; an entry without a finite percentage is skipped and windows
+ * past their reset time are dropped. No window left → undefined, never a 0% window.
  */
 export function parseUsageCache(data: unknown, now: number): ClaudeUsage | undefined {
   const own = ownCache(data);
@@ -145,7 +154,8 @@ export function readUsageFetchedAt(dir: string, explicit = false): number | unde
   return ownCache(readInfo(dir, explicit))?.checkedAt;
 }
 
-/** Usage cache of the account in dir (explicit: as for claudeJsonPath); undefined when missing or unreadable. */
+/** Usage cache of the account in dir (explicit: as for claudeJsonPath); undefined when missing, unreadable or
+ *  half-written. Synchronous. */
 export function readClaudeUsage(dir: string, explicit = false, now: number = Date.now()): ClaudeUsage | undefined {
   return parseUsageCache(readInfo(dir, explicit), now);
 }
@@ -168,8 +178,9 @@ function onPath(file: string): boolean {
 }
 
 /**
- * The environment of the CLI run: CLAUDE_CONFIG_DIR=dir when Claude Code reads <dir>/.claude.json for it, and no
- * CLAUDE_CONFIG_DIR for the home-level ~/.claude.json of the default ~/.claude, so the CLI updates the file we read.
+ * The environment of the CLI run: a copy of base with the setting variables applied (each value, '' included,
+ * overrides the inherited one), then CLAUDE_CONFIG_DIR=dir (resolved) when Claude Code reads <dir>/.claude.json for it,
+ * and no CLAUDE_CONFIG_DIR for the home-level ~/.claude.json of the default ~/.claude, so the CLI updates the file we read.
  */
 export function usageEnv(
   dir: string, explicit: boolean, base: NodeJS.ProcessEnv = process.env, setting: Record<string, string> = {},
@@ -199,7 +210,8 @@ type QueryThrew = { ok: false; reason: 'failed'; detail: string };
 
 /**
  * Queries the targets one after another (never two claude or codex processes at once); stops before the next target once
- * cancelled() is true. Returns each target's result in order; onStep is called before each query.
+ * cancelled() is true. Returns the results of the targets actually queried, in order; onStep is called before each
+ * query. A rejected query becomes { ok: false, reason: 'failed', detail: <message> } and the loop goes on.
  */
 export async function queryEach<R = ClaudeQueryResult>(
   targets: UsageTarget[], query: (dir: string) => Promise<R>,
@@ -223,8 +235,14 @@ export async function queryEach<R = ClaudeQueryResult>(
 type Attempt = { kind: 'done'; result: ClaudeQueryResult } | { kind: 'enoent' };
 
 /**
- * Runs `claude -p /usage --output-format json` for the account (a local command: no prompt is sent), then checks that
- * the account's usage cache was fetched during this run. The child it started is the only process ever signalled.
+ * Runs `claude` with ARGS for the account (a local command: no prompt is sent), env usageEnv(dir, explicit,
+ * process.env, options.env), cwd the home directory, hidden window, stdin and stderr ignored. On ENOENT on Windows,
+ * when a claude.cmd is on PATH, retries once through the shell as a fixed command line. The whole run (both attempts)
+ * is limited to timeoutMs; the child it started is the only process ever signalled, and only while still running (the
+ * shell fallback's tree through killTree). An already aborted signal ends the child right after it starts. Stdout is
+ * limited to 1 MiB and must be a JSON result: is_error true or a subtype other than 'success' → failed with the trimmed
+ * result text (200 characters) as detail. After a successful run it checks that the account's own usage cache was
+ * fetched during this run (see ClaudeUsageFailure).
  */
 export async function queryClaudeUsage(dir: string, explicit: boolean, options: ClaudeQueryOptions = {}): Promise<ClaudeQueryResult> {
   const spawn: ClaudeUsageSpawn = options.spawn ?? ((c, a, o) => childProcess.spawn(c, a, o));

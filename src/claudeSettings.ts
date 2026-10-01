@@ -1,3 +1,5 @@
+// claudeCode.environmentVariables: the CLAUDE_CONFIG_DIR entry is the only record of the current Claude account; the
+// other entries are what the Claude extension passes to Claude Code. Imports vscode.
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { defaultDir, samePath, sameRealPath } from './paths';
@@ -70,17 +72,26 @@ export function settingEnv(): Record<string, string> {
   return env;
 }
 
+/** The current Claude account directory: the setting's CLAUDE_CONFIG_DIR as the extension picks it (array or object
+ *  form), else defaultDir(). */
 export function currentDir(): string {
   return getConfiguredConfigDir() ?? defaultDir();
 }
 
-/** Whether the setting sets CLAUDE_CONFIG_DIR (non-empty) to dir; then Claude Code reads <dir>/.claude.json even for ~/.claude.
- *  Another spelling of the configured folder (8.3 name, '\\?\' prefix, a link to it) counts as the same folder */
+/** Whether the setting's accepted CLAUDE_CONFIG_DIR (an absolute path, see acceptedDir) is dir; then Claude Code reads
+ *  <dir>/.claude.json even for ~/.claude. Another spelling of the configured folder (8.3 name, '\\?\' prefix, a link
+ *  to it) counts as the same folder. Passed as `explicit` to claudeJsonPath / readAccountInfo by every caller */
 export function isExplicitConfigDir(dir: string): boolean {
   const configured = getConfiguredConfigDir();
   return configured !== undefined && (samePath(configured, dir) || sameRealPath(configured, dir));
 }
 
+/**
+ * Writes a new entry array (never mutating get()'s result) to the global (user / remote Machine) setting: every
+ * CLAUDE_CONFIG_DIR entry (any accepted spelling) is removed, the others kept, and {name, value: path.resolve(dir)} is
+ * appended unless dir is undefined or the default dir (samePath). The object form is written back as an array.
+ * Errors of the update are rethrown as is.
+ */
 export async function setConfigDir(dir: string | undefined): Promise<void> {
   const config = vscode.workspace.getConfiguration(SECTION);
   const raw = config.get<unknown>(KEY);
@@ -94,6 +105,7 @@ export async function setConfigDir(dir: string | undefined): Promise<void> {
   await config.update(KEY, next, vscode.ConfigurationTarget.Global);
 }
 
+// Whether a configuration change touches claudeCode.environmentVariables
 export function affectsSetting(e: vscode.ConfigurationChangeEvent): boolean {
   return e.affectsConfiguration(`${SECTION}.${KEY}`);
 }

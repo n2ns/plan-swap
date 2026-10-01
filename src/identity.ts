@@ -1,4 +1,4 @@
-// Pure grouping of account directories signed in to the same identity (same user in the same workspace/organization).
+// Pure grouping of account directories signed in to the same identity (same user in the same workspace/organization). No vscode import.
 // Identity values are opaque comparison keys: never displayed, logged, persisted or sent to the Webview.
 
 /** Groups entries that share an identity; only groups with two or more members are returned, members in input order, groups ordered by their first member. Entries without an identity are ignored. */

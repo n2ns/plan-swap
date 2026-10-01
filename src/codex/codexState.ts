@@ -7,9 +7,14 @@ import { samePath } from '../paths';
 import { t } from '../i18n';
 import { fsyncDir, isWindows, renameReplacing } from '../platform';
 import { SELF_CHECK_NAME, type Runner, getUserCodexHome, getUserEnv, setUserCodexHome, setUserEnv } from './codexWindows';
+// Codex selection state: the state file ~/.config/planswap/codex-home (the selected dir), the rc marker blocks in
+// ~/.profile and ~/.bashrc that export it, the native Windows user variable branch, enable pre-/self-checks and the
+// ai-switcher migration. Design: codex-design.md sections 4 and 9a. No vscode import.
 
+/** The selected-directory state file; the only place the selection is stored (empty or missing = default). */
 export const STATE_FILE = () => path.join(os.homedir(), '.config', 'planswap', 'codex-home');
 
+/** Trimmed state-file content, path.resolve'd; missing, unreadable or empty → undefined (the default account). */
 export function readSelectedDir(): string | undefined {
   let raw: string;
   try {
@@ -21,6 +26,8 @@ export function readSelectedDir(): string | undefined {
   return s ? path.resolve(s) : undefined;
 }
 
+/** Atomic write of the state file: folder 0700, exclusive temp file 0600 + fsync + rename + folder fsync.
+ *  undefined writes an empty file (the default account). */
 export function writeSelectedDir(dir: string | undefined): void {
   const file = STATE_FILE();
   const dirName = path.dirname(file);
@@ -44,8 +51,10 @@ export function writeSelectedDir(dir: string | undefined): void {
 }
 
 /**
- * Writes the selected directory and, on Windows when management is enabled (the state file existed), mirrors it into
+ * The only selection writer the commands use. Writes the selected directory and, on Windows when management is enabled (the state file existed), mirrors it into
  * the user-level CODEX_HOME so a freshly started editor picks it up. Elsewhere the rc blocks read the state file.
+ * Windows: throws t('codex.notEnabled') without the state file; reads the previous variable strictly, sets the
+ * variable first, then writes the state file and restores the variable if that write fails.
  */
 export function writeSelection(dir: string | undefined, run?: Runner): void {
   if (!isWindows()) {
@@ -66,7 +75,8 @@ export function writeSelection(dir: string | undefined, run?: Runner): void {
   }
 }
 
-/** Whether PlanSwap manages CODEX_HOME. Windows: the state file exists; elsewhere: both rc files carry a block. */
+/** Whether PlanSwap manages CODEX_HOME. Windows: the state file exists; elsewhere: both rc files carry a complete
+ *  block (a start marker without its end marker counts as not enabled). An unreadable rc file throws. */
 export function isEnabled(): boolean {
   if (isWindows()) return fs.existsSync(STATE_FILE());
   return rcStatus().every((s) => s.hasBlock && !s.broken);
@@ -79,7 +89,8 @@ function adoptableUserHome(value: string): boolean {
   return CODEX_DIR_BASENAME_RE.test(path.basename(dir)) && samePath(path.dirname(dir), os.homedir());
 }
 
-/** Windows enable: creates the state file (after preCheck); an existing file, or an adoptable variable, keeps the selection. */
+/** Windows enable: creates the state file (after preCheck); an existing file, or an adoptable variable, keeps the
+ *  selection. Never changes the user variable. A failed strict read throws before writing. */
 export function enableWindows(run?: Runner): void {
   if (fs.existsSync(STATE_FILE())) return;
   // Strict: a failed read must not record "default" while the variable still selects an account directory
@@ -105,6 +116,8 @@ export function removeWindowsState(): void {
   }
 }
 
+/** This window's effective dir: a non-empty process.env.CODEX_HOME of the extension host (path.resolve'd), otherwise
+ *  codexDefaultDir(). Never stored elsewhere. */
 export function effectiveDir(): string {
   const env = process.env.CODEX_HOME;
   return env ? path.resolve(env) : codexDefaultDir();
@@ -113,6 +126,8 @@ export function effectiveDir(): string {
 export const RC_BEGIN = '# >>> planswap codex >>>';
 export const RC_END = '# <<< planswap codex <<<';
 
+/** The marker block written to both rc files (both markers, trailing newline). Never localized; it must stay
+ *  byte-stable, since removal and migration match it line by line. */
 export function rcBlock(): string {
   return [
     RC_BEGIN,
@@ -130,7 +145,8 @@ export function rcBlock(): string {
   ].join('\n');
 }
 
-/** broken: a BEGIN marker exists without a matching END marker */
+/** hasUserExport: an `export CODEX_HOME=` line outside the marker blocks (the lines of an unterminated block itself
+ *  do not count). broken: a BEGIN marker exists without a matching END marker. A missing file has neither. */
 export interface RcFileStatus { file: string; hasBlock: boolean; broken: boolean; hasUserExport: boolean }
 
 const USER_EXPORT_RE = /^\s*export\s+CODEX_HOME=/;
@@ -182,12 +198,20 @@ function statusOf(file: string): RcFileStatus {
   return { file, hasBlock, broken, hasUserExport };
 }
 
+/** Status of ~/.profile and ~/.bashrc, in that order. Read errors other than ENOENT are thrown. */
 export function rcStatus(): RcFileStatus[] {
   return [statusOf(profilePath()), statusOf(bashrcPath())];
 }
 
 export interface PreCheck { ok: boolean; reasons: string[] }
 
+/**
+ * Enable pre-checks; reasons are localized, nothing is written and no modal is shown.
+ * Linux: SHELL is bash; ~/.bash_profile and ~/.bash_login are missing or mention `.bashrc` on a non-comment line;
+ * no rc file has a broken block (manual fix required) or a user export of CODEX_HOME.
+ * Windows: unless the state file exists, a user-level CODEX_HOME that is not an adoptable ~/.codex-<name> is refused;
+ * the read is strict, so a failed read throws instead of passing.
+ */
 export function preCheck(run?: Runner): PreCheck {
   const reasons: string[] = [];
   if (isWindows()) {
@@ -289,6 +313,14 @@ function installInto(file: string, beforeGuard: boolean): void {
   writeRc(file, text + sep + block, mode);
 }
 
+/**
+ * Writes the block into both files, skipping a file that already has one. ~/.bashrc: before the interactive guard
+ * (`case $- in`) with one blank line before the block, or appended when there is no guard; ~/.profile: appended
+ * (after a blank line when the file ends with a newline, after only the missing newline otherwise). A missing file is
+ * created with 0644, an existing one keeps its mode. Written by writeRc (atomic, through a symlink to its target);
+ * a dangling symlink throws t('codex.rc.danglingLink') before that file is written. Install then removeRcBlocks
+ * restores the original bytes of a file that existed before.
+ */
 export function installRcBlocks(): void {
   installInto(bashrcPath(), true);
   installInto(profilePath(), false);
@@ -330,7 +362,9 @@ export function removeRcBlockFrom(file: string): void {
   if (content !== undefined) writeRc(file, content, statMode(file));
 }
 
-/** Checks both files first; if any BEGIN lacks an END, throws (all errors combined) without changing either file. */
+/** Removes every block from both files, including the blank line or missing newline added on installation (a file
+ *  created by the installation is left empty); no block → no write. Checks both files first; if any BEGIN lacks an
+ *  END, throws (all localized reasons combined) without changing either file. Written like removeRcBlockFrom. */
 export function removeRcBlocks(): void {
   const errors: Error[] = [];
   const writes: Array<{ file: string; content: string }> = [];
@@ -392,7 +426,9 @@ function withLegacyReplaced(file: string): string | undefined {
  * (atomic, symlinks followed, mode kept), and the legacy state file is deleted (its folder too when empty).
  * Both rc files are checked before anything is written; a legacy block without its END marker throws and nothing
  * changes. The selected directory stays the same, so the server environment does not need to be resolved again.
- * Returns true when something was migrated.
+ * An empty legacy state file becomes an empty STATE_FILE; legacy-file removal errors are ignored. Without a legacy
+ * block nothing is touched (a leftover legacy state file stays) and false is returned. Returns true when something
+ * was migrated. Runs on every activation before the Codex store is created.
  */
 export function migrateLegacyCodex(): boolean {
   const errors: Error[] = [];
@@ -425,7 +461,7 @@ const SELF_CHECK_MARK = '__PLANSWAP_CODEX_HOME__=';
 /** Name prefix of the Linux self-check's scratch directory inside ~/.config/planswap. */
 export const SELF_CHECK_DIR_PREFIX = '.selfcheck-';
 
-// Windows: writes a marker into a scratch user variable (never CODEX_HOME itself), reads it back through the registry, then
+// Windows (selfCheck delegates here): writes a marker into a scratch user variable (never CODEX_HOME itself), reads it back through the registry, then
 // removes it. A failed removal is reported; it only leaves that harmless scratch variable behind
 export function selfCheckWindows(run?: Runner): { ok: boolean; detail: string } {
   const marker = `planswap-${process.pid}-${Date.now()}`;
@@ -447,6 +483,13 @@ export function selfCheckWindows(run?: Runner): { ok: boolean; detail: string } 
   return result;
 }
 
+/**
+ * Enable self-check. Linux: creates a scratch dir (SELF_CHECK_DIR_PREFIX) beside STATE_FILE, temporarily selects it,
+ * runs `bash -i -l -c` printing SELF_CHECK_MARK + $CODEX_HOME and compares only that marked line. Cleanup restores the
+ * previous state (or deletes a newly created state file) only while the state file still selects the scratch dir, so
+ * a concurrent switch by another window is kept, and removes the scratch with non-recursive rmdir so unexpected
+ * contents stay. Never throws; failures are returned as a localized detail. Windows: selfCheckWindows().
+ */
 export function selfCheck(): { ok: boolean; detail: string } {
   if (isWindows()) return selfCheckWindows();
   const file = STATE_FILE();

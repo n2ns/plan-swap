@@ -14,7 +14,9 @@ export interface ShareReportLike {
   copied?: string[];
 }
 
-/** Empty string when there is nothing worth telling (newly linked or created entries are not reported) */
+/** One localized line: moved, duplicates, keptBoth, backups, conflicts, refused, copied, noPrivilege, failed, busy
+ *  (share.r.*), in that order, joined with common.listSep (names within a part with common.nameSep). Empty string when
+ *  there is nothing worth telling (newly linked or created entries are not reported) */
 export function describeShareReport(r: ShareReportLike): string {
   const list = (items: string[]): string => items.join(t('common.nameSep'));
   const parts: string[] = [];

@@ -53,7 +53,13 @@ export class ClaudeUsageMonitor {
     return this.state;
   }
 
-  /** Queries now; a call while a query runs joins it instead of starting a second claude process. */
+  /**
+   * Queries now; a call while a query runs joins it instead of starting a second claude process. A run records
+   * { dir, at } before querying (failures count as attempts), notifies checking: true keeping the previous failure,
+   * then stores the failure with its directory (a rejected query becomes failed with the error message) or clears it
+   * on success. A directory that is not eligible is not queried and records no attempt; the run only clears a stale
+   * checking/failure state. When the current directory changed during the query, the new one is queried once more.
+   */
   refresh(): Promise<void> {
     this.running ??= this.run().finally(() => {
       this.running = undefined;
@@ -65,7 +71,9 @@ export class ClaudeUsageMonitor {
    * Queries only when the account's usage cache is older than staleMs (or missing) and this window's last attempt for
    * it, failed ones included, is too. A cache refreshed elsewhere (Claude Code in use, another window) therefore starts
    * nothing, and a failure is not retried in a loop. An account that is not eligible is skipped without counting as an
-   * attempt, so its sign-in is checked at once.
+   * attempt, so its sign-in is checked at once. Joins a running query. A cache dated more than 2 minutes in the future
+   * (clock moved back) does not count as fresh. Skipping for a fresh cache newer than this window's failed attempt for
+   * the directory clears that failure.
    */
   refreshIfStale(): Promise<void> {
     if (this.running) return this.running;

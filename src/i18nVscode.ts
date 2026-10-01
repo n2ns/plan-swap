@@ -4,7 +4,10 @@ import { LOCALES, type Locale, matchLocale, setLocale } from './i18n';
 const SECTION = 'planswap';
 const KEY = 'language';
 
-/** Resolves the UI locale from `planswap.language`; `auto` follows the editor display language. */
+/**
+ * Resolves the UI locale from `planswap.language`: a value equal to a LOCALES id is returned as is; `auto` (or any
+ * other value) gives matchLocale(vscode.env.language), the editor display language.
+ */
 export function resolveLocale(): Locale {
   const setting = vscode.workspace.getConfiguration(SECTION).get<string>(KEY, 'auto');
   if ((LOCALES as readonly string[]).includes(setting)) return setting as Locale;
@@ -19,7 +22,9 @@ const LEGACY_DONE_KEY = 'legacy.languageMigrated';
 /**
  * Carries a user-level `aiSwitcher.language` of `en` / `zh-cn` over to `planswap.language` once, when the new
  * setting has no user-level value. The old key is no longer contributed and cannot be written, so it stays in the
- * user's settings. Failures are only logged and retried on the next activation
+ * user's settings. Runs at most once: the globalState flag `legacy.languageMigrated` is set only after success
+ * (also when there was nothing to carry over). Failures are only logged (console.error) and retried on the next
+ * activation
  */
 export async function migrateLegacyLanguage(state: vscode.Memento): Promise<void> {
   if (state.get<boolean>(LEGACY_DONE_KEY)) return;
@@ -35,7 +40,7 @@ export async function migrateLegacyLanguage(state: vscode.Memento): Promise<void
   }
 }
 
-/** Re-resolves the locale when the setting changes, applies it, then calls onChange. */
+/** On a configuration change affecting `planswap.language`: setLocale(resolveLocale()), then onChange(). */
 export function watchLocale(onChange: () => void): vscode.Disposable {
   return vscode.workspace.onDidChangeConfiguration((e) => {
     if (!e.affectsConfiguration(`${SECTION}.${KEY}`)) return;

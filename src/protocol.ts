@@ -1,4 +1,6 @@
-// Message protocol between the extension and the sidebar webview (shared by both sides; imports no runtime modules)
+// Message protocol between the extension and the sidebar webview (shared by both sides; imports no runtime modules).
+// Both sides type-check against these unions; the host additionally validates every incoming message at runtime
+// (accountsPanel.checkMessage) and re-resolves each `dir` against its own rows before acting on it.
 import type { Locale } from './i18n';
 
 export type AccountKind = 'default' | 'named' | 'external';
@@ -11,6 +13,7 @@ export interface AccountView {
   name: string;
   // Display name: the alias (equals name when not set; localized for the external row)
   label: string;
+  // Absolute path; the row's identifier in messages
   dir: string;
   // For display, home directory replaced with ~
   dirLabel: string;
@@ -30,7 +33,8 @@ export interface AccountView {
   usage?: { windows: Array<{ usedPercent: number; windowMinutes?: number; resetsAt?: number; scope?: string }>; checkedAt: number };
 }
 
-// Editor connection context: local desktop (including WSLg), WSL remote, or another remote
+// Editor connection context from vscode.env.remoteName: undefined → local (including WSLg desktop), 'wsl' → wsl,
+// anything else → remote
 export type EditorContext = 'local' | 'wsl' | 'remote';
 // How a new Codex selection takes effect in this window; auto = false means the action only shows instructions;
 // userEnv: native Windows, where the selection is the per-user CODEX_HOME variable instead of rc-file blocks
@@ -46,7 +50,8 @@ export interface TabState {
   pendingDir?: string;
   // codex only: restart context for the pending banner and disabled page
   restart?: RestartInfo;
-  // Prefix of a new account folder for the add help, in the platform's spelling (~/.claude- / ~\.claude-)
+  // Prefix of a new account folder for the add help, in the platform's spelling (~/.claude- / ~\.claude-); the
+  // frontend falls back to its fixed ~/ prefix before the first state
   dirPrefix?: string;
   // Settings planswap.sidebar.showEmail: false hides the email line of every row (the host then sends no email)
   hideEmail?: boolean;
@@ -54,7 +59,7 @@ export interface TabState {
 
 export interface PanelState {
   active: PanelMode;
-  // UI locale resolved on the host
+  // UI locale resolved on the host (one of the host LOCALES, from getLocale())
   locale: Locale;
   claude: TabState;
   codex: TabState;
@@ -62,29 +67,38 @@ export interface PanelState {
 
 export type ToWebview =
   | { type: 'state'; state: PanelState }
+  // Answer to 'add'; error undefined means success. The host posts it even when the add flow throws
   | { type: 'addResult'; mode: PanelMode; error?: string }
+  // Answer to 'rename' for the row `dir`; error undefined means success. Also posted when the rename throws
   | { type: 'renameResult'; mode: PanelMode; dir: string; error?: string }
   // The webview switches to that tab and focuses the input
   | { type: 'focusAdd'; mode: PanelMode }
   // CLI and extension versions, shown in a card at the bottom of the panel
   | { type: 'versions'; items: Array<{ label: string; value: string }> };
 
+// Every message except 'ready' carries the page's mode; the host dispatches by it
 export type FromWebview =
   | { type: 'ready' }
   // The user clicked a tab; the host remembers it
   | { type: 'setTab'; mode: PanelMode }
   | { type: 'switch'; mode: PanelMode; dir: string }
   | { type: 'terminal'; mode: PanelMode; dir: string }
+  // Sent after the frontend's inline confirmation; the host only handles named rows
   | { type: 'remove'; mode: PanelMode; dir: string }
+  // shared: the add section's checkbox; the host treats a missing value as true
   | { type: 'add'; mode: PanelMode; name: string; shared: boolean }
-  // Convert an independent named account into one shared with the default account
+  // Convert an independent named account into one shared with the default account (the host confirms with a modal)
   | { type: 'share'; mode: PanelMode; dir: string }
-  // Convert a shared named account back into an independent one (links removed, default configuration copied)
+  // Convert a shared named account back into an independent one (links removed, default configuration copied; the host
+  // confirms with a modal)
   | { type: 'unshare'; mode: PanelMode; dir: string }
+  // Only sent for named rows; the host ignores the default and external rows
   | { type: 'rename'; mode: PanelMode; dir: string; label: string }
+  // reload / dismissBanner: the Codex host ignores them
   | { type: 'reload'; mode: PanelMode }
   | { type: 'dismissBanner'; mode: PanelMode }
+  // enable / restartServer: handled by the Codex host only
   | { type: 'enable'; mode: PanelMode }
   | { type: 'restartServer'; mode: PanelMode }
-  // Toolbar buttons
+  // Per-page Tools buttons, footer toolbar buttons (mode = the current tab) and the usage refresh buttons
   | { type: 'tool'; mode: PanelMode; tool: ToolId };
