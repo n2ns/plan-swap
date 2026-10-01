@@ -38,6 +38,18 @@ let profile;
 const name = (locale, width) => `${locale}-${width}`;
 const row = (mode, suffix) => `#panel-${mode} .row[data-dir="/fixture/.${mode}-${suffix}"]`;
 
+// Screenshot only after the tab bar shows `mode` and the 120ms tab color transition has finished
+async function shot(file, mode) {
+  const tab = await page.evaluate(() => ({
+    selected: document.querySelector('.tab[aria-selected="true"]')?.id,
+    active: document.querySelector('.tab.is-active')?.id,
+    shown: [...document.querySelectorAll('[role="tabpanel"]')].filter((el) => !el.hidden).map((el) => el.id),
+  }));
+  assert.deepEqual(tab, { selected: `tab-${mode}`, active: `tab-${mode}`, shown: [`panel-${mode}`] }, `tab bar does not match the ${mode} page for ${file}`);
+  await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined))));
+  await page.screenshot({ path: path.join(output, file) });
+}
+
 async function runCase(locale, width) {
   await page.evaluate(({ locale, width }) => window.preview.apply({ locale, width, active: 'codex' }), { locale, width });
   const data = await page.evaluate(() => {
@@ -147,14 +159,14 @@ async function runCase(locale, width) {
   } else {
     assert.ok(data.gridColumns <= 2, `narrow grid did not activate at ${name(locale, width)}`);
   }
-  await page.screenshot({ path: path.join(output, `${name(locale, width)}-codex.png`) });
+  await shot(`${name(locale, width)}-codex.png`, 'codex');
   const usageLocator = page.locator(`${row('codex', 'work')} .row-usage`);
   const beforeHover = await usageLocator.boundingBox();
   await usageLocator.hover();
   assert.equal(await usageLocator.getAttribute('title'), data.usageTitle);
   assert.equal(await usageLocator.textContent(), data.usageText);
   assert.deepEqual(await usageLocator.boundingBox(), beforeHover, `usage moved on hover at ${name(locale, width)}`);
-  await page.screenshot({ path: path.join(output, `${name(locale, width)}-codex-hover.png`) });
+  await shot(`${name(locale, width)}-codex-hover.png`, 'codex');
   results.cases.push({ locale, width, mode: 'codex', passed: true, hoverPreserved: true, ...data });
   await page.evaluate(({ locale, width }) => window.preview.apply({ locale, width, active: 'claude' }), { locale, width });
   const measureClaude = () => page.evaluate(() => {
@@ -212,7 +224,7 @@ async function runCase(locale, width) {
   assert.equal(collapsed.summaryActionsOverlap, false, `model-limit toggle overlaps actions at ${name(locale, width)}`);
   assert.deepEqual(collapsed.windows.map((w) => w.shown), [true, true, false]);
   assert.equal(collapsed.horizontalOverflow, false, `claude horizontal overflow (collapsed) at ${name(locale, width)}`);
-  await page.screenshot({ path: path.join(output, `${name(locale, width)}-claude.png`) });
+  await shot(`${name(locale, width)}-claude.png`, 'claude');
   await page.click('#panel-claude .row[data-dir="/fixture/.claude-work"] .usage-more-summary');
   // The expanded state survives a re-render that replaces the row (another locale and back forces new DOM)
   const rerendered = await page.evaluate(({ locale, width }) => {
@@ -247,7 +259,7 @@ async function runCase(locale, width) {
     assert.equal(window.overflow, false, `claude usage window overflow at ${name(locale, width)}`);
     assert.equal(window.shown, true);
   }
-  await page.screenshot({ path: path.join(output, `${name(locale, width)}-claude-expanded.png`) });
+  await shot(`${name(locale, width)}-claude-expanded.png`, 'claude');
   // Collapse again so the next case starts from the default
   await page.click('#panel-claude .row[data-dir="/fixture/.claude-work"] .usage-more-summary');
   assert.equal(await page.evaluate(() => document.querySelector('#panel-claude .row[data-dir="/fixture/.claude-work"] details.usage-more').open), false);
@@ -278,7 +290,7 @@ async function restartControls(locale, width) {
       return sidebar.scrollWidth > sidebar.clientWidth || banner.scrollWidth > banner.clientWidth;
     });
     assert.equal(overflow, false, `pending banner overflow at ${name(locale, width)}`);
-    await page.screenshot({ path: path.join(output, `${name(locale, width)}-pending-${restart.context}-${restart.auto}.png`) });
+    await shot(`${name(locale, width)}-pending-${restart.context}-${restart.auto}.png`, 'codex');
   }
   await page.evaluate(() => window.preview.clearMessages());
   await page.locator(`${row('codex', 'work')} [data-action="switch"]`).click();
@@ -306,7 +318,7 @@ async function usageEndpoints() {
     assert.equal(values[index].fill, `${percent}%`);
     assert.ok(values[index].text.includes(remaining.en(percent)));
   }
-  await page.screenshot({ path: path.join(output, 'en-200-usage-endpoints.png') });
+  await shot('en-200-usage-endpoints.png', 'codex');
   results.interactions.push('usage endpoints display 100% and 0% remaining for 0% and 100% used');
 }
 
@@ -398,7 +410,7 @@ async function interactions() {
     await page.keyboard.type('-account');
     assert.equal(await add.inputValue(), 'fresh-account');
     assert.equal(await rename.inputValue(), '');
-    await page.screenshot({ path: path.join(output, `${mode}-focus-preserved.png`) });
+    await shot(`${mode}-focus-preserved.png`, mode);
     results.interactions.push(`${mode} state rebuild preserved add focus while an invalid rename stayed open`);
     await rename.press('Escape');
   }

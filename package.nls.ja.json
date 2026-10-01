@@ -17,6 +17,7 @@
   "command.codex.removeAccount": "Codex アカウントを削除",
   "command.codex.openTerminal": "このアカウントでターミナルから codex を実行",
   "command.codex.restartServer": "Codex アカウントを適用：再起動または手順を表示",
+  "command.claude.refreshAllUsage": "すべての Claude アカウントの使用量上限を更新",
   "command.claude.refreshUsage": "Claude の使用量上限を更新",
   "command.codex.refreshUsage": "Codex の使用量上限を更新",
   "command.tools.openClaudeMd": "グローバル CLAUDE.md を開く",

@@ -317,6 +317,8 @@ body {
 }
 .shared-icon vscode-icon { color: var(--ink); }
 .row-sub { grid-area: sub; margin-top: 2px; color: var(--muted); font-size: 0.88em; min-width: 0; overflow-wrap: anywhere; }
+.row-identity { display: flex; align-items: center; gap: 5px; }
+.row-email { flex: 1; min-width: 0; }
 .row-sub.ok { display: flex; align-items: center; gap: 5px; }
 .row-sub.ok::before { content: ''; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
 .row-usage { grid-area: usage; min-width: 0; margin-top: 5px; font-size: 0.82em; overflow-wrap: anywhere; }

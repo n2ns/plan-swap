@@ -177,7 +177,7 @@ function planClass(plan: string | undefined, mode: PanelMode): string {
 
 // Without an email, show "Logged in" based on loggedIn
 function loginStatus(a: AccountView): HTMLElement | null {
-  if (a.email) return h('div', { class: 'row-sub' }, a.email);
+  if (a.email) return h('div', { class: 'row-sub row-identity' }, h('span', { class: 'row-email' }, a.email), planPill(a));
   if (a.loggedIn) return h('div', { class: 'row-sub ok' }, t('account.loggedIn'));
   // Not logged in and no email: the "Not logged in" pill on line 3 already says so; no extra line
   return null;
@@ -673,7 +673,7 @@ class Page {
           currentIcon,
         );
     // Line 3: tags on the left + action buttons on the right; on wide panels CSS moves them back to line 1 and the right side
-    const tags = h('div', { class: 'row-tags' }, planPill(a), !a.loggedIn && h('span', { class: 'pill warn' }, t('account.notLoggedIn')));
+    const tags = h('div', { class: 'row-tags' }, !a.email && planPill(a), !a.loggedIn && h('span', { class: 'pill warn' }, t('account.notLoggedIn')));
 
     // .row-main is display: contents, so its lines land directly in the .row grid
     const row = h(

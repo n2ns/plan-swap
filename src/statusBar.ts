@@ -16,6 +16,7 @@ import type { ClaudeUsageState } from './claudeUsageMonitor';
 
 export const REFRESH_USAGE_COMMAND = 'planswap.codex.refreshUsage';
 export const CLAUDE_REFRESH_USAGE_COMMAND = 'planswap.claude.refreshUsage';
+export const CLAUDE_REFRESH_ALL_USAGE_COMMAND = 'planswap.claude.refreshAllUsage';
 
 const INTL_LOCALES: Record<Locale, string> = { en: 'en', 'zh-cn': 'zh-CN', es: 'es', ja: 'ja' };
 const USAGE_FAILURE_MESSAGES: Record<Exclude<UsageFailure, 'notLoggedIn'>, MessageKey> = {
@@ -88,15 +89,24 @@ export function usageLines(state: CodexUsageState | undefined): string[] {
 export function claudeUsageLines(usage: ClaudeUsage | undefined, state: ClaudeUsageState | undefined, dir: string): string[] {
   const lines: string[] = usage ? usage.windows.map(windowLine) : [];
   const failure = state?.failure && samePath(state.failure.dir, dir) ? state.failure : undefined;
-  if (failure) {
-    // Without values to show (too old, or all reset), "could not be refreshed" must not point at shown values
-    lines.push(failure.reason === 'failed' && !failure.detail ? t('status.usageUnknownError', { detail: '' })
-      : failure.reason === 'notRefreshed' && !usage ? t('status.claudeUsageRefreshFailed')
-        : t(CLAUDE_USAGE_FAILURE_MESSAGES[failure.reason], { detail: failure.detail ?? '' }));
-  }
+  if (failure) lines.push(claudeUsageFailureText(failure, usage !== undefined));
   if (state?.checking) lines.push(t('status.usageChecking'));
   else if (usage) lines.push(t('status.usageChecked', { time: formatTime(usage.checkedAt) }));
   return lines;
+}
+
+/** The localized text of a failed Claude usage query; hasUsage: whether older values are still shown. */
+export function claudeUsageFailureText(failure: { reason: ClaudeUsageFailure; detail?: string }, hasUsage: boolean): string {
+  // Without values to show (too old, or all reset), "could not be refreshed" must not point at shown values
+  return failure.reason === 'failed' && !failure.detail ? t('status.usageUnknownError', { detail: '' })
+    : failure.reason === 'notRefreshed' && !hasUsage ? t('status.claudeUsageRefreshFailed')
+      : t(CLAUDE_USAGE_FAILURE_MESSAGES[failure.reason], { detail: failure.detail ?? '' });
+}
+
+/** Remaining percentage of the tightest window (the one that runs out first), rounded down; undefined without usage. */
+export function tightestRemaining(usage: ClaudeUsage | undefined): number | undefined {
+  if (!usage?.windows.length) return undefined;
+  return Math.floor(100 - Math.max(...usage.windows.map((w) => w.usedPercent)));
 }
 
 export class StatusBar implements vscode.Disposable {
@@ -128,7 +138,7 @@ export class StatusBar implements vscode.Disposable {
   update(): void {
     const text: string[] = [];
     // Each section is a list of plain-text lines; account text is escaped when the tooltip is built
-    const sections: Array<{ lines: string[]; refresh?: string }> = [];
+    const sections: Array<{ lines: string[]; links?: Array<{ command: string; text: string }> }> = [];
     const dir = currentDir();
     const explicit = isExplicitConfigDir(dir);
     const hasClaude = fs.existsSync(dir) || fs.existsSync(claudeJsonPath(dir, explicit)) ||
@@ -138,12 +148,18 @@ export class StatusBar implements vscode.Disposable {
       const label = labelFor(account ? account.name : EXTERNAL_NAME, this.labels);
       const info = readAccountInfo(dir, explicit);
       const identity = info.email ?? t(info.loggedIn ? 'common.loggedIn' : 'common.notLoggedIn');
-      text.push(`Claude: ${label}`);
       const lines = [`Claude: ${label}`, info.plan ? `${identity} · ${info.plan}` : identity, dir];
       // Usage limits exist only for a subscription sign-in (oauthAccount); signed-out accounts show none
       const showUsage = info.identity !== undefined;
-      if (showUsage) lines.push(...claudeUsageLines(readClaudeUsage(dir, explicit), this.claudeUsage, dir));
-      sections.push({ lines, refresh: showUsage && this.claudeUsage !== undefined ? CLAUDE_REFRESH_USAGE_COMMAND : undefined });
+      const usage = showUsage ? readClaudeUsage(dir, explicit) : undefined;
+      // The status bar text carries what is left of the window that runs out first
+      const left = tightestRemaining(usage);
+      text.push(left === undefined ? `Claude: ${label}` : `Claude: ${label} ${t('status.remainingShort', { percent: left })}`);
+      if (showUsage) lines.push(...claudeUsageLines(usage, this.claudeUsage, dir));
+      sections.push({ lines, links: showUsage && this.claudeUsage !== undefined ? [
+        { command: CLAUDE_REFRESH_USAGE_COMMAND, text: t('status.usageRefresh') },
+        { command: CLAUDE_REFRESH_ALL_USAGE_COMMAND, text: t('status.usageRefreshAll') },
+      ] : undefined });
     }
     const codexDir = effectiveDir();
     if (this.codex && (fs.existsSync(codexDir) || this.codex.store.all().some((account) => fs.existsSync(account.dir)))) {
@@ -169,7 +185,7 @@ export class StatusBar implements vscode.Disposable {
       const showUsage = !inWsl && !apiKey && info.loggedIn;
       if (inWsl) lines.push(t('status.codexRunsInWsl'));
       if (showUsage) lines.push(...usageLines(this.codexUsage));
-      sections.push({ lines, refresh: showUsage && this.codexUsage !== undefined ? REFRESH_USAGE_COMMAND : undefined });
+      sections.push({ lines, links: showUsage && this.codexUsage !== undefined ? [{ command: REFRESH_USAGE_COMMAND, text: t('status.usageRefresh') }] : undefined });
     }
     this.item.text = text.length ? `$(account) ${text.join(' · ')}` : '';
     this.item.tooltip = buildTooltip(sections);
@@ -197,16 +213,16 @@ function codexSwitchingEnabled(): boolean {
 
 // Plain text goes through appendText (escaped), so labels and paths can never inject links; the only trusted
 // commands are the usage refreshes
-function buildTooltip(sections: Array<{ lines: string[]; refresh?: string }>): vscode.MarkdownString {
+function buildTooltip(sections: Array<{ lines: string[]; links?: Array<{ command: string; text: string }> }>): vscode.MarkdownString {
   const md = new vscode.MarkdownString('', true);
-  md.isTrusted = { enabledCommands: [CLAUDE_REFRESH_USAGE_COMMAND, REFRESH_USAGE_COMMAND] };
+  md.isTrusted = { enabledCommands: [CLAUDE_REFRESH_USAGE_COMMAND, CLAUDE_REFRESH_ALL_USAGE_COMMAND, REFRESH_USAGE_COMMAND] };
   sections.forEach((section, i) => {
     if (i > 0) md.appendMarkdown('\n\n---\n\n');
     section.lines.forEach((line, j) => {
       if (j > 0) md.appendMarkdown('  \n');
       md.appendText(line);
     });
-    if (section.refresh) md.appendMarkdown(`  \n[$(refresh) ${escapeLinkText(t('status.usageRefresh'))}](command:${section.refresh})`);
+    if (section.links) md.appendMarkdown(`  \n${section.links.map((l) => `[$(refresh) ${escapeLinkText(l.text)}](command:${l.command})`).join(' · ')}`);
   });
   return md;
 }

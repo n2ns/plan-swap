@@ -22,7 +22,7 @@ Switch between the Claude Code and Codex subscription accounts you own (Claude P
 - **Keep accounts signed in**: sign in once per account, then switch from the sidebar. Codex switches require a restart (see below).
 - **Linked or independent accounts**: reuse the default account's setup, or keep separate settings and session histories.
 - **Display names**: give named accounts labels that are easy to recognize.
-- **Claude usage limits**: hover the status bar item to see the current Claude account's session and weekly limits, including model-specific ones. Every signed-in Claude account row shows the values its last check left in that account's own folder; values older than 24 hours are not shown.
+- **Claude usage limits**: hover the status bar item to see the current Claude account's session and weekly limits, including model-specific ones, and the status bar text itself shows how much of the tightest limit is left (for example `Claude: work 58% left`). **Refresh Usage Limits of All Claude Accounts** (Command Palette or the tooltip link) checks every signed-in account one after another so you can compare them before switching. Every signed-in Claude account row shows the values its last check left in that account's own folder; values older than 24 hours are not shown.
 - **Codex usage limits**: hover the status bar item to see the current Codex account's usage limits and reset times. Account rows retain the last observation with its collection time and a "not live" label; missing observations are not shown as zero usage.
 - **Handy tools**: open your rules and settings, update the CLI, check installed versions and reload the editor.
 - **English, Simplified Chinese, Spanish and Japanese UI**, switchable in the settings.
@@ -160,7 +160,7 @@ Your account directories (`~/.claude-<name>` and `~/.codex-<name>`) are kept. To
 
 ## Documentation
 
-- [Changelog](CHANGELOG.md): changes in **0.2.1** and earlier versions.
+- [Changelog](CHANGELOG.md): changes in **0.2.2** and earlier versions.
 - [Feature reference](docs/features.md): detailed instructions for managing accounts, switching and using panel tools.
 - [Documentation map](docs/README.md): development, design, module contracts and verification guides.
 - [Blog post](https://n2ns.com/blog/switch-claude-code-codex-accounts-planswap): why PlanSwap exists and how it switches accounts without copying or swapping credentials.

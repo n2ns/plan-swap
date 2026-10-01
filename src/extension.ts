@@ -6,12 +6,12 @@ import { claudeCredentialOverrides, oneDriveHome, pathVarsWithSpaces } from './e
 import { AccountsPanel, VIEW_ID, claudePanelSource, type PanelSource } from './accountsPanel';
 import { LabelStore, labelFor } from './labels';
 import { FileMemento } from './fileState';
-import { readAccountInfo, setClaudeSettingEnv } from './paths';
+import { readAccountInfo, samePath, setClaudeSettingEnv } from './paths';
 import { ensureCodexLinks, isSharedCodexAccount } from './codex/codexShare';
-import { CLAUDE_REFRESH_USAGE_COMMAND, REFRESH_USAGE_COMMAND, StatusBar } from './statusBar';
+import { CLAUDE_REFRESH_ALL_USAGE_COMMAND, CLAUDE_REFRESH_USAGE_COMMAND, REFRESH_USAGE_COMMAND, StatusBar, claudeUsageFailureText } from './statusBar';
 import { registerCommands } from './commands';
 import { affectsSetting, currentDir, isExplicitConfigDir, settingEnv, settingEnvNames } from './claudeSettings';
-import { queryClaudeUsage, readUsageFetchedAt } from './claudeUsage';
+import { oneAtATime, queryClaudeUsage, queryEach, readClaudeUsage, readUsageFetchedAt } from './claudeUsage';
 import { ClaudeUsageMonitor } from './claudeUsageMonitor';
 import { CodexAccountStore } from './codex/codexStore';
 import { codexPanelSource, codexRunsInWsl, registerCodexCommands, restartServerInteractive } from './codex/codexCommands';
@@ -103,15 +103,69 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   if (usage) statusBar.setCodexUsage(usage.current());
   // Usage limits of this window's current Claude account: claude refreshes the cache in the account's info file, which
   // the status bar and the panel read. Signed-out and non-subscription accounts start nothing
+  // Every claude usage process of this window (scheduled, manual, all accounts) runs after the previous one ended
+  const claudeQueue = oneAtATime();
   const claudeUsage = new ClaudeUsageMonitor(currentDir, (s) => {
     statusBar.setClaudeUsage(s);
     if (!s.checking) panel.refresh();
   }, {
-    query: (dir) => queryClaudeUsage(dir, isExplicitConfigDir(dir), { env: settingEnv() }),
+    query: (dir) => claudeQueue(() => queryClaudeUsage(dir, isExplicitConfigDir(dir), { env: settingEnv() })),
     eligible: (dir) => readAccountInfo(dir, isExplicitConfigDir(dir)).identity !== undefined,
     cachedAt: (dir) => readUsageFetchedAt(dir, isExplicitConfigDir(dir)),
   });
   statusBar.setClaudeUsage(claudeUsage.current());
+  // Manual only: every registered signed-in Claude account, one claude process at a time, so rows can be compared
+  // before switching. The result for the current account is handed to the monitor, which owns its tooltip state
+  let refreshingAll = false;
+  const refreshAllClaudeUsage = async (): Promise<void> => {
+    if (refreshingAll) return;
+    const targets = store.all()
+      .filter((a) => readAccountInfo(a.dir, isExplicitConfigDir(a.dir)).identity !== undefined)
+      .map((a) => ({ dir: a.dir, label: labelFor(a.name, claudeLabels) }));
+    if (!targets.length) {
+      void vscode.window.showInformationMessage(t('claude.usageAllNone'));
+      return;
+    }
+    refreshingAll = true;
+    try {
+      const abort = new AbortController();
+      const results = await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, cancellable: true },
+        (progress, token) => {
+          // Cancelling also ends the claude process that is running now
+          token.onCancellationRequested(() => abort.abort());
+          return queryEach(targets, async (dir) => {
+            const result = await claudeQueue(() => queryClaudeUsage(dir, isExplicitConfigDir(dir), { env: settingEnv(), signal: abort.signal }));
+            if (!abort.signal.aborted) claudeUsage.record(dir, result);
+            return result;
+          }, (target, index) => progress.report({
+            message: t('claude.usageAllProgress', { label: target.label, done: index + 1, total: targets.length }),
+            increment: index === 0 ? 0 : 100 / targets.length,
+          }), () => abort.signal.aborted);
+        },
+      );
+      panel.refresh();
+      statusBar.update();
+      // A query ended by the cancellation is neither a success nor a failure
+      const done = results.filter((r) => r.result.ok || r.result.detail !== 'cancelled' || !abort.signal.aborted);
+      const failed = done.filter((r) => !r.result.ok);
+      if (abort.signal.aborted) {
+        void vscode.window.showInformationMessage(t('claude.usageAllCancelled', { ok: done.length - failed.length, n: targets.length }));
+      } else if (!failed.length) {
+        void vscode.window.showInformationMessage(t('claude.usageAllDone', { n: results.length }));
+      }
+      if (!failed.length) return;
+      // At most three accounts are named so the notification stays readable
+      const named = failed.slice(0, 3).map(({ target, result }) => {
+        const text = result.ok ? '' : claudeUsageFailureText(result, readClaudeUsage(target.dir, isExplicitConfigDir(target.dir)) !== undefined);
+        return `${target.label} (${text})`;
+      });
+      if (failed.length > 3) named.push(t('claude.usageAllMore', { n: failed.length - 3 }));
+      void vscode.window.showWarningMessage(t('claude.usageAllFailed', { ok: done.length - failed.length, n: done.length, failures: named.join('; ') }));
+    } finally {
+      refreshingAll = false;
+    }
+  };
   // Account-info changes re-check Claude usage only after the first scheduled check, not during start-up
   let usageStarted = false;
   const checkUsage = (): void => {
@@ -188,6 +242,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
       if (e.focused) checkUsage();
     }),
     vscode.commands.registerCommand(CLAUDE_REFRESH_USAGE_COMMAND, () => claudeUsage.refresh()),
+    vscode.commands.registerCommand(CLAUDE_REFRESH_ALL_USAGE_COMMAND, () => refreshAllClaudeUsage()),
     ...(usage
       ? [vscode.commands.registerCommand(REFRESH_USAGE_COMMAND, async () => {
         if (codexRunsInWsl()) {

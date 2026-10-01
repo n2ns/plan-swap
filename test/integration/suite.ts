@@ -37,6 +37,7 @@ export async function run(): Promise<void> {
   await vscode.commands.executeCommand('planswap.accounts.focus');
   await vscode.commands.executeCommand('planswap.codex.refreshUsage');
   await vscode.commands.executeCommand('planswap.claude.refreshUsage');
+  await vscode.commands.executeCommand('planswap.claude.refreshAllUsage');
   assert.ok(readAccounts('accounts').some((a) => a.dir === newClaude));
   assert.ok(readAccounts('codex.accounts').some((a) => a.dir === newCodex));
   assert.equal(fs.existsSync(path.join(os.homedir(), '.codex', 'auth.json')), false);

@@ -81,6 +81,16 @@ export class ClaudeUsageMonitor {
     return this.refresh();
   }
 
+  /**
+   * Takes the result of a query of dir run elsewhere (refresh of all accounts) as this monitor's attempt, so its
+   * failure line and backoff follow it; ignored unless dir is still the current directory.
+   */
+  record(dir: string, result: ClaudeQueryResult): void {
+    if (!samePath(dir, this.dirOf())) return;
+    this.last = { dir, at: this.now() };
+    this.set({ checking: this.state.checking, failure: result.ok ? undefined : { dir, reason: result.reason, detail: result.detail } });
+  }
+
   private async run(): Promise<void> {
     // One follow-up when the current account changed during the query
     for (let attempt = 0; attempt < 2; attempt++) {

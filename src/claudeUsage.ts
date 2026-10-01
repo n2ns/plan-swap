@@ -37,6 +37,8 @@ export interface ClaudeQueryOptions {
   spawn?: ClaudeUsageSpawn;
   /** Variables of the Claude Code setting (settingEnv) */
   env?: Record<string, string>;
+  /** Ends the started child and settles as `failed` with detail 'cancelled' */
+  signal?: AbortSignal;
   /** Whole run; default 30000 */
   timeoutMs?: number;
   now?: () => number;
@@ -178,6 +180,44 @@ export function usageEnv(
   return env;
 }
 
+/**
+ * Runs the given tasks one after another in call order, so the scheduled check and a manual refresh of all accounts
+ * never start two claude processes at once. A failed task does not stop the next one.
+ */
+export function oneAtATime(): <T>(task: () => Promise<T>) => Promise<T> {
+  let tail: Promise<unknown> = Promise.resolve();
+  return <T>(task: () => Promise<T>): Promise<T> => {
+    const run = tail.then(task, task);
+    tail = run.catch(() => undefined);
+    return run;
+  };
+}
+
+export interface UsageTarget { dir: string; label: string }
+
+/**
+ * Queries the targets one after another (never two claude processes at once); stops before the next target once
+ * cancelled() is true. Returns each target's result in order; onStep is called before each query.
+ */
+export async function queryEach(
+  targets: UsageTarget[], query: (dir: string) => Promise<ClaudeQueryResult>,
+  onStep: (target: UsageTarget, index: number) => void = () => undefined, cancelled: () => boolean = () => false,
+): Promise<Array<{ target: UsageTarget; result: ClaudeQueryResult }>> {
+  const out: Array<{ target: UsageTarget; result: ClaudeQueryResult }> = [];
+  for (const [index, target] of targets.entries()) {
+    if (cancelled()) break;
+    onStep(target, index);
+    let result: ClaudeQueryResult;
+    try {
+      result = await query(target.dir);
+    } catch (e) {
+      result = { ok: false, reason: 'failed', detail: e instanceof Error ? e.message : String(e) };
+    }
+    out.push({ target, result });
+  }
+  return out;
+}
+
 type Attempt = { kind: 'done'; result: ClaudeQueryResult } | { kind: 'enoent' };
 
 /**
@@ -245,6 +285,7 @@ function attempt(
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      options.signal?.removeEventListener('abort', onAbort);
       stdout?.removeListener('data', onData);
       stdout?.resume();
       child.removeListener('error', onError);
@@ -273,6 +314,9 @@ function attempt(
       else done();
     };
     const timer = setTimeout(() => finish({ kind: 'done', result: { ok: false, reason: 'timeout' } }), timeoutMs);
+    const onAbort = (): void => finish({ kind: 'done', result: { ok: false, reason: 'failed', detail: 'cancelled' } });
+    if (options.signal?.aborted) onAbort();
+    else options.signal?.addEventListener('abort', onAbort, { once: true });
 
     stdout?.setEncoding('utf8');
     stdout?.on('data', onData);

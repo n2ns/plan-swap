@@ -6,11 +6,12 @@ import * as path from 'node:path';
 import { PassThrough } from 'node:stream';
 import type { SpawnOptions } from 'node:child_process';
 import {
-  CLAUDE_USAGE_MAX_AGE_MS, parseUsageCache, queryClaudeUsage, readClaudeUsage, readUsageFetchedAt, usageEnv,
+  CLAUDE_USAGE_MAX_AGE_MS, oneAtATime, parseUsageCache, queryClaudeUsage, queryEach, readClaudeUsage, readUsageFetchedAt, usageEnv,
   type ClaudeUsageChild, type ClaudeUsageSpawn,
 } from '../src/claudeUsage';
 import { ClaudeUsageMonitor, type ClaudeUsageState } from '../src/claudeUsageMonitor';
-import { claudeUsageLines } from '../src/statusBar';
+import { StatusBar, claudeUsageLines, tightestRemaining } from '../src/statusBar';
+import { statusBarItems, tooltipText } from './stubs/vscode';
 import { claudePanelSource } from '../src/accountsPanel';
 import { AccountStore } from '../src/accounts';
 import { LabelStore } from '../src/labels';
@@ -393,6 +394,105 @@ test('claudeUsageLines shows the cached windows with model scopes and only this 
     ['Usage limits unavailable: unknown error']);
   assert.deepEqual(claudeUsageLines(undefined, { checking: false, failure: { dir: '/a', reason: 'notRefreshed' } }, '/a'),
     ['Usage limits unavailable: Claude Code could not refresh them.'], 'no shown values to point at');
+});
+
+test('queryEach runs the targets one after another, keeps going after a failure and stops when cancelled', async () => {
+  const order: string[] = [];
+  let active = 0;
+  let maxActive = 0;
+  const targets = [{ dir: '/a', label: 'A' }, { dir: '/b', label: 'B' }, { dir: '/c', label: 'C' }];
+  const results = await queryEach(targets, async (dir) => {
+    active++;
+    maxActive = Math.max(maxActive, active);
+    await new Promise((r) => setImmediate(r));
+    active--;
+    order.push(dir);
+    if (dir === '/b') throw new Error('boom');
+    return { ok: true };
+  });
+  assert.equal(maxActive, 1, 'never two queries at once');
+  assert.deepEqual(order, ['/a', '/b', '/c']);
+  assert.deepEqual(results.map((r) => r.result), [{ ok: true }, { ok: false, reason: 'failed', detail: 'boom' }, { ok: true }]);
+  const steps: number[] = [];
+  const partial = await queryEach(targets, async () => ({ ok: true }), (_t, i) => steps.push(i), () => steps.length >= 2);
+  assert.equal(partial.length, 2);
+  assert.deepEqual(steps, [0, 1]);
+});
+
+test('oneAtATime runs tasks in call order without overlap, also after a failure', async () => {
+  const queue = oneAtATime();
+  const log: string[] = [];
+  let active = 0;
+  const task = (name: string, fail = false) => async (): Promise<string> => {
+    assert.equal(active, 0, 'never two tasks at once');
+    active++;
+    log.push(`start ${name}`);
+    await new Promise((r) => setImmediate(r));
+    active--;
+    if (fail) throw new Error(name);
+    return name;
+  };
+  const results = await Promise.allSettled([queue(task('a')), queue(task('b', true)), queue(task('c'))]);
+  assert.deepEqual(log, ['start a', 'start b', 'start c']);
+  assert.deepEqual(results.map((r) => r.status), ['fulfilled', 'rejected', 'fulfilled']);
+});
+
+test('queryClaudeUsage ends the running child when the signal aborts', LINUX_ONLY, async () => {
+  const tmp = makeTempHome('claude-usage-abort');
+  try {
+    const hang = fakeSpawn(() => undefined);
+    const abort = new AbortController();
+    const pending = queryClaudeUsage(path.join(tmp.home, '.claude-work'), true, { spawn: hang.spawn, signal: abort.signal, timeoutMs: 5000 });
+    await new Promise((r) => setImmediate(r));
+    abort.abort();
+    assert.deepEqual(await pending, { ok: false, reason: 'failed', detail: 'cancelled' });
+    assert.equal(hang.runs[0].child.killed, true);
+  } finally { tmp.restore(); }
+});
+
+test('the monitor takes a result recorded for the current directory only', () => {
+  const m = new ClaudeUsageMonitor(() => '/a', () => undefined, { query: async () => ({ ok: true }) });
+  m.record('/b', { ok: false, reason: 'timeout' });
+  assert.equal(m.current().failure, undefined, 'another directory is ignored');
+  m.record('/a', { ok: false, reason: 'timeout' });
+  assert.deepEqual(m.current().failure, { dir: '/a', reason: 'timeout', detail: undefined });
+  m.record('/a', { ok: true });
+  assert.equal(m.current().failure, undefined);
+});
+
+test('tightestRemaining is what is left of the window that runs out first', () => {
+  assert.equal(tightestRemaining(undefined), undefined);
+  assert.equal(tightestRemaining({ checkedAt: 0, windows: [] }), undefined);
+  assert.equal(tightestRemaining({ checkedAt: 0, windows: [{ usedPercent: 42.5 }, { usedPercent: 3 }, { usedPercent: 10, scope: 'Fable' }] }), 57);
+  assert.equal(tightestRemaining({ checkedAt: 0, windows: [{ usedPercent: 100 }] }), 0);
+});
+
+test('the status bar text shows the current Claude account with what is left; the tooltip offers both refreshes', LINUX_ONLY, () => {
+  setLocale('en');
+  const tmp = makeTempHome('status-claude-usage');
+  try {
+    fs.mkdirSync(path.join(tmp.home, '.claude'));
+    const fresh = cache({ fetchedAtMs: Date.now() - 60_000 });
+    (fresh.cachedUsageUtilization as { utilization: Record<string, unknown> }).utilization = {
+      limits: [{ kind: 'session', percent: 42, resets_at: iso(Date.now() + HOUR) }, { kind: 'weekly_all', percent: 7, resets_at: iso(Date.now() + 48 * HOUR) }],
+    };
+    fs.writeFileSync(path.join(tmp.home, '.claude.json'), JSON.stringify(fresh));
+    const memento = new MemoryMemento();
+    const bar = new StatusBar(new AccountStore(memento), new LabelStore(memento, 'claude.labels'));
+    try {
+      bar.setClaudeUsage({ checking: false });
+      const item = statusBarItems.at(-1)!;
+      assert.equal(item.text, '$(account) Claude: default 58% left');
+      const tip = tooltipText(item.tooltip);
+      assert.ok(tip.includes('command:planswap.claude.refreshUsage'));
+      assert.ok(tip.includes('command:planswap.claude.refreshAllUsage'));
+      // Signed in (identity present) but nothing displayable cached
+      fs.writeFileSync(path.join(tmp.home, '.claude.json'), JSON.stringify({ oauthAccount: { accountUuid: 'acct-1', organizationUuid: 'org-1' } }));
+      bar.update();
+      assert.ok(tooltipText(item.tooltip).includes('command:planswap.claude.refreshUsage'), 'still a signed-in account');
+      assert.equal(item.text, '$(account) Claude: default', 'no usage, no percentage');
+    } finally { bar.dispose(); }
+  } finally { tmp.restore(); }
 });
 
 test('Claude panel rows carry the cached usage of a subscription sign-in only', LINUX_ONLY, async () => {
