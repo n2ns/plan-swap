@@ -8,6 +8,7 @@ import type { AccountStore } from './accounts';
 import { EXTERNAL_NAME, labelFor, type LabelStore } from './labels';
 import type { AccountView, FromWebview, PanelMode, PanelState, RestartInfo, TabState, ToWebview } from './protocol';
 import { isSharedClaudeAccount } from './claudeShare';
+import { readClaudeUsage } from './claudeUsage';
 import { getLocale, t } from './i18n';
 import { comparablePath, isWindows } from './platform';
 
@@ -40,7 +41,7 @@ export function claudePanelSource(store: AccountStore, labels: LabelStore): Pane
       label: labelFor(a.name, labels),
       dir: a.dir,
       dirLabel: tildify(a.dir),
-      ...viewInfo(readAccountInfo(a.dir, isExplicitConfigDir(a.dir))),
+      ...claudeRowInfo(a.dir),
       isCurrent: i === curIdx,
       shared: a.name === DEFAULT_NAME ? undefined : isSharedClaudeAccount(a.dir),
     }));
@@ -51,7 +52,7 @@ export function claudePanelSource(store: AccountStore, labels: LabelStore): Pane
         label: labelFor(EXTERNAL_NAME, labels),
         dir: cur,
         dirLabel: tildify(cur),
-        ...viewInfo(readAccountInfo(cur, isExplicitConfigDir(cur))),
+        ...claudeRowInfo(cur),
         isCurrent: true,
       });
     }
@@ -315,6 +316,14 @@ export function checkMessage(raw: unknown): FromWebview | undefined {
  * The account-info fields a row shows. Picked explicitly rather than spread, so fields meant to stay in the host
  * (the identity comparison key) never reach the Webview.
  */
+// Account info plus the usage Claude Code cached in the same file; only subscription sign-ins (oauthAccount) have usage
+function claudeRowInfo(dir: string): Pick<AccountView, 'email' | 'plan' | 'loggedIn' | 'usage'> {
+  const explicit = isExplicitConfigDir(dir);
+  const info = readAccountInfo(dir, explicit);
+  const usage = info.identity !== undefined ? readClaudeUsage(dir, explicit) : undefined;
+  return usage ? { ...viewInfo(info), usage } : viewInfo(info);
+}
+
 export function viewInfo(info: { email?: string; plan?: string; loggedIn: boolean }): Pick<AccountView, 'email' | 'plan' | 'loggedIn'> {
   return { email: info.email, plan: info.plan, loggedIn: info.loggedIn };
 }

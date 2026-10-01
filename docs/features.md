@@ -74,6 +74,7 @@ Each row shows:
 | Email | The email when available; "Logged in" with a green dot when signed in without email; no line when signed out without email |
 | Directory | Current row only, monospace, home directory shown as `~` |
 | Tag group | Plan tag (when there is a plan, colors in 2.2); a "Not logged in" capsule tag when signed out |
+| Usage | Subscription sign-ins with a cached usage observation show it like a Codex row (see [Claude usage limits](#claude-usage-limits)); no line otherwise |
 | Sign-in hint | Rows that are signed out and not current additionally show `Click "Log in" to log in from a terminal, or switch and log in from the Claude panel` |
 | Hover tooltips | Rows, names, emails, directories and plan tags have no tooltip; only buttons and badges do |
 
@@ -145,12 +146,13 @@ After clicking the pencil icon after the name of a named account row, the row's 
 
 - On the right it shows `$(account) Claude: <display name of the current account>` (the alias for accounts that have one); when the current account is an external directory it shows `Claude: External directory` (localized).
 - The first tooltip line is the email (without an email, "Logged in" or "Not logged in" follows the account's sign-in state), followed by ` · <plan>` when there is a plan; the second line is the directory.
+- For a subscription sign-in, the tooltip also lists the account's usage limits with a "Refresh usage" link, see [Claude usage limits](#claude-usage-limits).
 - A click opens the "PlanSwap" sidebar.
 - It updates at the same times as the sidebar (see section 6), and also immediately when `planswap.language` changes.
 
 ## 4. Commands
 
-All six commands appear in the Command Palette in the category "Claude Account" ("Claude 账号"). Buttons, double-clicks, inputs and other actions in the panel send messages directly to the extension to run the corresponding flow, without going through the Command Palette; when a command that needs an account (switch, share, remove, open terminal) is run from the Command Palette, a QuickPick asks for the account first (each item shows the display name, the email or the correct "Logged in"/"Not logged in" state, and the directory); when there is nothing to pick, "No accounts to choose from." is shown. Messages and terminal names always use the account's display name.
+All seven commands appear in the Command Palette in the category "Claude Account" ("Claude 账号"). Buttons, double-clicks, inputs and other actions in the panel send messages directly to the extension to run the corresponding flow, without going through the Command Palette; when a command that needs an account (switch, share, remove, open terminal) is run from the Command Palette, a QuickPick asks for the account first (each item shows the display name, the email or the correct "Logged in"/"Not logged in" state, and the directory); when there is nothing to pick, "No accounts to choose from." is shown. Messages and terminal names always use the account's display name.
 
 ### 4.1 Switch account `planswap.switchAccount`
 
@@ -274,6 +276,10 @@ Entry point: the `debug-disconnect` button "Unlink from the default account: the
 5. Notification "X is now independent: removed N link(s), copied <list>." ("nothing" when nothing was copied); an exception shows "Unlinking X stopped: <reason>".
 6. The panel is refreshed; the row loses the badge and shows the link button again.
 
+### 4.8 Refresh usage limits `planswap.claude.refreshUsage`
+
+Entry points: the Command Palette ("Refresh Claude Usage Limits") and the "Refresh usage" link in the Claude part of the status bar tooltip. Queries the current account's usage limits now (see [Claude usage limits](#claude-usage-limits)); a query that is already running is joined. Nothing happens, and no message appears, for a signed-out or non-subscription account.
+
 ## 5. Auto-discovery, shared and independent accounts
 
 ### Auto-discovery of `~/.claude-*`
@@ -349,6 +355,7 @@ The panel and the status bar refresh when:
 - after adding or removing an account;
 - a terminal created by this extension closes;
 - the refresh button is clicked;
+- the usage cache in an account's `.claude.json` changes (the watcher above), and once a minute so that expired windows disappear;
 - the `planswap.language` setting changes (both are re-rendered in the new language).
 
 ## 7. Safety checks before deleting a directory
@@ -592,7 +599,20 @@ PlanSwap asks the official `codex` CLI (`codex app-server` with the account's `C
 
 ### Codex account usage observations
 
-Signed-in ChatGPT account rows show each last-observed usage window as a remaining percentage (`100 - usedPercent`, rounded to at most two decimal places) and a progress bar. Labels follow the reported duration, such as "5-hour limit" and "7-day limit". Each window with a reported reset time shows that date/time below its progress bar in the local timezone, using month/day and 24-hour hours/minutes without year or seconds (Chinese: "重置时间：10月4日 07:30"); no reset label is shown when the time is missing. The localized collection date/time appears only when hovering over the usage area; there is no visible collection timestamp or "not live" label. This helps compare previously used accounts before switching. Only the effective account is queried; an account without an observation has no usage line. Use **Refresh Codex Usage Limits** to update the effective account. Observations remain available after reopening the editor, expire after 24 hours, and hide individual windows, including their reset labels, once the current time reaches their reset time. The existing minute refresh updates expiry (up to one minute of display delay). A changed sign-in file hides old values until the account is queried again. Claude rows and API-key accounts have no usage observations. See [Codex design 8.7](codex-design.md#87-usage-limits) for storage and scheduling.
+Signed-in ChatGPT account rows show each last-observed usage window as a remaining percentage (`100 - usedPercent`, rounded to at most two decimal places) and a progress bar. Labels follow the reported duration, such as "5-hour limit" and "7-day limit". Each window with a reported reset time shows that date/time below its progress bar in the local timezone, using month/day and 24-hour hours/minutes without year or seconds (Chinese: "重置时间：10月4日 07:30"); no reset label is shown when the time is missing. The localized collection date/time appears only when hovering over the usage area; there is no visible collection timestamp or "not live" label. This helps compare previously used accounts before switching. Only the effective account is queried; an account without an observation has no usage line. Use **Refresh Codex Usage Limits** to update the effective account. Observations remain available after reopening the editor, expire after 24 hours, and hide individual windows, including their reset labels, once the current time reaches their reset time. The existing minute refresh updates expiry (up to one minute of display delay). A changed sign-in file hides old values until the account is queried again. API-key accounts have no usage observations; Claude rows are described in [Claude usage limits](#claude-usage-limits). See [Codex design 8.7](codex-design.md#87-usage-limits) for storage and scheduling.
+
+### Claude usage limits
+
+The Claude part of the status bar tooltip shows the **usage limits of the current Claude account** when it is a subscription sign-in ([Claude design 6.9](design.md#69-claude-usage-limits)):
+
+- one line per limit window as for Codex, e.g. "5h: 42% used, resets 14:30" and "7d: 10% used, resets Oct 8, 15:59", and "7d · Fable: 3% used, resets …" for a model-specific window (the model name as Claude Code reports it), then "Checked {time}" (the time of Claude Code's last fetch);
+- "Checking usage limits…" while a query runs; for the current account only, "Usage limits unavailable: the claude command was not found." / "…: claude did not answer in time." / "…: Claude Code reported none for this account." / "…: <detail>", or "Usage limits could not be refreshed; the values shown are from the last successful check." when the query ran but Claude Code could not fetch (for example offline);
+- a "Refresh usage" link, which runs `planswap.claude.refreshUsage`;
+- nothing for signed-out and non-subscription accounts, and nothing is started for them.
+
+Signed-in Claude rows show the usage that Claude Code last cached in that account's own `.claude.json`, rendered like Codex observations: remaining percentage with a progress bar per window, labels such as "5-hour limit" and "7-day limit" (a model-specific window "7-day limit · Fable"), the reset date/time below the bar, and the collection time on hover. This covers every registered signed-in account, not only the current one, but only the current account is queried, so another row shows what its last query (in any window or from a terminal) left behind. A row has no usage line when nothing was cached, the cache is older than 24 hours, or it belongs to a different sign-in than the one now in that directory (after a re-login the old values are hidden until the new account is queried); a window disappears at its reset time (within a minute). Missing data never means 0%. There is no separate saved history.
+
+PlanSwap runs `claude -p /usage` (a local Claude Code command that sends no prompt) with the account's `CLAUDE_CONFIG_DIR`, unset for the default account, and Claude Code refreshes the cache itself. It checks a few seconds after activation, then at most every 15 minutes and only while the window is focused, at once when the current account changed, and on demand.
 
 ## Diagnostics report
 

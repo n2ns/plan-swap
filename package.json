@@ -116,6 +116,12 @@
         "icon": "$(debug-restart)"
       },
       {
+        "command": "planswap.claude.refreshUsage",
+        "title": "%command.claude.refreshUsage%",
+        "category": "%category.claude%",
+        "icon": "$(refresh)"
+      },
+      {
         "command": "planswap.codex.refreshUsage",
         "title": "%command.codex.refreshUsage%",
         "category": "%category.codex%",

@@ -2,7 +2,7 @@ import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { REFRESH_USAGE_COMMAND, StatusBar, usageLines } from '../src/statusBar';
+import { CLAUDE_REFRESH_USAGE_COMMAND, REFRESH_USAGE_COMMAND, StatusBar, claudeUsageLines, usageLines } from '../src/statusBar';
 import { AccountStore } from '../src/accounts';
 import { CodexAccountStore } from '../src/codex/codexStore';
 import { LabelStore } from '../src/labels';
@@ -127,7 +127,7 @@ describe('Codex usage limits in the tooltip', () => {
         bar.setCodexUsage(ok);
         const tip = item.tooltip as MarkdownString;
         assert.ok(tip instanceof MarkdownString);
-        assert.deepEqual(tip.isTrusted, { enabledCommands: [REFRESH_USAGE_COMMAND] });
+        assert.deepEqual(tip.isTrusted, { enabledCommands: [CLAUDE_REFRESH_USAGE_COMMAND, REFRESH_USAGE_COMMAND] });
         assert.match(tooltipText(tip), /5h: 42% used, resets /);
         assert.ok(tip.value.includes(`(command:${REFRESH_USAGE_COMMAND})`));
         // The status bar text itself stays short

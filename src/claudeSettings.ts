@@ -57,6 +57,19 @@ export function settingEnvNames(): { set: string[]; cleared: string[] } {
   return { set: [...last].filter(([, v]) => v).map(([n]) => n), cleared: [...last].filter(([, v]) => !v).map(([n]) => n) };
 }
 
+/**
+ * The variables the setting passes to Claude Code besides CLAUDE_CONFIG_DIR, last entry winning; an empty value is
+ * passed as '' (overriding the inherited value), as the Claude extension does. Applied to the claude processes PlanSwap
+ * starts so they see what the Claude extension's processes see.
+ */
+export function settingEnv(): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const e of readEntries()) {
+    if (!isEnvName(e.name)) env[e.name] = e.value === undefined || e.value === null ? '' : String(e.value);
+  }
+  return env;
+}
+
 export function currentDir(): string {
   return getConfiguredConfigDir() ?? defaultDir();
 }

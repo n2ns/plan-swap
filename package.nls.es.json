@@ -17,6 +17,7 @@
   "command.codex.removeAccount": "Eliminar cuenta de Codex",
   "command.codex.openTerminal": "Ejecutar codex en el terminal con esta cuenta",
   "command.codex.restartServer": "Aplicar cuenta de Codex: reiniciar o ver instrucciones",
+  "command.claude.refreshUsage": "Actualizar límites de uso de Claude",
   "command.codex.refreshUsage": "Actualizar límites de uso de Codex",
   "command.tools.openClaudeMd": "Abrir CLAUDE.md global",
   "category.tools": "PlanSwap",

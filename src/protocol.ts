@@ -23,8 +23,9 @@ export interface AccountView {
   isSelected?: boolean;
   // Named rows only: true = shared with the default account (links), false = independent; undefined for default / external
   shared?: boolean;
-  // Codex only: a historical observation, never a live quota or a prediction after a reset
-  usage?: { windows: Array<{ usedPercent: number; windowMinutes?: number; resetsAt?: number }>; checkedAt: number };
+  // A historical observation, never a live quota or a prediction after a reset. Codex: the last query result; Claude:
+  // the usage cache in the account's own info file. scope names a model-specific limit (e.g. "Fable"), Claude only
+  usage?: { windows: Array<{ usedPercent: number; windowMinutes?: number; resetsAt?: number; scope?: string }>; checkedAt: number };
 }
 
 // Editor connection context: local desktop (including WSLg), WSL remote, or another remote

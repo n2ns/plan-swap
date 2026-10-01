@@ -49,10 +49,15 @@ function account(mode: PanelMode, name: 'default' | 'work' | 'empty'): AccountVi
   } else if (name === 'work') {
     base.email = `${mode}-work-with-a-long-address@example.invalid`;
     base.plan = mode === 'claude' ? 'Max 20x' : 'Pro';
+    const now = Math.floor(Date.now() / 1000);
     base.usage = {
-      windows: [
-        { usedPercent: 42, windowMinutes: 300, resetsAt: Math.floor(Date.now() / 1000) + 3 * 60 * 60 },
-        { usedPercent: 86, windowMinutes: 10080, resetsAt: Math.floor(Date.now() / 1000) + 3 * 24 * 60 * 60 },
+      windows: mode === 'claude' ? [
+        { usedPercent: 42, windowMinutes: 300, resetsAt: now + 3 * 60 * 60 },
+        { usedPercent: 86, windowMinutes: 10080, resetsAt: now + 3 * 24 * 60 * 60 },
+        { usedPercent: 25, windowMinutes: 10080, resetsAt: now + 4 * 24 * 60 * 60, scope: 'Fable' },
+      ] : [
+        { usedPercent: 42, windowMinutes: 300, resetsAt: now + 3 * 60 * 60 },
+        { usedPercent: 86, windowMinutes: 10080, resetsAt: now + 3 * 24 * 60 * 60 },
       ],
       checkedAt: Date.UTC(2026, 8, 30, 12),
     };

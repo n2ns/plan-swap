@@ -189,10 +189,12 @@ function usageHistory(a: AccountView): HTMLElement | null {
   return h('div', { class: 'row-usage', title: t('usage.observed', { time }) },
     ...a.usage.windows.map((w) => {
       const minutes = w.windowMinutes;
-      const duration = minutes === undefined ? t('usage.window')
+      const limit = minutes === undefined ? t('usage.window')
         : minutes % 1440 === 0 ? t('usage.days', { n: minutes / 1440 })
           : minutes % 60 === 0 ? t('usage.hours', { n: minutes / 60 })
             : t('usage.minutes', { n: minutes });
+      // Claude model-specific limits carry the model name (account-independent text, rendered via textContent)
+      const duration = w.scope ? t('usage.scoped', { limit, scope: w.scope }) : limit;
       const remaining = Number((100 - w.usedPercent).toFixed(2));
       const label = t('usage.remaining', { percent: remaining });
       return h('div', { class: 'usage-window' },
@@ -662,7 +664,7 @@ class Page {
         loginStatus(a),
         // The current account gets an extra line with its directory
         a.isCurrent && h('div', { class: 'row-dir' }, a.dirLabel),
-        this.mode === 'codex' && usageHistory(a),
+        usageHistory(a),
         h('div', { class: 'row-foot' }, tags, actions),
         !a.loggedIn && !a.isCurrent && h('div', { class: 'row-hint' }, t(`${this.mode}.loginHint`)),
         editing && this.renameError && h('div', { class: 'row-error', role: 'alert' }, this.renameError),

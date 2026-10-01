@@ -6,11 +6,13 @@ import { claudeCredentialOverrides, oneDriveHome, pathVarsWithSpaces } from './e
 import { AccountsPanel, VIEW_ID, claudePanelSource, type PanelSource } from './accountsPanel';
 import { LabelStore, labelFor } from './labels';
 import { FileMemento } from './fileState';
-import { setClaudeSettingEnv } from './paths';
+import { readAccountInfo, setClaudeSettingEnv } from './paths';
 import { ensureCodexLinks, isSharedCodexAccount } from './codex/codexShare';
-import { REFRESH_USAGE_COMMAND, StatusBar } from './statusBar';
+import { CLAUDE_REFRESH_USAGE_COMMAND, REFRESH_USAGE_COMMAND, StatusBar } from './statusBar';
 import { registerCommands } from './commands';
-import { affectsSetting, settingEnvNames } from './claudeSettings';
+import { affectsSetting, currentDir, isExplicitConfigDir, settingEnv, settingEnvNames } from './claudeSettings';
+import { queryClaudeUsage } from './claudeUsage';
+import { ClaudeUsageMonitor } from './claudeUsageMonitor';
 import { CodexAccountStore } from './codex/codexStore';
 import { codexPanelSource, codexRunsInWsl, registerCodexCommands, restartServerInteractive } from './codex/codexCommands';
 import { registerToolCommands, runTool, type TerminalCheck, type ToolDeps } from './tools';
@@ -99,8 +101,23 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     })
     : undefined;
   if (usage) statusBar.setCodexUsage(usage.current());
+  // Usage limits of this window's current Claude account: claude refreshes the cache in the account's info file, which
+  // the status bar and the panel read. Signed-out and non-subscription accounts start nothing
+  const claudeUsage = new ClaudeUsageMonitor(currentDir, (s) => {
+    statusBar.setClaudeUsage(s);
+    if (!s.checking) panel.refresh();
+  }, {
+    query: (dir) => queryClaudeUsage(dir, isExplicitConfigDir(dir), { env: settingEnv() }),
+    eligible: (dir) => readAccountInfo(dir, isExplicitConfigDir(dir)).identity !== undefined,
+  });
+  statusBar.setClaudeUsage(claudeUsage.current());
+  // Account-info changes re-check Claude usage only after the first scheduled check, not during start-up
+  let usageStarted = false;
   const checkUsage = (): void => {
-    if (usage && vscode.window.state.focused && !codexRunsInWsl()) void usage.refreshIfStale();
+    usageStarted = true;
+    if (!vscode.window.state.focused) return;
+    void claudeUsage.refreshIfStale();
+    if (usage && !codexRunsInWsl()) void usage.refreshIfStale();
   };
   const firstUsageCheck = setTimeout(checkUsage, USAGE_FIRST_CHECK_MS);
   const usageTick = setInterval(checkUsage, USAGE_TICK_MS);
@@ -160,6 +177,8 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     // effective account's auth.json changed (sign-in, re-login), and look for accounts signed in to the same identity
     panel.onDidChange(() => {
       statusBar.update();
+      // A sign-in of the current Claude account is checked at once; a recent check is not repeated
+      if (usageStarted && vscode.window.state.focused) void claudeUsage.refreshIfStale();
       if (usage && !codexRunsInWsl()) void usage.refreshIfAuthChanged();
       identityWarnings.check();
     }),
@@ -167,6 +186,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     vscode.window.onDidChangeWindowState((e) => {
       if (e.focused) checkUsage();
     }),
+    vscode.commands.registerCommand(CLAUDE_REFRESH_USAGE_COMMAND, () => claudeUsage.refresh()),
     ...(usage
       ? [vscode.commands.registerCommand(REFRESH_USAGE_COMMAND, async () => {
         if (codexRunsInWsl()) {
@@ -183,6 +203,8 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
       setClaudeSettingEnv(settingEnvNames());
       panel.refresh();
       statusBar.update();
+      // A switched account is checked at once (when its last check is not recent)
+      checkUsage();
     }),
     // Language setting changes apply immediately: re-render the panel and status bar
     watchLocale(() => {

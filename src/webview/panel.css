@@ -322,6 +322,7 @@ body {
 .row-usage { grid-area: usage; min-width: 0; margin-top: 5px; font-size: 0.82em; overflow-wrap: anywhere; }
 .usage-window + .usage-window { margin-top: 7px; }
 .usage-labels { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px; margin-bottom: 4px; color: var(--muted); }
+.usage-labels span:first-child { min-width: 0; overflow-wrap: anywhere; }
 .usage-labels span:last-child { color: var(--ink); font-variant-numeric: tabular-nums; }
 .usage-track { height: 4px; border-radius: var(--radius-pill); overflow: hidden; background: var(--line-strong); }
 .usage-fill { height: 100%; border-radius: inherit; background: var(--ink); }

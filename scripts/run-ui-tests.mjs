@@ -13,6 +13,12 @@ const widths = [200, 240, 280, 340, 420];
 const observed = ['Last observed: ', '采集于 ', 'Última consulta: ', '取得日時: '];
 const resets = { en: 'Resets: ', 'zh-cn': '重置时间：', es: 'Se restablece: ', ja: 'リセット日時: ' };
 const durations = { en: ['5-hour limit', '7-day limit'], 'zh-cn': ['5 小时限额', '7 天限额'], es: ['Límite de 5 h', 'Límite de 7 días'], ja: ['5 時間の上限', '7 日間の上限'] };
+const scopedDurations = {
+  en: ['5-hour limit', '7-day limit', '7-day limit · Fable'],
+  'zh-cn': ['5 小时限额', '7 天限额', '7 天限额 · Fable'],
+  es: ['Límite de 5 h', 'Límite de 7 días', 'Límite de 7 días · Fable'],
+  ja: ['5 時間の上限', '7 日間の上限', '7 日間の上限 · Fable'],
+};
 const remaining = {
   en: (percent) => `${percent}% remaining`,
   'zh-cn': (percent) => `剩余 ${percent}%`,
@@ -20,6 +26,9 @@ const remaining = {
   ja: (percent) => `残り ${percent}%`,
 };
 const results = { cases: [], interactions: [], window: null, failures: [], consoleErrors: [] };
+// Headless by default with a fixed 100% viewport; --headed opens a full-screen window on the display instead
+const headed = process.argv.includes('--headed');
+const HEADLESS_VIEWPORT = { width: 1920, height: 1080 };
 let preview;
 let context;
 let page;
@@ -150,14 +159,67 @@ async function runCase(locale, width) {
   const claude = await page.evaluate(() => {
     const app = document.querySelector('#app');
     const rows = [...document.querySelectorAll('#panel-claude .row')];
+    const rect = (el) => {
+      const r = el.getBoundingClientRect();
+      return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height };
+    };
+    const intersects = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+    const usageRow = document.querySelector('#panel-claude .row[data-dir="/fixture/.claude-work"]');
+    const usage = usageRow.querySelector('.row-usage');
+    const actions = usageRow.querySelector('.row-actions');
+    const usageState = window.preview.state().claude.accounts.find((a) => a.dir === '/fixture/.claude-work').usage;
     return {
       rows: rows.length,
       visible: getComputedStyle(document.querySelector('#panel-claude')).display !== 'none',
-      horizontalOverflow: app.scrollWidth > app.clientWidth || rows.some((item) => item.scrollWidth > item.clientWidth),
+      horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+        || app.scrollWidth > app.clientWidth || rows.some((item) => item.scrollWidth > item.clientWidth),
       usageCount: document.querySelectorAll('#panel-claude .row-usage').length,
+      usageVisible: !!usage && rect(usage).width > 0 && rect(usage).height > 0,
+      usageActionsOverlap: intersects(rect(usage), rect(actions)),
+      emptyUsage: !!document.querySelector('#panel-claude .row[data-dir="/fixture/.claude-empty"] .row-usage'),
+      defaultUsage: !!document.querySelector('#panel-claude .row[data-dir="/fixture/.claude"] .row-usage'),
+      windows: [...usage.querySelectorAll('.usage-window')].map((item, index) => {
+        const labels = item.querySelector('.usage-labels');
+        const track = item.querySelector('.usage-track');
+        const reset = item.querySelector('.usage-reset');
+        return {
+          text: labels.textContent, label: track.getAttribute('aria-label'),
+          first: labels.firstElementChild.textContent,
+          value: track.getAttribute('aria-valuenow'),
+          resetVisible: !!reset && rect(reset).width > 0 && rect(reset).height > 0,
+          resetActionsOverlap: !!reset && intersects(rect(reset), rect(actions)),
+          resetTime: new Date(usageState.windows[index].resetsAt * 1000).toLocaleString(document.documentElement.lang, {
+            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+          }),
+          resetText: reset?.textContent,
+          overlap: intersects(rect(labels), rect(track)),
+          overflow: item.scrollWidth > item.clientWidth || labels.scrollWidth > labels.clientWidth,
+        };
+      }),
     };
   });
-  assert.deepEqual(claude, { rows: 3, visible: true, horizontalOverflow: false, usageCount: 0 });
+  assert.equal(claude.rows, 3);
+  assert.equal(claude.visible, true);
+  assert.equal(claude.horizontalOverflow, false, `claude horizontal overflow at ${name(locale, width)}`);
+  assert.equal(claude.usageCount, 1);
+  assert.equal(claude.usageVisible, true);
+  assert.equal(claude.usageActionsOverlap, false, `claude usage overlaps actions at ${name(locale, width)}`);
+  assert.equal(claude.emptyUsage, false);
+  assert.equal(claude.defaultUsage, false);
+  assert.equal(claude.windows.length, 3);
+  for (const [index, percent] of [58, 14, 75].entries()) {
+    const window = claude.windows[index];
+    assert.equal(window.label, scopedDurations[locale][index]);
+    assert.equal(window.first, window.label, `aria-label differs from visible label at ${name(locale, width)}`);
+    assert.ok(window.text.includes(remaining[locale](percent)));
+    assert.equal(window.value, String(percent));
+    assert.equal(window.resetVisible, true);
+    assert.equal(window.resetText, resets[locale] + window.resetTime);
+    assert.equal(window.resetActionsOverlap, false, `claude reset date overlaps actions at ${name(locale, width)}`);
+    assert.equal(window.overlap, false, `claude usage labels overlap track at ${name(locale, width)}`);
+    assert.equal(window.overflow, false, `claude usage window overflow at ${name(locale, width)}`);
+  }
+  await page.screenshot({ path: path.join(output, `${name(locale, width)}-claude.png`) });
   results.cases.push({ locale, width, mode: 'claude', passed: true, ...claude });
 }
 
@@ -315,19 +377,22 @@ try {
   await mkdir(output, { recursive: true });
   profile = await mkdtemp(path.join(os.tmpdir(), 'planswap-ui-'));
   preview = await startPreview();
-  context = await chromium.launchPersistentContext(profile, {
-    headless: false, viewport: null, args: ['--start-fullscreen', '--disable-gpu'],
-  });
+  context = await chromium.launchPersistentContext(profile, headed
+    ? { headless: false, viewport: null, args: ['--start-fullscreen', '--disable-gpu'] }
+    : { headless: true, viewport: HEADLESS_VIEWPORT, deviceScaleFactor: 1, args: ['--disable-gpu'] });
   page = context.pages()[0] ?? await context.newPage();
   page.on('pageerror', (error) => results.consoleErrors.push(error.message));
   page.on('console', (message) => {
     if (message.type() === 'error' || message.type() === 'warning') results.consoleErrors.push(message.text());
   });
-  const cdp = await context.newCDPSession(page);
-  const { windowId } = await cdp.send('Browser.getWindowForTarget');
-  await cdp.send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'fullscreen' } });
-  const bounds = await cdp.send('Browser.getWindowBounds', { windowId });
-  assert.equal(bounds.bounds.windowState, 'fullscreen', 'browser must be full-screen');
+  let bounds;
+  if (headed) {
+    const cdp = await context.newCDPSession(page);
+    const { windowId } = await cdp.send('Browser.getWindowForTarget');
+    await cdp.send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'fullscreen' } });
+    bounds = await cdp.send('Browser.getWindowBounds', { windowId });
+    assert.equal(bounds.bounds.windowState, 'fullscreen', 'browser must be full-screen');
+  }
   // The synthetic page has no favicon; avoid an unrelated browser request warning.
   await page.route('**/favicon.ico', (route) => route.fulfill({ status: 204 }));
   await page.goto(preview.url);
@@ -340,12 +405,18 @@ try {
     viewportWidth: innerWidth, viewportHeight: innerHeight,
     zoomScale: visualViewport.scale, devicePixelRatio,
   }));
-  assert.equal(bounds.bounds.width, display.screenWidth, 'full-screen window must fill the display width');
-  assert.equal(bounds.bounds.height, display.screenHeight, 'full-screen window must fill the display height');
-  assert.equal(display.viewportWidth, display.screenWidth, 'page must fill the display width');
-  assert.equal(display.viewportHeight, display.screenHeight, 'page must fill the display height');
+  if (headed) {
+    assert.equal(bounds.bounds.width, display.screenWidth, 'full-screen window must fill the display width');
+    assert.equal(bounds.bounds.height, display.screenHeight, 'full-screen window must fill the display height');
+    assert.equal(display.viewportWidth, display.screenWidth, 'page must fill the display width');
+    assert.equal(display.viewportHeight, display.screenHeight, 'page must fill the display height');
+  } else {
+    assert.equal(display.viewportWidth, HEADLESS_VIEWPORT.width, 'page must fill the headless viewport width');
+    assert.equal(display.viewportHeight, HEADLESS_VIEWPORT.height, 'page must fill the headless viewport height');
+    assert.equal(display.devicePixelRatio, 1, 'headless pages render at device scale 1');
+  }
   assert.equal(display.zoomScale, 1, 'browser zoom must remain at 100%');
-  results.window = { bounds: bounds.bounds, display, viewportEmulation: false };
+  results.window = { headless: !headed, bounds: bounds?.bounds, display, viewportEmulation: !headed };
   for (const locale of locales) for (const width of widths) await runCase(locale, width);
   for (const locale of locales) for (const width of widths) await restartControls(locale, width);
   await usageEndpoints();

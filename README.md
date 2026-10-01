@@ -6,15 +6,13 @@
 
 Switch between the Claude Code and Codex subscription accounts you own (Claude Pro / Max, ChatGPT Plus / Pro…) from a VS Code sidebar, without signing out and back in. Built for VS Code WSL remote windows and native Windows.
 
-> **WSL/Linux and native Windows.** macOS is not supported. See [Native Windows](#native-windows).
+> **WSL/Linux or native Windows, with a VS Code 1.107+ compatible editor.** macOS is not supported. See [Requirements](#requirements) and [Native Windows](#native-windows).
 
-[![VS Code](https://img.shields.io/badge/VS_Code-1.107%2B-007ACC?style=flat)](https://code.visualstudio.com/)
-[![Environment: WSL and Windows](https://img.shields.io/badge/Environment-WSL%20%7C%20Windows-0078D4?style=flat)](#requirements)
+[![Version](https://img.shields.io/visual-studio-marketplace/v/n2ns.planswap?style=flat&label=version)](https://marketplace.visualstudio.com/items?itemName=n2ns.planswap)
 [![Install from VS Marketplace](https://img.shields.io/badge/VS_Marketplace-Install-007ACC?style=flat)](https://marketplace.visualstudio.com/items?itemName=n2ns.planswap)
-[![Open VSX](https://img.shields.io/open-vsx/v/n2ns/planswap?style=flat&label=Open%20VSX&cacheSeconds=10800)](https://open-vsx.org/extension/n2ns/planswap)
-[![License](https://img.shields.io/github/license/n2ns/planswap?style=flat&cacheSeconds=10800)](LICENSE)
-[![Stars](https://img.shields.io/github/stars/n2ns/planswap?style=flat&logo=github&cacheSeconds=10800)](https://github.com/n2ns/planswap/stargazers)
-[![Last Commit](https://img.shields.io/github/last-commit/n2ns/planswap?style=flat&cacheSeconds=10800)](https://github.com/n2ns/planswap/commits/main)
+[![Open VSX downloads](https://img.shields.io/open-vsx/dt/n2ns/planswap?style=flat&label=Open%20VSX%20downloads&cacheSeconds=86400)](https://open-vsx.org/extension/n2ns/planswap)
+[![CI](https://img.shields.io/github/actions/workflow/status/n2ns/planswap/test.yml?branch=main&style=flat&label=CI)](https://github.com/n2ns/planswap/actions/workflows/test.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat)](LICENSE)
 
 ![PlanSwap concept illustration showing separate Claude Code and Codex account switching panels](resources/planswap-banner.webp)
 
@@ -24,6 +22,7 @@ Switch between the Claude Code and Codex subscription accounts you own (Claude P
 - **Keep accounts signed in**: sign in once per account, then switch from the sidebar. Codex switches require a restart (see below).
 - **Linked or independent accounts**: reuse the default account's setup, or keep separate settings and session histories.
 - **Display names**: give named accounts labels that are easy to recognize.
+- **Claude usage limits**: hover the status bar item to see the current Claude account's session and weekly limits, including model-specific ones. Every signed-in Claude account row shows the values its last check left in that account's own folder; values older than 24 hours are not shown.
 - **Codex usage limits**: hover the status bar item to see the current Codex account's usage limits and reset times. Account rows retain the last observation with its collection time and a "not live" label; missing observations are not shown as zero usage.
 - **Handy tools**: open your rules and settings, update the CLI, check installed versions and reload the editor.
 - **English, Simplified Chinese, Spanish and Japanese UI**, switchable in the settings.
@@ -139,11 +138,11 @@ PlanSwap also runs in a local Windows editor (no remote window). Claude switchin
 
 ## Privacy
 
-Account management runs locally in your WSL environment or Windows user profile. PlanSwap includes no telemetry or analytics and makes no network requests of its own. To show Codex usage limits, it runs the official `codex` CLI with the current account's folder, which asks OpenAI's service as the CLI always does.
+Account management runs locally in your WSL environment or Windows user profile. PlanSwap includes no telemetry or analytics and makes no network requests of its own. To show usage limits, it runs the official `claude` CLI (`claude -p /usage`, which sends no prompt) or `codex` CLI with the current account's folder, which asks Anthropic's or OpenAI's service as the CLI always does.
 
 - **Local storage**: account lists, display names and hidden-account records are saved in `~/.config/planswap/state.json` inside each WSL environment (on Windows, `%USERPROFILE%\.config\planswap\state.json`). The selected sidebar tab is saved in the editor's extension storage.
 - **Usage observations**: the same local state file stores Codex quota values, collection times, account directory paths and sign-in file metadata, without tokens or account identity claims. Observations survive restarts, hide when the sign-in file changes, and expire after their reset time or 24 hours.
-- **Account information**: email and plan details are read locally for display. PlanSwap never reads the contents of Claude's `.credentials.json`. It reads Codex's `auth.json` locally and decodes the `id_token` payload for account information and identity comparison, but never copies, swaps or rewrites the file, or sends raw tokens to the sidebar. Account identifiers used to detect two accounts signed in to the same account stay in memory and are never shown or saved.
+- **Account information**: email and plan details are read locally for display. PlanSwap never reads the contents of Claude's `.credentials.json`; Claude usage values come from the usage cache Claude Code keeps in the account's `.claude.json`. It reads Codex's `auth.json` locally and decodes the `id_token` payload for account information and identity comparison, but never copies, swaps or rewrites the file, or sends raw tokens to the sidebar. Account identifiers used to detect two accounts signed in to the same account stay in memory and are never shown or saved.
 - **Configuration changes**: switching updates the settings that select an account. Enabling Codex switching adds configuration to `~/.profile` and `~/.bashrc` after confirmation (on Windows it sets the user environment variable `CODEX_HOME` instead). Linking accounts shares settings and history; it never links or copies their login credential files.
 - **Deleting accounts**: removing a row does not delete its files unless you separately confirm directory deletion. Deleting the directory permanently removes that account's login and local data. Shared data in the default account is kept.
 

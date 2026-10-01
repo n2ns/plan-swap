@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as fs from 'node:fs';
-import { claudeJsonPath, findSameDir, readAccountInfo } from './paths';
+import { claudeJsonPath, findSameDir, readAccountInfo, samePath } from './paths';
 import { currentDir, isExplicitConfigDir } from './claudeSettings';
 import type { AccountStore } from './accounts';
 import { EXTERNAL_NAME, labelFor, type LabelStore } from './labels';
@@ -11,8 +11,11 @@ import { effectiveDir, isEnabled, readSelectedDir } from './codex/codexState';
 import { codexRunsInWsl } from './codex/codexCommands';
 import type { CodexUsageState } from './codex/codexUsageMonitor';
 import type { UsageFailure, UsageWindow } from './codex/codexUsage';
+import { readClaudeUsage, type ClaudeUsage, type ClaudeUsageFailure, type ClaudeUsageWindow } from './claudeUsage';
+import type { ClaudeUsageState } from './claudeUsageMonitor';
 
 export const REFRESH_USAGE_COMMAND = 'planswap.codex.refreshUsage';
+export const CLAUDE_REFRESH_USAGE_COMMAND = 'planswap.claude.refreshUsage';
 
 const INTL_LOCALES: Record<Locale, string> = { en: 'en', 'zh-cn': 'zh-CN', es: 'es', ja: 'ja' };
 const USAGE_FAILURE_MESSAGES: Record<Exclude<UsageFailure, 'notLoggedIn'>, MessageKey> = {
@@ -24,6 +27,13 @@ const USAGE_FAILURE_MESSAGES: Record<Exclude<UsageFailure, 'notLoggedIn'>, Messa
   protocolTooLong: 'status.usageProtocolTooLong',
   exited: 'status.usageExited',
   unknownError: 'status.usageUnknownError',
+  failed: 'status.usageFailed',
+};
+const CLAUDE_USAGE_FAILURE_MESSAGES: Record<ClaudeUsageFailure, MessageKey> = {
+  cliMissing: 'status.claudeUsageCliMissing',
+  timeout: 'status.claudeUsageTimeout',
+  notRefreshed: 'status.claudeUsageNotRefreshed',
+  noUsage: 'status.claudeUsageNone',
   failed: 'status.usageFailed',
 };
 
@@ -44,8 +54,9 @@ export function formatTime(ms: number, now: number = Date.now()): string {
   return new Intl.DateTimeFormat(INTL_LOCALES[getLocale()], options).format(at);
 }
 
-function windowLine(w: UsageWindow, index: number): string {
-  const window = w.windowMinutes ? formatDuration(w.windowMinutes) : `#${index + 1}`;
+function windowLine(w: UsageWindow | ClaudeUsageWindow, index: number): string {
+  const duration = w.windowMinutes ? formatDuration(w.windowMinutes) : `#${index + 1}`;
+  const window = 'scope' in w && w.scope ? t('status.scopedWindow', { window: duration, scope: w.scope }) : duration;
   return w.resetsAt !== undefined
     ? t('status.usageWindow', { window, used: w.usedPercent, reset: formatTime(w.resetsAt * 1000) })
     : t('status.usageWindowNoReset', { window, used: w.usedPercent });
@@ -70,9 +81,28 @@ export function usageLines(state: CodexUsageState | undefined): string[] {
   return lines;
 }
 
+/**
+ * Tooltip lines for the current Claude account: the usage cached in its info file (usage), plus the refresh state of
+ * that directory (a failure of another directory is not shown).
+ */
+export function claudeUsageLines(usage: ClaudeUsage | undefined, state: ClaudeUsageState | undefined, dir: string): string[] {
+  const lines: string[] = usage ? usage.windows.map(windowLine) : [];
+  const failure = state?.failure && samePath(state.failure.dir, dir) ? state.failure : undefined;
+  if (failure) {
+    // Without values to show (too old, or all reset), "could not be refreshed" must not point at shown values
+    lines.push(failure.reason === 'failed' && !failure.detail ? t('status.usageUnknownError', { detail: '' })
+      : failure.reason === 'notRefreshed' && !usage ? t('status.claudeUsageRefreshFailed')
+        : t(CLAUDE_USAGE_FAILURE_MESSAGES[failure.reason], { detail: failure.detail ?? '' }));
+  }
+  if (state?.checking) lines.push(t('status.usageChecking'));
+  else if (usage) lines.push(t('status.usageChecked', { time: formatTime(usage.checkedAt) }));
+  return lines;
+}
+
 export class StatusBar implements vscode.Disposable {
   private readonly item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right);
   private codexUsage: CodexUsageState | undefined;
+  private claudeUsage: ClaudeUsageState | undefined;
 
   constructor(
     private readonly store: AccountStore,
@@ -89,10 +119,16 @@ export class StatusBar implements vscode.Disposable {
     this.update();
   }
 
+  /** Refresh state of the current Claude account's usage, kept by ClaudeUsageMonitor; undefined hides the refresh link. */
+  setClaudeUsage(state: ClaudeUsageState | undefined): void {
+    this.claudeUsage = state;
+    this.update();
+  }
+
   update(): void {
     const text: string[] = [];
     // Each section is a list of plain-text lines; account text is escaped when the tooltip is built
-    const sections: Array<{ lines: string[]; refresh?: boolean }> = [];
+    const sections: Array<{ lines: string[]; refresh?: string }> = [];
     const dir = currentDir();
     const explicit = isExplicitConfigDir(dir);
     const hasClaude = fs.existsSync(dir) || fs.existsSync(claudeJsonPath(dir, explicit)) ||
@@ -103,7 +139,11 @@ export class StatusBar implements vscode.Disposable {
       const info = readAccountInfo(dir, explicit);
       const identity = info.email ?? t(info.loggedIn ? 'common.loggedIn' : 'common.notLoggedIn');
       text.push(`Claude: ${label}`);
-      sections.push({ lines: [`Claude: ${label}`, info.plan ? `${identity} · ${info.plan}` : identity, dir] });
+      const lines = [`Claude: ${label}`, info.plan ? `${identity} · ${info.plan}` : identity, dir];
+      // Usage limits exist only for a subscription sign-in (oauthAccount); signed-out accounts show none
+      const showUsage = info.identity !== undefined;
+      if (showUsage) lines.push(...claudeUsageLines(readClaudeUsage(dir, explicit), this.claudeUsage, dir));
+      sections.push({ lines, refresh: showUsage && this.claudeUsage !== undefined ? CLAUDE_REFRESH_USAGE_COMMAND : undefined });
     }
     const codexDir = effectiveDir();
     if (this.codex && (fs.existsSync(codexDir) || this.codex.store.all().some((account) => fs.existsSync(account.dir)))) {
@@ -129,7 +169,7 @@ export class StatusBar implements vscode.Disposable {
       const showUsage = !inWsl && !apiKey && info.loggedIn;
       if (inWsl) lines.push(t('status.codexRunsInWsl'));
       if (showUsage) lines.push(...usageLines(this.codexUsage));
-      sections.push({ lines, refresh: showUsage && this.codexUsage !== undefined });
+      sections.push({ lines, refresh: showUsage && this.codexUsage !== undefined ? REFRESH_USAGE_COMMAND : undefined });
     }
     this.item.text = text.length ? `$(account) ${text.join(' · ')}` : '';
     this.item.tooltip = buildTooltip(sections);
@@ -156,17 +196,17 @@ function codexSwitchingEnabled(): boolean {
 }
 
 // Plain text goes through appendText (escaped), so labels and paths can never inject links; the only trusted
-// command is the usage refresh
-function buildTooltip(sections: Array<{ lines: string[]; refresh?: boolean }>): vscode.MarkdownString {
+// commands are the usage refreshes
+function buildTooltip(sections: Array<{ lines: string[]; refresh?: string }>): vscode.MarkdownString {
   const md = new vscode.MarkdownString('', true);
-  md.isTrusted = { enabledCommands: [REFRESH_USAGE_COMMAND] };
+  md.isTrusted = { enabledCommands: [CLAUDE_REFRESH_USAGE_COMMAND, REFRESH_USAGE_COMMAND] };
   sections.forEach((section, i) => {
     if (i > 0) md.appendMarkdown('\n\n---\n\n');
     section.lines.forEach((line, j) => {
       if (j > 0) md.appendMarkdown('  \n');
       md.appendText(line);
     });
-    if (section.refresh) md.appendMarkdown(`  \n[$(refresh) ${escapeLinkText(t('status.usageRefresh'))}](command:${REFRESH_USAGE_COMMAND})`);
+    if (section.refresh) md.appendMarkdown(`  \n[$(refresh) ${escapeLinkText(t('status.usageRefresh'))}](command:${section.refresh})`);
   });
   return md;
 }

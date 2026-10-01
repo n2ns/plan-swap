@@ -17,6 +17,7 @@
   "command.codex.removeAccount": "删除 Codex 账号",
   "command.codex.openTerminal": "在终端中以 Codex 账号运行 codex",
   "command.codex.restartServer": "应用 Codex 账号：重启或查看说明",
+  "command.claude.refreshUsage": "刷新 Claude 用量额度",
   "command.codex.refreshUsage": "刷新 Codex 用量额度",
   "command.tools.openClaudeMd": "打开全局 CLAUDE.md",
   "category.tools": "PlanSwap",
