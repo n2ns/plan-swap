@@ -191,13 +191,20 @@ function usageLevel(remaining: number): 'empty' | 'low' | 'warn' | 'ok' {
 
 const remainingPercent = (w: UsageWindowView): number => Number((100 - w.usedPercent).toFixed(2));
 
-// "in 3 hours" / "tomorrow" in the panel language; the exact date and time stay in the title
+type DurationFormatConstructor = new (locale: string, options: { style: string }) => { format(duration: Record<string, number>): string };
+
+// Time until a reset as a short duration in the panel language with the two largest units, a zero unit left out
+// ("2d 5h" / "2天5小时", "5h 20m", "45m"), rounded up to the minute; a copy of relativeReset in src/statusBar.ts
 function relativeTime(epochSeconds: number): string {
-  const rtf = new Intl.RelativeTimeFormat(getLocale(), { numeric: 'auto' });
-  const minutes = Math.max(1, Math.round((epochSeconds * 1000 - Date.now()) / 60000));
-  if (minutes < 60) return rtf.format(minutes, 'minute');
-  const hours = Math.round(minutes / 60);
-  return hours < 48 ? rtf.format(hours, 'hour') : rtf.format(Math.round(hours / 24), 'day');
+  const total = Math.max(1, Math.ceil((epochSeconds * 1000 - Date.now()) / 60000));
+  const days = Math.floor(total / 1440), hours = Math.floor((total % 1440) / 60), minutes = total % 60;
+  const parts = Object.entries(days ? { days, hours } : hours ? { hours, minutes } : { minutes }).filter(([, n]) => n > 0);
+  const locale = getLocale();
+  // Japanese narrow units are Latin letters ("2d5h"); the short style gives "2 日 5 時間"
+  const DurationFormat = (Intl as unknown as { DurationFormat?: DurationFormatConstructor }).DurationFormat;
+  if (DurationFormat) return new DurationFormat(locale, { style: locale === 'ja' ? 'short' : 'narrow' }).format(Object.fromEntries(parts));
+  const unit = { days: 'day', hours: 'hour', minutes: 'minute' } as Record<string, string>;
+  return parts.map(([k, n]) => new Intl.NumberFormat(locale, { style: 'unit', unit: unit[k], unitDisplay: 'narrow' }).format(n)).join(' ');
 }
 
 function usageWindow(w: UsageWindowView): HTMLElement {
@@ -212,23 +219,25 @@ function usageWindow(w: UsageWindowView): HTMLElement {
   const label = t('usage.remaining', { percent: remaining });
   const level = usageLevel(remaining);
   const exhausted = level === 'empty';
-  // The reset time sits in the label line of the window it belongs to
-  const reset = w.resetsAt !== undefined && h('span', {
-    class: 'usage-reset',
-    title: t('usage.resets', { time: new Date(w.resetsAt * 1000).toLocaleString(getLocale(), {
-      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
-    }) }),
-  }, t('usage.resetsIn', { time: relativeTime(w.resetsAt) }));
-  return h('div', { class: 'usage-window' },
-    h('div', { class: 'usage-labels' },
-      h('span', { class: 'usage-name' }, h('span', { class: 'usage-duration' }, duration), reset),
-      h('span', { class: 'usage-pct' }, label, exhausted && h('span', { class: 'usage-flag' }, t('usage.exhausted'))),
+  // Two lines per window: the duration with the time until the reset (clock icon + short duration) at the right, then
+  // the bar with the remaining percentage at its right. The full reset sentence and date are the reset's tooltip and
+  // part of the bar's screen reader value
+  const resetText = w.resetsAt !== undefined && t('usage.resetsIn', {
+    time: relativeTime(w.resetsAt),
+    date: new Date(w.resetsAt * 1000).toLocaleString(getLocale(), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }),
+  });
+  const reset = resetText && h('span', { class: 'usage-reset', title: resetText, 'aria-hidden': 'true' },
+    h('vscode-icon', { name: 'clock', size: '12' }), h('span', { class: 'usage-reset-time' }, relativeTime(w.resetsAt!)));
+  return h('div', { class: 'usage-window', 'data-level': level },
+    h('div', { class: 'usage-labels' }, h('span', { class: 'usage-duration' }, duration), reset),
+    h('div', { class: 'usage-bar' },
+      h('div', {
+        class: 'usage-track', 'data-level': level, role: 'progressbar', 'aria-label': duration,
+        'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(remaining),
+        'aria-valuetext': [label, exhausted && t('usage.exhausted'), resetText].filter(Boolean).join(', '),
+      }, h('div', { class: 'usage-fill', style: `width: ${remaining}%` })),
+      h('span', { class: 'usage-pct', title: label, 'aria-hidden': 'true' }, `${remaining}%`),
     ),
-    h('div', {
-      class: 'usage-track', 'data-level': level, role: 'progressbar', 'aria-label': duration,
-      'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(remaining),
-      'aria-valuetext': exhausted ? `${label}, ${t('usage.exhausted')}` : label,
-    }, h('div', { class: 'usage-fill', style: `width: ${remaining}%` })),
   );
 }
 
@@ -667,14 +676,16 @@ class Page {
     if (editing) classes.push('is-editing');
 
     // Built in edit mode too: CSS hides it there (visibility: hidden) so the card keeps its height and columns
-    const actions = h('div', { class: 'row-actions' });
+    // Text buttons (Switch, Log in) and icon buttons are two groups, so the icons wrap together and stay on the right
+    const textButtons = h('div', { class: 'row-btns' });
+    const iconButtons = h('div', { class: 'row-icons' });
     {
       // Conversions are refused by the host for the current account and for the Codex account selected but not yet effective
       const convertible = a.kind === 'named' && !a.isCurrent && !selected;
       // Primary action as a visible text button (double-click / Enter on the row stay as shortcuts);
       // the second click of a double-click (detail > 1) would send a duplicate switch
       if (canSwitch) {
-        actions.append(
+        textButtons.append(
           withAction(
             onClick(h('vscode-button', { class: 'row-btn', secondary: true, title: t('row.switch') }, t('row.switchShort')), (e) => {
               if (e.detail > 1) return;
@@ -687,7 +698,7 @@ class Page {
       }
       // Not logged in: a "Log in" text button; logged in: a terminal icon to run the CLI with this account
       if (!a.loggedIn) {
-        actions.append(
+        textButtons.append(
           onClick(
             h('vscode-button', { class: 'row-btn', title: t(`${this.mode}.loginTitle`), 'data-action': 'terminal' }, t('row.login')),
             () => this.send({ type: 'terminal', dir: a.dir }),
@@ -696,18 +707,18 @@ class Page {
       }
       // Independent account: offer converting it to a shared one (the host confirms)
       if (convertible && a.shared === false) {
-        actions.append(withAction(toolbarButton('link', t('row.share'), () => this.send({ type: 'share', dir: a.dir })), 'share'));
+        iconButtons.append(withAction(toolbarButton('link', t('row.share'), () => this.send({ type: 'share', dir: a.dir })), 'share'));
       }
       // Shared account: offer converting it back to an independent one (the host confirms)
       if (convertible && a.shared === true) {
-        actions.append(withAction(toolbarButton('debug-disconnect', t('row.unshare'), () => this.send({ type: 'unshare', dir: a.dir })), 'unshare'));
+        iconButtons.append(withAction(toolbarButton('debug-disconnect', t('row.unshare'), () => this.send({ type: 'unshare', dir: a.dir })), 'unshare'));
       }
       if (a.loggedIn) {
-        actions.append(withAction(toolbarButton('terminal', t(`${this.mode}.terminalTitle`), () => this.send({ type: 'terminal', dir: a.dir })), 'terminal'));
+        iconButtons.append(withAction(toolbarButton('terminal', t(`${this.mode}.terminalTitle`), () => this.send({ type: 'terminal', dir: a.dir })), 'terminal'));
       }
       // The current account cannot be removed; the confirmation that opens starts with the focus on Cancel
       if (a.kind === 'named' && !a.isCurrent && !selected) {
-        actions.append(
+        iconButtons.append(
           withAction(
             toolbarButton('trash', t('row.remove'), () => {
               this.confirmingDir = a.dir;
@@ -739,10 +750,14 @@ class Page {
           { class: 'row-title' },
           h('span', { class: 'row-name' }, ...nameWithTail(a.label, sharedIcon, renameButton)),
         );
-    // Tags (plan, not logged in) sit at the right end of the name line; the action buttons get their own line
+    // Tags (plan, not logged in) sit at the right end of the name line and wrap under it only when they do not fit; the
+    // action buttons get their own line, except icon-only buttons (no Switch / Log in), which join the name line before the tags
+    const inlineActions = !textButtons.hasChildNodes();
+    if (inlineActions) classes.push('inline-actions');
+    const actions = h('div', { class: 'row-actions' }, textButtons.hasChildNodes() && textButtons, iconButtons.hasChildNodes() && iconButtons);
     const tags = h('div', { class: 'row-tags' }, planPill(a), !a.loggedIn && h('span', { class: 'pill warn' }, t('account.notLoggedIn')));
 
-    // .row-main is display: contents, so its lines land directly in the .row grid
+    // .row-main is display: contents, so its lines land directly in the .row grid below the name line
     const row = h(
       'li',
       {
@@ -750,14 +765,13 @@ class Page {
         // The directory is a hover hint instead of a card line; the current card is marked for assistive technology only
         title: editing ? undefined : a.dirLabel, 'aria-current': a.isCurrent ? 'true' : undefined,
       },
-      avatar(a),
+      h('div', { class: 'row-head' }, h('div', { class: 'row-ident' }, avatar(a), title), inlineActions && actions, tags),
       h(
         'div',
         { class: 'row-main' },
-        title,
         loginStatus(a, this.tab.hideEmail),
         usageHistory(a),
-        h('div', { class: 'row-foot' }, tags, actions),
+        !inlineActions && actions,
         !a.loggedIn && !a.isCurrent && h('div', { class: 'row-hint' }, t(`${this.mode}.loginHint`)),
         editing && this.renameError && h('div', { class: 'row-error', role: 'alert' }, this.renameError),
       ),

@@ -14,6 +14,10 @@
   --ok: var(--vscode-testing-iconPassed, var(--vscode-charts-green));
   --error: var(--vscode-errorForeground);
   --info: var(--vscode-notificationsInfoIcon-foreground, var(--accent));
+  /* Small error / warning text: the theme color itself, darkened on light themes where it is tuned for icons and lines
+     and falls below 4.5:1 on the card surface */
+  --error-text: var(--error);
+  --warn-text: var(--warn);
   /* Layered surfaces: a little foreground mixed into the base color */
   --surface-1: color-mix(in srgb, var(--ink) 4%, var(--base));
   --surface-2: color-mix(in srgb, var(--ink) 8%, var(--base));
@@ -48,8 +52,6 @@ body {
   display: flex;
   flex-direction: column;
   gap: calc(var(--gap) * 2);
-  container-type: inline-size;
-  container-name: panel;
 }
 .page { display: flex; flex-direction: column; gap: calc(var(--gap) * 2); }
 .page[hidden] { display: none; }
@@ -136,6 +138,12 @@ body {
 [data-plan="enterprise"] { --plan-color: color-mix(in srgb, var(--vscode-charts-blue) 25%, var(--vscode-descriptionForeground)); }
 [data-plan="tier0"] { --plan-color: var(--vscode-descriptionForeground); }
 [data-plan="apikey"] { --plan-color: var(--vscode-charts-orange); }
+/* Light themes: softening toward white would leave the outline nearly invisible, so the high tier is darkened instead */
+.vscode-light [data-plan="tier2"], .vscode-high-contrast-light [data-plan="tier2"] { --plan-color: color-mix(in srgb, var(--vscode-charts-yellow) 70%, var(--ink)); }
+.vscode-light, .vscode-high-contrast-light {
+  --error-text: rgb(from var(--error) calc(r * 0.7) calc(g * 0.7) calc(b * 0.7));
+  --warn-text: rgb(from var(--warn) calc(r * 0.6) calc(g * 0.6) calc(b * 0.6));
+}
 
 .ok { color: var(--ok); }
 .warn { color: var(--warn); }
@@ -156,6 +164,12 @@ body {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--base) 60%, transparent);
 }
 .avatar vscode-icon { color: inherit; }
+/* The chart colors are light on dark themes, so the letter is the dark base color there; on light themes the disc is
+   darkened so the white letter keeps its contrast */
+.vscode-dark .avatar, .vscode-high-contrast .avatar { color: var(--base); }
+.vscode-light .avatar, .vscode-high-contrast-light .avatar {
+  background: rgb(from var(--avatar-color) calc(r * 0.75) calc(g * 0.75) calc(b * 0.75));
+}
 
 /* ---------- Sections ---------- */
 .section { display: flex; flex-direction: column; gap: var(--gap); }
@@ -224,28 +238,28 @@ body {
 
 /* ---------- Account list ---------- */
 .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-/* Lines: avatar+name+tags / email / usage / buttons. Line spacing uses each line's margin-top so empty areas take no space */
+/* Lines: name line (avatar, name, tags) / email / usage / buttons; only the name line has the avatar, the other lines
+   span the whole card. Line spacing uses each line's margin-top so empty areas take no space */
 .row {
   position: relative;
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) fit-content(40%);
+  grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
-    'avatar title tags'
-    '. sub sub'
-    '. usage usage'
-    '. actions actions'
-    '. hint hint'
-    '. error error';
-  column-gap: 8px;
+    'head'
+    'sub'
+    'usage'
+    'actions'
+    'hint'
+    'error';
   align-items: center;
   padding: 8px 8px 8px 12px;
-  border-radius: var(--radius-row);
-  border: 1px solid var(--line);
+  border-radius: 4px;
+  border: 1px solid var(--line-strong);
   background: var(--surface-1);
   outline: none;
   transition: background var(--ease), border-color var(--ease);
 }
-.row[data-plan="none"] { border-color: var(--line); }
+.row[data-plan="none"] { border-color: var(--line-strong); }
 .row::before {
   content: '';
   position: absolute;
@@ -257,8 +271,8 @@ body {
   transition: opacity var(--ease);
 }
 .row:hover { background: var(--surface-2); }
-.row[data-plan="none"]:hover { border-color: var(--line-strong); }
-.row:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.row:hover, .row[data-plan="none"]:hover { border-color: color-mix(in srgb, var(--ink) 26%, transparent); }
+.row:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 1px; }
 .row.is-current, .row.is-current[data-plan="none"] {
   border-color: var(--plan-color, var(--accent));
   background: var(--surface-2);
@@ -267,10 +281,17 @@ body {
 }
 .row.is-current::before { inset: 0 auto 0 0; width: 3px; border-radius: 0; opacity: 1; }
 .row.is-current:hover { background: color-mix(in srgb, var(--ink) 11%, var(--base)); }
+/* Name line: the avatar and name take what they need (at most the whole line); the tag group (and icon-only buttons)
+   follow at the right end and wrap onto the next line, still right-aligned, only when they do not fit beside the name */
+.row-head { grid-area: head; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; }
+.row-ident { flex: 1 1 auto; max-width: 100%; display: flex; align-items: center; gap: 8px; min-width: 0; }
+/* The hidden rename pencil takes no width (see .rename-btn), so it never pushes the tags onto a new line; a name too
+   long for the line wraps 20px early instead, leaving the pencil room at the end of the line */
+.row-ident:has(.rename-btn) { max-width: calc(100% - 20px); }
 /* When the name wraps, the avatar sticks to the top instead of floating in the middle */
-.row > .avatar { grid-area: avatar; align-self: start; }
+.row-ident > .avatar { align-self: flex-start; }
 .row-main { display: contents; }
-.row-title { grid-area: title; display: flex; align-items: center; gap: 6px; min-width: 0; }
+.row-title { flex: 1 1 auto; display: flex; align-items: center; gap: 6px; min-width: 0; }
 .row-name { flex: 0 1 auto; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
 /* The shared badge and the pencil sit inline in the name's text flow, so they follow the last line of a wrapped name */
 .name-tail { white-space: nowrap; }
@@ -280,7 +301,11 @@ body {
   place-items: center;
   width: 16px;
   height: 16px;
-  margin: -2px 0 0 4px;
+  /* The negative right margin cancels its 4px + 16px, so the line is laid out as if it were not there; when shown it
+     sits in the gap after the name, above the tags */
+  margin: -2px -20px 0 4px;
+  position: relative;
+  z-index: 1;
   padding: 0;
   border: 0;
   border-radius: 4px;
@@ -318,24 +343,28 @@ body {
 /* Muted lines (pre-existing) use --muted; usage text is read often, so it uses --secondary */
 .row-usage { grid-area: usage; min-width: 0; margin-top: 6px; font-size: max(11px, 0.85em); overflow-wrap: anywhere; }
 .usage-window + .usage-window { margin-top: 8px; }
-/* One label line per window: name and reset time on the left, remaining percentage on the right; it wraps when narrow */
-.usage-labels { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 8px; margin-bottom: 4px; color: var(--secondary); }
-.usage-name { display: flex; flex-wrap: wrap; gap: 0 6px; min-width: 0; }
-.usage-duration { min-width: 0; overflow-wrap: anywhere; color: var(--ink); }
-.usage-reset { color: var(--secondary); }
-.usage-pct { margin-left: auto; color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
-.usage-flag { margin-left: 6px; padding: 0 5px; border: 1px solid color-mix(in srgb, var(--error) 70%, transparent); border-radius: 4px; color: var(--error); font-weight: 600; white-space: nowrap; }
-.usage-track { height: 6px; border-radius: var(--radius-pill); overflow: hidden; background: var(--line-strong); box-shadow: 0 0 0 1px var(--line); }
+/* Two lines per window. The label line: the duration on the left (a duration that does not fit wraps between words in
+   its own column) and the time until the reset at the right. The bar line: the bar and the remaining percentage in a
+   fixed-width column, so every bar has the same length; the reset time and the percentage form one right-hand column */
+.usage-labels { display: flex; justify-content: space-between; align-items: flex-start; gap: 0 8px; margin-bottom: 3px; }
+.usage-duration { flex: 1 1 auto; min-width: 0; overflow-wrap: break-word; color: var(--ink); }
+.usage-reset { flex: none; display: inline-flex; align-items: center; line-height: inherit; gap: 3px; color: var(--secondary); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.usage-reset vscode-icon { color: inherit; }
+.usage-bar { display: flex; align-items: center; gap: 8px; }
+.usage-pct { flex: none; min-width: 4.2ch; font-size: calc(1em - 2px); color: var(--ink); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.usage-track { flex: 1 1 auto; min-width: 0; height: 6px; border-radius: 2px; overflow: hidden; background: var(--line-strong); box-shadow: 0 0 0 1px var(--line); }
 .usage-fill { height: 100%; border-radius: inherit; background: var(--ok); }
 /* Remaining quota level: amber at 30% or less, red at 10% or less; used up shows a hatched, outlined empty track. The
-   percentage text (and the "Used up" tag) states every level too, so color is never the only signal */
+   percentage text states every level too, so color is never the only signal */
 .usage-track[data-level="warn"] .usage-fill { background: var(--warn); }
 .usage-track[data-level="low"] .usage-fill { background: var(--error); }
 .usage-track[data-level="empty"] {
   background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--error) 60%, transparent) 0 3px, transparent 3px 6px);
   box-shadow: 0 0 0 1px var(--error);
 }
-.usage-labels:has(+ .usage-track[data-level="low"]) .usage-pct, .usage-labels:has(+ .usage-track[data-level="empty"]) .usage-pct { color: var(--error); }
+.usage-window[data-level="low"] .usage-pct, .usage-window[data-level="empty"] .usage-pct { color: var(--error-text); }
+/* Used up: when it comes back matters most, so the reset time turns red and bold */
+.usage-window[data-level="empty"] .usage-reset { color: var(--error-text); font-weight: 700; }
 /* High contrast: the track is outlined with the theme's contrast border, so the bar length reads without color */
 .vscode-high-contrast .usage-track, .vscode-high-contrast-light .usage-track { background: transparent; box-shadow: 0 0 0 1px var(--vscode-contrastBorder, var(--ink)); }
 .vscode-high-contrast .usage-fill, .vscode-high-contrast-light .usage-fill { box-shadow: 0 0 0 1px var(--vscode-contrastBorder, var(--ink)); }
@@ -345,8 +374,7 @@ body {
 .tools-summary:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 1px; }
 .chevron { flex: none; color: inherit; transition: transform var(--ease); }
 details[open] > summary > .chevron { transform: rotate(90deg); }
-.row-foot { grid-area: foot; margin-top: 4px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; min-width: 0; }
-.row-tags { flex: 1 1 auto; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.row-tags { flex: 0 1 auto; margin-left: auto; max-width: 100%; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 4px; min-width: 0; }
 .row-tags:empty { display: none; }
 .row-hint { grid-area: hint; color: var(--secondary); font-size: max(11px, 0.8em); margin-top: 4px; min-width: 0; overflow-wrap: anywhere; }
 .row-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px; flex: none; max-width: 100%; margin-left: auto; }
@@ -354,31 +382,20 @@ details[open] > summary > .chevron { transform: rotate(90deg); }
 .row-actions .icon-btn { opacity: 0.75; transition: opacity var(--ease); }
 .row:hover .row-actions .icon-btn, .row:focus-within .row-actions .icon-btn { opacity: 1; }
 
-/* The plan tag sits beside the name at every width (at most 40% of the card, then its text is cut); the buttons stay on their own line below */
-.row-foot { display: contents; }
-.row-tags { grid-area: tags; margin-top: 0; justify-self: end; }
-.row-actions { grid-area: actions; justify-self: end; margin-top: 4px; }
+/* The buttons stay on their own line below */
+.row-actions { grid-area: actions; justify-self: stretch; margin-top: 4px; margin-left: 0; }
+/* Text buttons (Switch, Log in) stay on the left, the icon group is pushed to the right; no gap between the two groups
+   (the icons' own padding separates them), so a group that exactly fits is not pushed down by rounding */
+.row-actions { justify-content: flex-start; column-gap: 0; }
+.row-btns, .row-icons { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.row-icons { margin-left: auto; }
+/* Icon buttons only: they sit on the name line, before the tag group, so the plan tag stays at the right end */
+.row-head > .row-actions { flex: none; margin-top: 0; }
 .row-sub, .row-hint, .row-error { margin-top: 1px; }
-/* Edit mode: the edit line spans over the tags column, and the plan tag is hidden meanwhile */
-.row.is-editing .row-title { grid-column: 2 / -1; }
+/* Edit mode: the edit line takes the whole name line (without pushing the hidden buttons onto a new line), and the
+   plan tag is hidden meanwhile */
+.row.is-editing .row-ident { flex-basis: 0; max-width: 100%; }
 .row.is-editing .row-tags { display: none; }
-
-/* Narrowest panel: the name and the tag no longer fit side by side, so the tag drops to its own line under the name */
-@container panel (max-width: 199px) {
-  .row {
-    grid-template-columns: 20px minmax(0, 1fr);
-    grid-template-areas:
-      'avatar title'
-      '. tags'
-      '. sub'
-      '. usage'
-      '. actions'
-      '. hint'
-      '. error';
-  }
-  .row-tags { justify-self: start; margin-top: 2px; }
-  .row.is-editing .row-title { grid-column: 2; }
-}
 
 /* Rounded icon buttons: 24px everywhere */
 .icon-btn {
@@ -416,13 +433,13 @@ details[open] > summary > .chevron { transform: rotate(90deg); }
   white-space: nowrap;
 }
 .pill.warn {
-  color: var(--warn);
+  color: var(--warn-text);
   border: 1px solid color-mix(in srgb, var(--warn) 65%, transparent);
   background: color-mix(in srgb, var(--warn) 10%, transparent);
   line-height: 14px;
 }
-/* Plan: tinted background + plan-colored border and text; small radius to differ from the capsule-shaped "Not logged in" */
-/* Plan: a neutral outline on every card; the current card carries the plan color (tinted, plan-colored border and text) */
+/* Plan: a neutral outline on every card, the current one included (its outline and left bar carry the plan color);
+   small radius to differ from the capsule-shaped "Not logged in" */
 .pill.plan {
   color: var(--secondary);
   border: 1px solid var(--line-strong);
@@ -432,14 +449,6 @@ details[open] > summary > .chevron { transform: rotate(90deg); }
   font-weight: 600;
   white-space: nowrap;
 }
-.row.is-current .pill.plan {
-  color: var(--plan-color);
-  border-color: var(--plan-color);
-  background: color-mix(in srgb, var(--plan-color) 14%, transparent);
-}
-/* Light themes: the chart colors are tuned for lines on white, so the text is a darkened plan color */
-.vscode-light .row.is-current .pill.plan,
-.vscode-high-contrast-light .row.is-current .pill.plan { color: rgb(from var(--plan-color) calc(r * 0.6) calc(g * 0.6) calc(b * 0.6)); }
 
 /* ---------- Inline rename (not for the external directory row) ---------- */
 .row.is-editing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
@@ -481,7 +490,7 @@ details[open] > summary > .chevron { transform: rotate(90deg); }
 .rename-field[focused] { box-shadow: 0 0 0 1px var(--accent), 0 0 0 3px color-mix(in srgb, var(--accent) 40%, transparent); }
 .rename-field[invalid][focused] { box-shadow: 0 0 0 1px var(--error), 0 0 0 3px color-mix(in srgb, var(--error) 35%, transparent); }
 .row.is-editing:has(.rename-field[invalid]) { border-color: var(--error); box-shadow: 0 0 0 1px var(--error); }
-.row-error { grid-area: error; color: var(--error); font-size: max(11px, 0.8em); margin-top: 4px; min-width: 0; overflow-wrap: anywhere; }
+.row-error { grid-area: error; color: var(--error-text); font-size: max(11px, 0.8em); margin-top: 4px; min-width: 0; overflow-wrap: anywhere; }
 
 /* ---------- Inline remove confirmation ---------- */
 .row.is-confirming {
@@ -512,7 +521,7 @@ details[open] > summary > .chevron { transform: rotate(90deg); }
   --vsc-border-right-radius: 6px;
 }
 .page-tools-row vscode-button[hidden] { display: none; }
-.page-tools-row vscode-button::part(base) { width: 100%; justify-content: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.page-tools-row vscode-button::part(base) { width: 100%; justify-content: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: calc(var(--vscode-font-size, 13px) - 2px); }
 
 /* ---------- Add account ---------- */
 /* The form opens right under the list heading */

@@ -74,13 +74,23 @@ export function backgroundIdFor(lowest: number | undefined): 'statusBarItem.erro
   return lowest <= 10 ? 'statusBarItem.errorBackground' : lowest <= 30 ? 'statusBarItem.warningBackground' : undefined;
 }
 
-/** "in 2 hours" / "tomorrow" in the UI language, from the reset time (unix seconds). */
+type DurationFormatConstructor = new (locale: string, options: { style: string }) => { format(duration: Record<string, number>): string };
+
+/**
+ * Time until a reset (unix seconds) as a short duration in the UI language with the two largest units, a zero unit
+ * left out: "2d 5h" / "2天5小时", "5h 20m", "45m"; rounded up to the minute, never below one minute. The sidebar's
+ * src/webview/main.ts keeps a copy (the Webview cannot import host code); keep both in step.
+ */
 export function relativeReset(epochSeconds: number, now: number = Date.now()): string {
-  const rtf = new Intl.RelativeTimeFormat(INTL_LOCALES[getLocale()], { numeric: 'auto' });
-  const minutes = Math.max(1, Math.round((epochSeconds * 1000 - now) / 60000));
-  if (minutes < 60) return rtf.format(minutes, 'minute');
-  const hours = Math.round(minutes / 60);
-  return hours < 48 ? rtf.format(hours, 'hour') : rtf.format(Math.round(hours / 24), 'day');
+  const total = Math.max(1, Math.ceil((epochSeconds * 1000 - now) / 60000));
+  const days = Math.floor(total / 1440), hours = Math.floor((total % 1440) / 60), minutes = total % 60;
+  const parts = Object.entries(days ? { days, hours } : hours ? { hours, minutes } : { minutes }).filter(([, n]) => n > 0);
+  const locale = INTL_LOCALES[getLocale()];
+  // Japanese narrow units are Latin letters ("2d5h"); the short style gives "2 日 5 時間"
+  const DurationFormat = (Intl as unknown as { DurationFormat?: DurationFormatConstructor }).DurationFormat;
+  if (DurationFormat) return new DurationFormat(locale, { style: locale === 'ja' ? 'short' : 'narrow' }).format(Object.fromEntries(parts));
+  const unit = { days: 'day', hours: 'hour', minutes: 'minute' } as Record<string, string>;
+  return parts.map(([k, n]) => new Intl.NumberFormat(locale, { style: 'unit', unit: unit[k], unitDisplay: 'narrow' }).format(n)).join(' ');
 }
 
 /** Status bar text: product names with the remaining percentage of their short window when known. */
@@ -102,7 +112,7 @@ export function windowRow(w: UsageWindow | ClaudeUsageWindow, index: number, now
   const remaining = remainingOf(w);
   const exhausted = Number((100 - w.usedPercent).toFixed(2)) <= 0;
   const percent = exhausted ? `${remaining}% $(warning) ${escapeMarkdown(t('status.exhausted'))}` : `${remaining}%`;
-  const reset = w.resetsAt !== undefined ? escapeMarkdown(relativeReset(w.resetsAt, now)) : '';
+  const reset = w.resetsAt !== undefined ? `$(clock) ${escapeMarkdown(relativeReset(w.resetsAt, now))}` : '';
   return `| ${escapeMarkdown(name)} | ${usageBar(remaining)} | ${percent} |${reset ? ` ${reset} ` : ' '}|`;
 }
 

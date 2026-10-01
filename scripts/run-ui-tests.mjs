@@ -11,12 +11,19 @@ const output = path.join(root, '.test-out', 'ui');
 const locales = ['en', 'zh-cn', 'es', 'ja'];
 const widths = [200, 240, 280, 340, 420];
 const observed = ['Last observed: ', '采集于 ', 'Última consulta: ', '取得日時: '];
-// Absolute reset time (title) and the visible relative one
-const resets = { en: 'Resets: ', 'zh-cn': '重置时间：', es: 'Se restablece: ', ja: 'リセット日時: ' };
+// Reset tooltip: the short duration shown on the card plus the absolute date
 const resetsIn = {
-  en: (time) => `Resets ${time}`, 'zh-cn': (time) => `${time}重置`,
-  es: (time) => `Se restablece ${time}`, ja: (time) => `${time}にリセット`,
+  en: (time, date) => `Resets in ${time} (${date})`, 'zh-cn': (time, date) => `${time}后重置（${date}）`,
+  es: (time, date) => `Se restablece en ${time} (${date})`, ja: (time, date) => `${time}後にリセット（${date}）`,
 };
+// Reference for the visible short duration (two largest units, zero unit left out, rounded up to the minute); runs in the page
+const SHORT_RESET = `(seconds) => {
+  const total = Math.max(1, Math.ceil((seconds * 1000 - Date.now()) / 60000));
+  const d = Math.floor(total / 1440), h = Math.floor((total % 1440) / 60), m = total % 60;
+  const parts = Object.fromEntries(Object.entries(d ? { days: d, hours: h } : h ? { hours: h, minutes: m } : { minutes: m }).filter(([, n]) => n > 0));
+  const lang = document.documentElement.lang;
+  return new Intl.DurationFormat(lang, { style: lang === 'ja' ? 'short' : 'narrow' }).format(parts);
+}`;
 const exhausted = { en: 'Used up', 'zh-cn': '已用完', es: 'Agotado', ja: '使い切り' };
 const switchLabel = { en: 'Switch', 'zh-cn': '切换', es: 'Cambiar', ja: '切り替え' };
 const refreshTitle = {
@@ -28,8 +35,6 @@ const refreshAllTitle = {
   es: 'Actualizar los límites de uso de todas las cuentas', ja: 'すべてのアカウントの使用上限を更新',
 };
 const addLabel = { en: 'Add', 'zh-cn': '添加', es: 'Añadir', ja: '追加' };
-// Minimum font size of any text in the account list, in CSS px
-const MIN_FONT_PX = 11;
 const durations = { en: ['5-hour limit', '7-day limit'], 'zh-cn': ['5 小时限额', '7 天限额'], es: ['Límite de 5 h', 'Límite de 7 días'], ja: ['5 時間の上限', '7 日間の上限'] };
 const scopedDurations = {
   en: ['5-hour limit', '7-day limit', '7-day limit · Fable'],
@@ -77,16 +82,6 @@ async function cardChecks(mode, locale, width) {
       const r = el.getBoundingClientRect();
       return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height };
     };
-    const small = [];
-    for (const row of rows) {
-      const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
-      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-        const el = node.parentElement;
-        if (!node.textContent.trim() || el.closest('.avatar')) continue;
-        const px = parseFloat(getComputedStyle(el).fontSize);
-        if (px < 11) small.push({ text: node.textContent.trim(), px });
-      }
-    }
     const info = (row) => {
       const pill = row.querySelector('.pill.plan');
       const button = row.querySelector('[data-action="switch"]');
@@ -100,13 +95,46 @@ async function cardChecks(mode, locale, width) {
         pillBorder: pill && getComputedStyle(pill).borderTopColor, pillText: pill && getComputedStyle(pill).color,
         boxShadow: style.boxShadow, backgroundImage: style.backgroundImage,
         actionsWrapHeight: rect(row.querySelector('.row-actions')).height,
+        inlineActions: row.classList.contains('inline-actions'),
+        // The tag group wraps under the name only when avatar + name (+ icon-only buttons) + tags cannot share the line
+        tagsWrappedNeedlessly: (() => {
+          const tags = row.querySelector('.row-tags');
+          if (!tags || !tags.childElementCount || rect(tags).top < rect(row.querySelector('.row-title')).bottom) return false;
+          const head = row.querySelector('.row-head');
+          const inline = head.querySelector('.row-actions');
+          const need = rect(row.querySelector('.avatar')).width + 8 + rect(row.querySelector('.row-name')).width
+            + (inline ? 8 + rect(inline).width : 0) + 8 + rect(tags).width;
+          return need <= rect(head).width;
+        })(),
+        // The hidden rename pencil takes no width: removing it must not move the tag group
+        pencilNeutral: (() => {
+          const tags = row.querySelector('.row-tags'); const pencil = row.querySelector('.rename-btn');
+          if (!tags?.childElementCount || !pencil) return true;
+          const before = rect(tags).top; pencil.style.display = 'none';
+          const after = rect(tags).top; pencil.style.display = '';
+          return Math.abs(before - after) < 1;
+        })(),
+        tagsRight: !row.querySelector('.row-tags')?.childElementCount
+          || Math.abs(rect(row.querySelector('.row-tags')).right - rect(row.querySelector('.row-head')).right) <= 1,
+        pillRightmost: !pill || rect(pill).top >= rect(row.querySelector('.row-title')).bottom
+          || rect(pill).right >= rect(row.querySelector('.row-actions')).right - 1,
+        actionsFromContentStart: Math.abs(rect(row.querySelector('.row-actions')).left - rect(row.querySelector('.avatar')).left) <= 1,
+        actionsInNameLine: rect(row.querySelector('.row-actions')).top < rect(row.querySelector('.row-title')).bottom,
+        textButtonsLeft: (() => {
+          const first = row.querySelector('.row-actions .row-btn');
+          return !first || Math.abs(rect(first).left - rect(row.querySelector('.row-actions')).left) <= 1;
+        })(),
+        iconsRight: (() => {
+          const icons = row.querySelectorAll('.row-actions .icon-btn');
+          return icons.length === 0 || Math.abs(rect(icons[icons.length - 1]).right - rect(row.querySelector('.row-actions')).right) <= 1;
+        })(),
       };
     };
     return {
       currentIcons: panel.querySelectorAll('.current-icon, .avatar-badge').length,
       dirLines: panel.querySelectorAll('.row-dir').length,
       ariaCurrentRows: panel.querySelectorAll('.row[aria-current]').length,
-      rows: rows.map(info), small,
+      rows: rows.map(info),
       avatarSizes: [...panel.querySelectorAll('.avatar')].map((a) => `${rect(a).width}x${rect(a).height}`),
       defaultAvatar: panel.querySelector('.row[data-dir$="-default"], .row[data-dir$="/.claude"], .row[data-dir$="/.codex"]')?.querySelector('.avatar')?.getAttribute('aria-label') ?? null,
     };
@@ -115,7 +143,6 @@ async function cardChecks(mode, locale, width) {
   assert.equal(data.currentIcons, 0, `current badge or avatar badge present at ${where}`);
   assert.equal(data.dirLines, 0, `directory line present at ${where}`);
   assert.equal(data.ariaCurrentRows, 1, `exactly one aria-current row expected at ${where}`);
-  assert.deepEqual(data.small, [], `text below ${MIN_FONT_PX}px at ${where}`);
   assert.equal(new Set(data.avatarSizes).size, 1, `avatars differ in size at ${where}`);
   for (const row of data.rows) {
     const current = row.ariaCurrent === 'true';
@@ -124,23 +151,33 @@ async function cardChecks(mode, locale, width) {
       assert.equal(row.boxShadow, 'none', `current card has a shadow at ${where}`);
       assert.equal(row.backgroundImage, 'none', `current card has a gradient at ${where}`);
       assert.equal(row.switchText, null, `current card has a Switch button at ${where}`);
-      assert.notEqual(row.pillBackground, 'rgba(0, 0, 0, 0)', `current plan tag is not tinted at ${where}`);
     } else {
       assert.equal(row.ariaCurrent, null);
       assert.equal(row.switchText, switchLabel[locale], `Switch button text at ${where}`);
       assert.equal(row.switchVisible && row.switchInside, true, `Switch button hidden or outside the card at ${where}`);
-      if (row.pillBackground) {
-        assert.equal(row.pillBackground, 'rgba(0, 0, 0, 0)', `non-current plan tag is filled at ${where}`);
-        assert.equal(row.pillImage, 'none');
-      }
     }
+    // Every plan tag is a neutral outline, the current card's included
+    if (row.pillBackground) {
+      assert.equal(row.pillBackground, 'rgba(0, 0, 0, 0)', `plan tag is filled at ${where}`);
+      assert.equal(row.pillImage, 'none');
+    }
+    // Icon-only button groups move to the name line; otherwise text buttons sit left and icons right
+    assert.equal(row.actionsInNameLine, row.inlineActions, `button group line at ${where}`);
+    assert.equal(row.pillRightmost, true, `plan tag is not at the right end of the name line at ${where}`);
+    assert.equal(row.tagsWrappedNeedlessly, false, `tag group wrapped although it fits beside the name at ${where}`);
+    assert.equal(row.tagsRight, true, `tag group is not right-aligned at ${where}`);
+    assert.equal(row.pencilNeutral, true, `hidden rename pencil moves the tag group at ${where}`);
+    if (row.switchText !== null) assert.equal(row.inlineActions, false);
+    if (!row.inlineActions) assert.equal(row.actionsFromContentStart, true, `button line does not span the card at ${where}`);
+    assert.equal(row.textButtonsLeft, true, `text buttons not on the left at ${where}`);
+    assert.equal(row.iconsRight, true, `icon buttons not on the right at ${where}`);
   }
   return data;
 }
 
 async function runCase(locale, width) {
   await page.evaluate(({ locale, width }) => window.preview.apply({ locale, width, active: 'codex' }), { locale, width });
-  const data = await page.evaluate(() => {
+  const data = await page.evaluate((shortReset) => {
     const sidebar = document.querySelector('#sidebar');
     const app = document.querySelector('#app');
     const codex = document.querySelector('#panel-codex');
@@ -176,11 +213,8 @@ async function runCase(locale, width) {
         const track = item.querySelector('.usage-track');
         const fill = item.querySelector('.usage-fill');
         const reset = item.querySelector('.usage-reset');
-        const relative = (seconds) => {
-          const hours = Math.round((seconds * 1000 - Date.now()) / 3600000);
-          const rtf = new Intl.RelativeTimeFormat(document.documentElement.lang, { numeric: 'auto' });
-          return hours < 48 ? rtf.format(hours, 'hour') : rtf.format(Math.round(hours / 24), 'day');
-        };
+        const pct = item.querySelector('.usage-pct');
+        const relative = eval(shortReset);
         return {
           text: labels.textContent,
           label: track.getAttribute('aria-label'), role: track.getAttribute('role'),
@@ -190,11 +224,15 @@ async function runCase(locale, width) {
           resetText: reset?.textContent,
           resetTitle: reset?.title,
           resetRelative: relative(usageState.windows[index].resetsAt),
+          pctText: pct.textContent, pctTitle: pct.title, trackWidth: rect(track).width,
+          pctBesideBar: rect(pct).top < rect(track).bottom && rect(pct).bottom > rect(track).top,
+          numberColumn: !reset || Math.abs(rect(reset).right - rect(pct).right) <= 1,
           resetTime: new Date(usageState.windows[index].resetsAt * 1000).toLocaleString(document.documentElement.lang, {
             month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
           }),
           resetVisible: !!reset && rect(reset).width > 0 && rect(reset).height > 0,
-          resetInLabels: !!reset && labels.contains(reset) && rect(reset).bottom <= rect(track).top,
+          resetInLabelLine: !!reset && labels.contains(reset) && rect(reset).bottom <= rect(track).top + 0.5
+            && Math.abs(rect(reset).right - rect(labels).right) <= 1,
           resetOverflow: !!reset && (reset.scrollWidth > reset.clientWidth || reset.scrollHeight > reset.clientHeight
             || rect(reset).right > rect(item).right + 1 || rect(reset).bottom > rect(item).bottom + 1),
           resetActionsOverlap: !!reset && intersects(rect(reset), rect(actions)),
@@ -206,10 +244,8 @@ async function runCase(locale, width) {
       emptyUsage: !!codex.querySelector('.row[data-dir="/fixture/.codex-empty"] .row-usage'),
       defaultUsage: !!codex.querySelector('.row[data-dir="/fixture/.codex"] .row-usage'),
       usageActionsOverlap: intersects(rect(usage), rect(actions)),
-      gridAreas: getComputedStyle(usageRow).gridTemplateAreas,
-      gridColumns: getComputedStyle(usageRow).gridTemplateColumns.split(' ').length,
     };
-  });
+  }, SHORT_RESET);
   assert.ok(Math.abs(data.sidebarWidth - width) <= 2, `sidebar width ${data.sidebarWidth} at ${name(locale, width)}`);
   assert.equal(data.zoomScale, 1, `browser zoom changed at ${name(locale, width)}`);
   assert.ok(data.documentHeight <= data.viewportHeight && data.bodyHeight <= data.viewportHeight,
@@ -231,31 +267,29 @@ async function runCase(locale, width) {
     assert.equal(window.role, 'progressbar');
     assert.equal(window.label, durations[locale][index]);
     assert.ok(window.text.includes(window.label));
-    assert.ok(window.text.includes(remaining[locale](percent)));
-    assert.equal(window.valueText, remaining[locale](percent));
+    assert.equal(window.pctText, `${percent}%`);
+    assert.equal(window.pctTitle, remaining[locale](percent));
+    assert.equal(window.valueText, `${remaining[locale](percent)}, ${window.resetTitle}`);
     assert.equal(window.value, String(percent));
     assert.equal(window.min, '0');
     assert.equal(window.max, '100');
     assert.equal(window.fill, `${percent}%`);
     assert.ok(Math.abs(window.fillRatio - percent / 100) < 0.02);
-    assert.equal(window.resetText, resetsIn[locale](window.resetRelative));
-    assert.equal(window.resetTitle, resets[locale] + window.resetTime);
-    if (locale === 'zh-cn') assert.match(window.resetTitle, /^重置时间：\d{1,2}月\d{1,2}日 \d{2}:\d{2}$/);
+    assert.equal(window.resetText, window.resetRelative);
+    assert.equal(window.resetTitle, resetsIn[locale](window.resetRelative, window.resetTime));
+    if (locale === 'zh-cn') assert.match(window.resetTitle, /^\d+(天|小时|分钟).*后重置（\d{1,2}月\d{1,2}日 \d{2}:\d{2}）$/);
     assert.ok(!data.usageText.includes(window.resetTime), `absolute reset time must stay in the title at ${name(locale, width)}`);
     assert.equal(window.resetVisible, true);
-    assert.equal(window.resetInLabels, true, `reset time must sit in its window's label line at ${name(locale, width)}`);
+    assert.equal(window.resetInLabelLine, true, `reset time must sit at the right of its window's label line at ${name(locale, width)}`);
+    assert.equal(window.pctBesideBar, true, `percentage must sit beside the bar at ${name(locale, width)}`);
+    assert.equal(window.numberColumn, true, `reset time and percentage are not right-aligned in one column at ${name(locale, width)}`);
     assert.equal(window.resetOverflow, false, `reset date overflow at ${name(locale, width)}`);
     assert.equal(window.resetActionsOverlap, false, `reset date overlaps actions at ${name(locale, width)}`);
     assert.equal(window.overlap, false, `usage labels overlap track at ${name(locale, width)}`);
     assert.equal(window.overflow, false, `usage window overflow at ${name(locale, width)}`);
   }
-  if (width === 200) {
-    assert.equal(data.gridColumns, 2, `narrowest grid did not activate at ${name(locale, width)}`);
-    assert.ok(data.gridAreas.includes('". tags"'));
-  } else {
-    assert.equal(data.gridColumns, 3, `grid did not activate at ${name(locale, width)}`);
-    assert.ok(data.gridAreas.includes('"avatar title tags"') && data.gridAreas.includes('". actions actions"'));
-  }
+  assert.ok(Math.max(...data.windows.map((w) => w.trackWidth)) - Math.min(...data.windows.map((w) => w.trackWidth)) <= 1,
+    `bars differ in length at ${name(locale, width)}`);
   await cardChecks('codex', locale, width);
   await shot(`${name(locale, width)}-codex.png`, 'codex');
   const usageLocator = page.locator(`${row('codex', 'work')} .row-usage`);
@@ -267,7 +301,7 @@ async function runCase(locale, width) {
   await shot(`${name(locale, width)}-codex-hover.png`, 'codex');
   results.cases.push({ locale, width, mode: 'codex', passed: true, hoverPreserved: true, ...data });
   await page.evaluate(({ locale, width }) => window.preview.apply({ locale, width, active: 'claude' }), { locale, width });
-  const measureClaude = () => page.evaluate(() => {
+  const measureClaude = () => page.evaluate((shortReset) => {
     const app = document.querySelector('#app');
     const rows = [...document.querySelectorAll('#panel-claude .row')];
     const rect = (el) => {
@@ -300,12 +334,8 @@ async function runCase(locale, width) {
           value: track.getAttribute('aria-valuenow'),
           resetVisible: !!reset && rect(reset).width > 0 && rect(reset).height > 0,
           resetTitle: reset?.title,
-          resetRelative: (() => {
-            const seconds = usageState.windows[index].resetsAt;
-            const hours = Math.round((seconds * 1000 - Date.now()) / 3600000);
-            const rtf = new Intl.RelativeTimeFormat(document.documentElement.lang, { numeric: 'auto' });
-            return hours < 48 ? rtf.format(hours, 'hour') : rtf.format(Math.round(hours / 24), 'day');
-          })(),
+          resetRelative: eval(shortReset)(usageState.windows[index].resetsAt),
+          pctText: item.querySelector('.usage-pct').textContent, trackWidth: rect(track).width,
           resetActionsOverlap: !!reset && intersects(rect(reset), rect(actions)),
           resetTime: new Date(usageState.windows[index].resetsAt * 1000).toLocaleString(document.documentElement.lang, {
             month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
@@ -316,7 +346,7 @@ async function runCase(locale, width) {
         };
       }),
     };
-  });
+  }, SHORT_RESET);
   // Model-specific limits (sent while sidebar.showModelLimits is on) are shown right away, with no fold
   await cardChecks('claude', locale, width);
   await shot(`${name(locale, width)}-claude.png`, 'claude');
@@ -334,11 +364,11 @@ async function runCase(locale, width) {
     const window = claude.windows[index];
     assert.equal(window.label, scopedDurations[locale][index]);
     assert.equal(window.first, window.label, `aria-label differs from visible label at ${name(locale, width)}`);
-    assert.ok(window.text.includes(remaining[locale](percent)));
+    assert.equal(window.pctText, `${percent}%`);
     assert.equal(window.value, String(percent));
     assert.equal(window.resetVisible, true);
-    assert.equal(window.resetText, resetsIn[locale](window.resetRelative));
-    assert.equal(window.resetTitle, resets[locale] + window.resetTime);
+    assert.equal(window.resetText, window.resetRelative);
+    assert.equal(window.resetTitle, resetsIn[locale](window.resetRelative, window.resetTime));
     assert.equal(window.resetActionsOverlap, false, `claude reset date overlaps actions at ${name(locale, width)}`);
     assert.equal(window.overlap, false, `claude usage labels overlap track at ${name(locale, width)}`);
     assert.equal(window.overflow, false, `claude usage window overflow at ${name(locale, width)}`);
@@ -509,25 +539,30 @@ async function usageEndpoints() {
   });
   const values = await page.locator(`${row('codex', 'work')} .usage-window`).evaluateAll((windows) => windows.map((item) => ({
     value: item.querySelector('.usage-track').getAttribute('aria-valuenow'),
-    text: item.querySelector('.usage-labels').textContent,
+    text: item.querySelector('.usage-pct').textContent,
     fill: item.querySelector('.usage-fill').style.width,
   })));
   for (const [index, percent] of [100, 0].entries()) {
     assert.equal(values[index].value, String(percent));
     assert.equal(values[index].fill, `${percent}%`);
-    assert.ok(values[index].text.includes(remaining.en(percent)));
+    assert.equal(values[index].text, `${percent}%`);
   }
   const flags = await page.locator(`${row('codex', 'work')} .usage-window`).evaluateAll((windows) => windows.map((item) => {
     const track = item.querySelector('.usage-track');
+    const reset = getComputedStyle(item.querySelector('.usage-reset'));
     return { flag: item.querySelector('.usage-flag')?.textContent ?? null, level: track.dataset.level, valueText: track.getAttribute('aria-valuetext'),
-      image: getComputedStyle(track).backgroundImage };
+      image: getComputedStyle(track).backgroundImage, resetWeight: reset.fontWeight, resetColor: reset.color,
+      pctColor: getComputedStyle(item.querySelector('.usage-pct')).color };
   }));
   assert.equal(flags[0].flag, null);
   assert.equal(flags[0].level, 'ok');
-  assert.equal(flags[1].flag, exhausted.en, 'a window at 0% remaining shows the used-up mark');
+  assert.equal(flags[1].flag, null, 'a window at 0% remaining has no separate used-up tag');
   assert.equal(flags[1].level, 'empty');
-  assert.match(flags[1].valueText, /Used up/);
+  assert.ok(flags[1].valueText.includes(exhausted.en), 'the used-up state stays in the progress bar value text');
   assert.match(flags[1].image, /repeating-linear-gradient/, 'the empty track is hatched');
+  assert.equal(flags[1].resetWeight, '700', 'a used-up window shows its reset time in bold');
+  assert.equal(flags[1].resetColor, flags[1].pctColor, 'a used-up window shows its reset time in the error color');
+  assert.notEqual(flags[0].resetWeight, '700');
   await shot('en-200-usage-endpoints.png', 'codex');
   results.interactions.push('usage endpoints display 100% and 0% remaining for 0% and 100% used');
 }

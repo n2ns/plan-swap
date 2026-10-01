@@ -10,15 +10,15 @@
 - Icon buttons left of "+ Add" in the account list header refresh the usage limits of the current account (both pages) and of all Claude accounts (Claude page); they appear only when the account can be queried. The Command Palette entries remain.
 - **Refresh Claude Usage Limits** checks the current account on demand, and a new **Refresh Usage Limits of All Claude Accounts** command (also reachable from the Claude page's sidebar buttons) checks every signed-in Claude account one at a time with a cancellable progress notification and reports failures.
 - Scheduled Claude usage checks are skipped while the account's cached values are younger than 15 minutes, so several editor windows no longer each start `claude`. Manual refresh always checks.
-
 - New settings `planswap.sidebar.showEmail`, `planswap.sidebar.showFiveHourLimit` and `planswap.sidebar.showWeeklyLimit` (all on by default) choose whether the sidebar account cards show the email, the 5-hour limit and the 7-day limit.
 
 ### Changed
 
 - The status bar tooltip is now compact: one table for both products so their columns line up, each product a header row with the email, plan and a refresh button followed by one row per usage window (shortest first) with a remaining bar, remaining percentage, an explicit "Used up" mark at 0% and the relative reset time, plus a short italic line only when something needs saying (checking, failed, Codex restart pending or running in WSL, limit reached). The account name, directory, collection time, lowest-remaining line, detailed failure reasons and text refresh links are gone from it. Codex limits use the same layout.
-- Refreshed sidebar account cards: the current account is marked by a highlighted card only (no check badge), other accounts show a neutral plan tag and a visible **Switch** button, and the directory moved into the card's tooltip.
-- Usage windows show reset times as relative times next to their own window, an explicit "Used up" mark at 0%.
-- **Add account** is collapsed behind a "+ Add" button, the page tools are collapsed by default, and the footer toolbar is grouped with the destructive reload and restart actions side by side.
+- Refreshed sidebar account cards: the current account is marked by its plan-colored outline and left bar only (no check badge), every card shows a neutral plan tag, non-current cards show a visible **Switch** button, and the directory moved into the card's tooltip. **Switch** and **Log in** sit at the left and the icon buttons at the right; a card with icon buttons only shows them on the name line, left of the plan tag. The plan tag stays at the right end of the name line and moves under the name only when it does not fit. Only the name line keeps the avatar; the lines below span the whole card. Cards have a stronger outline and smaller corners.
+- Usage windows take two lines: the limit with the time until its reset at the right, then the bar with the remaining percentage at its right, so all bars have the same length. Reset times are short durations with days and hours, hours and minutes, or minutes (for example "2d 5h"), with the exact date in the tooltip, in the sidebar and the status bar tooltip. A used-up window shows a hatched bar, a red 0% and its reset time in red bold, without an extra tag.
+- Better contrast in dark and light themes: avatar letters stay readable on every chart color, the Max 5x current-card outline is visible on light themes, small red and amber texts are darker on light themes, and keyboard focus is an outline outside the card instead of a border that looked like the blue Pro outline.
+- **Add account** is collapsed behind a "+ Add" button, the page tools are collapsed by default with smaller button text, and the footer toolbar is grouped with the destructive reload and restart actions side by side.
 
 ## [0.2.1] - 2026-10-01
 

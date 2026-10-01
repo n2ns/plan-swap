@@ -22,8 +22,9 @@ Switch between the Claude Code and Codex subscription accounts you own (Claude P
 - **Keep accounts signed in**: sign in once per account, then switch from the sidebar. Codex switches require a restart (see below).
 - **Linked or independent accounts**: reuse the default account's setup, or keep separate settings and session histories.
 - **Display names**: give named accounts labels that are easy to recognize.
-- **Claude usage limits**: hover the status bar item to see the current Claude account's session and weekly limits, and the status bar text itself shows what is left of the short (5-hour) window for each product (for example `Claude 97% · Codex 82%`); the item turns amber or red when any limit, the weekly one included, is nearly used up. Claude's model-specific limits in the sidebar are optional (setting `planswap.sidebar.showModelLimits`, default off). **Refresh Usage Limits of All Claude Accounts** (the layers button in the Claude page header or the Command Palette; the refresh button next to it checks the current account) checks every signed-in account one after another so you can compare them before switching. Every signed-in Claude account row shows the values its last check left in that account's own folder; values older than 24 hours are not shown.
-- **Codex usage limits**: hover the status bar item to see the current Codex account's usage limits and reset times. Account rows retain the last observation with its collection time and a "not live" label; missing observations are not shown as zero usage.
+- **Usage limits on every card**: each signed-in account card shows its remaining limits as bars, with the time until each window resets (for example `2d 5h`; the exact date is in the tooltip). A used-up window shows its reset time in red. The settings `planswap.sidebar.showEmail`, `planswap.sidebar.showFiveHourLimit` and `planswap.sidebar.showWeeklyLimit` hide the email, the 5-hour or the 7-day limit on the cards; `planswap.sidebar.showModelLimits` (default off) adds Claude's model-specific limits.
+- **Claude usage limits**: hover the status bar item to see the current Claude account's session and weekly limits, and the status bar text itself shows what is left of the short (5-hour) window for each product (for example `Claude 97% · Codex 82%`); the item turns amber or red when any limit, the weekly one included, is nearly used up. **Refresh Usage Limits of All Claude Accounts** (the layers button in the Claude page header or the Command Palette; the refresh button next to it checks the current account) checks every signed-in account one after another so you can compare them before switching. Every signed-in Claude account row shows the values its last check left in that account's own folder; values older than 24 hours are not shown.
+- **Codex usage limits**: hover the status bar item to see the current Codex account's usage limits and reset times. Account rows keep the last observation (its collection time is in the tooltip); missing observations are not shown as zero usage.
 - **Handy tools**: open your rules and settings, update the CLI, check installed versions and reload the editor.
 - **English, Simplified Chinese, Spanish and Japanese UI**, switchable in the settings.
 
@@ -68,13 +69,13 @@ Open **PlanSwap** in the activity bar. The `default` row represents your existin
 
 1. Click **+ Add** next to the account list heading, type a name (letters, digits, `-` and `_`) and press Enter. Leave **Link to the default account's settings and history** checked to reuse your default setup, or uncheck it for separate settings and history.
 2. Click the row's **Log in** button and complete sign-in in the terminal. You can also switch to the account and sign in from the Claude Code panel.
-3. Click the switch icon on any row. New sessions use that account; click **Reload Window** in the banner to move open panels over too.
+3. Click **Switch** on any row and confirm. New sessions use that account; click **Reload Window** in the banner to move open panels over too.
 
 **Codex**
 
 1. On the Codex tab, click **Enable Codex switching** and confirm the shell configuration changes shown by PlanSwap.
 2. Add an account, choose linked or independent, then click **Log in** and complete sign-in in the terminal.
-3. Click the switch icon and follow your editor's [restart steps](#supported-editors). Codex uses the selected account after the restart.
+3. Click **Switch**, confirm, and follow your editor's [restart steps](#supported-editors). Codex uses the selected account after the restart.
 
 **Tip:** signing in a new account does not sign out the others. Each account keeps its sign-in in its own folder, so there is no need to sign out first; signing out ends that account's session. PlanSwap warns you when two accounts are signed in to the same account and workspace, because switching between them gives no separate usage limits.
 

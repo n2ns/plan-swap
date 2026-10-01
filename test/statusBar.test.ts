@@ -111,17 +111,25 @@ describe('pure helpers', () => {
     assert.equal(backgroundIdFor(0), 'statusBarItem.errorBackground');
   });
 
-  test('relativeReset speaks the UI language', () => {
+  test('relativeReset is a short two-unit duration in the UI language', () => {
     const now = Date.parse('2026-10-01T12:00:00Z');
     const at = (ms: number): number => Math.floor((now + ms) / 1000);
-    assert.equal(relativeReset(at(5 * 60_000), now), 'in 5 minutes');
-    assert.equal(relativeReset(at(2 * 3600_000), now), 'in 2 hours');
-    assert.equal(relativeReset(at(3 * 86400_000), now), 'in 3 days');
-    assert.equal(relativeReset(at(-1000), now), 'in 1 minute', 'never negative');
+    assert.equal(relativeReset(at(5 * 60_000), now), '5m');
+    assert.equal(relativeReset(at(5 * 60_000 - 30_000), now), '5m', 'rounded up to the minute');
+    assert.equal(relativeReset(at(2 * 3600_000), now), '2h', 'a zero unit is left out');
+    assert.equal(relativeReset(at(5 * 3600_000 + 20 * 60_000), now), '5h 20m');
+    assert.equal(relativeReset(at(3 * 86400_000), now), '3d');
+    assert.equal(relativeReset(at(2 * 86400_000 + 5 * 3600_000 + 59 * 60_000), now), '2d 5h', 'days show hours, not minutes');
+    assert.equal(relativeReset(at(-1000), now), '1m', 'never negative');
+    const twoDaysFive = at(2 * 86400_000 + 5 * 3600_000);
     try {
       setLocale('zh-cn');
-      assert.equal(relativeReset(at(2 * 3600_000), now), '2小时后');
-      assert.equal(relativeReset(at(3 * 86400_000), now), '3天后');
+      assert.equal(relativeReset(twoDaysFive, now), '2天5小时');
+      assert.equal(relativeReset(at(3 * 86400_000), now), '3天');
+      setLocale('ja');
+      assert.equal(relativeReset(twoDaysFive, now), '2 日 5 時間');
+      setLocale('es');
+      assert.equal(relativeReset(twoDaysFive, now), '2d 5h');
     } finally { setLocale('en'); }
   });
 
@@ -150,7 +158,7 @@ describe('Codex usage limits in the tooltip', () => {
 
   test('windowRow and usageTable build one aligned table for all products: headers hold email, plan and refresh, rows hold window, bar, percent, reset', () => {
     const rows = [windowRow({ usedPercent: 42, windowMinutes: 300, resetsAt: Math.floor(now / 1000) + 3600 }, 0, now), windowRow({ usedPercent: 100, windowMinutes: 10080 }, 1, now), windowRow({ usedPercent: 3 }, 2, now)];
-    assert.equal(rows[0], '| 5h | ██████░░░░ | 58% | in 1 hour |');
+    assert.equal(rows[0], '| 5h | ██████░░░░ | 58% | $(clock) 1h |');
     assert.equal(rows[1], '| 7d | ░░░░░░░░░░ | 0% $(warning) Used up | |');
     assert.equal(rows[2], '| \\#3 | ██████████ | 97% | |');
     const link = refreshLink('planswap.claude.refreshUsage');
@@ -228,7 +236,7 @@ describe('Codex usage limits in the tooltip', () => {
         assert.equal(tip.supportThemeIcons, true);
         assert.deepEqual(tip.isTrusted, { enabledCommands: ['planswap.claude.refreshUsage', 'planswap.codex.refreshUsage'] });
         assert.ok(!tip.value.includes(path.join(temp.home, '.codex')));
-        assert.match(tooltipText(tip), /^\| default \| \| \| \[\$\(refresh\)\]\(command:planswap\.codex\.refreshUsage "Refresh usage limits"\) \|\n\|:--\|:--\|--:\|--:\|\n\| 5h \| ██████░░░░ \| 58% \| in 1 hour \|\n\| 7d \|/);
+        assert.match(tooltipText(tip), /^\| default \| \| \| \[\$\(refresh\)\]\(command:planswap\.codex\.refreshUsage "Refresh usage limits"\) \|\n\|:--\|:--\|--:\|--:\|\n\| 5h \| ██████░░░░ \| 58% \| \$\(clock\) 1h \|\n\| 7d \|/);
         // The status bar text states the product and the short window only, never the account
         assert.equal(item.text, '$(dashboard) Codex 58%');
         assert.equal(item.name, 'PlanSwap');
@@ -354,7 +362,7 @@ describe('both products in the status bar', LINUX_ONLY, () => {
       assert.equal(item.text, '$(dashboard) Claude 97% · Codex 82%');
       assert.equal(color(item), undefined);
       const tip = tooltipText(item.tooltip);
-      assert.match(tip, /^\| me@example\.com \| \| \| Max 5x \[\$\(refresh\)\]\(command:planswap\.claude\.refreshUsage "Refresh usage limits"\) \|\n\|:--\|:--\|--:\|--:\|\n\| 5h \| ██████████ \| 97% \| in 2 hours \|\n\| 7d \| ██████░░░░ \| 60% \| in 3 days \|\n\| \*\*default\*\* \| \| \| \*\*\[\$\(refresh\)\]\(command:planswap\.codex\.refreshUsage "Refresh usage limits"\)\*\* \|\n\| 5h \| ████████░░ \| 82% \| in 1 hour \|\n\| 7d \| █████░░░░░ \| 50% \| in 5 days \|$/);
+      assert.match(tip, /^\| me@example\.com \| \| \| Max 5x \[\$\(refresh\)\]\(command:planswap\.claude\.refreshUsage "Refresh usage limits"\) \|\n\|:--\|:--\|--:\|--:\|\n\| 5h \| ██████████ \| 97% \| \$\(clock\) 2h \|\n\| 7d \| ██████░░░░ \| 60% \| \$\(clock\) 3d \|\n\| \*\*default\*\* \| \| \| \*\*\[\$\(refresh\)\]\(command:planswap\.codex\.refreshUsage "Refresh usage limits"\)\*\* \|\n\| 5h \| ████████░░ \| 82% \| \$\(clock\) 1h \|\n\| 7d \| █████░░░░░ \| 50% \| \$\(clock\) 5d \|$/);
       assert.ok(!tip.includes('Fable') && !tip.includes('Per model'), 'model-specific windows are off by default');
       assert.ok(!/Checked|Lowest|\.claude[/\\]|\.codex[/\\]|---|used\b/i.test(tip), 'no account name, path, checked line, lowest line, rule or used values');
       assert.deepEqual(tip.match(/\(command:[^ )]+/g), ['(command:planswap.claude.refreshUsage', '(command:planswap.codex.refreshUsage'], 'only the two refresh links');
@@ -390,7 +398,7 @@ describe('both products in the status bar', LINUX_ONLY, () => {
       assert.equal(color(item), 'statusBarItem.errorBackground');
       const tip = tooltipText(item.tooltip);
       assert.ok(!tip.includes('Lowest'));
-      assert.match(tip, /\| 7d \| ░░░░░░░░░░ \| 0% \$\(warning\) Used up \| in 3 days \|/);
+      assert.match(tip, /\| 7d \| ░░░░░░░░░░ \| 0% \$\(warning\) Used up \| \$\(clock\) 3d \|/);
     } finally { bar.dispose(); }
   });
 

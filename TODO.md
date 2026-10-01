@@ -51,7 +51,9 @@ Review of the account list (2026-10-01). The plan-tag, current-card, card-conten
 - **Spacing.** Tightening card padding and line spacing, and grouping with whitespace instead of lines, were not part of
   the last pass.
 - **Real-editor look of the new styles.** The flat current card, neutral plan tags, hatched "used up" track,
-  high-contrast outline and the usage refresh icon buttons next to "+ Add" were previewed only with synthetic light, Solarized Light and high-contrast variables; see the
+  high-contrast outline, the usage refresh icon buttons next to "+ Add", and the theme-dependent rules added later
+  (dark avatar letters on dark themes, darkened avatar discs, Max 5x outline and small error/warning text on light themes,
+  the outline focus ring) were previewed only with synthetic light, Solarized Light and high-contrast variables; see the
   real-editor theme acceptance under Deferred features.
 
 ## Deferred features
