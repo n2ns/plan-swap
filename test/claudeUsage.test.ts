@@ -10,9 +10,9 @@ import {
   type ClaudeUsageChild, type ClaudeUsageSpawn,
 } from '../src/claudeUsage';
 import { ClaudeUsageMonitor, type ClaudeUsageState } from '../src/claudeUsageMonitor';
-import { StatusBar, claudeUsageLines, tightestRemaining } from '../src/statusBar';
-import { statusBarItems, tooltipText } from './stubs/vscode';
-import { claudePanelSource } from '../src/accountsPanel';
+import { StatusBar, claudeUsageFailureText, claudeUsageParts } from '../src/statusBar';
+import { statusBarItems, tooltipText, setConfig, resetConfig } from './stubs/vscode';
+import { claudePanelSource, SHOW_MODEL_LIMITS_SETTING } from '../src/accountsPanel';
 import { AccountStore } from '../src/accounts';
 import { LabelStore } from '../src/labels';
 import { setLocale } from '../src/i18n';
@@ -374,26 +374,27 @@ test('the monitor follows up once when the current account changes during a quer
   assert.deepEqual(calls, ['/a', '/b']);
 });
 
-test('claudeUsageLines shows the cached windows with model scopes and only this directory\'s failure', () => {
+test('claudeUsageParts lists the general windows, without model scopes, and only this directory\'s failure', () => {
   setLocale('en');
   const usage = { checkedAt: NOW, windows: [
-    { usedPercent: 42, windowMinutes: 300 },
     { usedPercent: 3, windowMinutes: 10080, scope: 'Fable' },
+    { usedPercent: 42, windowMinutes: 300 },
   ] };
-  const lines = claudeUsageLines(usage, { checking: false }, '/a');
-  assert.equal(lines[0], '5h: 42% used');
-  assert.equal(lines[1], '7d · Fable: 3% used');
-  assert.match(lines[2], /^Checked /);
-  const failed = claudeUsageLines(usage, { checking: false, failure: { dir: '/a', reason: 'notRefreshed' } }, '/a');
-  assert.ok(failed.includes('Usage limits could not be refreshed; the values shown are from the last successful check.'));
-  assert.equal(claudeUsageLines(undefined, { checking: false, failure: { dir: '/b', reason: 'timeout' } }, '/a').length, 0);
-  assert.deepEqual(claudeUsageLines(undefined, { checking: true }, '/a'), ['Checking usage limits…']);
-  assert.deepEqual(claudeUsageLines(undefined, { checking: false, failure: { dir: '/a', reason: 'cliMissing' } }, '/a'),
-    ['Usage limits unavailable: the claude command was not found.']);
-  assert.deepEqual(claudeUsageLines(undefined, { checking: false, failure: { dir: '/a', reason: 'failed' } }, '/a'),
-    ['Usage limits unavailable: unknown error']);
-  assert.deepEqual(claudeUsageLines(undefined, { checking: false, failure: { dir: '/a', reason: 'notRefreshed' } }, '/a'),
-    ['Usage limits unavailable: Claude Code could not refresh them.'], 'no shown values to point at');
+  const hidden = claudeUsageParts(usage, { checking: false }, '/a', NOW);
+  assert.deepEqual(hidden, { rows: ['| 5h | ██████░░░░ | 58% | |'], notes: [] }, 'the model-specific window is left out');
+  const failed = claudeUsageParts(usage, { checking: false, failure: { dir: '/a', reason: 'notRefreshed' } }, '/a', NOW);
+  assert.deepEqual(failed.notes, ['_Usage check failed_']);
+  assert.deepEqual(claudeUsageParts(undefined, { checking: false, failure: { dir: '/b', reason: 'timeout' } }, '/a'), { rows: [], notes: [] });
+  assert.deepEqual(claudeUsageParts(undefined, { checking: true }, '/a').notes, ['_Checking usage limits…_']);
+  assert.deepEqual(claudeUsageParts(usage, { checking: true, failure: { dir: '/a', reason: 'timeout' } }, '/a', NOW).notes, ['_Checking usage limits…_'], 'checking wins over an old failure');
+});
+
+test('claudeUsageFailureText gives the long text used by the refresh-all warning', () => {
+  setLocale('en');
+  assert.equal(claudeUsageFailureText({ reason: 'cliMissing' }, false), 'Usage limits unavailable: the claude command was not found.');
+  assert.equal(claudeUsageFailureText({ reason: 'failed' }, false), 'Usage limits unavailable: unknown error');
+  assert.equal(claudeUsageFailureText({ reason: 'notRefreshed' }, true), 'Usage limits could not be refreshed; the values shown are from the last successful check.');
+  assert.equal(claudeUsageFailureText({ reason: 'notRefreshed' }, false), 'Usage limits unavailable: Claude Code could not refresh them.', 'no shown values to point at');
 });
 
 test('queryEach runs the targets one after another, keeps going after a failure and stops when cancelled', async () => {
@@ -460,14 +461,7 @@ test('the monitor takes a result recorded for the current directory only', () =>
   assert.equal(m.current().failure, undefined);
 });
 
-test('tightestRemaining is what is left of the window that runs out first', () => {
-  assert.equal(tightestRemaining(undefined), undefined);
-  assert.equal(tightestRemaining({ checkedAt: 0, windows: [] }), undefined);
-  assert.equal(tightestRemaining({ checkedAt: 0, windows: [{ usedPercent: 42.5 }, { usedPercent: 3 }, { usedPercent: 10, scope: 'Fable' }] }), 57);
-  assert.equal(tightestRemaining({ checkedAt: 0, windows: [{ usedPercent: 100 }] }), 0);
-});
-
-test('the status bar text shows the current Claude account with what is left; the tooltip offers both refreshes', LINUX_ONLY, () => {
+test('the status bar text shows Claude with what is left of its short window; the tooltip lists its windows with a refresh link after the plan', LINUX_ONLY, () => {
   setLocale('en');
   const tmp = makeTempHome('status-claude-usage');
   try {
@@ -482,15 +476,14 @@ test('the status bar text shows the current Claude account with what is left; th
     try {
       bar.setClaudeUsage({ checking: false });
       const item = statusBarItems.at(-1)!;
-      assert.equal(item.text, '$(account) Claude: default 58% left');
+      assert.equal(item.text, '$(dashboard) Claude 58%');
       const tip = tooltipText(item.tooltip);
-      assert.ok(tip.includes('command:planswap.claude.refreshUsage'));
-      assert.ok(tip.includes('command:planswap.claude.refreshAllUsage'));
+      assert.match(tip, /^\| 5h \|/m);
+      assert.equal(tip.match(/\(command:[^ )]+/g)?.join(), '(command:planswap.claude.refreshUsage', 'only the refresh link');
       // Signed in (identity present) but nothing displayable cached
       fs.writeFileSync(path.join(tmp.home, '.claude.json'), JSON.stringify({ oauthAccount: { accountUuid: 'acct-1', organizationUuid: 'org-1' } }));
       bar.update();
-      assert.ok(tooltipText(item.tooltip).includes('command:planswap.claude.refreshUsage'), 'still a signed-in account');
-      assert.equal(item.text, '$(account) Claude: default', 'no usage, no percentage');
+      assert.equal(item.text, '$(dashboard) Claude', 'no usage, no percentage');
     } finally { bar.dispose(); }
   } finally { tmp.restore(); }
 });
@@ -504,7 +497,8 @@ test('Claude panel rows carry the cached usage of a subscription sign-in only', 
     fs.mkdirSync(other);
     const fresh = cache({ fetchedAtMs: Date.now() - 60_000 });
     (fresh.cachedUsageUtilization as { utilization: Record<string, unknown> }).utilization = {
-      limits: [{ kind: 'session', percent: 42, resets_at: iso(Date.now() + HOUR) }],
+      limits: [{ kind: 'session', percent: 42, resets_at: iso(Date.now() + HOUR) },
+        { kind: 'weekly_scoped', percent: 25, resets_at: iso(Date.now() + 48 * HOUR), scope: { model: { display_name: 'Fable' } } }],
     };
     fs.writeFileSync(path.join(work, '.claude.json'), JSON.stringify(fresh));
     // Re-signed in to another account: the old cache is not shown
@@ -514,8 +508,14 @@ test('Claude panel rows carry the cached usage of a subscription sign-in only', 
     const rows = claudePanelSource(new AccountStore(memento), new LabelStore(memento, 'claude.labels')).accounts();
     const row = rows.find((r) => r.dir === work);
     assert.equal(row?.usage?.windows[0].usedPercent, 42);
+    assert.equal(row?.usage?.windows.length, 1);
+    setConfig('planswap', SHOW_MODEL_LIMITS_SETTING, true);
+    const shown = claudePanelSource(new AccountStore(memento), new LabelStore(memento, 'claude.labels')).accounts().find((r) => r.dir === work);
+    assert.equal(shown?.usage?.windows.length, 2);
+    assert.equal(shown?.usage?.windows[1].scope, 'Fable');
+    assert.equal(row?.usageEligible, true);
     assert.equal(row?.usage?.windows[0].windowMinutes, 300);
     assert.equal(rows.find((r) => r.dir === other)?.usage, undefined);
     assert.ok(!JSON.stringify(rows).includes('acct-1'), 'no identity key reaches the Webview');
-  } finally { tmp.restore(); }
+  } finally { resetConfig(); tmp.restore(); }
 });

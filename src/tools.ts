@@ -10,6 +10,7 @@ import { askCopyFallback } from './linkPolicy';
 import { describeShareReport, type ShareReportLike } from './shareReport';
 import type { PanelMode, ToolId } from './protocol';
 import { t } from './i18n';
+import { CLAUDE_REFRESH_ALL_USAGE_COMMAND, CLAUDE_REFRESH_USAGE_COMMAND, REFRESH_USAGE_COMMAND } from './statusBar';
 import { isWindows } from './platform';
 import { accountTerminalShell } from './terminalShell';
 
@@ -76,6 +77,14 @@ export async function runTool(mode: PanelMode, tool: ToolId, deps: ToolDeps): Pr
         return;
       }
       await deps.codexRestart();
+      return;
+    // Panel buttons next to "Add": the product's own refresh command, so the Command Palette and the panel share one path
+    case 'refreshUsage':
+      await vscode.commands.executeCommand(mode === 'claude' ? CLAUDE_REFRESH_USAGE_COMMAND : REFRESH_USAGE_COMMAND);
+      return;
+    case 'refreshAllUsage':
+      // Claude only: the Codex page has no such button, and a message that claims it is ignored
+      if (mode === 'claude') await vscode.commands.executeCommand(CLAUDE_REFRESH_ALL_USAGE_COMMAND);
       return;
     case 'cliVersions':
       if (deps.postVersions) deps.postVersions(await collectVersions());
@@ -237,6 +246,7 @@ async function showCliVersions(): Promise<void> {
 /** Command Palette entries; restarting the WSL server reuses planswap.codex.restartServer and is not registered here */
 export function registerToolCommands(deps: ToolDeps): vscode.Disposable[] {
   return [
+    vscode.commands.registerCommand('planswap.openSettings', () => vscode.commands.executeCommand('workbench.action.openSettings', '@ext:n2ns.planswap')),
     vscode.commands.registerCommand('planswap.tools.openClaudeMd', () => runTool('claude', 'openGlobalMd', deps)),
     vscode.commands.registerCommand('planswap.tools.openAgentsMd', () => runTool('codex', 'openGlobalMd', deps)),
     vscode.commands.registerCommand('planswap.tools.openSettings', async () => {

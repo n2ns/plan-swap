@@ -166,6 +166,8 @@ body {
   justify-content: space-between;
   gap: 6px;
   padding: 0 2px;
+  /* At narrow widths the buttons drop below the title instead of overflowing */
+  flex-wrap: wrap;
 }
 .section-title, .tools-summary {
   font-size: max(11px, 0.72em);
@@ -190,6 +192,11 @@ body {
   background: var(--surface-2);
   border: 1px solid var(--line);
 }
+/* Usage refresh icon buttons and "+ Add" at the right of the list heading; right-aligned also when wrapped below the title */
+.title-actions { display: flex; align-items: center; gap: 2px; margin-left: auto; min-width: 0; }
+.title-actions .icon-btn { width: 22px; height: 22px; }
+.title-actions .icon-btn[hidden] { display: none; }
+.title-actions .add-toggle { margin-left: 2px; }
 /* "+ Add" at the right of the list heading; the form opens below it */
 .add-toggle {
   display: inline-flex;
@@ -217,18 +224,18 @@ body {
 
 /* ---------- Account list ---------- */
 .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-/* Narrow panel (default), three lines: avatar+name / email / tags+buttons. Line spacing uses each line's margin-top so empty areas take no space */
+/* Lines: avatar+name+tags / email / usage / buttons. Line spacing uses each line's margin-top so empty areas take no space */
 .row {
   position: relative;
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr);
+  grid-template-columns: 20px minmax(0, 1fr) fit-content(40%);
   grid-template-areas:
-    'avatar title'
-    'sub sub'
-    'usage usage'
-    'foot foot'
-    'hint hint'
-    'error error';
+    'avatar title tags'
+    '. sub sub'
+    '. usage usage'
+    '. actions actions'
+    '. hint hint'
+    '. error error';
   column-gap: 8px;
   align-items: center;
   padding: 8px 8px 8px 12px;
@@ -353,26 +360,30 @@ details[open] > summary > .chevron { transform: rotate(90deg); }
 .row-actions .icon-btn { opacity: 0.75; transition: opacity var(--ease); }
 .row:hover .row-actions .icon-btn, .row:focus-within .row-actions .icon-btn { opacity: 1; }
 
-/* Wide panel (container >= 340px): the plan tag moves up beside the name; the buttons stay on their own line below */
-@container panel (min-width: 340px) {
-  /* The tags column takes at most 40% before its pills wrap, so longer (e.g. English) pills never squeeze the name to nothing */
+/* The plan tag sits beside the name at every width (at most 40% of the card, then its text is cut); the buttons stay on their own line below */
+.row-foot { display: contents; }
+.row-tags { grid-area: tags; margin-top: 0; justify-self: end; }
+.row-actions { grid-area: actions; justify-self: end; margin-top: 4px; }
+.row-sub, .row-hint, .row-error { margin-top: 1px; }
+/* Edit mode: the edit line spans over the tags column, and the plan tag is hidden meanwhile */
+.row.is-editing .row-title { grid-column: 2 / -1; }
+.row.is-editing .row-tags { display: none; }
+
+/* Narrowest panel: the name and the tag no longer fit side by side, so the tag drops to its own line under the name */
+@container panel (max-width: 199px) {
   .row {
-    grid-template-columns: 20px minmax(0, 1fr) fit-content(40%);
+    grid-template-columns: 20px minmax(0, 1fr);
     grid-template-areas:
-      'avatar title tags'
-      '. sub sub'
-      '. usage usage'
-      '. actions actions'
-      '. hint hint'
-      '. error error';
+      'avatar title'
+      '. tags'
+      '. sub'
+      '. usage'
+      '. actions'
+      '. hint'
+      '. error';
   }
-  .row-foot { display: contents; }
-  .row-tags { grid-area: tags; margin-top: 0; }
-  .row-actions { grid-area: actions; justify-self: end; margin-top: 4px; }
-  .row-sub, .row-hint, .row-error { margin-top: 1px; }
-  /* Edit mode: the edit line spans over the tags column, and the plan tag is hidden meanwhile */
-  .row.is-editing .row-title { grid-column: 2 / -1; }
-  .row.is-editing .row-tags { display: none; }
+  .row-tags { justify-self: start; margin-top: 2px; }
+  .row.is-editing .row-title { grid-column: 2; }
 }
 
 /* Rounded icon buttons: 24px everywhere */

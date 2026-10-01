@@ -10,7 +10,8 @@ import { codexDefaultDir, readCodexAccountInfo } from './codex/codexPaths';
 import { effectiveDir, isEnabled, readSelectedDir } from './codex/codexState';
 import { codexRunsInWsl } from './codex/codexCommands';
 import type { CodexUsageState } from './codex/codexUsageMonitor';
-import type { UsageFailure, UsageWindow } from './codex/codexUsage';
+import type { CodexUsage, UsageWindow } from './codex/codexUsage';
+import { USAGE_HISTORY_MAX_AGE_MS } from './codex/codexUsageHistory';
 import { readClaudeUsage, type ClaudeUsage, type ClaudeUsageFailure, type ClaudeUsageWindow } from './claudeUsage';
 import type { ClaudeUsageState } from './claudeUsageMonitor';
 
@@ -19,17 +20,6 @@ export const CLAUDE_REFRESH_USAGE_COMMAND = 'planswap.claude.refreshUsage';
 export const CLAUDE_REFRESH_ALL_USAGE_COMMAND = 'planswap.claude.refreshAllUsage';
 
 const INTL_LOCALES: Record<Locale, string> = { en: 'en', 'zh-cn': 'zh-CN', es: 'es', ja: 'ja' };
-const USAGE_FAILURE_MESSAGES: Record<Exclude<UsageFailure, 'notLoggedIn'>, MessageKey> = {
-  cliMissing: 'status.usageCliMissing',
-  authExpired: 'status.usageAuthExpired',
-  timeout: 'status.usageTimeout',
-  homeMismatch: 'status.usageHomeMismatch',
-  noRateLimits: 'status.usageNoRateLimits',
-  protocolTooLong: 'status.usageProtocolTooLong',
-  exited: 'status.usageExited',
-  unknownError: 'status.usageUnknownError',
-  failed: 'status.usageFailed',
-};
 const CLAUDE_USAGE_FAILURE_MESSAGES: Record<ClaudeUsageFailure, MessageKey> = {
   cliMissing: 'status.claudeUsageCliMissing',
   timeout: 'status.claudeUsageTimeout',
@@ -45,54 +35,156 @@ function formatDuration(minutes: number): string {
   return t('status.minutes', { n: minutes });
 }
 
-// Time only when it falls on the same day as now, otherwise date and time; in the UI locale
-export function formatTime(ms: number, now: number = Date.now()): string {
-  const at = new Date(ms);
-  const sameDay = at.toDateString() === new Date(now).toDateString();
-  const options: Intl.DateTimeFormatOptions = sameDay
-    ? { hour: '2-digit', minute: '2-digit' }
-    : { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
-  return new Intl.DateTimeFormat(INTL_LOCALES[getLocale()], options).format(at);
+// Markdown for text that is not ours (account labels, emails, model names):
+// every markdown and theme-icon metacharacter is escaped, so it can never become a link, icon or formatting.
+export function escapeMarkdown(text: string): string {
+  return text.replace(/[\r\n]+/g, ' ').replace(/[\\`*_{}[\]()#+\-.!|<>~&$]/g, '\\$&');
 }
 
-function windowLine(w: UsageWindow | ClaudeUsageWindow, index: number): string {
-  const duration = w.windowMinutes ? formatDuration(w.windowMinutes) : `#${index + 1}`;
-  const window = 'scope' in w && w.scope ? t('status.scopedWindow', { window: duration, scope: w.scope }) : duration;
-  return w.resetsAt !== undefined
-    ? t('status.usageWindow', { window, used: w.usedPercent, reset: formatTime(w.resetsAt * 1000) })
-    : t('status.usageWindowNoReset', { window, used: w.usedPercent });
+/** Remaining percentage of a window, rounded down. */
+export function remainingOf(w: { usedPercent: number }): number {
+  return Math.max(0, Math.min(100, Math.floor(100 - w.usedPercent)));
 }
 
-/** Tooltip lines for the effective Codex account's usage limits; empty when there is nothing to say (signed out). */
-export function usageLines(state: CodexUsageState | undefined): string[] {
-  if (!state) return [];
-  const r = state.result;
-  const lines: string[] = [];
-  if (r?.ok) {
-    lines.push(...r.usage.windows.map(windowLine));
-    if (r.usage.limitReached) lines.push(t('status.usageReached'));
-  } else if (r && r.reason !== 'notLoggedIn') {
-    let detail = r.detail ?? '';
-    if (r.reason === 'exited' && !detail) detail = t('status.usageUnknownExit');
-    if (r.reason === 'unknownError' && detail) detail = ` (${detail})`;
-    lines.push(t(USAGE_FAILURE_MESSAGES[r.reason], { detail }));
-  }
-  if (state.checking) lines.push(t('status.usageChecking'));
-  else if (r?.ok) lines.push(t('status.usageChecked', { time: formatTime(r.usage.checkedAt) }));
-  return lines;
+const BAR_CELLS = 10;
+
+/** Fixed-width progress bar of the remaining share; a non-empty window always shows at least one filled cell. */
+export function usageBar(remaining: number): string {
+  const clamped = Math.max(0, Math.min(100, remaining));
+  const filled = clamped <= 0 ? 0 : Math.max(1, Math.round(clamped / 100 * BAR_CELLS));
+  return '█'.repeat(filled) + '░'.repeat(BAR_CELLS - filled);
 }
 
 /**
- * Tooltip lines for the current Claude account: the usage cached in its info file (usage), plus the refresh state of
- * that directory (a failure of another directory is not shown).
+ * The window the status bar text states: among the general (not model-specific) windows the one with the shortest
+ * duration (normally the 5-hour window); without durations, the first general window.
  */
-export function claudeUsageLines(usage: ClaudeUsage | undefined, state: ClaudeUsageState | undefined, dir: string): string[] {
-  const lines: string[] = usage ? usage.windows.map(windowLine) : [];
-  const failure = state?.failure && samePath(state.failure.dir, dir) ? state.failure : undefined;
-  if (failure) lines.push(claudeUsageFailureText(failure, usage !== undefined));
-  if (state?.checking) lines.push(t('status.usageChecking'));
-  else if (usage) lines.push(t('status.usageChecked', { time: formatTime(usage.checkedAt) }));
-  return lines;
+export function shortWindow<W extends { usedPercent: number; windowMinutes?: number; scope?: string }>(windows: readonly W[]): W | undefined {
+  const general = windows.filter((w) => !w.scope);
+  let best: W | undefined;
+  for (const w of general) {
+    if (w.windowMinutes !== undefined && (best === undefined || w.windowMinutes < best.windowMinutes!)) best = w;
+  }
+  return best ?? general[0];
+}
+
+/** The only two background colors a status bar item may use; thresholds are on the lowest remaining percentage. */
+export function backgroundIdFor(lowest: number | undefined): 'statusBarItem.errorBackground' | 'statusBarItem.warningBackground' | undefined {
+  if (lowest === undefined) return undefined;
+  return lowest <= 10 ? 'statusBarItem.errorBackground' : lowest <= 30 ? 'statusBarItem.warningBackground' : undefined;
+}
+
+/** "in 2 hours" / "tomorrow" in the UI language, from the reset time (unix seconds). */
+export function relativeReset(epochSeconds: number, now: number = Date.now()): string {
+  const rtf = new Intl.RelativeTimeFormat(INTL_LOCALES[getLocale()], { numeric: 'auto' });
+  const minutes = Math.max(1, Math.round((epochSeconds * 1000 - now) / 60000));
+  if (minutes < 60) return rtf.format(minutes, 'minute');
+  const hours = Math.round(minutes / 60);
+  return hours < 48 ? rtf.format(hours, 'hour') : rtf.format(Math.round(hours / 24), 'day');
+}
+
+/** Status bar text: product names with the remaining percentage of their short window when known. */
+export function statusText(parts: ReadonlyArray<{ product: string; remaining?: number }>): string {
+  return parts.map((p) => p.remaining === undefined ? p.product : t('status.textUsage', { product: p.product, percent: p.remaining })).join(' · ');
+}
+
+/** Screen reader label of the status bar item. */
+export function statusAccessibilityLabel(parts: ReadonlyArray<{ product: string; remaining?: number }>): string {
+  const items = parts.map((p) => p.remaining === undefined ? p.product : `${p.product} ${t('status.remainingShort', { percent: p.remaining })}`);
+  return `PlanSwap: ${items.join(', ')}`;
+}
+
+/** One usage window as a table row: name, bar, remaining percentage (with a warning mark at 0%), relative reset time. */
+export function windowRow(w: UsageWindow | ClaudeUsageWindow, index: number, now: number = Date.now()): string {
+  const duration = w.windowMinutes ? formatDuration(w.windowMinutes) : `#${index + 1}`;
+  const scope = 'scope' in w ? w.scope : undefined;
+  const name = scope ? t('status.scopedWindow', { window: duration, scope }) : duration;
+  const remaining = remainingOf(w);
+  const exhausted = Number((100 - w.usedPercent).toFixed(2)) <= 0;
+  const percent = exhausted ? `${remaining}% $(warning) ${escapeMarkdown(t('status.exhausted'))}` : `${remaining}%`;
+  const reset = w.resetsAt !== undefined ? escapeMarkdown(relativeReset(w.resetsAt, now)) : '';
+  return `| ${escapeMarkdown(name)} | ${usageBar(remaining)} | ${percent} |${reset ? ` ${reset} ` : ' '}|`;
+}
+
+/** A refresh icon link running one of PlanSwap's own refresh commands; the hover title is our own localized text. */
+export function refreshLink(command: string): string {
+  return `[$(refresh)](command:${command} "${t('status.refreshUsage').replace(/["\\]/g, '')}")`;
+}
+
+/**
+ * All products as one markdown table, so every column lines up across products: a product starts with its header row
+ * (email at the left; plan and refresh link in the last, right-aligned cell), then one row per usage window (name, bar,
+ * remaining percentage, reset time) and one row per note. The first product's header is the table header (rendered
+ * bold); later headers are bold rows. Text from outside is escaped before it gets here, so `**` is our own markup.
+ */
+export interface TableBlock { identity: string; plan?: string; refresh?: string; rows: readonly string[]; notes: readonly string[] }
+export function usageTable(blocks: readonly TableBlock[]): string {
+  const lines: string[] = [];
+  blocks.forEach((block, i) => {
+    const bold = (text: string): string => (i > 0 && text ? `**${text}**` : text);
+    const tail = [block.plan ? escapeMarkdown(block.plan) : '', block.refresh ?? ''].filter(Boolean).join(' ');
+    lines.push(`| ${bold(escapeMarkdown(block.identity))} | | |${tail ? ` ${bold(tail)} ` : ' '}|`);
+    if (i === 0) lines.push('|:--|:--|--:|--:|');
+    lines.push(...block.rows, ...block.notes.map((note) => `| ${note} | | | |`));
+  });
+  return lines.join('\n');
+}
+
+const italic = (text: string): string => `_${escapeMarkdown(text)}_`;
+
+/** Shortest windows first; windows without a duration keep their order after the others. */
+function byDuration<W extends { windowMinutes?: number }>(windows: readonly W[]): W[] {
+  return windows.map((w, i) => ({ w, i })).sort((x, y) => (x.w.windowMinutes ?? Infinity) - (y.w.windowMinutes ?? Infinity) || x.i - y.i).map(({ w }) => w);
+}
+
+/** What a product block shows below its first line: window table rows and short italic status lines (already markdown). */
+export interface UsageParts { rows: string[]; notes: string[] }
+
+/** The Codex observation as far as it may still be shown: not older than 24 hours, windows past their reset dropped. */
+export function liveCodexUsage(usage: CodexUsage, now: number = Date.now()): CodexUsage | undefined {
+  const age = now - usage.checkedAt;
+  if (age >= USAGE_HISTORY_MAX_AGE_MS || age < -2 * 60_000) return undefined;
+  return { ...usage, windows: usage.windows.filter((w) => w.resetsAt === undefined || w.resetsAt * 1000 > now) };
+}
+
+/** Windows of the effective Codex account that may be shown, or undefined (no state, a failure, a stale observation). */
+function codexWindows(state: CodexUsageState | undefined, now: number): UsageWindow[] | undefined {
+  const r = state?.result;
+  return r?.ok ? liveCodexUsage(r.usage, now)?.windows : undefined;
+}
+
+/** Table rows and status lines for the effective Codex account's usage limits; empty when there is nothing to say (signed out). */
+export function codexUsageParts(state: CodexUsageState | undefined, now: number = Date.now()): UsageParts {
+  const parts: UsageParts = { rows: [], notes: [] };
+  if (!state) return parts;
+  const r = state.result;
+  if (r?.ok) {
+    const usage = liveCodexUsage(r.usage, now);
+    if (usage) {
+      parts.rows.push(...byDuration(usage.windows).map((w, i) => windowRow(w, i, now)));
+      if (usage.limitReached) parts.notes.push(`_$(warning) ${escapeMarkdown(t('status.usageReached'))}_`);
+    }
+  } else if (r && r.reason !== 'notLoggedIn') {
+    parts.notes.push(italic(t('status.usageFailedShort')));
+  }
+  if (state.checking) parts.notes.push(italic(t('status.usageChecking')));
+  return parts;
+}
+
+/**
+ * Table rows and status lines for the current Claude account: the general windows, then the refresh state
+ * of that directory (a failure of another directory is not shown).
+ */
+export function claudeUsageParts(
+  usage: ClaudeUsage | undefined, state: ClaudeUsageState | undefined, dir: string, now: number = Date.now(),
+): UsageParts {
+  const parts: UsageParts = { rows: [], notes: [] };
+  if (usage) {
+    parts.rows.push(...byDuration(usage.windows.filter((w) => !w.scope)).map((w, i) => windowRow(w, i, now)));
+  }
+  if (state?.checking) parts.notes.push(italic(t('status.usageChecking')));
+  else if (state?.failure && samePath(state.failure.dir, dir)) parts.notes.push(italic(t('status.usageFailedShort')));
+  return parts;
 }
 
 /** The localized text of a failed Claude usage query; hasUsage: whether older values are still shown. */
@@ -103,10 +195,24 @@ export function claudeUsageFailureText(failure: { reason: ClaudeUsageFailure; de
       : t(CLAUDE_USAGE_FAILURE_MESSAGES[failure.reason], { detail: failure.detail ?? '' });
 }
 
-/** Remaining percentage of the tightest window (the one that runs out first), rounded down; undefined without usage. */
-export function tightestRemaining(usage: ClaudeUsage | undefined): number | undefined {
-  if (!usage?.windows.length) return undefined;
-  return Math.floor(100 - Math.max(...usage.windows.map((w) => w.usedPercent)));
+interface Block {
+  // First line: the email, or its fallback
+  identity: string;
+  // Shown at the right end of the first line; absent for no plan (and for the Codex API key mode, where identity says it)
+  plan?: string;
+  // Refresh command linked after the plan; absent when the product shows no usage
+  refresh?: string;
+  usage: UsageParts;
+}
+
+interface Product { product: string; remaining?: number }
+interface Candidate { remaining: number; product: string; window: string }
+
+// The lowest remaining percentage among the general windows (model-specific ones never count)
+function candidatesOf(product: string, windows: ReadonlyArray<UsageWindow | ClaudeUsageWindow>): Candidate[] {
+  return windows.flatMap((w, index) => ('scope' in w && w.scope) ? [] : [{
+    remaining: remainingOf(w), product, window: w.windowMinutes ? formatDuration(w.windowMinutes) : `#${index + 1}`,
+  }]);
 }
 
 export class StatusBar implements vscode.Disposable {
@@ -120,6 +226,7 @@ export class StatusBar implements vscode.Disposable {
     private readonly codex?: { store: CodexAccountStore; labels: LabelStore },
   ) {
     this.item.command = 'workbench.view.extension.planswap';
+    this.item.name = 'PlanSwap';
     this.update();
   }
 
@@ -129,16 +236,17 @@ export class StatusBar implements vscode.Disposable {
     this.update();
   }
 
-  /** Refresh state of the current Claude account's usage, kept by ClaudeUsageMonitor; undefined hides the refresh link. */
+  /** Refresh state of the current Claude account's usage, kept by ClaudeUsageMonitor; undefined hides its status lines. */
   setClaudeUsage(state: ClaudeUsageState | undefined): void {
     this.claudeUsage = state;
     this.update();
   }
 
   update(): void {
-    const text: string[] = [];
-    // Each section is a list of plain-text lines; account text is escaped when the tooltip is built
-    const sections: Array<{ lines: string[]; links?: Array<{ command: string; text: string }> }> = [];
+    const now = Date.now();
+    const products: Product[] = [];
+    const blocks: Block[] = [];
+    const candidates: Candidate[] = [];
     const dir = currentDir();
     const explicit = isExplicitConfigDir(dir);
     const hasClaude = fs.existsSync(dir) || fs.existsSync(claudeJsonPath(dir, explicit)) ||
@@ -147,19 +255,18 @@ export class StatusBar implements vscode.Disposable {
       const account = sameDirAccount(this.store.all(), dir);
       const label = labelFor(account ? account.name : EXTERNAL_NAME, this.labels);
       const info = readAccountInfo(dir, explicit);
-      const identity = info.email ?? t(info.loggedIn ? 'common.loggedIn' : 'common.notLoggedIn');
-      const lines = [`Claude: ${label}`, info.plan ? `${identity} · ${info.plan}` : identity, dir];
       // Usage limits exist only for a subscription sign-in (oauthAccount); signed-out accounts show none
       const showUsage = info.identity !== undefined;
       const usage = showUsage ? readClaudeUsage(dir, explicit) : undefined;
-      // The status bar text carries what is left of the window that runs out first
-      const left = tightestRemaining(usage);
-      text.push(left === undefined ? `Claude: ${label}` : `Claude: ${label} ${t('status.remainingShort', { percent: left })}`);
-      if (showUsage) lines.push(...claudeUsageLines(usage, this.claudeUsage, dir));
-      sections.push({ lines, links: showUsage && this.claudeUsage !== undefined ? [
-        { command: CLAUDE_REFRESH_USAGE_COMMAND, text: t('status.usageRefresh') },
-        { command: CLAUDE_REFRESH_ALL_USAGE_COMMAND, text: t('status.usageRefreshAll') },
-      ] : undefined });
+      const short = usage ? shortWindow(usage.windows) : undefined;
+      products.push({ product: 'Claude', remaining: short ? remainingOf(short) : undefined });
+      if (usage) candidates.push(...candidatesOf('Claude', usage.windows));
+      blocks.push({
+        identity: info.email ?? (info.loggedIn ? label : t('common.notLoggedIn')),
+        plan: info.plan,
+        refresh: showUsage && this.claudeUsage !== undefined ? CLAUDE_REFRESH_USAGE_COMMAND : undefined,
+        usage: showUsage ? claudeUsageParts(usage, this.claudeUsage, dir, now) : { rows: [], notes: [] },
+      });
     }
     const codexDir = effectiveDir();
     if (this.codex && (fs.existsSync(codexDir) || this.codex.store.all().some((account) => fs.existsSync(account.dir)))) {
@@ -168,28 +275,46 @@ export class StatusBar implements vscode.Disposable {
       const label = labelFor(account ? account.name : EXTERNAL_NAME, this.codex.labels);
       const info = readCodexAccountInfo(codexDir);
       const apiKey = info.plan === 'API key';
-      const identity = apiKey ? 'API key' :
-        [info.email ?? t(info.loggedIn ? 'common.loggedIn' : 'common.notLoggedIn'), info.plan].filter(Boolean).join(' · ');
-      text.push(`Codex: ${label}`);
-      const lines = [`Codex: ${label}`, identity, codexDir];
+      const usage: UsageParts = { rows: [], notes: [] };
       const selected = readSelectedDir() ?? codexDefaultDir();
       // A selection is only pending while PlanSwap manages CODEX_HOME (as on the panel, an unreadable rc file counts as
       // not enabled)
       if (codexSwitchingEnabled() && findSameDir([selected], codexDir) !== 0) {
         const pendingAccount = sameDirAccount(all, selected);
         const pending = pendingAccount ? labelFor(pendingAccount.name, this.codex.labels) : selected;
-        lines.push(t('status.codexPending', { label: pending }));
+        usage.notes.push(italic(t('status.codexPending', { label: pending })));
       }
       // Codex run inside WSL by a Windows editor uses another home: its limits are not this account's
       const inWsl = codexRunsInWsl();
       const showUsage = !inWsl && !apiKey && info.loggedIn;
-      if (inWsl) lines.push(t('status.codexRunsInWsl'));
-      if (showUsage) lines.push(...usageLines(this.codexUsage));
-      sections.push({ lines, links: showUsage && this.codexUsage !== undefined ? [{ command: REFRESH_USAGE_COMMAND, text: t('status.usageRefresh') }] : undefined });
+      if (inWsl) usage.notes.push(italic(t('status.codexRunsInWsl')));
+      let remaining: number | undefined;
+      if (showUsage) {
+        const shown = codexUsageParts(this.codexUsage, now);
+        usage.rows.push(...shown.rows);
+        usage.notes.push(...shown.notes);
+        const windows = codexWindows(this.codexUsage, now);
+        const short = windows ? shortWindow(windows) : undefined;
+        remaining = short ? remainingOf(short) : undefined;
+        if (windows) candidates.push(...candidatesOf('Codex', windows));
+      }
+      products.push({ product: 'Codex', remaining });
+      blocks.push({
+        identity: apiKey ? 'API key' : info.email ?? (info.loggedIn ? label : t('common.notLoggedIn')),
+        plan: apiKey ? undefined : info.plan,
+        refresh: showUsage && this.codexUsage !== undefined ? REFRESH_USAGE_COMMAND : undefined,
+        usage,
+      });
     }
-    this.item.text = text.length ? `$(account) ${text.join(' · ')}` : '';
-    this.item.tooltip = buildTooltip(sections);
-    if (text.length) this.item.show();
+    // The color follows the window that runs out first, whichever it is; the text shows the short window only
+    let lowest: Candidate | undefined;
+    for (const c of candidates) if (!lowest || c.remaining < lowest.remaining) lowest = c;
+    const background = backgroundIdFor(lowest?.remaining);
+    this.item.text = products.length ? `$(dashboard) ${statusText(products)}` : '';
+    this.item.accessibilityInformation = products.length ? { label: statusAccessibilityLabel(products), role: 'button' } : undefined;
+    this.item.backgroundColor = background ? new vscode.ThemeColor(background) : undefined;
+    this.item.tooltip = buildTooltip(blocks);
+    if (products.length) this.item.show();
     else this.item.hide();
   }
 
@@ -211,23 +336,14 @@ function codexSwitchingEnabled(): boolean {
   }
 }
 
-// Plain text goes through appendText (escaped), so labels and paths can never inject links; the only trusted
-// commands are the usage refreshes
-function buildTooltip(sections: Array<{ lines: string[]; links?: Array<{ command: string; text: string }> }>): vscode.MarkdownString {
+// Everything from outside (labels, emails, model names) is escaped by escapeMarkdown when the block is assembled, so only
+// our own markup (italics, bars, table, $(warning), the refresh links) can act as markdown. Only the refresh commands are
+// trusted.
+function buildTooltip(blocks: Block[]): vscode.MarkdownString {
   const md = new vscode.MarkdownString('', true);
-  md.isTrusted = { enabledCommands: [CLAUDE_REFRESH_USAGE_COMMAND, CLAUDE_REFRESH_ALL_USAGE_COMMAND, REFRESH_USAGE_COMMAND] };
-  sections.forEach((section, i) => {
-    if (i > 0) md.appendMarkdown('\n\n---\n\n');
-    section.lines.forEach((line, j) => {
-      if (j > 0) md.appendMarkdown('  \n');
-      md.appendText(line);
-    });
-    if (section.links) md.appendMarkdown(`  \n${section.links.map((l) => `[$(refresh) ${escapeLinkText(l.text)}](command:${l.command})`).join(' · ')}`);
-  });
+  md.isTrusted = { enabledCommands: [CLAUDE_REFRESH_USAGE_COMMAND, REFRESH_USAGE_COMMAND] };
+  md.appendMarkdown(usageTable(blocks.map((block) => ({
+    identity: block.identity, plan: block.plan, refresh: block.refresh && refreshLink(block.refresh), rows: block.usage.rows, notes: block.usage.notes,
+  }))));
   return md;
-}
-
-// Our own localized label inside link brackets: only the characters that would end or break the link are escaped
-function escapeLinkText(s: string): string {
-  return s.replace(/[\\[\]]/g, '\\$&');
 }

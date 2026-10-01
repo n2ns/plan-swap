@@ -34,6 +34,7 @@ is still missing. Remove an item once it is done or decided.
   `LinkOptions.busy` in the migration entry guard, with a regression test for this window.
 - **Codex per-account usage observations** need real-account acceptance across switches and editor restarts, including reset/24-hour expiry and sign-in changes; follow [the usage checks](docs/manual-verification.md#usage-limits-sign-in-tip-and-duplicate-sign-ins).
 - **Codex usage limits in the status bar** are implemented but not yet accepted with real accounts, on WSL or Windows (`codex.cmd` fallback, the binary bundled with the Codex extension when `codex` is not on PATH). Run [the usage checks](docs/manual-verification.md#usage-limits-sign-in-tip-and-duplicate-sign-ins); re-verify the `codex app-server` protocol facts ([Codex design §2](docs/codex-design.md#2-background-facts-verified)) after CLI upgrades.
+- **Status bar text, warning background and tooltip layout** (`Claude 97% · Codex 82%`, error/warning background from the lowest remaining window, the compact per-product table tooltip with one row per window, `planswap.statusBar.showModelLimits`) are covered by unit tests and generated-markdown review only; a headless preview cannot render the status bar, so look at them in a real editor in light, dark and high-contrast themes and in all four languages ([Claude usage checks](docs/manual-verification.md#claude-usage-limits), step 8).
 - **Claude usage limits** are implemented (`claude -p /usage` plus the usage cache in each account's info file, [Claude design 6.9](docs/design.md#69-claude-usage-limits)) but not yet accepted with real accounts. Run [the Claude usage checks](docs/manual-verification.md#claude-usage-limits). Verified only on 2026-10-01 for the signed-in default account (Claude Code 2.1.286: a smoke run of the real modules returned three windows; about 70 calls without a 429, see [the research record](docs/research/claude-usage.md#rate-limiting)). Still open: named accounts with `CLAUDE_CONFIG_DIR`, signed-out, API-key and expired sign-ins, a re-sign-in as another account, the offline and `claude`-missing messages, a non-English locale and time zone, whether the CLI writes anything besides the cache entry, and native Windows (`claude.cmd` fallback). The endpoint's own rate limits stay unobserved.
 
 ## Windows verification
@@ -49,8 +50,8 @@ Review of the account list (2026-10-01). The plan-tag, current-card, card-conten
   [Features](docs/features.md#codex-account-usage-observations)), so the wording needs a decision first.
 - **Spacing.** Tightening card padding and line spacing, and grouping with whitespace instead of lines, were not part of
   the last pass.
-- **Real-editor look of the new styles.** The flat current card, neutral plan tags, hatched "used up" track and
-  high-contrast outline were previewed only with synthetic light, Solarized Light and high-contrast variables; see the
+- **Real-editor look of the new styles.** The flat current card, neutral plan tags, hatched "used up" track,
+  high-contrast outline and the usage refresh icon buttons next to "+ Add" were previewed only with synthetic light, Solarized Light and high-contrast variables; see the
   real-editor theme acceptance under Deferred features.
 
 ## Deferred features

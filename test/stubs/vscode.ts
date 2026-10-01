@@ -42,6 +42,10 @@ export const env: { remoteName: string | undefined; language: string; clipboard:
 export interface StubTerminal { name: string; sent: string[]; shown: number; sendText(text: string): void; show(): void }
 export const StatusBarAlignment = { Left: 1, Right: 2 };
 
+export class ThemeColor {
+  constructor(public readonly id: string) {}
+}
+
 /** Like vscode.MarkdownString: appendText escapes markdown syntax, appendMarkdown appends as is */
 export class MarkdownString {
   isTrusted?: boolean | { readonly enabledCommands: readonly string[] };
@@ -62,7 +66,7 @@ export function tooltipText(tooltip: string | MarkdownString): string {
   return tooltip.value.replace(/ {2}\n/g, '\n').replace(/\\(.)/g, '$1');
 }
 
-export const statusBarItems: Array<{ alignment: number; text: string; tooltip: string | MarkdownString; command: string; visible: boolean; show(): void; hide(): void; dispose(): void }> = [];
+export const statusBarItems: Array<{ alignment: number; text: string; tooltip: string | MarkdownString; command: string; name?: string; backgroundColor?: ThemeColor; accessibilityInformation?: { label: string; role?: string }; visible: boolean; show(): void; hide(): void; dispose(): void }> = [];
 export const window = {
   state: { focused: true },
   async showTextDocument<T>(document: T): Promise<T> { return document; },

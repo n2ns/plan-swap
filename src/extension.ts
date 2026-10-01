@@ -3,7 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { AccountStore } from './accounts';
 import { claudeCredentialOverrides, oneDriveHome, pathVarsWithSpaces } from './environmentWarnings';
-import { AccountsPanel, VIEW_ID, claudePanelSource, type PanelSource } from './accountsPanel';
+import { AccountsPanel, SHOW_MODEL_LIMITS_SETTING, VIEW_ID, claudePanelSource, type PanelSource } from './accountsPanel';
 import { LabelStore, labelFor } from './labels';
 import { FileMemento } from './fileState';
 import { readAccountInfo, samePath, setClaudeSettingEnv } from './paths';
@@ -255,6 +255,8 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     vscode.workspace.onDidChangeConfiguration((e) => {
       // The Codex extension's run-in-WSL switch changes what the Codex section of the tooltip can say
       if (e.affectsConfiguration('chatgpt.runCodexInWindowsSubsystemForLinux')) { statusBar.update(); panel.refresh(); }
+      // Model-specific limits in the Claude sidebar are optional
+      if (e.affectsConfiguration(`planswap.${SHOW_MODEL_LIMITS_SETTING}`)) panel.refresh();
       if (!affectsSetting(e)) return;
       setClaudeSettingEnv(settingEnvNames());
       panel.refresh();

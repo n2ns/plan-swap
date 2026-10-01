@@ -8,6 +8,7 @@
   "command.removeAccount": "删除账号",
   "command.openTerminal": "在终端中以账号运行 claude",
   "command.refresh": "刷新",
+  "command.openSettings": "打开 PlanSwap 设置",
   "command.codex.enable": "启用 Codex 账号切换",
   "category.codex": "Codex 账号",
   "command.codex.disable": "停用 Codex 账号切换",
@@ -37,5 +38,6 @@
   "config.language.zhCn": "简体中文",
   "config.language.es": "Español",
   "config.language.ja": "日本語",
-  "config.language.description": "PlanSwap 面板、状态栏与提示消息使用的语言，修改后立即生效。命令标题等静态文案跟随 VS Code 显示语言。"
+  "config.language.description": "PlanSwap 面板、状态栏与提示消息使用的语言，修改后立即生效。命令标题等静态文案跟随 VS Code 显示语言。",
+  "config.sidebarModelLimits.description": "在侧边栏中显示 Claude 的按模型用量限额。开启后，在通用限额下方显示可展开的按模型限额区域。"
 }

@@ -62,6 +62,12 @@
         "icon": "$(terminal)"
       },
       {
+        "command": "planswap.openSettings",
+        "title": "%command.openSettings%",
+        "category": "%category.tools%",
+        "icon": "$(settings-gear)"
+      },
+      {
         "command": "planswap.refresh",
         "title": "%command.refresh%",
         "category": "%category.claude%",
@@ -204,6 +210,12 @@
             "%config.language.ja%"
           ],
           "description": "%config.language.description%"
+        },
+        "planswap.sidebar.showModelLimits": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "description": "%config.sidebarModelLimits.description%"
         }
       }
     },
@@ -228,9 +240,14 @@
     "menus": {
       "view/title": [
         {
+          "command": "planswap.openSettings",
+          "when": "view == planswap.accounts",
+          "group": "navigation@1"
+        },
+        {
           "command": "planswap.refresh",
           "when": "view == planswap.accounts",
-          "group": "navigation"
+          "group": "navigation@2"
         }
       ]
     }

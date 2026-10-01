@@ -19,6 +19,14 @@ const resetsIn = {
 };
 const exhausted = { en: 'Used up', 'zh-cn': '已用完', es: 'Agotado', ja: '使い切り' };
 const switchLabel = { en: 'Switch', 'zh-cn': '切换', es: 'Cambiar', ja: '切り替え' };
+const refreshTitle = {
+  en: 'Refresh usage limits of the current account', 'zh-cn': '刷新当前账号的用量限额',
+  es: 'Actualizar los límites de uso de la cuenta actual', ja: '現在のアカウントの使用上限を更新',
+};
+const refreshAllTitle = {
+  en: 'Refresh usage limits of all accounts', 'zh-cn': '刷新全部账号的用量限额',
+  es: 'Actualizar los límites de uso de todas las cuentas', ja: 'すべてのアカウントの使用上限を更新',
+};
 const addLabel = { en: 'Add', 'zh-cn': '添加', es: 'Añadir', ja: '追加' };
 // Minimum font size of any text in the account list, in CSS px
 const MIN_FONT_PX = 11;
@@ -242,11 +250,12 @@ async function runCase(locale, width) {
     assert.equal(window.overlap, false, `usage labels overlap track at ${name(locale, width)}`);
     assert.equal(window.overflow, false, `usage window overflow at ${name(locale, width)}`);
   }
-  if (data.appWidth >= 340) {
-    assert.equal(data.gridColumns, 3, `wide grid did not activate at ${name(locale, width)}`);
-    assert.ok(data.gridAreas.includes('"avatar title tags"') && data.gridAreas.includes('". actions actions"'));
+  if (width === 200) {
+    assert.equal(data.gridColumns, 2, `narrowest grid did not activate at ${name(locale, width)}`);
+    assert.ok(data.gridAreas.includes('". tags"'));
   } else {
-    assert.ok(data.gridColumns <= 2, `narrow grid did not activate at ${name(locale, width)}`);
+    assert.equal(data.gridColumns, 3, `grid did not activate at ${name(locale, width)}`);
+    assert.ok(data.gridAreas.includes('"avatar title tags"') && data.gridAreas.includes('". actions actions"'));
   }
   await cardChecks('codex', locale, width);
   await shot(`${name(locale, width)}-codex.png`, 'codex');
@@ -366,7 +375,115 @@ async function runCase(locale, width) {
   // Collapse again so the next case starts from the default
   await page.click('#panel-claude .row[data-dir="/fixture/.claude-work"] .usage-more-summary');
   assert.equal(await page.evaluate(() => document.querySelector('#panel-claude .row[data-dir="/fixture/.claude-work"] details.usage-more').open), false);
+  // The host omits scoped windows while sidebar.showModelLimits is disabled.
+  await page.evaluate(() => {
+    const state = structuredClone(window.preview.state());
+    for (const account of state.claude.accounts) {
+      if (account.usage) account.usage.windows = account.usage.windows.filter((w) => !w.scope);
+    }
+    window.preview.post({ type: 'state', state });
+  });
+  assert.equal(await page.locator('#panel-claude .usage-more').count(), 0);
+  assert.equal(await page.locator('#panel-claude .row[data-dir="/fixture/.claude-work"] .usage-window').count(), 2);
+  await shot(`${name(locale, width)}-claude-model-limits-hidden.png`, 'claude');
   results.cases.push({ locale, width, mode: 'claude', passed: true, ...claude });
+}
+
+// Usage refresh icon buttons left of "+ Add": present with a title and aria-label, send the right tool message, stay inside
+// the heading (wrapping below the title at narrow widths) without overlapping the title, each other or the Add toggle,
+// and disappear when no account can be queried
+async function refreshButtons(locale, width) {
+  for (const mode of ['claude', 'codex']) {
+    const where = `${mode} ${name(locale, width)}`;
+    await page.evaluate(({ locale, width, mode }) => { window.preview.apply({ locale, width, active: mode }); window.preview.clearMessages(); }, { locale, width, mode });
+    const tools = mode === 'claude' ? ['refreshUsage', 'refreshAllUsage'] : ['refreshUsage'];
+    const data = await page.evaluate(({ mode, tools }) => {
+      const panel = document.querySelector(`#panel-${mode}`);
+      const rect = (el) => {
+        const r = el.getBoundingClientRect();
+        return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height };
+      };
+      const intersects = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+      const heading = panel.querySelector('.section-title');
+      const parts = [heading.querySelector('.title-main'), ...tools.map((tool) => heading.querySelector(`[data-action="${tool}"]`)), heading.querySelector('.add-toggle')];
+      const boxes = parts.map(rect);
+      const buttons = tools.map((tool) => {
+        const el = heading.querySelector(`[data-action="${tool}"]`);
+        return {
+          tool, tag: el.localName, icon: el.getAttribute('icon'), title: el.title, label: el.getAttribute('label'),
+          inner: el.shadowRoot?.querySelector('button')?.getAttribute('aria-label') ?? null,
+          order: parts.indexOf(el), visible: rect(el).width > 0 && rect(el).height > 0,
+        };
+      });
+      const sidebar = document.querySelector('#sidebar').getBoundingClientRect();
+      const pairs = [];
+      for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) if (intersects(boxes[i], boxes[j])) pairs.push([i, j]);
+      return {
+        buttons, count: heading.querySelectorAll('.title-actions > [data-action^="refresh"]').length, pairs,
+        outside: boxes.some((b) => b.left < sidebar.left - 1 || b.right > sidebar.right + 1),
+        headingOverflow: heading.scrollWidth > heading.clientWidth,
+        horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+        addIsLast: boxes[boxes.length - 1].right >= Math.max(...boxes.map((b) => b.right)) - 0.5,
+        addAfterButtons: boxes[boxes.length - 1].left >= boxes[boxes.length - 2].right - 0.5 || boxes[boxes.length - 1].top >= boxes[boxes.length - 2].bottom - 0.5,
+        headingHeight: rect(heading).height,
+      };
+    }, { mode, tools });
+    await shot(`${name(locale, width)}-${mode}-refresh-buttons.png`, mode);
+    assert.equal(data.count, tools.length, `refresh button count at ${where}`);
+    for (const [index, button] of data.buttons.entries()) {
+      const expected = button.tool === 'refreshUsage' ? refreshTitle[locale] : refreshAllTitle[locale];
+      assert.equal(button.tag, 'vscode-toolbar-button');
+      assert.equal(button.icon, button.tool === 'refreshUsage' ? 'refresh' : 'layers');
+      assert.equal(button.title, expected, `title at ${where}`);
+      assert.equal(button.label, expected, `label at ${where}`);
+      assert.equal(button.inner, expected, `aria-label at ${where}`);
+      assert.equal(button.visible, true, `${button.tool} hidden at ${where}`);
+      assert.equal(button.order, index + 1);
+    }
+    assert.deepEqual(data.pairs, [], `heading parts overlap at ${where}`);
+    assert.equal(data.outside, false, `heading part outside the sidebar at ${where}`);
+    assert.equal(data.headingOverflow, false, `heading overflow at ${where}`);
+    assert.equal(data.horizontalOverflow, false, `horizontal overflow at ${where}`);
+    assert.equal(data.addAfterButtons, true, `Add toggle must follow the refresh buttons at ${where}`);
+    if (width >= 340) assert.ok(data.headingHeight < 30, `heading wrapped at ${where}: ${JSON.stringify(data)}`);
+    for (const tool of tools) {
+      await page.locator(`#panel-${mode} .section-title [data-action="${tool}"]`).click();
+    }
+    assert.deepEqual(await page.evaluate(() => window.preview.messages), tools.map((tool) => ({ type: 'tool', mode, tool })), `tool messages at ${where}`);
+    await page.evaluate(() => window.preview.clearMessages());
+  }
+  results.interactions.push(`${name(locale, width)}: refresh buttons present, labelled, inside the heading; clicks sent the tool messages`);
+}
+
+async function refreshButtonVisibility() {
+  for (const mode of ['claude', 'codex']) {
+    await page.evaluate((mode) => window.preview.apply({ locale: 'en', width: 280, active: mode }), mode);
+    const visible = () => page.locator(`#panel-${mode} .section-title [data-action^="refresh"]`).evaluateAll((els) => els.filter((el) => el.getBoundingClientRect().width > 0).map((el) => el.dataset.action));
+    assert.deepEqual(await visible(), mode === 'claude' ? ['refreshUsage', 'refreshAllUsage'] : ['refreshUsage']);
+    // The current account cannot be queried: the current button goes (Claude keeps "all" while another account can be)
+    await page.evaluate((mode) => {
+      const state = structuredClone(window.preview.state());
+      state[mode].accounts.find((a) => a.isCurrent).usageEligible = undefined;
+      window.preview.post({ type: 'state', state });
+    }, mode);
+    assert.deepEqual(await visible(), mode === 'claude' ? ['refreshAllUsage'] : []);
+    // No account can be queried
+    await page.evaluate((mode) => {
+      const state = structuredClone(window.preview.state());
+      for (const account of state[mode].accounts) account.usageEligible = undefined;
+      window.preview.post({ type: 'state', state });
+    }, mode);
+    assert.deepEqual(await visible(), []);
+    // A disabled page shows no list heading buttons
+    await page.evaluate((mode) => {
+      const state = structuredClone(window.preview.state());
+      for (const account of state[mode].accounts) account.usageEligible = true;
+      state[mode].enabled = mode === 'claude';
+      window.preview.post({ type: 'state', state });
+    }, mode);
+    if (mode === 'codex') assert.deepEqual(await visible(), []);
+  }
+  results.interactions.push('refresh buttons follow usageEligible: current button needs the current account, Claude "all" any registered one');
 }
 
 async function restartControls(locale, width) {
@@ -553,7 +670,8 @@ async function footerAndSwitch() {
   // A card double-click within 500ms of a Switch button click is the same gesture and is ignored
   await page.waitForTimeout(600);
   await page.evaluate(() => window.preview.clearMessages());
-  await page.locator(`${row('codex', 'work')} .row-name`).dblclick();
+  // Clicked on the card's own padding: the name can wrap at 200px and its centre then lands on the rename pencil
+  await page.locator(row('codex', 'work')).dblclick({ position: { x: 4, y: 4 } });
   assert.deepEqual(await page.evaluate(() => window.preview.messages), [{ type: 'switch', mode: 'codex', dir: '/fixture/.codex-work' }], 'double-clicking the card switches once');
   await page.evaluate(() => window.preview.clearMessages());
   await page.locator(row('codex', 'work')).focus();
@@ -678,6 +796,8 @@ try {
   results.window = { headless: !headed, bounds: bounds?.bounds, display, viewportEmulation: !headed };
   for (const locale of locales) for (const width of widths) await runCase(locale, width);
   for (const locale of locales) for (const width of widths) await restartControls(locale, width);
+  for (const locale of locales) for (const width of widths) await refreshButtons(locale, width);
+  await refreshButtonVisibility();
   await usageEndpoints();
   await resetDateStates();
   await interactions();

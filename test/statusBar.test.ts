@@ -1,17 +1,23 @@
+import { SHOW_MODEL_LIMITS_SETTING } from '../src/accountsPanel';
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { CLAUDE_REFRESH_ALL_USAGE_COMMAND, CLAUDE_REFRESH_USAGE_COMMAND, REFRESH_USAGE_COMMAND, StatusBar, claudeUsageLines, usageLines } from '../src/statusBar';
+import {
+  StatusBar,
+  backgroundIdFor, codexUsageParts, escapeMarkdown, liveCodexUsage, relativeReset, remainingOf, shortWindow,
+  refreshLink, statusAccessibilityLabel, statusText, usageBar, usageTable, windowRow,
+} from '../src/statusBar';
 import { AccountStore } from '../src/accounts';
 import { CodexAccountStore } from '../src/codex/codexStore';
 import { LabelStore } from '../src/labels';
 import { setLocale, type Locale } from '../src/i18n';
-import { makeTempHome, MemoryMemento } from './helpers';
-import { MarkdownString, statusBarItems, StatusBarAlignment, tooltipText } from './stubs/vscode';
+import { LINUX_ONLY, makeTempHome, MemoryMemento } from './helpers';
+import { MarkdownString, resetConfig, setConfig, statusBarItems, StatusBarAlignment, ThemeColor, tooltipText } from './stubs/vscode';
 import { installRcBlocks, writeSelectedDir } from '../src/codex/codexState';
 import type { CodexUsageState } from '../src/codex/codexUsageMonitor';
 import type { UsageResult } from '../src/codex/codexUsage';
+import type { ClaudeUsageWindow } from '../src/claudeUsage';
 
 before(() => setLocale('en'));
 
@@ -26,10 +32,12 @@ for (const vendors of [[], ['claude'], ['codex'], ['claude', 'codex']]) {
       const item = statusBarItems.at(-1)!;
       assert.equal(item.alignment, StatusBarAlignment.Right);
       assert.equal(item.visible, vendors.length > 0);
-      assert.equal(item.text.includes('Claude:'), vendors.includes('claude'));
-      assert.equal(item.text.includes('Codex:'), vendors.includes('codex'));
-      assert.equal(tooltipText(item.tooltip).includes('Claude:'), vendors.includes('claude'));
-      assert.equal(tooltipText(item.tooltip).includes('Codex:'), vendors.includes('codex'));
+      assert.equal(item.text.includes('Claude'), vendors.includes('claude'));
+      assert.equal(item.text.includes('Codex'), vendors.includes('codex'));
+      // One header row per vendor in a single table: the first is the table header, later ones are bold rows
+      const tip = tooltipText(item.tooltip);
+      assert.equal(tip === '' ? 0 : 1 + (tip.match(/^\| \*\*/gm)?.length ?? 0), vendors.length);
+      assert.equal(item.backgroundColor, undefined);
       assert.equal(item.command, 'workbench.view.extension.planswap');
     } finally { bar.dispose(); temp.restore(); }
   });
@@ -52,12 +60,85 @@ test('Codex status keeps effective account and reports pending selection with al
     { store, labels: new LabelStore(state, 'codex.labels') });
   try {
     const item = statusBarItems.at(-1)!;
-    assert.equal(item.text, '$(account) Codex: default');
-    assert.match(tooltipText(item.tooltip), /Pending: Work alias \(restart required\)/);
+    assert.equal(item.text, '$(dashboard) Codex');
+    assert.match(tooltipText(item.tooltip), /^\| Not logged in \| \| \| \|\n\|:--\|:--\|--:\|--:\|\n\| _Pending: Work alias \(restart required\)_ \| \| \| \|$/);
     writeSelectedDir(dir);
     bar.update();
     assert.doesNotMatch(tooltipText(item.tooltip), /Pending:/);
   } finally { bar.dispose(); temp.restore(); }
+});
+
+
+const unescape = (lines: string[]): string[] => lines.map((l) => l.replace(/\\(.)/g, '$1'));
+
+describe('pure helpers', () => {
+  test('usageBar is always ten cells wide and follows the remaining share', () => {
+    for (let r = 0; r <= 100; r++) assert.equal([...usageBar(r)].length, 10, `${r}%`);
+    assert.equal(usageBar(100), '██████████');
+    assert.equal(usageBar(97), '██████████');
+    assert.equal(usageBar(58), '██████░░░░');
+    assert.equal(usageBar(50), '█████░░░░░');
+    assert.equal(usageBar(1), '█░░░░░░░░░', 'a window with something left is never drawn empty');
+    assert.equal(usageBar(0), '░░░░░░░░░░');
+    assert.equal(usageBar(-5), '░░░░░░░░░░');
+    assert.equal(usageBar(140), '██████████');
+  });
+
+  test('remainingOf rounds down and stays within 0..100', () => {
+    assert.equal(remainingOf({ usedPercent: 42.5 }), 57);
+    assert.equal(remainingOf({ usedPercent: 3 }), 97);
+    assert.equal(remainingOf({ usedPercent: 100 }), 0);
+    assert.equal(remainingOf({ usedPercent: 99.5 }), 0);
+    assert.equal(remainingOf({ usedPercent: 0 }), 100);
+  });
+
+  test('shortWindow picks the shortest general window, ignores model scopes, falls back to the first general one', () => {
+    assert.equal(shortWindow<ClaudeUsageWindow>([]), undefined);
+    assert.equal(shortWindow([{ windowMinutes: 10080, usedPercent: 1 }, { windowMinutes: 300, usedPercent: 2 }])?.usedPercent, 2);
+    assert.equal(shortWindow([{ windowMinutes: 45, scope: 'Fable', usedPercent: 9 }, { windowMinutes: 10080, usedPercent: 1 }])?.usedPercent, 1);
+    assert.equal(shortWindow([{ windowMinutes: 45, scope: 'Fable', usedPercent: 9 }]), undefined);
+    assert.equal(shortWindow([{ usedPercent: 5 }, { usedPercent: 6 }])?.usedPercent, 5, 'no durations: the first window');
+    assert.equal(shortWindow([{ usedPercent: 5 }, { windowMinutes: 10080, usedPercent: 6 }])?.usedPercent, 6, 'a known duration beats an unknown one');
+  });
+
+  test('backgroundIdFor: error at 10% or less, warning at 30% or less, otherwise none', () => {
+    assert.equal(backgroundIdFor(undefined), undefined);
+    assert.equal(backgroundIdFor(100), undefined);
+    assert.equal(backgroundIdFor(31), undefined);
+    assert.equal(backgroundIdFor(30), 'statusBarItem.warningBackground');
+    assert.equal(backgroundIdFor(11), 'statusBarItem.warningBackground');
+    assert.equal(backgroundIdFor(10), 'statusBarItem.errorBackground');
+    assert.equal(backgroundIdFor(0), 'statusBarItem.errorBackground');
+  });
+
+  test('relativeReset speaks the UI language', () => {
+    const now = Date.parse('2026-10-01T12:00:00Z');
+    const at = (ms: number): number => Math.floor((now + ms) / 1000);
+    assert.equal(relativeReset(at(5 * 60_000), now), 'in 5 minutes');
+    assert.equal(relativeReset(at(2 * 3600_000), now), 'in 2 hours');
+    assert.equal(relativeReset(at(3 * 86400_000), now), 'in 3 days');
+    assert.equal(relativeReset(at(-1000), now), 'in 1 minute', 'never negative');
+    try {
+      setLocale('zh-cn');
+      assert.equal(relativeReset(at(2 * 3600_000), now), '2小时后');
+      assert.equal(relativeReset(at(3 * 86400_000), now), '3天后');
+    } finally { setLocale('en'); }
+  });
+
+  test('statusText and the screen reader label carry product names and the short window only', () => {
+    assert.equal(statusText([{ product: 'Claude', remaining: 97 }, { product: 'Codex', remaining: 82 }]), 'Claude 97% · Codex 82%');
+    assert.equal(statusText([{ product: 'Claude' }, { product: 'Codex', remaining: 0 }]), 'Claude · Codex 0%');
+    assert.equal(statusAccessibilityLabel([{ product: 'Claude', remaining: 97 }, { product: 'Codex' }]), 'PlanSwap: Claude 97% left, Codex');
+  });
+
+  test('escapeMarkdown neutralizes links, emphasis, icons, table pipes and line breaks', () => {
+    const evil = '[x](command:evil) **b** _i_ $(trash) <b>\nnext';
+    const escaped = escapeMarkdown(evil);
+    assert.ok(!escaped.includes('\n'));
+    assert.ok(!/(^|[^\\])[[\]()*_$<>]/.test(escaped), escaped);
+    assert.equal(escaped.replace(/\\(.)/g, '$1'), evil.replace('\n', ' '));
+    assert.equal(escapeMarkdown('a|b'), 'a\\|b', 'a pipe cannot end a table cell');
+  });
 });
 
 describe('Codex usage limits in the tooltip', () => {
@@ -67,41 +148,58 @@ describe('Codex usage limits in the tooltip', () => {
     result: { ok: true, usage: { windows: [{ usedPercent: 42, windowMinutes: 300, resetsAt: Math.floor(now / 1000) + 3600 }, { usedPercent: 7, windowMinutes: 10080 }], limitReached: false, checkedAt: now } },
   };
 
-  test('usageLines: windows with durations, reached flag, checked / checking lines', () => {
-    const lines = usageLines(ok);
-    assert.match(lines[0], /^5h: 42% used, resets /);
-    assert.equal(lines[1], '7d: 7% used');
-    assert.match(lines[2], /^Checked /);
-    const reached = usageLines({ checking: true, result: { ok: true, usage: { windows: [{ usedPercent: 100, windowMinutes: 45 }], limitReached: true, checkedAt: now } } });
-    assert.deepEqual(reached, ['45 min: 100% used', 'Usage limit reached', 'Checking usage limits…']);
-    assert.deepEqual(usageLines({ checking: false, result: { ok: true, usage: { windows: [{ usedPercent: 3 }], limitReached: false, checkedAt: now } } }).slice(0, 1), ['#1: 3% used']);
+  test('windowRow and usageTable build one aligned table for all products: headers hold email, plan and refresh, rows hold window, bar, percent, reset', () => {
+    const rows = [windowRow({ usedPercent: 42, windowMinutes: 300, resetsAt: Math.floor(now / 1000) + 3600 }, 0, now), windowRow({ usedPercent: 100, windowMinutes: 10080 }, 1, now), windowRow({ usedPercent: 3 }, 2, now)];
+    assert.equal(rows[0], '| 5h | ██████░░░░ | 58% | in 1 hour |');
+    assert.equal(rows[1], '| 7d | ░░░░░░░░░░ | 0% $(warning) Used up | |');
+    assert.equal(rows[2], '| \\#3 | ██████████ | 97% | |');
+    const link = refreshLink('planswap.claude.refreshUsage');
+    assert.equal(link, '[$(refresh)](command:planswap.claude.refreshUsage "Refresh usage limits")');
+    assert.equal(
+      usageTable([
+        { identity: 'me@example.com', plan: 'Max 5x', refresh: link, rows: rows.slice(0, 1), notes: [] },
+        { identity: 'b@example.com', plan: 'Plus', rows: rows.slice(1, 2), notes: ['_Checking_'] },
+        { identity: 'API key', rows: [], notes: [] },
+      ]),
+      [
+        `| me@example\\.com | | | Max 5x ${link} |`, '|:--|:--|--:|--:|', rows[0],
+        '| **b@example\\.com** | | | **Plus** |', rows[1], '| _Checking_ | | | |',
+        '| **API key** | | | |',
+      ].join('\n'),
+      'one table for all products: later headers are bold rows, notes are rows',
+    );
+    assert.equal(usageTable([{ identity: 'me@example.com', rows: [], notes: [] }]), '| me@example\\.com | | | |\n|:--|:--|--:|--:|');
   });
 
-  test('usageLines: failures say why; signed out and no state say nothing', () => {
-    assert.deepEqual(usageLines(undefined), []);
-    assert.deepEqual(usageLines({ checking: false, result: { ok: false, reason: 'notLoggedIn' } }), []);
-    assert.deepEqual(usageLines({ checking: false, result: { ok: false, reason: 'cliMissing' } }), ['Usage limits unavailable: the codex command was not found.']);
-    assert.deepEqual(usageLines({ checking: false, result: { ok: false, reason: 'timeout' } }), ['Usage limits unavailable: codex did not answer in time.']);
-    assert.deepEqual(usageLines({ checking: false, result: { ok: false, reason: 'failed', detail: 'boom (1)' } }), ['Usage limits unavailable: boom (1)']);
-    assert.deepEqual(usageLines({ checking: true }), ['Checking usage limits…']);
+  test('codexUsageParts: short window first, reached note, checking note', () => {
+    const parts = codexUsageParts({ checking: false, result: { ok: true, usage: { windows: [{ usedPercent: 7, windowMinutes: 10080 }, { usedPercent: 42, windowMinutes: 300 }], limitReached: false, checkedAt: now } } }, now);
+    assert.deepEqual(parts.rows.map((r) => r.split(' | ')[0]), ['| 5h', '| 7d']);
+    assert.deepEqual(parts.notes, []);
+    const reached = codexUsageParts({ checking: true, result: { ok: true, usage: { windows: [{ usedPercent: 100, windowMinutes: 45 }], limitReached: true, checkedAt: now } } }, now);
+    assert.deepEqual(reached.rows, ['| 45 min | ░░░░░░░░░░ | 0% $(warning) Used up | |']);
+    assert.deepEqual(reached.notes, ['_$(warning) Usage limit reached_', '_Checking usage limits…_']);
   });
 
-  test('usageLines localizes generated reasons while preserving raw details and external errors', () => {
-    const cases: Array<[UsageResult, string]> = [
-      [{ ok: false, reason: 'homeMismatch', detail: '/other/.codex' }, '无法获取用量额度：codex 返回了不同的账号目录：/other/.codex'],
-      [{ ok: false, reason: 'noRateLimits' }, '无法获取用量额度：响应中没有用量额度。'],
-      [{ ok: false, reason: 'protocolTooLong' }, '无法获取用量额度：响应中的协议行过长。'],
-      [{ ok: false, reason: 'exited', detail: '3' }, '无法获取用量额度：codex 在响应前已退出（3）。'],
-      [{ ok: false, reason: 'exited', detail: 'SIGTERM' }, '无法获取用量额度：codex 在响应前已退出（SIGTERM）。'],
-      [{ ok: false, reason: 'exited' }, '无法获取用量额度：codex 在响应前已退出（退出状态未知）。'],
-      [{ ok: false, reason: 'unknownError', detail: '-32603' }, '无法获取用量额度：未知错误 (-32603)'],
-      [{ ok: false, reason: 'unknownError' }, '无法获取用量额度：未知错误'],
-      [{ ok: false, reason: 'failed', detail: 'no rate limits in the response (-32603)' }, '无法获取用量额度：no rate limits in the response (-32603)'],
-    ];
+  test('codexUsageParts: one short failure text for every reason; signed out and no state say nothing', () => {
+    assert.deepEqual(codexUsageParts(undefined), { rows: [], notes: [] });
+    assert.deepEqual(codexUsageParts({ checking: false, result: { ok: false, reason: 'notLoggedIn' } }), { rows: [], notes: [] });
+    for (const result of [{ ok: false, reason: 'cliMissing' }, { ok: false, reason: 'timeout' }, { ok: false, reason: 'failed', detail: '[x](command:evil)' }, { ok: false, reason: 'authExpired' }] as UsageResult[]) {
+      assert.deepEqual(codexUsageParts({ checking: false, result }), { rows: [], notes: ['_Usage check failed_'] }, result.ok ? '' : result.reason);
+    }
+    assert.deepEqual(codexUsageParts({ checking: true }).notes, ['_Checking usage limits…_']);
+  });
+
+  test('the failure note follows the locale', () => {
     try {
       setLocale('zh-cn');
-      for (const [result, expected] of cases) assert.deepEqual(usageLines({ checking: false, result }), [expected]);
+      assert.deepEqual(codexUsageParts({ checking: false, result: { ok: false, reason: 'noRateLimits' } }).notes, ['_用量查询失败_']);
     } finally { setLocale('en'); }
+  });
+
+  test('liveCodexUsage drops windows past their reset and observations older than a day', () => {
+    const usage = { windows: [{ usedPercent: 10, windowMinutes: 300, resetsAt: Math.floor(now / 1000) - 5 }, { usedPercent: 20, windowMinutes: 10080 }], limitReached: false, checkedAt: now - 1000 };
+    assert.deepEqual(liveCodexUsage(usage, now)?.windows, [{ usedPercent: 20, windowMinutes: 10080 }]);
+    assert.equal(liveCodexUsage({ ...usage, checkedAt: now - 25 * 3600_000 }, now), undefined);
   });
 
   describe('rendered tooltip', () => {
@@ -120,51 +218,61 @@ describe('Codex usage limits in the tooltip', () => {
       return { bar, item: statusBarItems.at(-1)! };
     };
 
-    test('a signed-in effective account shows its limits and the only trusted command is the refresh link', () => {
+    test('a signed-in effective account shows its limits; the only link is the trusted refresh after the plan', () => {
       fs.writeFileSync(path.join(temp.home, '.codex', 'auth.json'), '{}');
       const { bar, item } = make();
       try {
         bar.setCodexUsage(ok);
         const tip = item.tooltip as MarkdownString;
         assert.ok(tip instanceof MarkdownString);
-        assert.deepEqual(tip.isTrusted, { enabledCommands: [CLAUDE_REFRESH_USAGE_COMMAND, CLAUDE_REFRESH_ALL_USAGE_COMMAND, REFRESH_USAGE_COMMAND] });
-        assert.match(tooltipText(tip), /5h: 42% used, resets /);
-        assert.ok(tip.value.includes(`(command:${REFRESH_USAGE_COMMAND})`));
-        // The status bar text itself stays short
-        assert.equal(item.text, '$(account) Codex: default');
+        assert.equal(tip.supportThemeIcons, true);
+        assert.deepEqual(tip.isTrusted, { enabledCommands: ['planswap.claude.refreshUsage', 'planswap.codex.refreshUsage'] });
+        assert.ok(!tip.value.includes(path.join(temp.home, '.codex')));
+        assert.match(tooltipText(tip), /^\| default \| \| \| \[\$\(refresh\)\]\(command:planswap\.codex\.refreshUsage "Refresh usage limits"\) \|\n\|:--\|:--\|--:\|--:\|\n\| 5h \| ██████░░░░ \| 58% \| in 1 hour \|\n\| 7d \|/);
+        // The status bar text states the product and the short window only, never the account
+        assert.equal(item.text, '$(dashboard) Codex 58%');
+        assert.equal(item.name, 'PlanSwap');
+        assert.equal(item.accessibilityInformation?.label, 'PlanSwap: Codex 58% left');
+        assert.equal(item.backgroundColor, undefined);
       } finally { bar.dispose(); }
     });
 
-    test('a cached generated failure follows locale changes when the tooltip is updated', () => {
+    test('a cached failure shows the short failure line in the current locale', () => {
       fs.writeFileSync(path.join(temp.home, '.codex', 'auth.json'), '{}');
       const { bar, item } = make();
-      const expected: Record<Locale, string> = {
-        en: 'Usage limits unavailable: the response contained no usage limits.',
-        'zh-cn': '无法获取用量额度：响应中没有用量额度。',
-        es: 'Límites de uso no disponibles: la respuesta no contenía límites de uso.',
-        ja: '使用量の上限を取得できません: 応答に使用量の上限が含まれていません。',
-      };
+      const expected: Record<Locale, string> = { en: 'Usage check failed', 'zh-cn': '用量查询失败', es: 'Error al consultar el uso', ja: '使用量の確認に失敗' };
       try {
         bar.setCodexUsage({ checking: false, result: { ok: false, reason: 'noRateLimits' } });
         for (const locale of Object.keys(expected) as Locale[]) {
           setLocale(locale);
           bar.update();
-          assert.ok(tooltipText(item.tooltip).includes(expected[locale]), locale);
+          assert.equal(tooltipText(item.tooltip), `| default | | | ${refreshLink('planswap.codex.refreshUsage')} |\n|:--|:--|--:|--:|\n| _${expected[locale]}_ | | | |`, locale);
+          assert.equal(item.text, '$(dashboard) Codex', 'no usage, no number');
         }
       } finally { setLocale('en'); bar.dispose(); }
     });
 
-    test('a signed-out account shows no usage and no refresh link', () => {
+    test('a signed-out account shows no usage', () => {
       fs.rmSync(path.join(temp.home, '.codex', 'auth.json'), { force: true });
       const { bar, item } = make();
       try {
         bar.setCodexUsage(ok);
-        assert.doesNotMatch(tooltipText(item.tooltip), /% used/);
-        assert.ok(!(item.tooltip as MarkdownString).value.includes('command:'));
+        assert.equal(tooltipText(item.tooltip), '| Not logged in | | | |\n|:--|:--|--:|--:|');
+        assert.equal(item.text, '$(dashboard) Codex');
       } finally { bar.dispose(); }
     });
 
-    test('an alias with markdown is escaped, never rendered as a link', async () => {
+    test('an API key account shows "API key" as its first line, no plan, no number and no usage', () => {
+      fs.writeFileSync(path.join(temp.home, '.codex', 'auth.json'), JSON.stringify({ auth_mode: 'apikey', OPENAI_API_KEY: 'sk-test' }));
+      const { bar, item } = make();
+      try {
+        bar.setCodexUsage(ok);
+        assert.equal(item.text, '$(dashboard) Codex');
+        assert.equal(tooltipText(item.tooltip), '| API key | | | |\n|:--|:--|--:|--:|');
+      } finally { bar.dispose(); }
+    });
+
+    test('an alias with markdown is escaped, never rendered as a link (it is the first line only when there is no email)', async () => {
       const dir = path.join(temp.home, '.codex-evil');
       fs.mkdirSync(dir);
       fs.writeFileSync(path.join(dir, 'auth.json'), '{}');
@@ -175,17 +283,160 @@ describe('Codex usage limits in the tooltip', () => {
       try {
         bar.setCodexUsage(ok);
         const value = (item.tooltip as MarkdownString).value;
-        assert.match(tooltipText(item.tooltip), /Codex: \[x\]\(command:workbench\.action\.quit\)/);
+        assert.match(tooltipText(item.tooltip), /^\| \[x\]\(command:workbench\.action\.quit\) \|/);
         assert.ok(!value.includes('](command:workbench.action.quit)'));
+        assert.ok(!item.text.includes('[x]'), 'the account label is not in the status bar text');
       } finally {
         delete process.env.CODEX_HOME;
         bar.dispose();
         await state.update('codex.labels', {});
       }
     });
+
+    test('an email with markdown and table pipes is escaped, never a link or an extra cell', () => {
+      fs.writeFileSync(path.join(temp.home, '.codex', 'auth.json'), JSON.stringify({
+        tokens: { id_token: `x.${Buffer.from(JSON.stringify({ email: '[x](command:evil)|b@example.com', 'https://api.openai.com/auth': { chatgpt_plan_type: 'plus' } })).toString('base64url')}.y` },
+      }));
+      const { bar, item } = make();
+      try {
+        bar.setCodexUsage(ok);
+        const value = (item.tooltip as MarkdownString).value;
+        assert.ok(!value.includes('](command:evil)') && !/[^\\]\|b@/.test(value));
+        assert.match(value.split('\n')[0], /^\| \\\[x\\\]\\\(command:evil\\\)\\\|b@example\\\.com \| \| \| Plus \[\$\(refresh\)\]\(command:planswap\.codex\.refreshUsage "[^"]*"\) \|$/);
+      } finally { bar.dispose(); }
+    });
   });
 });
 
-test('usageLines: an expired sign-in asks to sign in again', () => {
-  assert.deepEqual(usageLines({ checking: false, result: { ok: false, reason: 'authExpired' } }), ['Usage limits unavailable: the sign-in has expired; sign in to this account again.']);
+describe('both products in the status bar', LINUX_ONLY, () => {
+  const NOW_MS = Date.now();
+  const iso = (ms: number): string => new Date(ms).toISOString();
+  let temp: ReturnType<typeof makeTempHome>;
+  before(() => {
+    temp = makeTempHome('status-both');
+    fs.mkdirSync(path.join(temp.home, '.claude'));
+    fs.mkdirSync(path.join(temp.home, '.codex'));
+    fs.writeFileSync(path.join(temp.home, '.codex', 'auth.json'), '{}');
+  });
+  after(() => { temp.restore(); resetConfig(); });
+
+  const writeClaude = (limits: Array<Record<string, unknown>>, signedIn = true): void => {
+    fs.writeFileSync(path.join(temp.home, '.claude.json'), JSON.stringify(signedIn ? {
+      oauthAccount: { emailAddress: 'me@example.com', accountUuid: 'acct-1', organizationUuid: 'org-1', organizationType: 'claude_max', organizationRateLimitTier: 'default_claude_max_5x' },
+      cachedUsageUtilization: { fetchedAtMs: NOW_MS - 60_000, accountUuid: 'acct-1', utilization: { limits } },
+    } : {}));
+  };
+  const session = (percent: number, ms = 2 * 3600_000): Record<string, unknown> => ({ kind: 'session', percent, resets_at: iso(NOW_MS + ms) });
+  const weekly = (percent: number): Record<string, unknown> => ({ kind: 'weekly_all', percent, resets_at: iso(NOW_MS + 3 * 86400_000) });
+  const scoped = (percent: number): Record<string, unknown> => ({ kind: 'weekly_scoped', percent, resets_at: iso(NOW_MS + 3 * 86400_000), scope: { model: { display_name: 'Fable' } } });
+  const codexOk = (used5h: number, used7d: number): CodexUsageState => ({
+    checking: false,
+    result: { ok: true, usage: { windows: [
+      { usedPercent: used5h, windowMinutes: 300, resetsAt: Math.floor(NOW_MS / 1000) + 3600 },
+      { usedPercent: used7d, windowMinutes: 10080, resetsAt: Math.floor(NOW_MS / 1000) + 5 * 86400 },
+    ], limitReached: false, checkedAt: NOW_MS } },
+  });
+  const make = (): { bar: StatusBar; item: (typeof statusBarItems)[number] } => {
+    const memento = new MemoryMemento();
+    const bar = new StatusBar(new AccountStore(memento), new LabelStore(memento, 'claude.labels'),
+      { store: new CodexAccountStore(memento), labels: new LabelStore(memento, 'codex.labels') });
+    return { bar, item: statusBarItems.at(-1)! };
+  };
+  const color = (item: (typeof statusBarItems)[number]): string | undefined => (item.backgroundColor as ThemeColor | undefined)?.id;
+
+  test('two accounts, healthy: product names with short-window percentages, no background, one table per product', () => {
+    resetConfig();
+    writeClaude([session(3), weekly(40), scoped(95)]);
+    const { bar, item } = make();
+    try {
+      bar.setClaudeUsage({ checking: false });
+      bar.setCodexUsage(codexOk(18, 50));
+      assert.equal(item.text, '$(dashboard) Claude 97% · Codex 82%');
+      assert.equal(color(item), undefined);
+      const tip = tooltipText(item.tooltip);
+      assert.match(tip, /^\| me@example\.com \| \| \| Max 5x \[\$\(refresh\)\]\(command:planswap\.claude\.refreshUsage "Refresh usage limits"\) \|\n\|:--\|:--\|--:\|--:\|\n\| 5h \| ██████████ \| 97% \| in 2 hours \|\n\| 7d \| ██████░░░░ \| 60% \| in 3 days \|\n\| \*\*default\*\* \| \| \| \*\*\[\$\(refresh\)\]\(command:planswap\.codex\.refreshUsage "Refresh usage limits"\)\*\* \|\n\| 5h \| ████████░░ \| 82% \| in 1 hour \|\n\| 7d \| █████░░░░░ \| 50% \| in 5 days \|$/);
+      assert.ok(!tip.includes('Fable') && !tip.includes('Per model'), 'model-specific windows are off by default');
+      assert.ok(!/Checked|Lowest|\.claude[/\\]|\.codex[/\\]|---|used\b/i.test(tip), 'no account name, path, checked line, lowest line, rule or used values');
+      assert.deepEqual(tip.match(/\(command:[^ )]+/g), ['(command:planswap.claude.refreshUsage', '(command:planswap.codex.refreshUsage'], 'only the two refresh links');
+      assert.deepEqual((item.tooltip as MarkdownString).isTrusted, { enabledCommands: ['planswap.claude.refreshUsage', 'planswap.codex.refreshUsage'] });
+    } finally { bar.dispose(); }
+  });
+
+  test('the sidebar model-specific setting does not change the status bar', () => {
+    writeClaude([session(3), weekly(40), scoped(100)]);
+    setConfig('planswap', SHOW_MODEL_LIMITS_SETTING, true);
+    const { bar, item } = make();
+    try {
+      bar.setClaudeUsage({ checking: false });
+      let tip = tooltipText(item.tooltip);
+      assert.ok(!tip.includes('Fable'));
+      assert.ok(!tip.includes('Per model'));
+      assert.equal(item.text, '$(dashboard) Claude 97% · Codex');
+      assert.equal(color(item), undefined, 'a used-up model window does not count');
+      setConfig('planswap', SHOW_MODEL_LIMITS_SETTING, false);
+      bar.update();
+      tip = tooltipText(item.tooltip);
+      assert.ok(!tip.includes('Fable'));
+    } finally { bar.dispose(); resetConfig(); }
+  });
+
+  test('5h healthy but 7d used up: the text shows the 5h number, the background is the error color and the row carries the warning', () => {
+    writeClaude([session(3), weekly(100)]);
+    const { bar, item } = make();
+    try {
+      bar.setClaudeUsage({ checking: false });
+      bar.setCodexUsage(codexOk(18, 50));
+      assert.equal(item.text, '$(dashboard) Claude 97% · Codex 82%');
+      assert.equal(color(item), 'statusBarItem.errorBackground');
+      const tip = tooltipText(item.tooltip);
+      assert.ok(!tip.includes('Lowest'));
+      assert.match(tip, /\| 7d \| ░░░░░░░░░░ \| 0% \$\(warning\) Used up \| in 3 days \|/);
+    } finally { bar.dispose(); }
+  });
+
+  test('a Codex window drives the warning color across products', () => {
+    writeClaude([session(3), weekly(40)]);
+    const { bar, item } = make();
+    try {
+      bar.setClaudeUsage({ checking: false });
+      bar.setCodexUsage(codexOk(18, 75));
+      assert.equal(color(item), 'statusBarItem.warningBackground');
+      bar.setCodexUsage(codexOk(18, 91));
+      assert.equal(color(item), 'statusBarItem.errorBackground');
+    } finally { bar.dispose(); }
+  });
+
+  test('Codex without a usage result shows its first line only; signed-out Claude shows no usage', () => {
+    writeClaude([], false);
+    const { bar, item } = make();
+    try {
+      bar.setClaudeUsage({ checking: false });
+      assert.equal(item.text, '$(dashboard) Claude · Codex');
+      assert.equal(color(item), undefined);
+      assert.equal(tooltipText(item.tooltip), '| Not logged in | | | |\n|:--|:--|--:|--:|\n| **default** | | | |');
+      assert.equal(item.accessibilityInformation?.label, 'PlanSwap: Claude, Codex');
+    } finally { bar.dispose(); }
+  });
+
+  test('checking and failed refreshes are one short italic line below the rows', () => {
+    writeClaude([session(3)]);
+    const { bar, item } = make();
+    try {
+      bar.setClaudeUsage({ checking: true });
+      assert.match(tooltipText(item.tooltip), /^\| me@example\.com [^\n]*\n[^\n]*\n\| 5h [^\n]*\n\| _Checking usage limits…_ \| \| \| \|\n\| \*\*/);
+      bar.setClaudeUsage({ checking: false, failure: { dir: path.join(temp.home, '.claude'), reason: 'timeout' } });
+      assert.match(tooltipText(item.tooltip), /\| 5h [^\n]*\n\| _Usage check failed_ \| \| \| \|\n\| \*\*/);
+      bar.setClaudeUsage({ checking: false, failure: { dir: path.join(temp.home, '.other'), reason: 'timeout' } });
+      assert.ok(!tooltipText(item.tooltip).includes('failed'), 'a failure of another directory is not shown');
+    } finally { bar.dispose(); }
+  });
+
+  test('a Claude sign-in without an email shows the account label as its first line', () => {
+    fs.writeFileSync(path.join(temp.home, '.claude', '.credentials.json'), '{}');
+    fs.writeFileSync(path.join(temp.home, '.claude.json'), '{}');
+    const { bar, item } = make();
+    try {
+      assert.match(tooltipText(item.tooltip), /^\| default \| \| \| \|\n\|:--\|:--\|--:\|--:\|\n\| \*\*/);
+    } finally { bar.dispose(); fs.rmSync(path.join(temp.home, '.claude', '.credentials.json'), { force: true }); }
+  });
 });

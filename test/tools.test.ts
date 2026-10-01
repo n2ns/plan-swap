@@ -2,7 +2,7 @@ import { after, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { runTool } from '../src/tools';
 import { setLocale, t } from '../src/i18n';
-import { window } from './stubs/vscode';
+import { commands, window } from './stubs/vscode';
 import { inLocale } from './helpers';
 
 describe('re-link result messages', () => {
@@ -37,4 +37,22 @@ describe('re-link result messages', () => {
       });
     }
   }
+});
+
+describe('usage refresh tools from the panel buttons', () => {
+  const run = async (ctx: { mock: { method: typeof import('node:test').mock.method } }, mode: 'claude' | 'codex', tool: 'refreshUsage' | 'refreshAllUsage'): Promise<unknown[]> => {
+    const exec = ctx.mock.method(commands, 'executeCommand', async () => undefined);
+    await runTool(mode, tool, {});
+    return exec.mock.calls.map((c) => c.arguments[0]);
+  };
+
+  test('refreshUsage runs the product\'s own command', async (ctx) => {
+    assert.deepEqual(await run(ctx, 'claude', 'refreshUsage'), ['planswap.claude.refreshUsage']);
+    assert.deepEqual(await run(ctx, 'codex', 'refreshUsage'), ['planswap.codex.refreshUsage']);
+  });
+
+  test('refreshAllUsage exists for Claude only; a Codex message is ignored', async (ctx) => {
+    assert.deepEqual(await run(ctx, 'claude', 'refreshAllUsage'), ['planswap.claude.refreshAllUsage']);
+    assert.deepEqual(await run(ctx, 'codex', 'refreshAllUsage'), []);
+  });
 });

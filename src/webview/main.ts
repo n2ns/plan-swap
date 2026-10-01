@@ -176,7 +176,7 @@ function planClass(plan: string | undefined, mode: PanelMode): string {
 
 // Without an email, show "Logged in" based on loggedIn
 function loginStatus(a: AccountView): HTMLElement | null {
-  if (a.email) return h('div', { class: 'row-sub row-identity' }, h('span', { class: 'row-email' }, a.email), planPill(a));
+  if (a.email) return h('div', { class: 'row-sub row-identity' }, h('span', { class: 'row-email' }, a.email));
   if (a.loggedIn) return h('div', { class: 'row-sub ok' }, t('account.loggedIn'));
   // Not logged in and no email: the "Not logged in" pill on line 3 already says so; no extra line
   return null;
@@ -274,6 +274,9 @@ class Page {
   private readonly listSection: HTMLElement;
   private readonly addToggle: HTMLElement;
   private readonly addToggleText = h('span');
+  // Usage refresh buttons left of "Add"; shown only while the page has an account whose limits can be queried
+  private readonly refreshButton: HTMLElement;
+  private readonly refreshAllButton?: HTMLElement;
   private addOpen = false;
   private toolsOpen = false;
   private readonly addField: TextField;
@@ -321,10 +324,18 @@ class Page {
       this.setAddOpen(!this.addOpen);
       if (this.addOpen) this.focusAdd();
     });
+    this.refreshButton = withAction(toolbarButton('refresh', '', () => this.send({ type: 'tool', tool: 'refreshUsage' })), 'refreshUsage');
+    // Refreshing every account exists for Claude only (Codex queries the effective account)
+    if (mode === 'claude') this.refreshAllButton = withAction(toolbarButton('layers', '', () => this.send({ type: 'tool', tool: 'refreshAllUsage' })), 'refreshAllUsage');
     this.listSection = h(
       'section',
       { class: 'section' },
-      h('div', { class: 'section-title' }, h('span', { class: 'title-main' }, this.listTitle, this.listCount), this.addToggle),
+      h(
+        'div',
+        { class: 'section-title' },
+        h('span', { class: 'title-main' }, this.listTitle, this.listCount),
+        h('div', { class: 'title-actions' }, this.refreshButton, this.refreshAllButton, this.addToggle),
+      ),
       this.addSection,
       this.list,
     );
@@ -359,6 +370,10 @@ class Page {
     this.addToggle.setAttribute('aria-label', t('add.title'));
     this.addToggle.title = t('add.title');
     this.listTitle.textContent = t('list.title');
+    for (const [button, key] of [[this.refreshButton, 'usage.refreshTitle'], [this.refreshAllButton, 'usage.refreshAllTitle']] as const) {
+      button?.setAttribute('label', t(key));
+      button?.setAttribute('title', t(key));
+    }
     this.addShared.textContent = t('add.shared');
     // A host add error is in the old locale; drop it so the help line shows the local validation in the new one
     if (this.addError) {
@@ -744,8 +759,8 @@ class Page {
           { class: 'row-title' },
           h('span', { class: 'row-name' }, ...nameWithTail(a.label, sharedIcon, renameButton)),
         );
-    // Line 3: tags on the left + action buttons on the right; on wide panels CSS moves them back to line 1 and the right side
-    const tags = h('div', { class: 'row-tags' }, !a.email && planPill(a), !a.loggedIn && h('span', { class: 'pill warn' }, t('account.notLoggedIn')));
+    // Tags (plan, not logged in) sit at the right end of the name line; the action buttons get their own line
+    const tags = h('div', { class: 'row-tags' }, planPill(a), !a.loggedIn && h('span', { class: 'pill warn' }, t('account.notLoggedIn')));
 
     // .row-main is display: contents, so its lines land directly in the .row grid
     const row = h(
@@ -810,6 +825,14 @@ class Page {
     this.syncButton.hidden = !this.tab.accounts.some((a) => a.kind === 'named' && a.shared === true);
   }
 
+  // A refresh button acts on the current account (Claude: also on every registered one), so it needs one that can be queried;
+  // a refresh already running is joined by the host, so a repeated click starts nothing new
+  private updateUsageButtons(): void {
+    const accounts = receivedState && this.tab.enabled ? this.tab.accounts : [];
+    this.refreshButton.hidden = !accounts.some((a) => a.isCurrent && a.usageEligible);
+    if (this.refreshAllButton) this.refreshAllButton.hidden = !accounts.some((a) => a.kind !== 'external' && a.usageEligible);
+  }
+
   private renderList(): void {
     // The current account always comes first; the rest keep their order
     const accounts = this.tab.accounts;
@@ -859,6 +882,7 @@ class Page {
     this.rendering = true;
     try {
       this.updateSyncButton();
+      this.updateUsageButtons();
       if (!receivedState) {
         this.top.replaceChildren(h('p', { role: 'status', 'aria-live': 'polite' }, t('panel.loading')));
         this.listSection.hidden = true;

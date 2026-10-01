@@ -12,6 +12,8 @@ import { readClaudeUsage } from './claudeUsage';
 import { getLocale, t } from './i18n';
 import { comparablePath, isWindows } from './platform';
 
+export const SHOW_MODEL_LIMITS_SETTING = 'sidebar.showModelLimits';
+
 export const VIEW_ID = 'planswap.accounts';
 
 const ACTIVE_TAB_KEY = 'panel.activeTab';
@@ -317,11 +319,14 @@ export function checkMessage(raw: unknown): FromWebview | undefined {
  * (the identity comparison key) never reach the Webview.
  */
 // Account info plus the usage Claude Code cached in the same file; only subscription sign-ins (oauthAccount) have usage
-function claudeRowInfo(dir: string): Pick<AccountView, 'email' | 'plan' | 'loggedIn' | 'usage'> {
+function claudeRowInfo(dir: string): Pick<AccountView, 'email' | 'plan' | 'loggedIn' | 'usage' | 'usageEligible'> {
   const explicit = isExplicitConfigDir(dir);
   const info = readAccountInfo(dir, explicit);
   const usage = info.identity !== undefined ? readClaudeUsage(dir, explicit) : undefined;
-  return usage ? { ...viewInfo(info), usage } : viewInfo(info);
+  const view = info.identity !== undefined ? { ...viewInfo(info), usageEligible: true } : viewInfo(info);
+  if (!usage) return view;
+  const showModelLimits = vscode.workspace.getConfiguration('planswap').get<boolean>(SHOW_MODEL_LIMITS_SETTING, false);
+  return { ...view, usage: { ...usage, windows: usage.windows.filter((w) => showModelLimits || !w.scope) } };
 }
 
 export function viewInfo(info: { email?: string; plan?: string; loggedIn: boolean }): Pick<AccountView, 'email' | 'plan' | 'loggedIn'> {

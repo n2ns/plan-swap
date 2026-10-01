@@ -39,7 +39,7 @@ function account(mode: PanelMode, name: 'default' | 'work' | 'empty'): AccountVi
   const base: AccountView = {
     kind: name === 'default' ? 'default' : 'named',
     name, label: name === 'default' ? 'Default' : name === 'work' ? 'Work' : 'Empty',
-    dir, dirLabel: dir, loggedIn: name !== 'empty', isCurrent: name === 'default',
+    dir, dirLabel: dir, loggedIn: name !== 'empty', usageEligible: name !== 'empty' || undefined, isCurrent: name === 'default',
     shared: name === 'default' ? undefined : name === 'work',
   };
   if (mode === 'codex') base.isSelected = name === 'default';

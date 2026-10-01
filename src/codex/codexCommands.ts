@@ -189,7 +189,10 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, h
     }
     if (!codexRunsInWsl()) {
       for (const row of rows) {
-        if (row.loggedIn && row.plan !== 'API key') row.usage = history?.get(row.dir);
+        if (row.loggedIn && row.plan !== 'API key') {
+          row.usage = history?.get(row.dir);
+          row.usageEligible = true;
+        }
       }
     }
     return rows;

@@ -569,7 +569,7 @@ describe('Windows Codex re-enable', () => {
 });
 
 describe('status bar', () => {
-  test('a Codex account signed in without an email reads "Logged in"; pending only while switching is enabled', async () => {
+  test('a Codex account signed in without an email shows its label; pending only while switching is enabled', async () => {
     const state = new MemoryMemento();
     const store = new CodexAccountStore(state);
     const work = path.join(home, '.codex-work');
@@ -581,15 +581,14 @@ describe('status bar', () => {
     const bar = new StatusBar(new AccountStore(state), new LabelStore(state, 'claude.labels'), { store, labels: new LabelStore(state, 'codex.labels') });
     const item = statusBarItems.at(-1)!;
     try {
-      assert.equal(item.text, '$(account) Codex: work');
-      const lines = tooltipText(item.tooltip).split('\n');
-      assert.equal(lines[1], t('common.loggedIn'));
+      assert.equal(item.text, '$(dashboard) Codex');
+      assert.equal(tooltipText(item.tooltip), '| work | | | |\n|:--|:--|--:|--:|');
       // The selection (default) differs from the effective account, but PlanSwap does not manage CODEX_HOME
       assert.doesNotMatch(tooltipText(item.tooltip), /Pending:/);
       if (onWindows) writeSelectedDir(undefined);
       else installRcBlocks();
       bar.update();
-      assert.match(tooltipText(item.tooltip), /Pending: default \(restart required\)/);
+      assert.match(tooltipText(item.tooltip), /^\| work \| \| \| \|\n\|:--\|:--\|--:\|--:\|\n\| _Pending: default \(restart required\)_ \| \| \| \|$/);
     } finally {
       bar.dispose();
     }
@@ -606,7 +605,9 @@ describe('status bar', () => {
     setCurrent(link);
     const bar = new StatusBar(store, new LabelStore(state, 'claude.labels'));
     try {
-      assert.equal(statusBarItems.at(-1)!.text, '$(account) Claude: real');
+      assert.equal(statusBarItems.at(-1)!.text, '$(dashboard) Claude');
+      // Not signed in, so the first line is the sign-in state; the registered label only shows with a signed-in account without email
+      assert.equal(tooltipText(statusBarItems.at(-1)!.tooltip), '| Not logged in | | | |\n|:--|:--|--:|--:|');
     } finally {
       bar.dispose();
     }

@@ -3,7 +3,7 @@ import type { Locale } from './i18n';
 
 export type AccountKind = 'default' | 'named' | 'external';
 export type PanelMode = 'claude' | 'codex';
-export type ToolId = 'openGlobalMd' | 'openSettings' | 'reloadWindow' | 'restartExtHost' | 'restartServer' | 'cliVersions' | 'sync' | 'updateCli' | 'openHelp' | 'openStar';
+export type ToolId = 'openGlobalMd' | 'openSettings' | 'reloadWindow' | 'restartExtHost' | 'restartServer' | 'cliVersions' | 'sync' | 'updateCli' | 'openHelp' | 'openStar' | 'refreshUsage' | 'refreshAllUsage';
 
 export interface AccountView {
   kind: AccountKind;
@@ -18,6 +18,8 @@ export interface AccountView {
   // For display, formatted plan type (e.g. "Max 20x", "Plus", "API key")
   plan?: string;
   loggedIn: boolean;
+  // True when the row's usage limits can be queried: Claude, a subscription sign-in; Codex, a ChatGPT sign-in outside WSL-run Codex (not API key)
+  usageEligible?: boolean;
   isCurrent: boolean;
   // Codex only: selected for the next editor/server start; independent of the effective account
   isSelected?: boolean;
