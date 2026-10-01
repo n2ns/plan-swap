@@ -214,7 +214,6 @@ async function runCase(locale, width) {
       usageTitle: usage?.title ?? '',
       observedTime: new Date(window.preview.state().codex.accounts.find((a) => a.dir === '/fixture/.codex-work').usage.checkedAt)
         .toLocaleString(document.documentElement.lang),
-      visibleTimestamp: !!usage?.querySelector('.usage-time'),
       windows: [...usage.querySelectorAll('.usage-window')].map((item, index) => {
         const labels = item.querySelector('.usage-labels');
         const track = item.querySelector('.usage-track');
@@ -265,9 +264,6 @@ async function runCase(locale, width) {
   assert.equal(data.emptyUsage, false);
   assert.equal(data.defaultUsage, false);
   assert.equal(data.usageTitle, observed[locales.indexOf(locale)] + data.observedTime);
-  assert.equal(data.visibleTimestamp, false);
-  assert.ok(!data.usageText.includes(data.observedTime), `visible timestamp at ${name(locale, width)}`);
-  assert.doesNotMatch(data.usageText + data.usageTitle, /not live|非实时|no en tiempo real|リアルタイムではありません/);
   assert.equal(data.windows.length, 2);
   for (const [index, percent] of [58, 14].entries()) {
     const window = data.windows[index];

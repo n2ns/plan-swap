@@ -49,6 +49,7 @@ export class ThemeColor {
 /** Like vscode.MarkdownString: appendText escapes markdown syntax, appendMarkdown appends as is */
 export class MarkdownString {
   isTrusted?: boolean | { readonly enabledCommands: readonly string[] };
+  supportHtml?: boolean;
   constructor(public value = '', public supportThemeIcons = false) {}
   appendText(text: string): this {
     this.value += text.replace(/[\\`*_{}[\]()#+\-.!|<>~]/g, '\\$&');
@@ -61,8 +62,28 @@ export class MarkdownString {
 }
 
 /** Tooltip as the reader sees it: markdown escapes removed and line breaks restored (for assertions) */
+/**
+ * Readable text of the status bar's HTML: a table becomes one line per row, `| cell | cell |` (a spanning cell is one
+ * cell); in any cell or fragment, codicons become `$(name)`, links `[text](href "title")`, <strong> `**`, <em> `_`, and
+ * character references are decoded.
+ */
+export function htmlText(html: string): string {
+  const cell = (part: string): string => part
+    .replace(/<span class="codicon codicon-([a-z-]+)"><\/span>/g, '$($1)')
+    .replace(/<a href="([^"]*)" title="([^"]*)">(.*?)<\/a>/g, '[$3]($1 "$2")')
+    .replace(/<\/?strong>/g, '**')
+    .replace(/<\/?em>/g, '_')
+    .replace(/&#(\d+);/g, (_, n: string) => String.fromCharCode(Number(n)));
+  if (!html.includes('<tr>')) return cell(html);
+  return [...html.matchAll(/<tr>(.*?)<\/tr>/g)]
+    .map(([, row]) => `| ${[...row.matchAll(/<td[^>]*>(.*?)<\/td>/g)].map(([, c]) => cell(c)).join(' | ')} |`)
+    .join('\n');
+}
+
+/** Readable text of a tooltip: the status bar's HTML through htmlText; other markdown only loses its backslash escapes. */
 export function tooltipText(tooltip: string | MarkdownString): string {
   if (typeof tooltip === 'string') return tooltip;
+  if (tooltip.value.startsWith('<table>')) return htmlText(tooltip.value);
   return tooltip.value.replace(/ {2}\n/g, '\n').replace(/\\(.)/g, '$1');
 }
 

@@ -11,7 +11,7 @@ import {
 } from '../src/claudeUsage';
 import { ClaudeUsageMonitor, type ClaudeUsageState } from '../src/claudeUsageMonitor';
 import { StatusBar, claudeUsageFailureText, claudeUsageParts } from '../src/statusBar';
-import { statusBarItems, tooltipText, setConfig, resetConfig } from './stubs/vscode';
+import { htmlText, statusBarItems, tooltipText, setConfig, resetConfig } from './stubs/vscode';
 import { claudePanelSource, SHOW_MODEL_LIMITS_SETTING } from '../src/accountsPanel';
 import { AccountStore } from '../src/accounts';
 import { LabelStore } from '../src/labels';
@@ -399,12 +399,12 @@ test('claudeUsageParts lists the general windows, without model scopes, and only
     { usedPercent: 42, windowMinutes: 300 },
   ] };
   const hidden = claudeUsageParts(usage, { checking: false }, '/a', NOW);
-  assert.deepEqual(hidden, { rows: ['| 5h | ██████░░░░ | 58% | |'], notes: [] }, 'the model-specific window is left out');
+  assert.deepEqual({ rows: hidden.rows.map(htmlText), notes: hidden.notes }, { rows: ['| 5h | ██████░░░░ | 58% |  |'], notes: [] }, 'the model-specific window is left out');
   const failed = claudeUsageParts(usage, { checking: false, failure: { dir: '/a', reason: 'notRefreshed' } }, '/a', NOW);
-  assert.deepEqual(failed.notes, ['_Usage check failed_']);
+  assert.deepEqual(failed.notes.map(htmlText), ['_Usage check failed_']);
   assert.deepEqual(claudeUsageParts(undefined, { checking: false, failure: { dir: '/b', reason: 'timeout' } }, '/a'), { rows: [], notes: [] });
-  assert.deepEqual(claudeUsageParts(undefined, { checking: true }, '/a').notes, ['_Checking usage limits…_']);
-  assert.deepEqual(claudeUsageParts(usage, { checking: true, failure: { dir: '/a', reason: 'timeout' } }, '/a', NOW).notes, ['_Checking usage limits…_'], 'checking wins over an old failure');
+  assert.deepEqual(claudeUsageParts(undefined, { checking: true }, '/a').notes.map(htmlText), ['_Checking usage limits…_']);
+  assert.deepEqual(claudeUsageParts(usage, { checking: true, failure: { dir: '/a', reason: 'timeout' } }, '/a', NOW).notes.map(htmlText), ['_Checking usage limits…_'], 'checking wins over an old failure');
 });
 
 test('claudeUsageFailureText gives the long text used by the refresh-all warning', () => {

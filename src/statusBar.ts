@@ -42,11 +42,15 @@ function formatDuration(minutes: number): string {
   return t('status.minutes', { n: minutes });
 }
 
-// Markdown for text that is not ours (account labels, emails, model names):
-// every markdown and theme-icon metacharacter is escaped, so it can never become a link, icon or formatting.
-export function escapeMarkdown(text: string): string {
-  return text.replace(/[\r\n]+/g, ' ').replace(/[\\`*_{}[\]()#+\-.!|<>~&$]/g, '\\$&');
+// HTML text for content that is not ours (account labels, emails, plans, model names): line breaks become a space, and
+// HTML, markdown and theme-icon metacharacters become numeric character references, so the text can never become a
+// tag, link, icon or formatting (the tooltip is an HTML table, inside which markdown is not parsed anyway).
+export function escapeHtml(text: string): string {
+  return text.replace(/[\r\n]+/g, ' ').replace(/[&<>"'$\\`*_{}[\]()#+!|~]/g, (c) => `&#${c.charCodeAt(0)};`);
 }
+
+/** A codicon in the HTML tooltip; the sanitizer keeps only `codicon codicon-<name>` classes. */
+const icon = (name: string): string => `<span class="codicon codicon-${name}"></span>`;
 
 /** Remaining percentage of a window, rounded down. */
 export function remainingOf(w: { usedPercent: number }): number {
@@ -114,43 +118,45 @@ export function statusAccessibilityLabel(parts: ReadonlyArray<{ product: string;
   return `PlanSwap: ${items.join(', ')}`;
 }
 
-/** One usage window as a table row: name, bar, remaining percentage (with a warning mark at 0%), relative reset time. */
+/** One usage window as an HTML table row: name, bar, remaining percentage (with a warning mark at 0%), relative reset time. */
 export function windowRow(w: UsageWindow | ClaudeUsageWindow, index: number, now: number = Date.now()): string {
   const duration = w.windowMinutes ? formatDuration(w.windowMinutes) : `#${index + 1}`;
   const scope = 'scope' in w ? w.scope : undefined;
   const name = scope ? t('status.scopedWindow', { window: duration, scope }) : duration;
   const remaining = remainingOf(w);
   const exhausted = Number((100 - w.usedPercent).toFixed(2)) <= 0;
-  const percent = exhausted ? `${remaining}% $(warning) ${escapeMarkdown(t('status.exhausted'))}` : `${remaining}%`;
-  const reset = w.resetsAt !== undefined ? `$(clock) ${escapeMarkdown(relativeReset(w.resetsAt, now))}` : '';
-  return `| ${escapeMarkdown(name)} | ${usageBar(remaining)} | ${percent} |${reset ? ` ${reset} ` : ' '}|`;
+  const percent = exhausted ? `${remaining}% ${icon('warning')} ${escapeHtml(t('status.exhausted'))}` : `${remaining}%`;
+  const reset = w.resetsAt !== undefined ? `${icon('clock')} ${escapeHtml(relativeReset(w.resetsAt, now))}` : '';
+  return `<tr><td>${escapeHtml(name)}</td><td>${usageBar(remaining)}</td><td align="right">${percent}</td><td align="right">${reset}</td></tr>`;
 }
 
 /** A refresh icon link running one of PlanSwap's own refresh commands; the hover title is our own localized text. */
 export function refreshLink(command: string): string {
-  return `[$(refresh)](command:${command} "${t('status.refreshUsage').replace(/["\\]/g, '')}")`;
+  return `<a href="command:${command}" title="${escapeHtml(t('status.refreshUsage'))}">${icon('refresh')}</a>`;
 }
 
 /**
- * All products as one markdown table, so every column lines up across products: a product starts with its header row
- * (email at the left; plan and refresh link in the last, right-aligned cell), then one row per usage window (name, bar,
- * remaining percentage, reset time) and one row per note. The first product's header is the table header (rendered
- * bold); later headers are bold rows. Text from outside is escaped before it gets here, so `**` is our own markup.
+ * All products as one HTML table (MarkdownString.supportHtml), so the bars, percentages and reset times of every product
+ * share the same columns. A product starts with a header row whose email (bold) spans the name, bar and percentage
+ * columns (colspan, which markdown tables lack), so it cannot widen the name column; the plan and the refresh link sit in
+ * the right-aligned last column. Then one row per usage window and one full-width row per status line. Kept on one line:
+ * a blank line would end the HTML block. Text from outside is escaped here or before.
  */
 export interface TableBlock { identity: string; plan?: string; refresh?: string; rows: readonly string[]; notes: readonly string[] }
 export function usageTable(blocks: readonly TableBlock[]): string {
-  const lines: string[] = [];
-  blocks.forEach((block, i) => {
-    const bold = (text: string): string => (i > 0 && text ? `**${text}**` : text);
-    const tail = [block.plan ? escapeMarkdown(block.plan) : '', block.refresh ?? ''].filter(Boolean).join(' ');
-    lines.push(`| ${bold(escapeMarkdown(block.identity))} | | |${tail ? ` ${bold(tail)} ` : ' '}|`);
-    if (i === 0) lines.push('|:--|:--|--:|--:|');
-    lines.push(...block.rows, ...block.notes.map((note) => `| ${note} | | | |`));
+  if (!blocks.length) return '';
+  const rows = blocks.flatMap((block) => {
+    const tail = [block.plan ? escapeHtml(block.plan) : '', block.refresh ?? ''].filter(Boolean).join(' ');
+    return [
+      `<tr><td colspan="3"><strong>${escapeHtml(block.identity)}</strong></td><td align="right">${tail}</td></tr>`,
+      ...block.rows,
+      ...block.notes.map((note) => `<tr><td colspan="4">${note}</td></tr>`),
+    ];
   });
-  return lines.join('\n');
+  return `<table>${rows.join('')}</table>`;
 }
 
-const italic = (text: string): string => `_${escapeMarkdown(text)}_`;
+const italic = (text: string): string => `<em>${escapeHtml(text)}</em>`;
 
 /** Shortest windows first; windows without a duration keep their order after the others. */
 function byDuration<W extends { windowMinutes?: number }>(windows: readonly W[]): W[] {
@@ -182,7 +188,7 @@ export function codexUsageParts(state: CodexUsageState | undefined, now: number 
     const usage = liveCodexUsage(r.usage, now);
     if (usage) {
       parts.rows.push(...byDuration(usage.windows).map((w, i) => windowRow(w, i, now)));
-      if (usage.limitReached) parts.notes.push(`_$(warning) ${escapeMarkdown(t('status.usageReached'))}_`);
+      if (usage.limitReached) parts.notes.push(`<em>${icon('warning')} ${escapeHtml(t('status.usageReached'))}</em>`);
     }
   } else if (r && r.reason !== 'notLoggedIn') {
     parts.notes.push(italic(t('status.usageFailedShort')));
@@ -366,11 +372,12 @@ function codexSwitchingEnabled(): boolean {
   }
 }
 
-// Everything from outside (labels, emails, model names) is escaped by escapeMarkdown when the block is assembled, so only
-// our own markup (italics, bars, table, $(warning), the refresh links) can act as markdown. Only the refresh commands are
-// trusted.
+// Everything from outside (labels, emails, plans, model names) is escaped by escapeHtml when the block is assembled, so
+// only our own markup (the table, emphasis, bars, codicons, the refresh links) can act as HTML. Only the refresh commands
+// are trusted.
 function buildTooltip(blocks: Block[]): vscode.MarkdownString {
-  const md = new vscode.MarkdownString('', true);
+  const md = new vscode.MarkdownString();
+  md.supportHtml = true;
   md.isTrusted = { enabledCommands: [CLAUDE_REFRESH_USAGE_COMMAND, REFRESH_USAGE_COMMAND] };
   md.appendMarkdown(usageTable(blocks.map((block) => ({
     identity: block.identity, plan: block.plan, refresh: block.refresh && refreshLink(block.refresh), rows: block.usage.rows, notes: block.usage.notes,
