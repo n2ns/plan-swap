@@ -355,6 +355,16 @@ async function runCase(locale, width) {
   assert.equal(await page.locator('#panel-claude details').count(), 1, 'only the Tools section folds');
   assert.equal(await page.locator('#panel-claude .row[data-dir="/fixture/.claude-work"] .usage-window').count(), 2);
   await shot(`${name(locale, width)}-claude-model-limits-hidden.png`, 'claude');
+  // planswap.sidebar.showEmail off: the host sends hideEmail and no emails; no row shows an email or "Logged in" line
+  await page.evaluate(() => {
+    const state = structuredClone(window.preview.state());
+    state.claude.hideEmail = true;
+    for (const account of state.claude.accounts) delete account.email;
+    window.preview.post({ type: 'state', state });
+  });
+  assert.equal(await page.locator('#panel-claude .row .row-sub').count(), 0, `email line hidden at ${name(locale, width)}`);
+  assert.equal(await page.locator('#panel-claude .row .pill.plan').count() > 0, true, 'plan tags stay');
+  await shot(`${name(locale, width)}-claude-email-hidden.png`, 'claude');
   results.cases.push({ locale, width, mode: 'claude', passed: true, ...claude });
 }
 

@@ -39,5 +39,8 @@
   "config.language.es": "Español",
   "config.language.ja": "日本語",
   "config.language.description": "PlanSwap 面板、状态栏与提示消息使用的语言，修改后立即生效。命令标题等静态文案跟随 VS Code 显示语言。",
-  "config.sidebarModelLimits.description": "在侧边栏中显示 Claude 的按模型用量限额。开启后，直接显示在通用限额下方。"
+  "config.sidebarModelLimits.description": "在侧边栏中显示 Claude 的按模型用量限额。开启后，直接显示在通用限额下方。",
+  "config.sidebarEmail.description": "在侧边栏中显示各账号的邮箱。",
+  "config.sidebarFiveHour.description": "在侧边栏中显示各账号的 5 小时用量限额。",
+  "config.sidebarWeekly.description": "在侧边栏中显示各账号的 7 天用量限额。"
 }

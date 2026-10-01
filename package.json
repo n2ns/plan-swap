@@ -216,6 +216,24 @@
           "default": false,
           "scope": "application",
           "description": "%config.sidebarModelLimits.description%"
+        },
+        "planswap.sidebar.showEmail": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "%config.sidebarEmail.description%"
+        },
+        "planswap.sidebar.showFiveHourLimit": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "%config.sidebarFiveHour.description%"
+        },
+        "planswap.sidebar.showWeeklyLimit": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "%config.sidebarWeekly.description%"
         }
       }
     },

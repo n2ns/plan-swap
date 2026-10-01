@@ -174,8 +174,9 @@ function planClass(plan: string | undefined, mode: PanelMode): string {
   return 'none';
 }
 
-// Without an email, show "Logged in" based on loggedIn
-function loginStatus(a: AccountView): HTMLElement | null {
+// Without an email, show "Logged in" based on loggedIn; nothing when the email line is turned off in the settings
+function loginStatus(a: AccountView, hideEmail?: boolean): HTMLElement | null {
+  if (hideEmail) return null;
   if (a.email) return h('div', { class: 'row-sub row-identity' }, h('span', { class: 'row-email' }, a.email));
   if (a.loggedIn) return h('div', { class: 'row-sub ok' }, t('account.loggedIn'));
   // Not logged in and no email: the "Not logged in" pill on line 3 already says so; no extra line
@@ -754,7 +755,7 @@ class Page {
         'div',
         { class: 'row-main' },
         title,
-        loginStatus(a),
+        loginStatus(a, this.tab.hideEmail),
         usageHistory(a),
         h('div', { class: 'row-foot' }, tags, actions),
         !a.loggedIn && !a.isCurrent && h('div', { class: 'row-hint' }, t(`${this.mode}.loginHint`)),

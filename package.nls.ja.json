@@ -39,5 +39,8 @@
   "config.language.es": "Español",
   "config.language.ja": "日本語",
   "config.language.description": "PlanSwap のパネル、ステータスバー、メッセージの表示言語。変更はすぐに反映されます。コマンド名などの固定テキストは VS Code の表示言語に従います。",
-  "config.sidebarModelLimits.description": "サイドバーに Claude のモデル別使用量上限を表示します。有効にすると、共通の上限の下にそのまま表示されます。"
+  "config.sidebarModelLimits.description": "サイドバーに Claude のモデル別使用量上限を表示します。有効にすると、共通の上限の下にそのまま表示されます。",
+  "config.sidebarEmail.description": "サイドバーに各アカウントのメールアドレスを表示します。",
+  "config.sidebarFiveHour.description": "サイドバーに各アカウントの 5 時間の使用量上限を表示します。",
+  "config.sidebarWeekly.description": "サイドバーに各アカウントの 7 日間の使用量上限を表示します。"
 }

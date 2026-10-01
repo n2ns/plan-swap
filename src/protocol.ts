@@ -48,6 +48,8 @@ export interface TabState {
   restart?: RestartInfo;
   // Prefix of a new account folder for the add help, in the platform's spelling (~/.claude- / ~\.claude-)
   dirPrefix?: string;
+  // Settings planswap.sidebar.showEmail: false hides the email line of every row (the host then sends no email)
+  hideEmail?: boolean;
 }
 
 export interface PanelState {

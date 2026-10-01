@@ -11,6 +11,8 @@
 - **Refresh Claude Usage Limits** checks the current account on demand, and a new **Refresh Usage Limits of All Claude Accounts** command (also reachable from the Claude page's sidebar buttons) checks every signed-in Claude account one at a time with a cancellable progress notification and reports failures.
 - Scheduled Claude usage checks are skipped while the account's cached values are younger than 15 minutes, so several editor windows no longer each start `claude`. Manual refresh always checks.
 
+- New settings `planswap.sidebar.showEmail`, `planswap.sidebar.showFiveHourLimit` and `planswap.sidebar.showWeeklyLimit` (all on by default) choose whether the sidebar account cards show the email, the 5-hour limit and the 7-day limit.
+
 ### Changed
 
 - The status bar tooltip is now compact: one table for both products so their columns line up, each product a header row with the email, plan and a refresh button followed by one row per usage window (shortest first) with a remaining bar, remaining percentage, an explicit "Used up" mark at 0% and the relative reset time, plus a short italic line only when something needs saying (checking, failed, Codex restart pending or running in WSL, limit reached). The account name, directory, collection time, lowest-remaining line, detailed failure reasons and text refresh links are gone from it. Codex limits use the same layout.

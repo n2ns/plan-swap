@@ -41,7 +41,7 @@ export function migrateLegacyLanguage(state: vscode.Memento): Promise<void>; // 
 - `displayName`, `description`, command titles and categories, view container and view names, configuration titles and descriptions are `%key%` placeholders resolved from `package.nls.json` (English), `package.nls.zh-cn.json` (Simplified Chinese), `package.nls.es.json` (Spanish) and `package.nls.ja.json` (Japanese), all with the same keys. VS Code resolves these by its own display language, not by `planswap.language` (platform limitation).
 - English names: displayName "PlanSwap: Claude Code & Codex Account Switcher" (brand "PlanSwap" is permanent; the part after the colon grows as more AI tools are supported), identifier `planswap`; container and view title "PlanSwap"; command categories "Claude Account" / "Codex Account" / "PlanSwap". The Chinese file keeps the Chinese titles ("PlanSwap", "Claude 账号", "Codex 账号", ...).
 - `contributes.configuration`: `planswap.language`, type string, enum `["auto", "en", "zh-cn", "es", "ja"]`, default `"auto"`, scope `application`, enumDescriptions: auto = follow the VS Code display language; en = English; zh-cn = 简体中文; es = Español; ja = 日本語.
-- `contributes.configuration`: `planswap.sidebar.showModelLimits`, type boolean, default `false`, scope `application`, description `%config.sidebarModelLimits.description%` (read by `accountsPanel.ts`; filters model-specific windows from Claude rows when disabled).
+- `contributes.configuration`: `planswap.sidebar.showModelLimits`, type boolean, default `false`, scope `application`, description `%config.sidebarModelLimits.description%` (read by `accountsPanel.ts`; filters model-specific windows from Claude rows when disabled). `planswap.sidebar.showEmail` / `showFiveHourLimit` / `showWeeklyLimit`, type boolean, default `true`, scope `application`, descriptions `%config.sidebarEmail.description%` / `%config.sidebarFiveHour.description%` / `%config.sidebarWeekly.description%` (read by `sidebarDisplay()` in `accountsPanel.ts` on every state push and applied to both pages by `applySidebarDisplay`). `extension.ts` refreshes the panel when any `planswap.sidebar` setting changes.
 
 ## src/platform.ts (no vscode import)
 
@@ -325,6 +325,7 @@ export interface TabState {
   enabled: boolean;          // false when codex is not enabled; always true for claude
   accounts: AccountView[];
   switchedTo?: string;       // claude only: shows the reload banner, value is the display name
+  hideEmail?: boolean;       // true while planswap.sidebar.showEmail is off: the rows carry no email and the frontend renders no email / "Logged in" line
   dirPrefix?: string;        // prefix of a new account folder for the add help in the platform spelling (tildify: ~/.claude- or ~\.claude-); the frontend falls back to its fixed ~/ prefix before the first state
   pendingDir?: string;       // codex only: selected but not restarted, value is the display name (path for an unregistered directory)
   restart?: RestartInfo;     // codex only: host-owned wording input for the disabled text and pending banner
@@ -372,6 +373,8 @@ export interface PanelSource {
   restart?(): RestartInfo;        // codex only; copied into TabState.restart on every push
 }
 export function claudePanelSource(store: AccountStore, labels: LabelStore): PanelSource; // maps store.all() (label via labelFor(name, labels), email/plan via readAccountInfo and, for rows with a subscription identity, `usage` via `readClaudeUsage` (both through the private `claudeRowInfo(dir)`), shared via isSharedClaudeAccount for named rows); when currentDir() does not correspond to any account, appends a current row with kind='external' (name EXTERNAL_NAME, label labelFor(EXTERNAL_NAME, labels)); enabled always true; pendingDir always undefined
+export function sidebarDisplay(): SidebarDisplay; // { email, fiveHour, weekly } from planswap.sidebar.showEmail / showFiveHourLimit / showWeeklyLimit, each default true
+export function applySidebarDisplay(rows: AccountView[], display: SidebarDisplay): AccountView[]; // pure: drops `email` when hidden, and the general (unscoped) windows of 300 / 10080 minutes when hidden; a row left with no window gets no `usage`; the input rows are not changed
 export function tildify(dir: string): string;  // replaces the home directory with ~ (case-insensitive on win32); file watchers are keyed by comparablePath, so two spellings of one file share a watcher
 export function viewInfo(info: { email?: string; plan?: string; loggedIn: boolean }): Pick<AccountView, 'email' | 'plan' | 'loggedIn'>; // picks only these fields; the Codex source builds rows with ...viewInfo(readCodexAccountInfo(dir)) and the Claude source with ...claudeRowInfo(dir) (viewInfo of readAccountInfo plus `usage`), so the host-only identity key never reaches the Webview
 

@@ -13,6 +13,41 @@ import { getLocale, t } from './i18n';
 import { comparablePath, isWindows } from './platform';
 
 export const SHOW_MODEL_LIMITS_SETTING = 'sidebar.showModelLimits';
+export const SHOW_EMAIL_SETTING = 'sidebar.showEmail';
+export const SHOW_FIVE_HOUR_SETTING = 'sidebar.showFiveHourLimit';
+export const SHOW_WEEKLY_SETTING = 'sidebar.showWeeklyLimit';
+
+const FIVE_HOURS = 300;
+const SEVEN_DAYS = 7 * 1440;
+
+export interface SidebarDisplay { email: boolean; fiveHour: boolean; weekly: boolean }
+
+/** The sidebar display settings (all shown by default); read on every state push. */
+export function sidebarDisplay(): SidebarDisplay {
+  const config = vscode.workspace.getConfiguration('planswap');
+  return {
+    email: config.get<boolean>(SHOW_EMAIL_SETTING, true),
+    fiveHour: config.get<boolean>(SHOW_FIVE_HOUR_SETTING, true),
+    weekly: config.get<boolean>(SHOW_WEEKLY_SETTING, true),
+  };
+}
+
+/**
+ * Applies the sidebar display settings to the rows of either page: a hidden email is not sent, and the general 5-hour
+ * and 7-day windows are dropped when hidden (model-specific windows follow their own setting; a row left with no
+ * window loses its usage block).
+ */
+export function applySidebarDisplay(rows: AccountView[], display: SidebarDisplay): AccountView[] {
+  const hidden = (w: { windowMinutes?: number; scope?: string }): boolean => !w.scope &&
+    ((!display.fiveHour && w.windowMinutes === FIVE_HOURS) || (!display.weekly && w.windowMinutes === SEVEN_DAYS));
+  return rows.map((row) => {
+    const next = display.email ? row : { ...row, email: undefined };
+    if (!next.usage) return next;
+    const windows = next.usage.windows.filter((w) => !hidden(w));
+    if (windows.length === next.usage.windows.length) return next;
+    return { ...next, usage: windows.length ? { ...next.usage, windows } : undefined };
+  });
+}
 
 export const VIEW_ID = 'planswap.accounts';
 
@@ -208,9 +243,11 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
 
   private tabState(mode: PanelMode): TabState {
     const source = this.sources[mode];
+    const display = sidebarDisplay();
     return {
       enabled: source.enabled(),
-      accounts: source.accounts(),
+      accounts: applySidebarDisplay(source.accounts(), display),
+      hideEmail: display.email ? undefined : true,
       switchedTo: mode === 'claude' ? this.switchedTo : undefined,
       pendingDir: source.pendingDir(),
       restart: source.restart?.(),

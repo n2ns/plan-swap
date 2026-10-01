@@ -26,6 +26,7 @@ Purpose: the detailed user-visible behavior of both Claude and Codex account swi
 ## 2. Sidebar
 
 - Setting `planswap.sidebar.showModelLimits` (boolean, default `false`, scope `application`): show Claude's model-specific usage windows in the sidebar below the general windows (shown directly, not folded). Changing it updates the sidebar at once.
+- Settings `planswap.sidebar.showEmail`, `planswap.sidebar.showFiveHourLimit` and `planswap.sidebar.showWeeklyLimit` (boolean, default `true`, scope `application`): show each row's email line, its general 5-hour window and its general 7-day window in the sidebar, on both pages. With the email off, a row shows no email and no "Logged in" line (the plan tag stays); a row whose every window is hidden shows no usage block. Model-specific windows follow `planswap.sidebar.showModelLimits` only. The status bar and its tooltip are not affected. Changing any of them updates the sidebar at once.
 - The view title bar shows a Settings gear before Refresh. It runs `planswap.openSettings` to open the Settings UI filtered to `@ext:n2ns.planswap`.
 - A new account icon in the activity bar (container id `planswap`, title "PlanSwap" / "PlanSwap") containing **one** view, also named "PlanSwap" (view id `planswap.accounts`). These names follow VS Code's display language (see section 11).
 - The sidebar is a Webview panel (changed from a native TreeView to a Webview); UI components come from @vscode-elements/elements, icons from @vscode/codicons; all colors follow the editor theme.

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type * as vscode from 'vscode';
-import { AccountsPanel, claudePanelSource, type PanelSource } from '../src/accountsPanel';
+import { AccountsPanel, applySidebarDisplay, claudePanelSource, type PanelSource } from '../src/accountsPanel';
 import { AccountStore } from '../src/accounts';
 import { LabelStore } from '../src/labels';
 import { readAccountInfo } from '../src/paths';
@@ -106,4 +106,24 @@ test('Claude panel rows show the email but never carry the identity comparison k
     assert.equal(row?.loggedIn, true);
     for (const r of rows) assert.ok(!('identity' in r), `row ${r.name} has no identity`);
   } finally { tmp.restore(); }
+});
+
+test('the sidebar display settings hide the email and the general 5-hour / 7-day windows of every row', () => {
+  const now = Date.now();
+  const rows = [{
+    name: 'work', dir: '/w', label: 'work', kind: 'named', isCurrent: true, loggedIn: true, email: 'a@example.com', plan: 'Max 5x',
+    usage: { checkedAt: now, windows: [{ usedPercent: 10, windowMinutes: 300 }, { usedPercent: 20, windowMinutes: 10080 }, { usedPercent: 30, windowMinutes: 10080, scope: 'Fable' }] },
+  }] as Parameters<typeof applySidebarDisplay>[0];
+  const all = { email: true, fiveHour: true, weekly: true };
+  assert.deepEqual(applySidebarDisplay(rows, all), rows, 'everything shown by default');
+  const noEmail = applySidebarDisplay(rows, { ...all, email: false })[0];
+  assert.equal(noEmail.email, undefined);
+  assert.equal(noEmail.plan, 'Max 5x');
+  const noFive = applySidebarDisplay(rows, { ...all, fiveHour: false })[0];
+  assert.deepEqual(noFive.usage?.windows.map((w) => w.windowMinutes), [10080, 10080]);
+  const noWeekly = applySidebarDisplay(rows, { ...all, weekly: false })[0];
+  assert.deepEqual(noWeekly.usage?.windows.map((w) => [w.windowMinutes, w.scope]), [[300, undefined], [10080, 'Fable']], 'model-specific windows follow their own setting');
+  const generalOnly = [{ ...rows[0], usage: { checkedAt: now, windows: rows[0].usage!.windows.slice(0, 2) } }];
+  assert.equal(applySidebarDisplay(generalOnly, { email: true, fiveHour: false, weekly: false })[0].usage, undefined, 'no window left: no usage block');
+  assert.equal(rows[0].email, 'a@example.com', 'the input rows are not changed');
 });
