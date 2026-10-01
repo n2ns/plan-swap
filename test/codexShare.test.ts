@@ -587,6 +587,14 @@ describe('migrateCodexToShared', SHARING, () => {
     assert.ok(!exists(path.join(def, 'sessions')));
   });
 
+  test('refuses when the caller reports the account busy (terminal opened during the copy-fallback prompt); nothing moved', () => {
+    const acc = codexAccountDir('a');
+    write(path.join(acc, 'sessions', 'x.jsonl'), 'x');
+    assert.throws(() => migrateCodexToShared(acc, 'a', fakeProc({}), { busy: () => true }), { message: t('share.busyCodex', { name: 'a' }) });
+    assert.equal(read(path.join(acc, 'sessions', 'x.jsonl')), 'x');
+    assert.ok(!exists(path.join(def, 'sessions')));
+  });
+
   test('default dir → empty report', () => {
     const r = migrateCodexToShared(def, 'default', fakeProc({}));
     assert.deepEqual(r, { linked: [], created: [], conflicts: [], refused: [], moved: 0, duplicates: 0, keptBoth: [], backups: [] });

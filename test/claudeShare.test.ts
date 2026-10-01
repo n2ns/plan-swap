@@ -712,6 +712,14 @@ describe('migrateClaudeToShared', SHARING, () => {
     assert.ok(!exists(path.join(def, 'projects')));
   });
 
+  test('refuses when the caller reports the account busy (terminal opened during the copy-fallback prompt); nothing moved', () => {
+    const acc = accountDir('a');
+    write(path.join(acc, 'projects', 'p', 'x'), 'x');
+    assert.throws(() => migrateClaudeToShared(acc, 'a', fakeProc({}), 'Work', { busy: () => true }), { message: t('share.busy', { name: 'Work' }) });
+    assert.equal(read(path.join(acc, 'projects', 'p', 'x')), 'x');
+    assert.ok(!exists(path.join(def, 'projects')));
+  });
+
   test('the busy error names the display name when one is passed', () => {
     const acc = accountDir('a');
     write(path.join(acc, 'sessions', '42.json'), JSON.stringify({ pid: 42 }));

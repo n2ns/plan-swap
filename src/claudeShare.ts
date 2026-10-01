@@ -743,12 +743,13 @@ function appendHistory(src: string, dst: string): void {
 }
 
 /** Converts an independent account into a shared one (see the contract); ends with ensureClaudeLinks(dir, procRoot).
- *  Throws t('share.busy') with the display name label (defaults to accountName) when claudeAccountBusy(dir, procRoot). */
+ *  Throws t('share.busy') with the display name label (defaults to accountName) when claudeAccountBusy(dir, procRoot) or
+ *  options.busy() (the caller's check, e.g. a PlanSwap terminal opened while the copy-fallback prompt was shown). */
 export function migrateClaudeToShared(dir: string, accountName: string, procRoot = '/proc', label = accountName, options: LinkOptions = {}): MigrateReport {
   const report: MigrateReport = { ...emptyReport(), moved: 0, duplicates: 0, keptBoth: [], backups: [] };
   if (isDefault(dir)) return report;
   assertNotDefaultAncestor(dir);
-  if (claudeAccountBusy(dir, procRoot)) throw new Error(t('share.busy', { name: label }));
+  if (claudeAccountBusy(dir, procRoot) || options.busy?.()) throw new Error(t('share.busy', { name: label }));
   const def = defaultDir();
   const acc = path.resolve(dir);
   fs.mkdirSync(def, { recursive: true, mode: 0o700 });

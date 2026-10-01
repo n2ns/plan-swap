@@ -27,11 +27,6 @@ is still missing. Remove an item once it is done or decided.
   shared sessions with its own quota. Revisit if Codex adds a memory location option.
 - **Refusal reasons are not specific.** When `settings.json` / `config.toml` is not shared for safety, the report only
   names the file, not the identity key that caused it.
-- **Windows conversion can become busy during the copy-fallback prompt.** The host checks the account before asking
-  whether to copy configuration files, but `migrateClaudeToShared` / `migrateCodexToShared` do not consult the
-  caller-supplied terminal-busy callback at their entry. If that account's PlanSwap terminal opens while the prompt is
-  visible, the migration can begin before the final link-repair step notices it. Re-check after the prompt or include
-  `LinkOptions.busy` in the migration entry guard, with a regression test for this window.
 - **Codex per-account usage observations** need real-account acceptance across switches and editor restarts, including reset/24-hour expiry and sign-in changes; follow [the usage checks](docs/manual-verification.md#usage-limits-sign-in-tip-and-duplicate-sign-ins).
 - **Codex usage limits in the status bar** are implemented but not yet accepted with real accounts, on WSL or Windows (`codex.cmd` fallback, the binary bundled with the Codex extension when `codex` is not on PATH). Run [the usage checks](docs/manual-verification.md#usage-limits-sign-in-tip-and-duplicate-sign-ins); re-verify the `codex app-server` protocol facts ([Codex design §2](docs/codex-design.md#2-background-facts-verified)) after CLI upgrades.
 - **Status bar text, warning background and tooltip layout** (`Claude 97% · Codex 82%`, error/warning background from the lowest remaining window, the compact per-product table tooltip with one row per window, `planswap.statusBar.showModelLimits`) are covered by unit tests and generated-markdown review only; a headless preview cannot render the status bar, so look at them in a real editor in light, dark and high-contrast themes and in all four languages ([Claude usage checks](docs/manual-verification.md#claude-usage-limits), step 8).

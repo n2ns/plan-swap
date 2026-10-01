@@ -285,12 +285,13 @@ function backupSqlite(src: string, rel: string, ctx: MergeCtx): void {
 }
 
 /** Converts an independent account into a shared one (see the contract); ends with ensureCodexLinks(dir, options, procRoot).
- *  Throws t('share.busyCodex') when codexAccountBusy(dir, procRoot). */
+ *  Throws t('share.busyCodex') when codexAccountBusy(dir, procRoot) or options.busy() (the caller's check, see
+ *  migrateClaudeToShared). */
 export function migrateCodexToShared(dir: string, accountName: string, procRoot = '/proc', options: LinkOptions = {}): MigrateReport {
   const report: MigrateReport = { ...emptyReport(), moved: 0, duplicates: 0, keptBoth: [], backups: [] };
   if (isDefault(dir)) return report;
   assertNotContainingDefault(dir);
-  if (codexAccountBusy(dir, procRoot)) throw new Error(t('share.busyCodex', { name: accountName }));
+  if (codexAccountBusy(dir, procRoot) || options.busy?.()) throw new Error(t('share.busyCodex', { name: accountName }));
   const def = codexDefaultDir();
   const acc = path.resolve(dir);
   fs.mkdirSync(def, { recursive: true, mode: 0o700 });
