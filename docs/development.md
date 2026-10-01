@@ -60,6 +60,29 @@ Frontend assets must all be emitted into `dist/media/`, the Webview's only `loca
 - The local tests use disposable fixtures; UI integration and real-account acceptance are separate and follow [Manual Verification](manual-verification.md). Record what ran and what remains unverified.
 - Before releasing, check `README.md` and `CHANGELOG.md`: neither may contain `[Unreleased]` content, including an empty heading. Packaging does not authorize installation or publication. Never install the `.vsix` into the user's editor automatically; the user installs it after packaging. Publish only under the user's explicit release authorization.
 
+## Localization terminology
+
+English is the source of every visible string; the translations live in `src/i18n.ts` (host messages), `src/webview/i18n.ts` (sidebar) and `package.nls.<locale>.json` (Command Palette titles and settings). Use the terms below whenever you add or change a string in any of them, and in the translated user guides (`docs/user-guide.<locale>.md`), which quote the UI labels exactly. If a term must change, change it everywhere in the same commit and update this table. The "Avoid" column lists variants that were used before and were unified on 2026-10-02.
+
+| Concept | English | 简体中文 | Español | 日本語 | Avoid |
+| --- | --- | --- | --- | --- | --- |
+| The `default` account | default account | 默认账号 | cuenta predeterminada | 既定のアカウント | ja デフォルトアカウント |
+| The account in use (Claude) | current account | 当前账号 | cuenta actual | 現在のアカウント | |
+| Codex account in effect in this window | effective account | 当前生效账号 / 生效账号 | cuenta efectiva | 現在有効なアカウント / 有効なアカウント | |
+| Codex account applied after restart | selected account | 已选择账号 | cuenta seleccionada | 選択されたアカウント | |
+| Account list heading | All accounts | 全部账号 | Todas las cuentas | すべてのアカウント | |
+| Link (verb, mode) | link, linked account | 链接，已链接账号 | vincular, cuenta vinculada | リンク、リンク済みアカウント | es enlazar / enlazada |
+| Unlink | unlink | 拆分（与默认账号拆分） | desvincular | リンク解除 | |
+| Re-link tool | Re-link | 重新链接 | Revincular | 再リンク | es Volver a enlazar |
+| Independent mode | independent | 独立 | independiente | 独立 | |
+| Usage limits | usage limits | 用量额度 | límites de uso | 使用量の上限 | zh 用量限额; ja 使用上限, 使用量上限 |
+| One limit window label | 5-hour limit, 7-day limit | 5 小时额度，7 天额度 | Límite de 5 h, Límite de 7 días | 5 時間の上限、7 日間の上限 | zh 小时限额 / 天限额 |
+| Sign-in action | sign in (button: Log in) | 登录 | iniciar sesión (button: Acceder) | サインイン (button: ログイン) | |
+| Signed-out state | Not logged in | 未登录 | Sin sesión | 未ログイン | |
+| Switch accounts | Switch | 切换 | Cambiar | 切り替え | |
+
+A file or folder link as an object (a symbolic link or junction) is not the account mode: Spanish keeps `enlace` there ("enlaces de archivo"). Product names, setting keys, command ids, file names, rc marker text and account terminal names are never translated (see AGENTS.md).
+
 ## Automated test coverage
 
 - Tests cover the panel provider readiness/focus lifecycle using in-memory Webview stubs, the pure modules (paths, fileState, labels, identity, claudeSettings, claudeShare, codexPaths, codexShare, codexState, codexServer, codexUsage, codexUsageMonitor, claudeUsage, claudeUsageMonitor, usageCooldown; `claudeAccountBusy` / `codexAccountBusy` / the migrations take a fake `procRoot`; `readCodexUsage` and `queryClaudeUsage` take a fake `spawn`, so tests never start a real `codex` or `claude`), `IdentityWarnings` with fake sources and a warn callback, the two account stores (accounts, codexStore) with an in-memory Memento (`MemoryMemento` in `test/helpers.ts`), i18n key and placeholder parity across all four locales, locale resolution and manifest localization, and the pure helpers exported by `commands.ts` (`validateName`, `shQuote`) and `codex/codexCommands.ts` (`validateName`); every test that touches the file system runs under a temporary HOME created by `test/helpers.ts` (`makeTempHome`, which also asserts that the real home is not used). UI behavior is verified with [Manual Verification](manual-verification.md).

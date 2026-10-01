@@ -27,18 +27,18 @@ const SHORT_RESET = `(seconds) => {
 const exhausted = { en: 'Used up', 'zh-cn': '已用完', es: 'Agotado', ja: '使い切り' };
 const switchLabel = { en: 'Switch to this account', 'zh-cn': '切换到此账号', es: 'Cambiar a esta cuenta', ja: 'このアカウントに切り替え' };
 const refreshTitle = {
-  en: 'Refresh usage limits of the current account', 'zh-cn': '刷新当前账号的用量限额',
-  es: 'Actualizar los límites de uso de la cuenta actual', ja: '現在のアカウントの使用上限を更新',
+  en: 'Refresh usage limits of the current account', 'zh-cn': '刷新当前账号的用量额度',
+  es: 'Actualizar los límites de uso de la cuenta actual', ja: '現在のアカウントの使用量の上限を更新',
 };
 const refreshAllTitle = {
-  en: 'Refresh usage limits of all accounts', 'zh-cn': '刷新全部账号的用量限额',
-  es: 'Actualizar los límites de uso de todas las cuentas', ja: 'すべてのアカウントの使用上限を更新',
+  en: 'Refresh usage limits of all accounts', 'zh-cn': '刷新全部账号的用量额度',
+  es: 'Actualizar los límites de uso de todas las cuentas', ja: 'すべてのアカウントの使用量の上限を更新',
 };
 const addLabel = { en: 'Add', 'zh-cn': '添加', es: 'Añadir', ja: '追加' };
-const durations = { en: ['5-hour limit', '7-day limit'], 'zh-cn': ['5 小时限额', '7 天限额'], es: ['Límite de 5 h', 'Límite de 7 días'], ja: ['5 時間の上限', '7 日間の上限'] };
+const durations = { en: ['5-hour limit', '7-day limit'], 'zh-cn': ['5 小时额度', '7 天额度'], es: ['Límite de 5 h', 'Límite de 7 días'], ja: ['5 時間の上限', '7 日間の上限'] };
 const scopedDurations = {
   en: ['5-hour limit', '7-day limit', '7-day limit · Fable'],
-  'zh-cn': ['5 小时限额', '7 天限额', '7 天限额 · Fable'],
+  'zh-cn': ['5 小时额度', '7 天额度', '7 天额度 · Fable'],
   es: ['Límite de 5 h', 'Límite de 7 días', 'Límite de 7 días · Fable'],
   ja: ['5 時間の上限', '7 日間の上限', '7 日間の上限 · Fable'],
 };
