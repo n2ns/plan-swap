@@ -1,6 +1,7 @@
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
+import fsDefault from 'node:fs';
 import * as path from 'node:path';
 import { codexPanelSource, codexRunsInWsl, manualRestartMessages, registerCodexCommands, restartInfo, restartServerInteractive, validateName } from '../src/codex/codexCommands';
 import { CodexAccountStore } from '../src/codex/codexStore';
@@ -120,7 +121,7 @@ describe('local selection with manual restart', () => {
     } as unknown as AccountsPanel;
     const execute = ctx.mock.method(commands, 'executeCommand', async () => {});
     let confirm = false;
-    ctx.mock.method(window, 'showWarningMessage', async () => confirm ? t('common.continue') : undefined);
+    ctx.mock.method(window, 'showWarningMessage', async () => confirm ? t('codex.saveSelectionButton') : undefined);
     const disposables = registerCodexCommands({ store, labels, panel, tools: {} });
     const source = codexPanelSource(store, labels);
     const savedCodexHome = process.env.CODEX_HOME;
@@ -134,13 +135,16 @@ describe('local selection with manual restart', () => {
       assert.deepEqual(warnings, [[t('codex.notEnabled')]]);
       assert.equal(readSelectedDir(), undefined);
       refused.mock.restore();
-      ctx.mock.method(window, 'showWarningMessage', async () => confirm ? t('common.continue') : undefined);
+      const selectionWarning = ctx.mock.method(window, 'showWarningMessage', async () => confirm ? t('codex.saveSelectionButton') : undefined);
       confirm = false;
       // Enabled from here on
       installRcBlocks();
       await handle({ type: 'switch', mode: 'codex', dir: named.dir });
       assert.equal(readSelectedDir(), undefined);
       assert.equal(refreshes, 0);
+      assert.deepEqual(selectionWarning.mock.calls[0].arguments, [
+        manualRestartMessages('unknown', undefined).switchConfirm, { modal: true }, t('codex.saveSelectionButton'),
+      ]);
       confirm = true;
       await handle({ type: 'switch', mode: 'codex', dir: named.dir });
       assert.equal(readSelectedDir(), named.dir);
@@ -396,6 +400,41 @@ describe('panel message handlers', () => {
     }
   });
 
+  for (const locale of ['en', 'zh-cn', 'es', 'ja'] as const) {
+    for (const [serverDir, editor] of [['.antigravity-ide-server', 'Antigravity'], ['.vscodium-server', 'VSCodium']] as const) {
+      test(`switch: ${locale} ${editor} offers switch and restart; cancelling preserves selection`, LINUX_ONLY, async (ctx) => {
+        fs.writeFileSync(bashrc(), 'x=1\n');
+        fs.writeFileSync(profile(), 'p=1\n');
+        installRcBlocks();
+        const account = named('auto-confirm');
+        const h = await harness([account]);
+        writeSelectedDir(undefined);
+        const realRead = fs.readFileSync;
+        ctx.mock.method(fsDefault, 'readFileSync', ((file: fs.PathOrFileDescriptor, ...args: unknown[]) => {
+          if (file === `/proc/${process.ppid}/cmdline`) {
+            return `node\0${path.join(fxHome, serverDir, 'bin', 'fake', 'out', 'server-main.js')}\0--start-server\0`;
+          }
+          return (realRead as (...args: unknown[]) => unknown)(file, ...args);
+        }) as typeof fs.readFileSync);
+        const warning = ctx.mock.method(window, 'showWarningMessage', async () => undefined);
+        try {
+          setLocale(locale);
+          env.remoteName = 'wsl';
+          await h.handle({ type: 'switch', mode: 'codex', dir: account.dir });
+          assert.deepEqual(warning.mock.calls[0].arguments, [
+            t('codex.switchConfirm', { editor }), { modal: true }, t('codex.switchAndRestartButton'),
+          ]);
+          assert.equal(readSelectedDir(), undefined);
+          assert.equal(h.refreshes(), 0);
+        } finally {
+          setLocale('en');
+          env.remoteName = undefined;
+          h.dispose();
+        }
+      });
+    }
+  }
+
   test('switch: an account already effective in this window only realigns the state file; no confirmation, no restart', LINUX_ONLY, async (ctx) => {
     // Enabled: rc blocks in place (the confirmed switch back to the default needs them)
     fs.writeFileSync(bashrc(), 'x=1\n');
@@ -403,7 +442,7 @@ describe('panel message handlers', () => {
     installRcBlocks();
     const a = named('eff');
     const h = await harness([a]);
-    const warnings = modal(ctx, () => t('common.continue'));
+    const warnings = modal(ctx, () => t('codex.saveSelectionButton'));
     const savedCodexHome = process.env.CODEX_HOME;
     try {
       env.remoteName = 'wsl';
@@ -437,7 +476,7 @@ describe('panel message handlers', () => {
       ctx.mock.method(window, 'showWarningMessage', async () => {
         await h.store.remove(a.name);
         if (deleteDirectory) await deleteCodexDir(a.dir);
-        return t('common.continue');
+        return t('codex.saveSelectionButton');
       });
       try {
         await h.handle({ type: 'switch', mode: 'codex', dir: a.dir });
@@ -763,7 +802,7 @@ describe('panel message handlers', () => {
   test('Windows with Codex run inside WSL: enable and switch are refused with guidance, nothing is written', async (ctx) => {
     const a = named('wslrun');
     const h = await harness([a]);
-    const warnings = modal(ctx, () => t('common.continue'));
+    const warnings = modal(ctx, () => t('codex.saveSelectionButton'));
     const realPlatform = Object.getOwnPropertyDescriptor(process, 'platform') as PropertyDescriptor;
     const stateBefore = fs.existsSync(STATE_FILE()) ? read(STATE_FILE()) : undefined;
     setConfig('chatgpt', 'runCodexInWindowsSubsystemForLinux', true);

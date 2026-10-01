@@ -141,7 +141,7 @@ function restart(kind: ServerKind): boolean {
   return true;
 }
 
-/** Restart a supported WSL server with modal confirmation; otherwise show instructions: shared by the panel button, Command Palette and toolbar */
+/** Restart a supported WSL server with modal confirmation; otherwise show instructions: available from the Command Palette */
 export async function restartServerInteractive(): Promise<void> {
   const kind = detectServerKind();
   const info = restartInfo(kind);
@@ -417,9 +417,9 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     const confirmText = !auto
       ? manualRestartMessages(kind, vscode.env.remoteName).switchConfirm
       : t('codex.switchConfirm', { editor: editorName(kind) });
-    const continueLabel = t('common.continue');
-    const ok = await vscode.window.showWarningMessage(confirmText, { modal: true }, continueLabel);
-    if (ok !== continueLabel) return;
+    const switchLabel = t(auto ? 'codex.switchAndRestartButton' : 'codex.saveSelectionButton');
+    const ok = await vscode.window.showWarningMessage(confirmText, { modal: true }, switchLabel);
+    if (ok !== switchLabel) return;
     // Another window may have removed the account while the confirmation was open.
     if (!fs.existsSync(account.dir)) {
       void vscode.window.showErrorMessage(t('account.dirMissing', { dir: account.dir }));

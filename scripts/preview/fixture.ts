@@ -50,7 +50,10 @@ function account(mode: PanelMode, name: 'default' | 'work' | 'empty'): AccountVi
     base.email = `${mode}-work-with-a-long-address@example.invalid`;
     base.plan = mode === 'claude' ? 'Max 20x' : 'Pro';
     base.usage = {
-      windows: [{ usedPercent: 42, windowMinutes: 300 }, { usedPercent: 86, windowMinutes: 10080 }],
+      windows: [
+        { usedPercent: 42, windowMinutes: 300, resetsAt: Math.floor(Date.now() / 1000) + 3 * 60 * 60 },
+        { usedPercent: 86, windowMinutes: 10080, resetsAt: Math.floor(Date.now() / 1000) + 3 * 24 * 60 * 60 },
+      ],
       checkedAt: Date.UTC(2026, 8, 30, 12),
     };
   }

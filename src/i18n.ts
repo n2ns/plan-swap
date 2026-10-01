@@ -178,6 +178,8 @@ export const en = {
   'codex.switchConfirmManualRemote': 'The new Codex account requires restarting the remote editor server. {hint} Continue?',
   'claude.switchConfirm': 'Switch the Claude account to {label}? New sessions will use it; sessions already open keep the current account until the window is reloaded.',
   'claude.switchButton': 'Switch',
+  'codex.switchAndRestartButton': 'Switch and restart',
+  'codex.saveSelectionButton': 'Save selection',
   'codex.switchConfirm':
     "Switching the Codex account restarts {editor}'s WSL server: all WSL windows disconnect and prompt to reload, all extensions restart, and integrated terminals close. Continue?",
   'codex.switchConfirmManual':
@@ -484,6 +486,8 @@ export const zhCn: Record<MessageKey, string> = {
   'codex.switchConfirmManualRemote': '新 Codex 账号需要重启远程编辑器服务端后才生效。{hint}继续？',
   'claude.switchConfirm': '将 Claude 账号切换到 {label}？新会话将使用该账号，已打开的会话在重新加载窗口前仍使用当前账号。',
   'claude.switchButton': '切换',
+  'codex.switchAndRestartButton': '切换并重启',
+  'codex.saveSelectionButton': '保存选择',
   'codex.switchConfirm':
     '切换 Codex 账号会重启 {editor} 的 WSL 服务端：所有 WSL 窗口会断开并提示重新加载，所有扩展重启，集成终端关闭。继续？',
   'codex.switchConfirmManual': '新 Codex 账号要在 WSL 服务端重启后才生效，此编辑器无法自动重启。{hint}继续？',
@@ -772,6 +776,8 @@ export const es: Record<MessageKey, string> = {
   'codex.switchConfirmManualRemote': 'La nueva cuenta de Codex requiere reiniciar el servidor remoto del editor. {hint} ¿Continuar?',
   'claude.switchConfirm': '¿Cambiar la cuenta de Claude a {label}? Las sesiones nuevas la usarán; las abiertas mantienen la cuenta actual hasta que recargues la ventana.',
   'claude.switchButton': 'Cambiar',
+  'codex.switchAndRestartButton': 'Cambiar y reiniciar',
+  'codex.saveSelectionButton': 'Guardar selección',
   'codex.switchConfirm': 'Cambiar de cuenta de Codex reinicia el servidor WSL de {editor}: todas las ventanas WSL se desconectan y solicitan recargarse, todas las extensiones se reinician y las terminales integradas se cierran. ¿Continuar?',
   'codex.switchConfirmManual': 'La nueva cuenta de Codex solo se aplica al reiniciar el servidor WSL. Este editor no puede hacerlo automáticamente. {hint} ¿Continuar?',
   'codex.restartConfirm': 'Reiniciar el servidor WSL de {editor}: todas las ventanas WSL se desconectan y solicitan recargarse, todas las extensiones se reinician y las terminales integradas se cierran. ¿Continuar?',
@@ -1051,6 +1057,8 @@ export const ja: Record<MessageKey, string> = {
   'codex.switchConfirmManualRemote': '新しい Codex アカウントの適用にはリモートのエディターサーバーの再起動が必要です。{hint}続行しますか？',
   'claude.switchConfirm': 'Claude アカウントを {label} に切り替えますか？新しいセッションで適用されます。既存のセッションはウィンドウを再読み込みするまで現在のアカウントを使い続けます。',
   'claude.switchButton': '切り替え',
+  'codex.switchAndRestartButton': '切り替えて再起動',
+  'codex.saveSelectionButton': '選択を保存',
   'codex.switchConfirm': 'Codex アカウントを切り替えると {editor} の WSL サーバーが再起動します。すべての WSL ウィンドウが切断されて再読み込みを求められ、すべての拡張機能が再起動し、統合ターミナルが閉じます。続行しますか？',
   'codex.switchConfirmManual': '新しい Codex アカウントは WSL サーバーの再起動後に適用されます。このエディターでは自動再起動できません。{hint}続行しますか？',
   'codex.restartConfirm': '{editor} の WSL サーバーを再起動します。すべての WSL ウィンドウが切断されて再読み込みを求められ、すべての拡張機能が再起動し、統合ターミナルが閉じます。続行しますか？',

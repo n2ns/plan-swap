@@ -186,16 +186,27 @@ function loginStatus(a: AccountView): HTMLElement | null {
 function usageHistory(a: AccountView): HTMLElement | null {
   if (!a.usage) return null;
   const time = new Date(a.usage.checkedAt).toLocaleString(getLocale());
-  return h('div', { class: 'row-usage' },
-    h('div', { class: 'usage-values' }, ...a.usage.windows.map((w) => {
+  return h('div', { class: 'row-usage', title: t('usage.observed', { time }) },
+    ...a.usage.windows.map((w) => {
       const minutes = w.windowMinutes;
       const duration = minutes === undefined ? t('usage.window')
         : minutes % 1440 === 0 ? t('usage.days', { n: minutes / 1440 })
           : minutes % 60 === 0 ? t('usage.hours', { n: minutes / 60 })
             : t('usage.minutes', { n: minutes });
-      return h('div', {}, t('usage.used', { duration, percent: w.usedPercent }));
-    })),
-    h('div', { class: 'usage-time' }, t('usage.observed', { time })),
+      const remaining = Number((100 - w.usedPercent).toFixed(2));
+      const label = t('usage.remaining', { percent: remaining });
+      return h('div', { class: 'usage-window' },
+        h('div', { class: 'usage-labels' }, h('span', {}, duration), h('span', {}, label)),
+        h('div', {
+          class: 'usage-track', role: 'progressbar', 'aria-label': duration,
+          'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(remaining), 'aria-valuetext': label,
+        }, h('div', { class: 'usage-fill', style: `width: ${remaining}%` })),
+        w.resetsAt !== undefined && h('div', { class: 'usage-reset' },
+          t('usage.resets', { time: new Date(w.resetsAt * 1000).toLocaleString(getLocale(), {
+            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+          }) })),
+      );
+    }),
   );
 }
 
@@ -484,10 +495,9 @@ class Page {
   // Codex: the state file changed but this window has not restarted the server yet
   private renderPending(): HTMLElement | null {
     if (this.mode !== 'codex' || !this.tab.pendingDir) return null;
-    const { context, auto } = codexRestart();
+    const { context } = codexRestart();
     const local = context === 'local';
     const text = context === 'remote' ? 'pending.textRemote' : local ? 'pending.textLocalManual' : 'pending.text';
-    const button = auto ? 'pending.restart' : 'pending.instructions';
     return h(
       'div',
       { class: 'banner', role: 'status' },
@@ -497,11 +507,6 @@ class Page {
         { class: 'banner-body' },
         h('div', { class: 'banner-title' }, t(local ? 'pending.titleLocal' : 'pending.title', { name: this.tab.pendingDir })),
         h('div', { class: 'banner-text' }, t(text)),
-        h(
-          'div',
-          { class: 'banner-actions' },
-          onClick(h('vscode-button', { icon: auto ? 'debug-restart' : 'info', 'data-action': 'restartServer' }, t(button)), () => this.send({ type: 'restartServer' })),
-        ),
       ),
     );
   }
@@ -831,24 +836,17 @@ const FOOTER_TOOLS = [
   ['info', 'footer.versions', 'cliVersions'],
   ['refresh', 'common.reloadWindow', 'reloadWindow'],
   ['debug-restart', 'footer.restartExtHost', 'restartExtHost'],
-  ['server-process', 'footer.restartServer', 'restartServer'],
   ['book', 'footer.help', 'openHelp'],
   ['star-empty', 'footer.star', 'openStar'],
 ] as const satisfies ReadonlyArray<readonly [icon: string, title: MessageKey, tool: ToolId]>;
 const footer = h('div', { class: 'tools', role: 'toolbar' });
 const footerVersion = h('div', { class: 'extension-version' });
-// Title of the restart button; the footer is rebuilt only when it changes so keyboard focus survives state pushes
-function footerRestartTitle(): MessageKey {
-  return codexRestart().auto ? 'footer.restartServer' : 'footer.restartManual';
-}
-let footerKey = '';
 function renderFooter(): void {
-  footerKey = `${getLocale()}|${footerRestartTitle()}`;
   footer.setAttribute('aria-label', t('tools.title'));
   footerVersion.textContent = t('footer.version', { version: __PLANSWAP_VERSION__ });
   footer.replaceChildren(
     ...FOOTER_TOOLS.map(([icon, title, tool]) =>
-      toolbarButton(icon, t(tool === 'restartServer' ? footerRestartTitle() : title), () => {
+      toolbarButton(icon, t(title), () => {
         // The info button hides an open versions card locally; only opening asks the host (which runs the CLIs)
         if (tool === 'cliVersions' && !versionsCard.hidden) {
           versionsCard.hidden = true;
@@ -909,7 +907,6 @@ window.addEventListener('message', (e: MessageEvent<ToWebview>) => {
     // The host sets <html lang> only once when it creates the webview; keep it in sync on every push
     document.documentElement.lang = state.locale === 'zh-cn' ? 'zh-CN' : state.locale;
     if (state.locale !== getLocale()) applyLocale();
-    else if (footerKey !== `${getLocale()}|${footerRestartTitle()}`) renderFooter();
     // No local record yet: adopt the host's tab and remember it
     if (!activeTab) setActiveTab(state.active);
     for (const mode of MODES) pages[mode].onState();

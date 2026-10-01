@@ -41,7 +41,7 @@ export interface TabState {
   switchedTo?: string;
   // codex only: set when the state file points to a directory other than this window's effective one (shows "X selected, takes effect after server restart"); value is the display name
   pendingDir?: string;
-  // codex only: labels of the restart actions (pending banner, footer toolbar, disabled page)
+  // codex only: restart context for the pending banner and disabled page
   restart?: RestartInfo;
   // Prefix of a new account folder for the add help, in the platform's spelling (~/.claude- / ~\.claude-)
   dirPrefix?: string;

@@ -105,7 +105,7 @@ The Command Palette also offers **Share with Default Account** separately for Cl
 
 ## Tools
 
-The Tools row and footer let you open rules and settings, check CLI and extension versions, reload the window, or restart the extension host or WSL server.
+The Tools row and footer let you open rules and settings, check CLI and extension versions, reload the window, or restart the extension host. Codex account switching offers a restart in its confirmation dialog when supported, or explains the manual steps.
 
 **Update CLI** opens a terminal for the selected service. Follow its progress and prompts there. If your CLI was installed in a custom location, you may need to update it using its original installation method.
 

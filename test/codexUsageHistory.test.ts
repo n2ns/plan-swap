@@ -36,9 +36,23 @@ test('reset windows and observations older than one day disappear without predic
     let now = 100_000;
     const history = new CodexUsageHistory(new FileMemento(), () => now, () => 'stamp');
     await history.record(tmp.home, observed(now), 'stamp');
-    now += 3600_000;
+    now += 3600_000 - 1;
+    assert.deepEqual(history.get(tmp.home)?.windows.map((w) => w.windowMinutes), [300, 10080]);
+    now += 1;
+    assert.deepEqual(history.get(tmp.home)?.windows.map((w) => w.windowMinutes), [10080]);
+    now += 1;
     assert.deepEqual(history.get(tmp.home)?.windows.map((w) => w.windowMinutes), [10080]);
     now = 100_000 + USAGE_HISTORY_MAX_AGE_MS;
+    assert.equal(history.get(tmp.home), undefined);
+    await history.record(tmp.home, { ok: true, usage: {
+      checkedAt: now, limitReached: false,
+      windows: [{ usedPercent: 42, windowMinutes: 300, resetsAt: (now + 1000) / 1000 }],
+    } }, 'stamp');
+    now += 999;
+    assert.equal(history.get(tmp.home)?.windows.length, 1);
+    now += 1;
+    assert.equal(history.get(tmp.home), undefined);
+    now += 1;
     assert.equal(history.get(tmp.home), undefined);
   } finally { tmp.restore(); }
 });

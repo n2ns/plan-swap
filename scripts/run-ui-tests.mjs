@@ -10,8 +10,16 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const output = path.join(root, '.test-out', 'ui');
 const locales = ['en', 'zh-cn', 'es', 'ja'];
 const widths = [200, 240, 280, 340, 420];
-const observed = ['not live', '非实时', 'no en tiempo real', 'リアルタイムではありません'];
-const results = { cases: [], interactions: [], window: null, failures: [] };
+const observed = ['Last observed: ', '采集于 ', 'Última consulta: ', '取得日時: '];
+const resets = { en: 'Resets: ', 'zh-cn': '重置时间：', es: 'Se restablece: ', ja: 'リセット日時: ' };
+const durations = { en: ['5-hour limit', '7-day limit'], 'zh-cn': ['5 小时限额', '7 天限额'], es: ['Límite de 5 h', 'Límite de 7 días'], ja: ['5 時間の上限', '7 日間の上限'] };
+const remaining = {
+  en: (percent) => `${percent}% remaining`,
+  'zh-cn': (percent) => `剩余 ${percent}%`,
+  es: (percent) => `${percent}% restante`,
+  ja: (percent) => `残り ${percent}%`,
+};
+const results = { cases: [], interactions: [], window: null, failures: [], consoleErrors: [] };
 let preview;
 let context;
 let page;
@@ -36,6 +44,7 @@ async function runCase(locale, width) {
     };
     const intersects = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
     const rows = [...codex.querySelectorAll('.row'), ...claude.querySelectorAll('.row')];
+    const usageState = window.preview.state().codex.accounts.find((a) => a.dir === '/fixture/.codex-work').usage;
     return {
       sidebarWidth: rect(sidebar).width, appWidth: rect(app).width,
       viewportWidth: innerWidth, viewportHeight: innerHeight,
@@ -48,6 +57,35 @@ async function runCase(locale, width) {
       claudeRows: claude.querySelectorAll('.row').length,
       usageVisible: !!usage && rect(usage).width > 0 && rect(usage).height > 0,
       usageText: usage?.textContent ?? '',
+      usageTitle: usage?.title ?? '',
+      observedTime: new Date(window.preview.state().codex.accounts.find((a) => a.dir === '/fixture/.codex-work').usage.checkedAt)
+        .toLocaleString(document.documentElement.lang),
+      visibleTimestamp: !!usage?.querySelector('.usage-time'),
+      windows: [...usage.querySelectorAll('.usage-window')].map((item, index) => {
+        const labels = item.querySelector('.usage-labels');
+        const track = item.querySelector('.usage-track');
+        const fill = item.querySelector('.usage-fill');
+        const reset = item.querySelector('.usage-reset');
+        return {
+          text: labels.textContent,
+          label: track.getAttribute('aria-label'), role: track.getAttribute('role'),
+          value: track.getAttribute('aria-valuenow'), min: track.getAttribute('aria-valuemin'), max: track.getAttribute('aria-valuemax'),
+          valueText: track.getAttribute('aria-valuetext'), fill: fill.style.width,
+          fillRatio: rect(fill).width / rect(track).width,
+          resetText: reset?.textContent,
+          resetTime: new Date(usageState.windows[index].resetsAt * 1000).toLocaleString(document.documentElement.lang, {
+            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+          }),
+          resetVisible: !!reset && rect(reset).width > 0 && rect(reset).height > 0,
+          resetBelowTrack: !!reset && rect(reset).top >= rect(track).bottom,
+          resetOverflow: !!reset && (reset.scrollWidth > reset.clientWidth || reset.scrollHeight > reset.clientHeight
+            || rect(reset).right > rect(item).right + 1 || rect(reset).bottom > rect(item).bottom + 1),
+          resetActionsOverlap: !!reset && intersects(rect(reset), rect(actions)),
+          overlap: intersects(rect(labels), rect(track)),
+          overflow: item.scrollWidth > item.clientWidth || labels.scrollWidth > labels.clientWidth
+            || rect(fill).right > rect(track).right + 1,
+        };
+      }),
       emptyUsage: !!codex.querySelector('.row[data-dir="/fixture/.codex-empty"] .row-usage'),
       defaultUsage: !!codex.querySelector('.row[data-dir="/fixture/.codex"] .row-usage'),
       usageActionsOverlap: intersects(rect(usage), rect(actions)),
@@ -66,9 +104,33 @@ async function runCase(locale, width) {
   assert.equal(data.usageActionsOverlap, false, `usage overlaps actions at ${name(locale, width)}`);
   assert.equal(data.emptyUsage, false);
   assert.equal(data.defaultUsage, false);
-  assert.match(data.usageText, /42%/);
-  assert.ok(data.usageText.includes(observed[locales.indexOf(locale)]), `missing localized historical label at ${name(locale, width)}`);
-  assert.match(data.usageText, /2026/);
+  assert.equal(data.usageTitle, observed[locales.indexOf(locale)] + data.observedTime);
+  assert.equal(data.visibleTimestamp, false);
+  assert.ok(!data.usageText.includes(data.observedTime), `visible timestamp at ${name(locale, width)}`);
+  assert.doesNotMatch(data.usageText + data.usageTitle, /not live|非实时|no en tiempo real|リアルタイムではありません/);
+  assert.equal(data.windows.length, 2);
+  for (const [index, percent] of [58, 14].entries()) {
+    const window = data.windows[index];
+    assert.equal(window.role, 'progressbar');
+    assert.equal(window.label, durations[locale][index]);
+    assert.ok(window.text.includes(window.label));
+    assert.ok(window.text.includes(remaining[locale](percent)));
+    assert.equal(window.valueText, remaining[locale](percent));
+    assert.equal(window.value, String(percent));
+    assert.equal(window.min, '0');
+    assert.equal(window.max, '100');
+    assert.equal(window.fill, `${percent}%`);
+    assert.ok(Math.abs(window.fillRatio - percent / 100) < 0.02);
+    assert.equal(window.resetText, resets[locale] + window.resetTime);
+    if (locale === 'zh-cn') assert.match(window.resetText, /^重置时间：\d{1,2}月\d{1,2}日 \d{2}:\d{2}$/);
+    assert.ok(data.usageText.includes(window.resetTime));
+    assert.equal(window.resetVisible, true);
+    assert.equal(window.resetBelowTrack, true, `reset date above track at ${name(locale, width)}`);
+    assert.equal(window.resetOverflow, false, `reset date overflow at ${name(locale, width)}`);
+    assert.equal(window.resetActionsOverlap, false, `reset date overlaps actions at ${name(locale, width)}`);
+    assert.equal(window.overlap, false, `usage labels overlap track at ${name(locale, width)}`);
+    assert.equal(window.overflow, false, `usage window overflow at ${name(locale, width)}`);
+  }
   if (data.appWidth >= 340) {
     assert.ok(data.gridColumns >= 4, `wide grid did not activate at ${name(locale, width)}`);
     assert.ok(data.gridAreas.includes('usage usage actions'));
@@ -76,7 +138,14 @@ async function runCase(locale, width) {
     assert.ok(data.gridColumns <= 2, `narrow grid did not activate at ${name(locale, width)}`);
   }
   await page.screenshot({ path: path.join(output, `${name(locale, width)}-codex.png`) });
-  results.cases.push({ locale, width, mode: 'codex', passed: true, ...data });
+  const usageLocator = page.locator(`${row('codex', 'work')} .row-usage`);
+  const beforeHover = await usageLocator.boundingBox();
+  await usageLocator.hover();
+  assert.equal(await usageLocator.getAttribute('title'), data.usageTitle);
+  assert.equal(await usageLocator.textContent(), data.usageText);
+  assert.deepEqual(await usageLocator.boundingBox(), beforeHover, `usage moved on hover at ${name(locale, width)}`);
+  await page.screenshot({ path: path.join(output, `${name(locale, width)}-codex-hover.png`) });
+  results.cases.push({ locale, width, mode: 'codex', passed: true, hoverPreserved: true, ...data });
   await page.evaluate(({ locale, width }) => window.preview.apply({ locale, width, active: 'claude' }), { locale, width });
   const claude = await page.evaluate(() => {
     const app = document.querySelector('#app');
@@ -90,6 +159,90 @@ async function runCase(locale, width) {
   });
   assert.deepEqual(claude, { rows: 3, visible: true, horizontalOverflow: false, usageCount: 0 });
   results.cases.push({ locale, width, mode: 'claude', passed: true, ...claude });
+}
+
+async function restartControls(locale, width) {
+  await page.evaluate(({ locale, width }) => window.preview.apply({ locale, width, active: 'codex' }), { locale, width });
+  for (const restart of [
+    { context: 'wsl', auto: true },
+    { context: 'wsl', auto: false },
+    { context: 'local', auto: false, userEnv: true },
+    { context: 'remote', auto: false },
+  ]) {
+    await page.evaluate((restart) => {
+      const state = structuredClone(window.preview.state());
+      state.codex.restart = restart;
+      state.codex.pendingDir = 'Work';
+      window.preview.post({ type: 'state', state });
+    }, restart);
+    assert.equal(await page.locator('#panel-codex .banner').count(), 1);
+    assert.equal(await page.locator('#panel-codex .banner vscode-button').count(), 0);
+    assert.equal(await page.locator('.tools[role="toolbar"] vscode-toolbar-button').count(), 5);
+    assert.equal(await page.locator('[data-action="restartServer"], vscode-icon[name="server-process"]').count(), 0);
+    const overflow = await page.evaluate(() => {
+      const sidebar = document.querySelector('#sidebar');
+      const banner = document.querySelector('#panel-codex .banner');
+      return sidebar.scrollWidth > sidebar.clientWidth || banner.scrollWidth > banner.clientWidth;
+    });
+    assert.equal(overflow, false, `pending banner overflow at ${name(locale, width)}`);
+    await page.screenshot({ path: path.join(output, `${name(locale, width)}-pending-${restart.context}-${restart.auto}.png`) });
+  }
+  await page.evaluate(() => window.preview.clearMessages());
+  await page.locator(`${row('codex', 'work')} [data-action="switch"]`).click();
+  assert.deepEqual(await page.evaluate(() => window.preview.messages),
+    [{ type: 'switch', mode: 'codex', dir: '/fixture/.codex-work' }]);
+  results.interactions.push(`${name(locale, width)}: restart controls absent in automatic/manual contexts; switch request preserved`);
+}
+
+async function usageEndpoints() {
+  await page.evaluate(() => {
+    window.preview.apply({ locale: 'en', width: 200, active: 'codex' });
+    const state = structuredClone(window.preview.state());
+    const account = state.codex.accounts.find((a) => a.dir === '/fixture/.codex-work');
+    account.usage.windows[0].usedPercent = 0;
+    account.usage.windows[1].usedPercent = 100;
+    window.preview.post({ type: 'state', state });
+  });
+  const values = await page.locator(`${row('codex', 'work')} .usage-window`).evaluateAll((windows) => windows.map((item) => ({
+    value: item.querySelector('.usage-track').getAttribute('aria-valuenow'),
+    text: item.querySelector('.usage-labels').textContent,
+    fill: item.querySelector('.usage-fill').style.width,
+  })));
+  for (const [index, percent] of [100, 0].entries()) {
+    assert.equal(values[index].value, String(percent));
+    assert.equal(values[index].fill, `${percent}%`);
+    assert.ok(values[index].text.includes(remaining.en(percent)));
+  }
+  await page.screenshot({ path: path.join(output, 'en-200-usage-endpoints.png') });
+  results.interactions.push('usage endpoints display 100% and 0% remaining for 0% and 100% used');
+}
+
+async function resetDateStates() {
+  await page.evaluate(() => {
+    window.preview.apply({ locale: 'en', width: 200, active: 'codex' });
+    const state = structuredClone(window.preview.state());
+    const account = state.codex.accounts.find((a) => a.dir === '/fixture/.codex-work');
+    delete account.usage.windows[0].resetsAt;
+    window.preview.post({ type: 'state', state });
+  });
+  const windows = page.locator(`${row('codex', 'work')} .usage-window`);
+  assert.equal(await windows.count(), 2);
+  assert.equal(await windows.nth(0).locator('.usage-reset').count(), 0);
+  assert.equal(await windows.nth(0).locator('.usage-track').getAttribute('aria-valuenow'), '58');
+  assert.equal(await windows.nth(1).locator('.usage-reset').count(), 1);
+  const remainingWindow = await windows.nth(1).textContent();
+  await page.evaluate(() => {
+    const state = structuredClone(window.preview.state());
+    const account = state.codex.accounts.find((a) => a.dir === '/fixture/.codex-work');
+    // Model the refreshed host payload after the first window expired and was filtered out by the host.
+    account.usage.windows = account.usage.windows.slice(1);
+    window.preview.post({ type: 'state', state });
+  });
+  assert.equal(await windows.count(), 1);
+  assert.equal(await windows.nth(0).textContent(), remainingWindow);
+  assert.equal(await windows.nth(0).locator('.usage-track').getAttribute('aria-valuenow'), '14');
+  assert.equal(await windows.nth(0).locator('.usage-reset').count(), 1);
+  results.interactions.push('missing reset date preserves its bar; refreshed host state removes only the expired window');
 }
 
 async function interactions() {
@@ -166,12 +319,20 @@ try {
     headless: false, viewport: null, args: ['--start-fullscreen', '--disable-gpu'],
   });
   page = context.pages()[0] ?? await context.newPage();
+  page.on('pageerror', (error) => results.consoleErrors.push(error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error' || message.type() === 'warning') results.consoleErrors.push(message.text());
+  });
   const cdp = await context.newCDPSession(page);
   const { windowId } = await cdp.send('Browser.getWindowForTarget');
   await cdp.send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'fullscreen' } });
   const bounds = await cdp.send('Browser.getWindowBounds', { windowId });
   assert.equal(bounds.bounds.windowState, 'fullscreen', 'browser must be full-screen');
+  // The synthetic page has no favicon; avoid an unrelated browser request warning.
+  await page.route('**/favicon.ico', (route) => route.fulfill({ status: 204 }));
   await page.goto(preview.url);
+  assert.equal(page.url(), preview.url);
+  assert.equal(await page.title(), 'PlanSwap synthetic Webview preview');
   await page.waitForFunction(() => window.preview?.messages.some((message) => message.type === 'ready')
     && !!document.querySelector('#tab-claude') && window.preview.state()?.codex.accounts.length === 3);
   const display = await page.evaluate(() => ({
@@ -186,8 +347,12 @@ try {
   assert.equal(display.zoomScale, 1, 'browser zoom must remain at 100%');
   results.window = { bounds: bounds.bounds, display, viewportEmulation: false };
   for (const locale of locales) for (const width of widths) await runCase(locale, width);
+  for (const locale of locales) for (const width of widths) await restartControls(locale, width);
+  await usageEndpoints();
+  await resetDateStates();
   await interactions();
-  console.log(`UI preview passed: ${results.cases.length} layout cases, 20 Codex screenshots, ${results.interactions.length} interactions`);
+  assert.deepEqual(results.consoleErrors, [], 'preview console must have no errors or warnings');
+  console.log(`UI preview passed: ${results.cases.length} layout cases, 121 Codex screenshots, ${results.interactions.length} interactions`);
 } catch (error) {
   results.failures.push(error instanceof Error ? error.stack ?? error.message : String(error));
   if (page) await page.screenshot({ path: path.join(output, 'failure.png'), fullPage: true }).catch(() => undefined);
