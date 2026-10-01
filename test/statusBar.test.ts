@@ -133,6 +133,28 @@ describe('pure helpers', () => {
     } finally { setLocale('en'); }
   });
 
+  test('relativeReset without Intl.DurationFormat (Node 22) gives the same text', () => {
+    const now = Date.parse('2026-10-01T12:00:00Z');
+    const at = (ms: number): number => Math.floor((now + ms) / 1000);
+    const intl = Intl as unknown as Record<string, unknown>;
+    const saved = intl.DurationFormat;
+    const samples = [2 * 86400_000 + 5 * 3600_000, 3 * 86400_000, 5 * 3600_000 + 20 * 60_000, 45 * 60_000];
+    const expected: Record<string, string[]> = {
+      en: ['2d 5h', '3d', '5h 20m', '45m'], 'zh-cn': ['2天5小时', '3天', '5小时20分钟', '45分钟'],
+      es: ['2d 5h', '3d', '5h 20min', '45min'], ja: ['2 日 5 時間', '3 日', '5 時間 20 分', '45 分'],
+    };
+    try {
+      delete intl.DurationFormat;
+      for (const [locale, texts] of Object.entries(expected)) {
+        setLocale(locale as Parameters<typeof setLocale>[0]);
+        assert.deepEqual(samples.map((ms) => relativeReset(at(ms), now)), texts, locale);
+      }
+    } finally {
+      if (saved !== undefined) intl.DurationFormat = saved;
+      setLocale('en');
+    }
+  });
+
   test('statusText and the screen reader label carry product names and the short window only', () => {
     assert.equal(statusText([{ product: 'Claude', remaining: 97 }, { product: 'Codex', remaining: 82 }]), 'Claude 97% · Codex 82%');
     assert.equal(statusText([{ product: 'Claude' }, { product: 'Codex', remaining: 0 }]), 'Claude · Codex 0%');

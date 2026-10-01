@@ -203,8 +203,11 @@ function relativeTime(epochSeconds: number): string {
   // Japanese narrow units are Latin letters ("2d5h"); the short style gives "2 日 5 時間"
   const DurationFormat = (Intl as unknown as { DurationFormat?: DurationFormatConstructor }).DurationFormat;
   if (DurationFormat) return new DurationFormat(locale, { style: locale === 'ja' ? 'short' : 'narrow' }).format(Object.fromEntries(parts));
+  // Without DurationFormat (Node 22): unit numbers in the same widths, unspaced in Chinese, as DurationFormat writes them
   const unit = { days: 'day', hours: 'hour', minutes: 'minute' } as Record<string, string>;
-  return parts.map(([k, n]) => new Intl.NumberFormat(locale, { style: 'unit', unit: unit[k], unitDisplay: 'narrow' }).format(n)).join(' ');
+  const display = locale === 'ja' ? 'short' : 'narrow';
+  return parts.map(([k, n]) => new Intl.NumberFormat(locale, { style: 'unit', unit: unit[k], unitDisplay: display }).format(n))
+    .join(locale.toLowerCase().startsWith('zh') ? '' : ' ');
 }
 
 function usageWindow(w: UsageWindowView): HTMLElement {
