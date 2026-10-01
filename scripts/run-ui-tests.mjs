@@ -11,7 +11,17 @@ const output = path.join(root, '.test-out', 'ui');
 const locales = ['en', 'zh-cn', 'es', 'ja'];
 const widths = [200, 240, 280, 340, 420];
 const observed = ['Last observed: ', '采集于 ', 'Última consulta: ', '取得日時: '];
+// Absolute reset time (title) and the visible relative one
 const resets = { en: 'Resets: ', 'zh-cn': '重置时间：', es: 'Se restablece: ', ja: 'リセット日時: ' };
+const resetsIn = {
+  en: (time) => `Resets ${time}`, 'zh-cn': (time) => `${time}重置`,
+  es: (time) => `Se restablece ${time}`, ja: (time) => `${time}にリセット`,
+};
+const exhausted = { en: 'Used up', 'zh-cn': '已用完', es: 'Agotado', ja: '使い切り' };
+const switchLabel = { en: 'Switch', 'zh-cn': '切换', es: 'Cambiar', ja: '切り替え' };
+const addLabel = { en: 'Add', 'zh-cn': '添加', es: 'Añadir', ja: '追加' };
+// Minimum font size of any text in the account list, in CSS px
+const MIN_FONT_PX = 11;
 const durations = { en: ['5-hour limit', '7-day limit'], 'zh-cn': ['5 小时限额', '7 天限额'], es: ['Límite de 5 h', 'Límite de 7 días'], ja: ['5 時間の上限', '7 日間の上限'] };
 const scopedDurations = {
   en: ['5-hour limit', '7-day limit', '7-day limit · Fable'],
@@ -48,6 +58,77 @@ async function shot(file, mode) {
   assert.deepEqual(tab, { selected: `tab-${mode}`, active: `tab-${mode}`, shown: [`panel-${mode}`] }, `tab bar does not match the ${mode} page for ${file}`);
   await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined))));
   await page.screenshot({ path: path.join(output, file) });
+}
+
+// Card structure of one provider page: no current badge or directory line, aria-current, visible Switch button,
+// directory hover title, neutral plan tags outside the current card, flat current card and readable font sizes
+async function cardChecks(mode, locale, width) {
+  const data = await page.evaluate(({ mode }) => {
+    const panel = document.querySelector(`#panel-${mode}`);
+    const rows = [...panel.querySelectorAll('.row')];
+    const rect = (el) => {
+      const r = el.getBoundingClientRect();
+      return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height };
+    };
+    const small = [];
+    for (const row of rows) {
+      const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const el = node.parentElement;
+        if (!node.textContent.trim() || el.closest('.avatar')) continue;
+        const px = parseFloat(getComputedStyle(el).fontSize);
+        if (px < 11) small.push({ text: node.textContent.trim(), px });
+      }
+    }
+    const info = (row) => {
+      const pill = row.querySelector('.pill.plan');
+      const button = row.querySelector('[data-action="switch"]');
+      const style = getComputedStyle(row);
+      return {
+        dir: row.dataset.dir, title: row.title, ariaCurrent: row.getAttribute('aria-current'),
+        switchText: button?.textContent.trim() ?? null, switchTitle: button?.title ?? null,
+        switchVisible: !!button && rect(button).width > 0 && rect(button).height > 0,
+        switchInside: !!button && rect(button).left >= rect(row).left && rect(button).right <= rect(row).right,
+        pillBackground: pill && getComputedStyle(pill).backgroundColor, pillImage: pill && getComputedStyle(pill).backgroundImage,
+        pillBorder: pill && getComputedStyle(pill).borderTopColor, pillText: pill && getComputedStyle(pill).color,
+        boxShadow: style.boxShadow, backgroundImage: style.backgroundImage,
+        actionsWrapHeight: rect(row.querySelector('.row-actions')).height,
+      };
+    };
+    return {
+      currentIcons: panel.querySelectorAll('.current-icon, .avatar-badge').length,
+      dirLines: panel.querySelectorAll('.row-dir').length,
+      ariaCurrentRows: panel.querySelectorAll('.row[aria-current]').length,
+      rows: rows.map(info), small,
+      avatarSizes: [...panel.querySelectorAll('.avatar')].map((a) => `${rect(a).width}x${rect(a).height}`),
+      defaultAvatar: panel.querySelector('.row[data-dir$="-default"], .row[data-dir$="/.claude"], .row[data-dir$="/.codex"]')?.querySelector('.avatar')?.getAttribute('aria-label') ?? null,
+    };
+  }, { mode });
+  const where = `${mode} ${name(locale, width)}`;
+  assert.equal(data.currentIcons, 0, `current badge or avatar badge present at ${where}`);
+  assert.equal(data.dirLines, 0, `directory line present at ${where}`);
+  assert.equal(data.ariaCurrentRows, 1, `exactly one aria-current row expected at ${where}`);
+  assert.deepEqual(data.small, [], `text below ${MIN_FONT_PX}px at ${where}`);
+  assert.equal(new Set(data.avatarSizes).size, 1, `avatars differ in size at ${where}`);
+  for (const row of data.rows) {
+    const current = row.ariaCurrent === 'true';
+    assert.equal(row.title, row.dir, `row title is the directory at ${where}`);
+    if (current) {
+      assert.equal(row.boxShadow, 'none', `current card has a shadow at ${where}`);
+      assert.equal(row.backgroundImage, 'none', `current card has a gradient at ${where}`);
+      assert.equal(row.switchText, null, `current card has a Switch button at ${where}`);
+      assert.notEqual(row.pillBackground, 'rgba(0, 0, 0, 0)', `current plan tag is not tinted at ${where}`);
+    } else {
+      assert.equal(row.ariaCurrent, null);
+      assert.equal(row.switchText, switchLabel[locale], `Switch button text at ${where}`);
+      assert.equal(row.switchVisible && row.switchInside, true, `Switch button hidden or outside the card at ${where}`);
+      if (row.pillBackground) {
+        assert.equal(row.pillBackground, 'rgba(0, 0, 0, 0)', `non-current plan tag is filled at ${where}`);
+        assert.equal(row.pillImage, 'none');
+      }
+    }
+  }
+  return data;
 }
 
 async function runCase(locale, width) {
@@ -88,6 +169,11 @@ async function runCase(locale, width) {
         const track = item.querySelector('.usage-track');
         const fill = item.querySelector('.usage-fill');
         const reset = item.querySelector('.usage-reset');
+        const relative = (seconds) => {
+          const hours = Math.round((seconds * 1000 - Date.now()) / 3600000);
+          const rtf = new Intl.RelativeTimeFormat(document.documentElement.lang, { numeric: 'auto' });
+          return hours < 48 ? rtf.format(hours, 'hour') : rtf.format(Math.round(hours / 24), 'day');
+        };
         return {
           text: labels.textContent,
           label: track.getAttribute('aria-label'), role: track.getAttribute('role'),
@@ -95,11 +181,13 @@ async function runCase(locale, width) {
           valueText: track.getAttribute('aria-valuetext'), fill: fill.style.width,
           fillRatio: rect(fill).width / rect(track).width,
           resetText: reset?.textContent,
+          resetTitle: reset?.title,
+          resetRelative: relative(usageState.windows[index].resetsAt),
           resetTime: new Date(usageState.windows[index].resetsAt * 1000).toLocaleString(document.documentElement.lang, {
             month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
           }),
           resetVisible: !!reset && rect(reset).width > 0 && rect(reset).height > 0,
-          resetBelowTrack: !!reset && rect(reset).top >= rect(track).bottom,
+          resetInLabels: !!reset && labels.contains(reset) && rect(reset).bottom <= rect(track).top,
           resetOverflow: !!reset && (reset.scrollWidth > reset.clientWidth || reset.scrollHeight > reset.clientHeight
             || rect(reset).right > rect(item).right + 1 || rect(reset).bottom > rect(item).bottom + 1),
           resetActionsOverlap: !!reset && intersects(rect(reset), rect(actions)),
@@ -143,22 +231,24 @@ async function runCase(locale, width) {
     assert.equal(window.max, '100');
     assert.equal(window.fill, `${percent}%`);
     assert.ok(Math.abs(window.fillRatio - percent / 100) < 0.02);
-    assert.equal(window.resetText, resets[locale] + window.resetTime);
-    if (locale === 'zh-cn') assert.match(window.resetText, /^重置时间：\d{1,2}月\d{1,2}日 \d{2}:\d{2}$/);
-    assert.ok(data.usageText.includes(window.resetTime));
+    assert.equal(window.resetText, resetsIn[locale](window.resetRelative));
+    assert.equal(window.resetTitle, resets[locale] + window.resetTime);
+    if (locale === 'zh-cn') assert.match(window.resetTitle, /^重置时间：\d{1,2}月\d{1,2}日 \d{2}:\d{2}$/);
+    assert.ok(!data.usageText.includes(window.resetTime), `absolute reset time must stay in the title at ${name(locale, width)}`);
     assert.equal(window.resetVisible, true);
-    assert.equal(window.resetBelowTrack, true, `reset date above track at ${name(locale, width)}`);
+    assert.equal(window.resetInLabels, true, `reset time must sit in its window's label line at ${name(locale, width)}`);
     assert.equal(window.resetOverflow, false, `reset date overflow at ${name(locale, width)}`);
     assert.equal(window.resetActionsOverlap, false, `reset date overlaps actions at ${name(locale, width)}`);
     assert.equal(window.overlap, false, `usage labels overlap track at ${name(locale, width)}`);
     assert.equal(window.overflow, false, `usage window overflow at ${name(locale, width)}`);
   }
   if (data.appWidth >= 340) {
-    assert.ok(data.gridColumns >= 4, `wide grid did not activate at ${name(locale, width)}`);
-    assert.ok(data.gridAreas.includes('usage usage actions'));
+    assert.equal(data.gridColumns, 3, `wide grid did not activate at ${name(locale, width)}`);
+    assert.ok(data.gridAreas.includes('"avatar title tags"') && data.gridAreas.includes('". actions actions"'));
   } else {
     assert.ok(data.gridColumns <= 2, `narrow grid did not activate at ${name(locale, width)}`);
   }
+  await cardChecks('codex', locale, width);
   await shot(`${name(locale, width)}-codex.png`, 'codex');
   const usageLocator = page.locator(`${row('codex', 'work')} .row-usage`);
   const beforeHover = await usageLocator.boundingBox();
@@ -192,7 +282,9 @@ async function runCase(locale, width) {
       emptyUsage: !!document.querySelector('#panel-claude .row[data-dir="/fixture/.claude-empty"] .row-usage'),
       defaultUsage: !!document.querySelector('#panel-claude .row[data-dir="/fixture/.claude"] .row-usage'),
       moreOpen: usage.querySelector('details.usage-more')?.open ?? null,
-      summaryText: usage.querySelector('.usage-more-summary')?.textContent ?? null,
+      summaryText: usage.querySelector('.usage-more-label')?.textContent ?? null,
+      summaryValue: usage.querySelector('.usage-more-value')?.textContent ?? null,
+      summaryChevron: !!usage.querySelector('.usage-more-summary vscode-icon.chevron'),
       summaryVisible: (() => { const el = usage.querySelector('.usage-more-summary'); return !!el && rect(el).width > 0 && rect(el).height > 0; })(),
       summaryActionsOverlap: (() => { const el = usage.querySelector('.usage-more-summary'); return !!el && intersects(rect(el), rect(actions)); })(),
       windows: [...usage.querySelectorAll('.usage-window')].map((item, index) => {
@@ -202,9 +294,16 @@ async function runCase(locale, width) {
         return {
           shown: item.checkVisibility({ contentVisibilityAuto: true }) && rect(item).height > 0,
           text: labels.textContent, label: track.getAttribute('aria-label'),
-          first: labels.firstElementChild.textContent,
+          first: item.querySelector('.usage-duration').textContent,
           value: track.getAttribute('aria-valuenow'),
           resetVisible: !!reset && rect(reset).width > 0 && rect(reset).height > 0,
+          resetTitle: reset?.title,
+          resetRelative: (() => {
+            const seconds = usageState.windows[index].resetsAt;
+            const hours = Math.round((seconds * 1000 - Date.now()) / 3600000);
+            const rtf = new Intl.RelativeTimeFormat(document.documentElement.lang, { numeric: 'auto' });
+            return hours < 48 ? rtf.format(hours, 'hour') : rtf.format(Math.round(hours / 24), 'day');
+          })(),
           resetActionsOverlap: !!reset && intersects(rect(reset), rect(actions)),
           resetTime: new Date(usageState.windows[index].resetsAt * 1000).toLocaleString(document.documentElement.lang, {
             month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
@@ -220,10 +319,13 @@ async function runCase(locale, width) {
   const collapsed = await measureClaude();
   assert.equal(collapsed.moreOpen, false, `model limits must start collapsed at ${name(locale, width)}`);
   assert.equal(collapsed.summaryText, modelLimits[locale]);
+  assert.equal(collapsed.summaryValue, remaining[locale](75), `summary shows the lowest remaining value at ${name(locale, width)}`);
+  assert.equal(collapsed.summaryChevron, true);
   assert.equal(collapsed.summaryVisible, true);
   assert.equal(collapsed.summaryActionsOverlap, false, `model-limit toggle overlaps actions at ${name(locale, width)}`);
   assert.deepEqual(collapsed.windows.map((w) => w.shown), [true, true, false]);
   assert.equal(collapsed.horizontalOverflow, false, `claude horizontal overflow (collapsed) at ${name(locale, width)}`);
+  await cardChecks('claude', locale, width);
   await shot(`${name(locale, width)}-claude.png`, 'claude');
   await page.click('#panel-claude .row[data-dir="/fixture/.claude-work"] .usage-more-summary');
   // The expanded state survives a re-render that replaces the row (another locale and back forces new DOM)
@@ -253,7 +355,8 @@ async function runCase(locale, width) {
     assert.ok(window.text.includes(remaining[locale](percent)));
     assert.equal(window.value, String(percent));
     assert.equal(window.resetVisible, true);
-    assert.equal(window.resetText, resets[locale] + window.resetTime);
+    assert.equal(window.resetText, resetsIn[locale](window.resetRelative));
+    assert.equal(window.resetTitle, resets[locale] + window.resetTime);
     assert.equal(window.resetActionsOverlap, false, `claude reset date overlaps actions at ${name(locale, width)}`);
     assert.equal(window.overlap, false, `claude usage labels overlap track at ${name(locale, width)}`);
     assert.equal(window.overflow, false, `claude usage window overflow at ${name(locale, width)}`);
@@ -318,6 +421,17 @@ async function usageEndpoints() {
     assert.equal(values[index].fill, `${percent}%`);
     assert.ok(values[index].text.includes(remaining.en(percent)));
   }
+  const flags = await page.locator(`${row('codex', 'work')} .usage-window`).evaluateAll((windows) => windows.map((item) => {
+    const track = item.querySelector('.usage-track');
+    return { flag: item.querySelector('.usage-flag')?.textContent ?? null, level: track.dataset.level, valueText: track.getAttribute('aria-valuetext'),
+      image: getComputedStyle(track).backgroundImage };
+  }));
+  assert.equal(flags[0].flag, null);
+  assert.equal(flags[0].level, 'ok');
+  assert.equal(flags[1].flag, exhausted.en, 'a window at 0% remaining shows the used-up mark');
+  assert.equal(flags[1].level, 'empty');
+  assert.match(flags[1].valueText, /Used up/);
+  assert.match(flags[1].image, /repeating-linear-gradient/, 'the empty track is hatched');
   await shot('en-200-usage-endpoints.png', 'codex');
   results.interactions.push('usage endpoints display 100% and 0% remaining for 0% and 100% used');
 }
@@ -348,6 +462,104 @@ async function resetDateStates() {
   assert.equal(await windows.nth(0).locator('.usage-track').getAttribute('aria-valuenow'), '14');
   assert.equal(await windows.nth(0).locator('.usage-reset').count(), 1);
   results.interactions.push('missing reset date preserves its bar; refreshed host state removes only the expired window');
+}
+
+// The add form starts collapsed behind the "+ Add" toggle; focusAdd expands and focuses it; Escape and a successful add collapse it.
+// The Tools section starts collapsed and keeps its state across re-renders
+async function addFormAndTools() {
+  for (const mode of ['claude', 'codex']) {
+    await page.evaluate((mode) => { window.preview.apply({ locale: 'en', width: 280, active: mode }); window.preview.clearMessages(); }, mode);
+    const panel = `#panel-${mode}`;
+    const toggle = page.locator(`${panel} .add-toggle`);
+    const form = page.locator(`${panel} .add`);
+    const field = page.locator(`${panel} .add vscode-textfield input`);
+    const fieldFocused = () => field.evaluate((el) => el.getRootNode().activeElement === el);
+    assert.equal(await form.isVisible(), false, `${mode} add form must start collapsed`);
+    assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
+    assert.equal((await toggle.textContent()).trim(), addLabel.en);
+    assert.equal(await toggle.getAttribute('aria-label'), 'Add account');
+    // The toggle sits at the right end of the list heading
+    const placement = await page.evaluate((panel) => {
+      const title = document.querySelector(`${panel} .section-title`).getBoundingClientRect();
+      const toggle = document.querySelector(`${panel} .add-toggle`).getBoundingClientRect();
+      const count = document.querySelector(`${panel} .count`).getBoundingClientRect();
+      return { right: toggle.right <= title.right + 1 && toggle.left > count.right, sameLine: Math.abs((toggle.top + toggle.bottom) / 2 - (title.top + title.bottom) / 2) < 6 };
+    }, panel);
+    assert.deepEqual(placement, { right: true, sameLine: true }, `${mode} toggle placement`);
+
+    await toggle.click();
+    assert.equal(await form.isVisible(), true);
+    assert.equal(await toggle.getAttribute('aria-expanded'), 'true');
+    assert.equal(await fieldFocused(), true, `${mode} toggle must focus the field`);
+    await page.keyboard.press('Escape');
+    assert.equal(await form.isVisible(), false, `${mode} Escape must collapse the form`);
+    assert.equal(await toggle.evaluate((el) => el === document.activeElement), true, `${mode} Escape must return the focus to the toggle`);
+
+    // The host's focusAdd expands a collapsed form and focuses the field
+    await page.evaluate((mode) => window.preview.post({ type: 'focusAdd', mode }), mode);
+    assert.equal(await form.isVisible(), true);
+    assert.equal(await fieldFocused(), true, `${mode} focusAdd must focus the field`);
+    // A state push keeps the open form and its focus (the form is never re-created)
+    await field.fill('fresh2');
+    await page.evaluate((mode) => {
+      const state = structuredClone(window.preview.state());
+      state[mode].accounts[0].email = 'pushed@example.test';
+      window.preview.post({ type: 'state', state });
+    }, mode);
+    assert.equal(await fieldFocused(), true, `${mode} state push must keep the add focus`);
+    assert.equal(await field.inputValue(), 'fresh2');
+
+    // A host error keeps the form open and shows the message; a success collapses it, clears the input and refocuses the toggle
+    await page.evaluate(() => window.preview.clearMessages());
+    await field.press('Enter');
+    assert.deepEqual(await page.evaluate(() => window.preview.messages), [{ type: 'add', mode, name: 'fresh2', shared: true }]);
+    await page.evaluate((mode) => window.preview.post({ type: 'addResult', mode, error: 'Failed to create account directory: test' }), mode);
+    assert.equal(await form.isVisible(), true);
+    assert.match(await page.locator(`${panel} .add .help`).textContent(), /Failed to create account directory: test/);
+    await page.evaluate((mode) => window.preview.post({ type: 'addResult', mode }), mode);
+    assert.equal(await form.isVisible(), false, `${mode} a successful add must collapse the form`);
+    assert.equal(await field.inputValue(), '');
+    assert.equal(await toggle.evaluate((el) => el === document.activeElement), true);
+
+    // Tools: collapsed by default, Re-link follows the shared-account rule, state survives a re-render
+    const tools = page.locator(`${panel} details.page-tools`);
+    assert.equal(await tools.evaluate((el) => el.open), false);
+    assert.equal(await page.locator(`${panel} .page-tools-row`).isVisible(), false);
+    await tools.locator('summary').click();
+    assert.equal(await page.locator(`${panel} .page-tools-row vscode-button:visible`).count(), 4);
+    await page.evaluate((mode) => {
+      const state = structuredClone(window.preview.state());
+      for (const a of state[mode].accounts) if (a.kind === 'named') a.shared = false;
+      window.preview.post({ type: 'state', state });
+    }, mode);
+    assert.equal(await tools.evaluate((el) => el.open), true);
+    assert.equal(await page.locator(`${panel} .page-tools-row vscode-button:visible`).count(), 3, `${mode} Re-link must hide without shared accounts`);
+    await tools.locator('summary').click();
+    assert.equal(await tools.evaluate((el) => el.open), false);
+    await shot(`${mode}-add-tools.png`, mode);
+    results.interactions.push(`${mode}: add form collapsed by default, expands on toggle/focusAdd, collapses on Escape/success; Tools collapsed, Re-link rule intact`);
+  }
+}
+
+// Footer groups (info+help | reload+restart | star) and the Switch button / row shortcuts that must send exactly one switch
+async function footerAndSwitch() {
+  await page.evaluate(() => { window.preview.apply({ locale: 'en', width: 200, active: 'codex' }); window.preview.clearMessages(); });
+  const footer = await page.evaluate(() => [...document.querySelectorAll('.tools[role="toolbar"] > *')].map((el) => el.getAttribute('role') === 'separator' ? '|' : el.getAttribute('icon')));
+  assert.deepEqual(footer, ['info', 'book', '|', 'refresh', 'debug-restart', '|', 'star-empty']);
+
+  const button = page.locator(`${row('codex', 'work')} [data-action="switch"]`);
+  await button.dblclick();
+  assert.deepEqual(await page.evaluate(() => window.preview.messages), [{ type: 'switch', mode: 'codex', dir: '/fixture/.codex-work' }], 'double-clicking Switch sends one request');
+  // A card double-click within 500ms of a Switch button click is the same gesture and is ignored
+  await page.waitForTimeout(600);
+  await page.evaluate(() => window.preview.clearMessages());
+  await page.locator(`${row('codex', 'work')} .row-name`).dblclick();
+  assert.deepEqual(await page.evaluate(() => window.preview.messages), [{ type: 'switch', mode: 'codex', dir: '/fixture/.codex-work' }], 'double-clicking the card switches once');
+  await page.evaluate(() => window.preview.clearMessages());
+  await page.locator(row('codex', 'work')).focus();
+  await page.keyboard.press('Enter');
+  assert.deepEqual(await page.evaluate(() => window.preview.messages), [{ type: 'switch', mode: 'codex', dir: '/fixture/.codex-work' }], 'Enter on the card switches once');
+  results.interactions.push('footer groups divided; Switch button, card double-click and Enter each send one switch');
 }
 
 async function interactions() {
@@ -394,11 +606,15 @@ async function interactions() {
   assert.equal(await page.locator('#panel-codex .row-usage').count(), 0);
   results.interactions.push('host state without usage removed historical rows');
 
+  await addFormAndTools();
+  await footerAndSwitch();
+
   for (const mode of ['claude', 'codex']) {
     await page.evaluate((mode) => window.preview.apply({ locale: 'en', width: 420, active: mode }), mode);
     await page.locator(`${row(mode, 'work')} [data-action="rename"]`).click();
     const rename = page.locator(`${row(mode, 'work')} .rename-field input`);
     await rename.fill('');
+    await page.locator(`#panel-${mode} .add-toggle`).click();
     const add = page.locator(`#panel-${mode} .add vscode-textfield input`);
     await add.fill('fresh');
     await page.evaluate((mode) => {

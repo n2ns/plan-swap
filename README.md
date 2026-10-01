@@ -66,7 +66,7 @@ Open **PlanSwap** in the activity bar. The `default` row represents your existin
 
 **Claude**
 
-1. Type a name (letters, digits, `-` and `_`) in **Add account** and press Enter. Leave **Link to the default account's settings and history** checked to reuse your default setup, or uncheck it for separate settings and history.
+1. Click **+ Add** next to the account list heading, type a name (letters, digits, `-` and `_`) and press Enter. Leave **Link to the default account's settings and history** checked to reuse your default setup, or uncheck it for separate settings and history.
 2. Click the row's **Log in** button and complete sign-in in the terminal. You can also switch to the account and sign in from the Claude Code panel.
 3. Click the switch icon on any row. New sessions use that account; click **Reload Window** in the banner to move open panels over too.
 
@@ -98,13 +98,13 @@ You can change an existing account's mode after switching away from it and closi
 - **Link to the default account** moves its settings and history into the shared setup. Conflicting files are kept for you to merge manually; review the result reported by PlanSwap.
 - **Unlink from the default account** gives it a separate copy of the default configuration and keeps its sign-in. Shared history and sessions remain with the default account, so the unlinked account starts with an empty history.
 
-Use **Re-link** in the Tools row to refresh shared settings and repair links. It appears only when the selected tab has a linked account.
+Use **Re-link** in the (collapsed by default) Tools section to refresh shared settings and repair links. It appears only when the selected tab has a linked account.
 
 The Command Palette also offers **Share with Default Account** separately for Claude and Codex. Choose an eligible independent account and review the conversion confirmation.
 
 ## Tools
 
-The Tools row and footer let you open rules and settings, check CLI and extension versions, reload the window, or restart the extension host. Codex account switching offers a restart in its confirmation dialog when supported, or explains the manual steps.
+The Tools section and footer let you open rules and settings, check CLI and extension versions, reload the window, or restart the extension host. Codex account switching offers a restart in its confirmation dialog when supported, or explains the manual steps.
 
 **Update CLI** opens a terminal for the selected service. Follow its progress and prompts there. If your CLI was installed in a custom location, you may need to update it using its original installation method.
 

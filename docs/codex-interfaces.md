@@ -194,12 +194,12 @@ Messages with `mode === 'codex'` are dispatched to `panel.setHandler('codex', ..
 ## src/webview/main.ts
 
 When the top tab bar switches to Codex, the page is rendered from `state.codex`, with all texts from `src/webview/i18n.ts` in `state.locale`:
-- `!enabled`: only the explanation (design section 7) and the "Enable Codex switching" button (sends `{type:'enable', mode:'codex'}`) plus the "Tools" row are rendered; the other blocks are hidden.
+- `!enabled`: only the explanation (design section 7) and the "Enable Codex switching" button (sends `{type:'enable', mode:'codex'}`) plus the "Tools" section are rendered; the other blocks are hidden.
 - `!enabled` text: the base explanation followed by `disabled.restartLocal` / `disabled.restartWsl` / `disabled.restartRemote` for `restart.context`.
 - No reload banner; when `pendingDir` is set, the top shows `pending.titleLocal` (local) or `pending.title` (others); text `pending.textLocalManual` (local), `pending.text` (wsl) or `pending.textRemote` (remote). The banner contains no action button. The footer contains no Codex restart control and is rebuilt on locale changes only. Before the first state arrives the WSL wording is used; the add section's help text uses `~/.codex-<name>` and selects `codex.addHelpSharedWin` when `restart.userEnv` is true, keeping memories and thread databases independent; the sign-in button's title is "Run codex login in a terminal"; the terminal icon's title is "Run codex with this account in a terminal"; the signed-out hint is `Click "Log in" to log in from a terminal, or switch and log in from the Codex panel`.
 - Current and other rows: email and `plan` when there is an `email`; "Logged in" when `loggedIn` without `email`; "Not logged in" when signed out.
 - Pencil renaming of named account rows (not the default or external row) works as on the Claude page (`rename` with `dir`, `label`, edit state keyed by `dir`), with messages carrying `mode:'codex'`.
-- The "Tools" row shows `AGENTS.md`, the Codex extension settings, "Re-link" (only while a linked Codex account exists) and "Update CLI" (`tool` messages with `mode:'codex'`; syncing sends `tool:'sync'`, updating `tool:'updateCli'`).
+- The "Tools" section shows `AGENTS.md`, the Codex extension settings, "Re-link" (only while a linked Codex account exists) and "Update CLI" (`tool` messages with `mode:'codex'`; syncing sends `tool:'sync'`, updating `tool:'updateCli'`).
 - The add section's shared checkbox, the shared badge, the "Link to the default account: …" row button and the unlink action of shared rows work as on the Claude page (`add` with `shared`, `share` / `unshare` with `dir`, `mode:'codex'`).
 - Claude page behavior is unchanged.
 

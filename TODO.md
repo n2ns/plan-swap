@@ -39,6 +39,20 @@ is still missing. Remove an item once it is done or decided.
 ## Windows verification
 
 - **Native Windows is implemented but not yet accepted on a real machine.** Run [the Windows checklist](docs/manual-verification.md#native-windows-user-operated). Settled on 2026-09-30 without real accounts: `<dir>.claude.json` when `CLAUDE_CONFIG_DIR` is set (claude.exe 2.1.284 with temporary folders), the Claude extension 2.1.284 applies `claudeCode.environmentVariables` to the process it starts and follows it host-side (code), Codex honors `CODEX_HOME` including non-ASCII paths (`codex app-server` with a temporary folder), and Codex's default credential store is `file` (upstream `defaults.toml`). Still open: whether the Codex extension host inherits the changed user variable after a fresh start, whether the Codex extension with `chatgpt.runCodexInWindowsSubsystemForLinux` really runs Codex in WSL and ignores the Windows `CODEX_HOME` (PlanSwap refuses Codex switching then), and rc/state behavior of the `.vsix` under a real Windows editor.
+
+## UI polish
+
+Review of the account list (2026-10-01). The plan-tag, current-card, card-content, add/Tools/footer layout and color-guard items are done; what is left:
+
+- **Consistent card height.** The current card shows usage while cards without an observation show nothing. A
+  placeholder (for example "Show usage") was not added: a missing observation must not read as 0% (see
+  [Features](docs/features.md#codex-account-usage-observations)), so the wording needs a decision first.
+- **Spacing.** Tightening card padding and line spacing, and grouping with whitespace instead of lines, were not part of
+  the last pass.
+- **Real-editor look of the new styles.** The flat current card, neutral plan tags, hatched "used up" track and
+  high-contrast outline were previewed only with synthetic light, Solarized Light and high-contrast variables; see the
+  real-editor theme acceptance under Deferred features.
+
 ## Deferred features
 
 - **Real-editor theme acceptance.** `npm run test:ui` now repeats four-language, five-width layout and DOM checks, but its

@@ -173,8 +173,8 @@ Subsequent cold starts (source-derived, pending user verification):
 ## 7. User interface
 
 - The activity bar container "PlanSwap" ("PlanSwap") holds a single Webview view `planswap.accounts`, also named "PlanSwap"; the tab bar at the top of the panel switches between the Claude and Codex pages. The Codex page is a page rendered by the same `AccountsPanel` instance from the data provided by `codexPanelSource` (the current tab is stored in the memento `panel.activeTab`, see design.md 5.1). The frontend uses page-specific texts, all from the Webview i18n tables in the current UI language (see design.md 5.5).
-- While not enabled (a file without the marker block, or with a broken one, section 4 pre-check 5), the Codex page only shows an explanation, the "Enable Codex switching" button and the "Tools" row; enabling with a broken block leads to the repair guidance.
-- Once enabled the layout matches the Claude page: account list (current account pinned to the first row), "Tools" row, add input at the bottom; every named account row also has a pencil icon for renaming (aliases stored per account in `codex.labels`).
+- While not enabled (a file without the marker block, or with a broken one, section 4 pre-check 5), the Codex page only shows an explanation, the "Enable Codex switching" button and the "Tools" section; enabling with a broken block leads to the repair guidance.
+- Once enabled the layout matches the Claude page: account list (current account pinned to the first row) with the collapsed add form behind its "+ Add" button, "Tools" section at the bottom; every named account row also has a pencil icon for renaming (aliases stored per account in `codex.labels`).
 - Differences:
   - Switch button → modal confirmation → write the state file → restart the WSL server (automatic kinds only, section 5); a local desktop editor is restarted by the user (5.1). A target that is already effective in this window only realigns the state file (8.1 step 1). There is no reload banner; when the state file and the effective directory differ, the top shows "X selected; takes effect after restarting the server" ("…restarting the editor" in a local window) with explanatory text and no action button. The switch confirmation offers "Switch and restart" (automatic WSL) or "Save selection" with manual instructions; the footer has no Codex restart action.
   - Current and other rows: email and plan when there is an email (`Plus`, `Pro`, `Team`, `API key`, etc.); "Logged in" when signed in without email; "Not logged in" when signed out.
@@ -182,7 +182,7 @@ Subsequent cold starts (source-derived, pending user verification):
   - The terminal icon of signed-in accounts runs `env CODEX_HOME='<dir>' codex`.
   - The current account cannot be removed.
   - The add section has the shared checkbox (help line for a valid name, checked: `codex.addHelpShared` "Will create ~/.codex-<name> linked to the default account's settings, rules, skills, history, sessions and thread databases (memories stay per account)"); on Windows `codex.addHelpSharedWin` keeps memories and thread databases per account; shared rows have the `link` badge and independent rows that are not current have the "Link to the default account: …" button (the host also refuses the selected account, 8.6), as on the Claude page.
-  - The "Tools" row has `AGENTS.md` (opens `<effectiveDir()>/AGENTS.md`), the Codex extension settings (`chatgpt.`), "Re-link" (re-links every shared Codex account, 8.6; shown only while one exists), and "Update CLI" (opens a terminal and runs `env -u CODEX_HOME codex update`; see features.md section 5.5).
+  - The "Tools" section has `AGENTS.md` (opens `<effectiveDir()>/AGENTS.md`), the Codex extension settings (`chatgpt.`), "Re-link" (re-links every shared Codex account, 8.6; shown only while one exists), and "Update CLI" (opens a terminal and runs `env -u CODEX_HOME codex update`; see features.md section 5.5).
 
 ## 8. Commands and flows
 

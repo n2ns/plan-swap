@@ -10,6 +10,12 @@
 - **Refresh Claude Usage Limits** checks the current account on demand, and a new **Refresh Usage Limits of All Claude Accounts** command (also a "Refresh all accounts" link in the tooltip) checks every signed-in Claude account one at a time with a cancellable progress notification and reports failures.
 - Scheduled Claude usage checks are skipped while the account's cached values are younger than 15 minutes, so several editor windows no longer each start `claude`. Manual refresh always checks.
 
+### Changed
+
+- Refreshed sidebar account cards: the current account is marked by a highlighted card only (no check badge), other accounts show a neutral plan tag and a visible **Switch** button, and the directory moved into the card's tooltip.
+- Usage windows show reset times as relative times next to their own window, an explicit "Used up" mark at 0%, and a model-limits row with a chevron and its lowest remaining value.
+- **Add account** is collapsed behind a "+ Add" button, the page tools are collapsed by default, and the footer toolbar is grouped with the destructive reload and restart actions side by side.
+
 ## [0.2.1] - 2026-10-01
 
 ### Added

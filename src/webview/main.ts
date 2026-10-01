@@ -143,12 +143,11 @@ function avatar(a: AccountView): HTMLElement {
   for (const ch of a.name) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
   const color = AVATAR_COLORS[hash % AVATAR_COLORS.length];
   const letter = a.kind === 'external' ? '?' : a.label.charAt(0).toUpperCase();
-  const el = h('div', { class: 'avatar', style: `--avatar-color: var(--vscode-charts-${color})` }, letter);
-  // Default account: a home badge at the avatar's bottom-right, marking it as the home-directory account
+  // Default account: the same disc with a home icon instead of a letter, marking it as the home-directory account
   if (a.kind === 'default') {
-    el.append(h('span', { class: 'avatar-badge', title: t('account.default'), role: 'img', 'aria-label': t('account.default') }, h('vscode-icon', { name: 'home', size: '9' })));
+    return h('div', { class: 'avatar', style: `--avatar-color: var(--vscode-charts-${color})`, title: t('account.default'), role: 'img', 'aria-label': t('account.default') }, h('vscode-icon', { name: 'home', size: '12' }));
   }
-  return el;
+  return h('div', { class: 'avatar', style: `--avatar-color: var(--vscode-charts-${color})` }, letter);
 }
 
 function planPill(a: AccountView): HTMLElement | null {
@@ -188,6 +187,21 @@ type UsageWindowView = NonNullable<AccountView['usage']>['windows'][number];
 // Rows whose model-specific limits the user expanded; kept across re-renders for this Webview's lifetime
 const expandedScoped = new Set<string>();
 
+function usageLevel(remaining: number): 'empty' | 'low' | 'warn' | 'ok' {
+  return remaining <= 0 ? 'empty' : remaining <= 10 ? 'low' : remaining <= 30 ? 'warn' : 'ok';
+}
+
+const remainingPercent = (w: UsageWindowView): number => Number((100 - w.usedPercent).toFixed(2));
+
+// "in 3 hours" / "tomorrow" in the panel language; the exact date and time stay in the title
+function relativeTime(epochSeconds: number): string {
+  const rtf = new Intl.RelativeTimeFormat(getLocale(), { numeric: 'auto' });
+  const minutes = Math.max(1, Math.round((epochSeconds * 1000 - Date.now()) / 60000));
+  if (minutes < 60) return rtf.format(minutes, 'minute');
+  const hours = Math.round(minutes / 60);
+  return hours < 48 ? rtf.format(hours, 'hour') : rtf.format(Math.round(hours / 24), 'day');
+}
+
 function usageWindow(w: UsageWindowView): HTMLElement {
   const minutes = w.windowMinutes;
   const limit = minutes === undefined ? t('usage.window')
@@ -196,18 +210,27 @@ function usageWindow(w: UsageWindowView): HTMLElement {
         : t('usage.minutes', { n: minutes });
   // Claude model-specific limits carry the model name (account-independent text, rendered via textContent)
   const duration = w.scope ? t('usage.scoped', { limit, scope: w.scope }) : limit;
-  const remaining = Number((100 - w.usedPercent).toFixed(2));
+  const remaining = remainingPercent(w);
   const label = t('usage.remaining', { percent: remaining });
+  const level = usageLevel(remaining);
+  const exhausted = level === 'empty';
+  // The reset time sits in the label line of the window it belongs to
+  const reset = w.resetsAt !== undefined && h('span', {
+    class: 'usage-reset',
+    title: t('usage.resets', { time: new Date(w.resetsAt * 1000).toLocaleString(getLocale(), {
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    }) }),
+  }, t('usage.resetsIn', { time: relativeTime(w.resetsAt) }));
   return h('div', { class: 'usage-window' },
-    h('div', { class: 'usage-labels' }, h('span', {}, duration), h('span', {}, label)),
+    h('div', { class: 'usage-labels' },
+      h('span', { class: 'usage-name' }, h('span', { class: 'usage-duration' }, duration), reset),
+      h('span', { class: 'usage-pct' }, label, exhausted && h('span', { class: 'usage-flag' }, t('usage.exhausted'))),
+    ),
     h('div', {
-      class: 'usage-track', role: 'progressbar', 'aria-label': duration,
-      'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(remaining), 'aria-valuetext': label,
+      class: 'usage-track', 'data-level': level, role: 'progressbar', 'aria-label': duration,
+      'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(remaining),
+      'aria-valuetext': exhausted ? `${label}, ${t('usage.exhausted')}` : label,
     }, h('div', { class: 'usage-fill', style: `width: ${remaining}%` })),
-    w.resetsAt !== undefined && h('div', { class: 'usage-reset' },
-      t('usage.resets', { time: new Date(w.resetsAt * 1000).toLocaleString(getLocale(), {
-        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
-      }) })),
   );
 }
 
@@ -220,7 +243,11 @@ function usageHistory(a: AccountView): HTMLElement | null {
   let more: HTMLElement | null = null;
   if (scoped.length) {
     // data-action lets a re-render restore focus to the toggle instead of the row (whose Enter switches accounts)
-    const summary = h('summary', { class: 'usage-more-summary', 'data-action': 'usageMore' }, t('usage.modelLimits', { n: scoped.length }));
+    const lowest = Math.min(...scoped.map(remainingPercent));
+    const summary = h('summary', { class: 'usage-more-summary', 'data-action': 'usageMore', title: t('usage.lowestTitle') },
+      h('vscode-icon', { name: 'chevron-right', size: '12', class: 'chevron' }),
+      h('span', { class: 'usage-more-label' }, t('usage.modelLimits', { n: scoped.length })),
+      h('span', { class: 'usage-more-value', 'data-level': usageLevel(lowest) }, t('usage.remaining', { percent: lowest })));
     // A double-click on the toggle must not reach the row's dblclick (which switches accounts)
     summary.addEventListener('dblclick', (e) => e.stopPropagation());
     const details = h('details', { class: 'usage-more', open: expandedScoped.has(a.dir) }, summary, ...scoped.map(usageWindow)) as HTMLDetailsElement;
@@ -239,13 +266,21 @@ function usageHistory(a: AccountView): HTMLElement | null {
 class Page {
   readonly text: (typeof TEXT)[PanelMode];
   readonly root: HTMLElement;
+  // Banners, the disabled card and the loading line; the list section below is created once so the add form keeps its focus
   private readonly top = h('div', { class: 'page-top' });
+  private readonly list = h('ul', { class: 'list' });
+  private readonly listTitle = h('span');
+  private readonly listCount = h('span', { class: 'count' });
+  private readonly listSection: HTMLElement;
+  private readonly addToggle: HTMLElement;
+  private readonly addToggleText = h('span');
+  private addOpen = false;
+  private toolsOpen = false;
   private readonly addField: TextField;
   private readonly addButton: HTMLElement & { disabled: boolean };
   // Shared (links to the default account) vs independent (copied settings); checked by default, kept across re-renders
   private readonly addShared: HTMLElement & { checked: boolean };
   private readonly addHelp = h('div', { class: 'help' });
-  private readonly addTitle = h('span');
   private tools: HTMLElement;
   private syncButton!: HTMLElement;
   private readonly addSection: HTMLElement;
@@ -275,24 +310,43 @@ class Page {
     this.addShared = h('vscode-checkbox', { class: 'add-shared', checked: true }) as HTMLElement & { checked: boolean };
     this.addShared.checked = true;
     this.addSection = h(
-      'section',
-      { class: 'section add' },
-      h('div', { class: 'section-title' }, this.addTitle),
+      'div',
+      { class: 'add', id: `add-${mode}`, hidden: true },
       h('div', { class: 'input-group' }, this.addField, this.addButton),
       this.addShared,
       this.addHelp,
+    );
+    this.addToggle = h('button', { type: 'button', class: 'add-toggle', 'aria-expanded': 'false', 'aria-controls': `add-${mode}` }, h('vscode-icon', { name: 'add', size: '12' }), this.addToggleText);
+    this.addToggle.addEventListener('click', () => {
+      this.setAddOpen(!this.addOpen);
+      if (this.addOpen) this.focusAdd();
+    });
+    this.listSection = h(
+      'section',
+      { class: 'section' },
+      h('div', { class: 'section-title' }, h('span', { class: 'title-main' }, this.listTitle, this.listCount), this.addToggle),
+      this.addSection,
+      this.list,
     );
     this.addField.addEventListener('input', () => {
       this.addError = undefined;
       this.updateAddHelp();
     });
     this.addField.addEventListener('keydown', (e) => {
-      if ((e as KeyboardEvent).key === 'Enter' && !isComposing(e as KeyboardEvent)) this.submitAdd();
+      const key = e as KeyboardEvent;
+      if (isComposing(key)) return;
+      if (key.key === 'Enter') this.submitAdd();
+      else if (key.key === 'Escape') {
+        // Collapses the form (the typed name is kept) and returns the focus to the toggle
+        e.preventDefault();
+        this.setAddOpen(false);
+        this.addToggle.focus();
+      }
     });
     onClick(this.addButton, () => this.submitAdd());
     this.addShared.addEventListener('change', () => this.updateAddHelp());
     this.tools = this.renderTools();
-    this.root = h('div', { class: 'page', role: 'tabpanel', id: `panel-${mode}`, 'aria-labelledby': `tab-${mode}` }, this.top, this.tools, this.addSection);
+    this.root = h('div', { class: 'page', role: 'tabpanel', id: `panel-${mode}`, 'aria-labelledby': `tab-${mode}` }, this.top, this.listSection, this.tools);
     this.applyLocale();
   }
 
@@ -301,7 +355,10 @@ class Page {
     this.addField.setAttribute('placeholder', t('add.placeholder'));
     this.addField.setAttribute('aria-label', t('add.ariaLabel'));
     this.addButton.textContent = t('add.button');
-    this.addTitle.textContent = t('add.title');
+    this.addToggleText.textContent = t('add.button');
+    this.addToggle.setAttribute('aria-label', t('add.title'));
+    this.addToggle.title = t('add.title');
+    this.listTitle.textContent = t('list.title');
     this.addShared.textContent = t('add.shared');
     // A host add error is in the old locale; drop it so the help line shows the local validation in the new one
     if (this.addError) {
@@ -333,8 +390,19 @@ class Page {
     send({ ...msg, mode: this.mode });
   }
 
+  private setAddOpen(open: boolean): void {
+    this.addOpen = open;
+    this.addSection.hidden = !open;
+    this.addToggle.setAttribute('aria-expanded', String(open));
+    this.addToggle.classList.toggle('is-open', open);
+  }
+
+  // Expands the add form and focuses its field (nothing to add to while the page is loading or disabled)
   focusAdd(): void {
+    if (!receivedState || !this.tab.enabled) return;
+    this.setAddOpen(true);
     this.addField.focus();
+    this.addSection.scrollIntoView?.({ block: 'nearest' });
   }
 
   onState(): void {
@@ -345,7 +413,13 @@ class Page {
   onAddResult(error?: string): void {
     this.adding = false;
     this.addError = error;
-    if (!error) this.addField.value = '';
+    if (!error) {
+      this.addField.value = '';
+      // A successful add collapses the form; focus that sat in it moves to the toggle
+      const hadFocus = this.addSection.contains(document.activeElement);
+      this.setAddOpen(false);
+      if (hadFocus) this.addToggle.focus();
+    } else this.setAddOpen(true);
     this.updateAddHelp();
   }
 
@@ -467,7 +541,7 @@ class Page {
   }
 
   private syncRenameError(): void {
-    const el = this.top.querySelector('.row-error');
+    const el = this.list.querySelector('.row-error');
     if (this.renameError) {
       if (el) el.textContent = this.renameError;
       else this.renameField?.closest('.row')?.querySelector('.row-main')?.append(h('div', { class: 'row-error', role: 'alert' }, this.renameError));
@@ -602,19 +676,12 @@ class Page {
     {
       // Conversions are refused by the host for the current account and for the Codex account selected but not yet effective
       const convertible = a.kind === 'named' && !a.isCurrent && !selected;
-      // Independent account: offer converting it to a shared one (the host confirms)
-      if (convertible && a.shared === false) {
-        actions.append(withAction(toolbarButton('link', t('row.share'), () => this.send({ type: 'share', dir: a.dir })), 'share'));
-      }
-      // Shared account: offer converting it back to an independent one (the host confirms)
-      if (convertible && a.shared === true) {
-        actions.append(withAction(toolbarButton('debug-disconnect', t('row.unshare'), () => this.send({ type: 'unshare', dir: a.dir })), 'unshare'));
-      }
-      // The second click of a double-click (detail > 1) would send a duplicate switch
+      // Primary action as a visible text button (double-click / Enter on the row stay as shortcuts);
+      // the second click of a double-click (detail > 1) would send a duplicate switch
       if (canSwitch) {
         actions.append(
           withAction(
-            toolbarButton('arrow-swap', t('row.switch'), (e) => {
+            onClick(h('vscode-button', { class: 'row-btn', secondary: true, title: t('row.switch') }, t('row.switchShort')), (e) => {
               if (e.detail > 1) return;
               this.lastSwitchAt = Date.now();
               this.send({ type: 'switch', dir: a.dir });
@@ -624,15 +691,24 @@ class Page {
         );
       }
       // Not logged in: a "Log in" text button; logged in: a terminal icon to run the CLI with this account
-      if (a.loggedIn) {
-        actions.append(withAction(toolbarButton('terminal', t(`${this.mode}.terminalTitle`), () => this.send({ type: 'terminal', dir: a.dir })), 'terminal'));
-      } else {
+      if (!a.loggedIn) {
         actions.append(
           onClick(
-            h('vscode-button', { class: 'login-button', title: t(`${this.mode}.loginTitle`), 'data-action': 'terminal' }, t('row.login')),
+            h('vscode-button', { class: 'row-btn', title: t(`${this.mode}.loginTitle`), 'data-action': 'terminal' }, t('row.login')),
             () => this.send({ type: 'terminal', dir: a.dir }),
           ),
         );
+      }
+      // Independent account: offer converting it to a shared one (the host confirms)
+      if (convertible && a.shared === false) {
+        actions.append(withAction(toolbarButton('link', t('row.share'), () => this.send({ type: 'share', dir: a.dir })), 'share'));
+      }
+      // Shared account: offer converting it back to an independent one (the host confirms)
+      if (convertible && a.shared === true) {
+        actions.append(withAction(toolbarButton('debug-disconnect', t('row.unshare'), () => this.send({ type: 'unshare', dir: a.dir })), 'unshare'));
+      }
+      if (a.loggedIn) {
+        actions.append(withAction(toolbarButton('terminal', t(`${this.mode}.terminalTitle`), () => this.send({ type: 'terminal', dir: a.dir })), 'terminal'));
       }
       // The current account cannot be removed; the confirmation that opens starts with the focus on Cancel
       if (a.kind === 'named' && !a.isCurrent && !selected) {
@@ -649,9 +725,6 @@ class Page {
       }
     }
 
-    // Current account: an icon at the right of the name line (omitted in edit mode, where the field fills the line)
-    const currentIcon =
-      a.isCurrent && !editing && h('span', { class: 'current-icon', title: t('account.current'), role: 'img', 'aria-label': t('account.current') }, h('vscode-icon', { name: 'check', size: '10' }));
     // Shared account: a link badge right after the name
     const sharedIcon =
       a.kind === 'named' && a.shared === true && !editing && h('span', { class: 'shared-icon', title: t('account.sharedBadge'), role: 'img', 'aria-label': t('account.sharedBadge') }, h('vscode-icon', { name: 'link', size: '10' }));
@@ -670,7 +743,6 @@ class Page {
           'div',
           { class: 'row-title' },
           h('span', { class: 'row-name' }, ...nameWithTail(a.label, sharedIcon, renameButton)),
-          currentIcon,
         );
     // Line 3: tags on the left + action buttons on the right; on wide panels CSS moves them back to line 1 and the right side
     const tags = h('div', { class: 'row-tags' }, !a.email && planPill(a), !a.loggedIn && h('span', { class: 'pill warn' }, t('account.notLoggedIn')));
@@ -678,15 +750,17 @@ class Page {
     // .row-main is display: contents, so its lines land directly in the .row grid
     const row = h(
       'li',
-      { class: classes.join(' '), 'data-plan': planClass(a.plan, this.mode), 'data-dir': a.dir, tabindex: !canSwitch || editing ? undefined : '0' },
+      {
+        class: classes.join(' '), 'data-plan': planClass(a.plan, this.mode), 'data-dir': a.dir, tabindex: !canSwitch || editing ? undefined : '0',
+        // The directory is a hover hint instead of a card line; the current card is marked for assistive technology only
+        title: editing ? undefined : a.dirLabel, 'aria-current': a.isCurrent ? 'true' : undefined,
+      },
       avatar(a),
       h(
         'div',
         { class: 'row-main' },
         title,
         loginStatus(a),
-        // The current account gets an extra line with its directory
-        a.isCurrent && h('div', { class: 'row-dir' }, a.dirLabel),
         usageHistory(a),
         h('div', { class: 'row-foot' }, tags, actions),
         !a.loggedIn && !a.isCurrent && h('div', { class: 'row-hint' }, t(`${this.mode}.loginHint`)),
@@ -705,16 +779,17 @@ class Page {
     return row;
   }
 
-  // Page tools, including CLI updates (shown even when Codex is not enabled); Re-link only when the page has a linked account
+  // Page tools, including CLI updates (shown even when Codex is not enabled), in a section that starts collapsed;
+  // Re-link only when the page has a linked account
   private renderTools(): HTMLElement {
     const btn = (icon: string, label: string, title: string, tool: ToolId): HTMLElement =>
       onClick(h('vscode-button', { secondary: true, icon, title }, label), () => this.send({ type: 'tool', tool }));
     this.syncButton = btn('sync', t('tools.sync'), t(`${this.mode}.syncTitle`), 'sync');
     this.updateSyncButton();
-    return h(
-      'section',
-      { class: 'section page-tools' },
-      h('div', { class: 'section-title' }, h('span', {}, t('tools.title'))),
+    const details = h(
+      'details',
+      { class: 'page-tools', open: this.toolsOpen },
+      h('summary', { class: 'tools-summary' }, h('vscode-icon', { name: 'chevron-right', size: '12', class: 'chevron' }), h('span', {}, t('tools.title'))),
       h(
         'div',
         { class: 'page-tools-row' },
@@ -723,7 +798,11 @@ class Page {
         this.syncButton,
         btn('cloud-download', t('tools.updateCli'), t('tools.updateCliTitle'), 'updateCli'),
       ),
-    );
+    ) as HTMLDetailsElement;
+    details.addEventListener('toggle', () => {
+      this.toolsOpen = details.open;
+    });
+    return details;
   }
 
   // Re-link only acts on linked accounts, so it is hidden while the page has none
@@ -731,16 +810,12 @@ class Page {
     this.syncButton.hidden = !this.tab.accounts.some((a) => a.kind === 'named' && a.shared === true);
   }
 
-  private renderList(): HTMLElement {
+  private renderList(): void {
     // The current account always comes first; the rest keep their order
     const accounts = this.tab.accounts;
     const ordered = [...accounts.filter((a) => a.isCurrent), ...accounts.filter((a) => !a.isCurrent)];
-    return h(
-      'section',
-      { class: 'section' },
-      h('div', { class: 'section-title' }, h('span', {}, t('list.title')), h('span', { class: 'count' }, String(this.tab.accounts.length))),
-      h('ul', { class: 'list' }, ...ordered.map((a) => this.renderRow(a))),
-    );
+    this.listCount.textContent = String(accounts.length);
+    this.list.replaceChildren(...ordered.map((a) => this.renderRow(a)));
   }
 
   // What the last render showed; a state push that changes neither the page's state nor the locale keeps the DOM
@@ -758,7 +833,7 @@ class Page {
   /** The focused control inside the page's rows, banners or cards, identified by its row's dir and its action */
   private focusedControl(): { dir?: string; action?: string } | undefined {
     const active = document.activeElement;
-    if (!(active instanceof HTMLElement) || !this.top.contains(active) || active === this.renameField) return undefined;
+    if (!(active instanceof HTMLElement) || !this.root.contains(active) || active === this.renameField) return undefined;
     const dir = active.closest<HTMLElement>('[data-dir]')?.dataset.dir;
     const action = active.closest<HTMLElement>('[data-action]')?.dataset.action;
     return dir === undefined && action === undefined ? undefined : { dir, action };
@@ -769,9 +844,9 @@ class Page {
    * itself when focusable, otherwise the row's first control
    */
   private focusControl(dir: string | undefined, action: string | undefined): void {
-    const row = dir === undefined ? undefined : [...this.top.querySelectorAll<HTMLElement>('[data-dir]')].find((el) => el.dataset.dir === dir);
+    const row = dir === undefined ? undefined : [...this.root.querySelectorAll<HTMLElement>('[data-dir]')].find((el) => el.dataset.dir === dir);
     if (dir !== undefined && !row) return;
-    const controls = [...(row ?? this.top).querySelectorAll<HTMLElement>('[data-action]')].filter((el) => el.closest('[data-dir]') === (row ?? null));
+    const controls = [...(row ?? this.root).querySelectorAll<HTMLElement>('[data-action]')].filter((el) => el.closest('[data-dir]') === (row ?? null));
     const target = controls.find((el) => el.dataset.action === action) ?? (row && row.tabIndex >= 0 ? row : controls[0]);
     if (target) focusElement(target);
   }
@@ -786,18 +861,17 @@ class Page {
       this.updateSyncButton();
       if (!receivedState) {
         this.top.replaceChildren(h('p', { role: 'status', 'aria-live': 'polite' }, t('panel.loading')));
-        this.addSection.hidden = true;
+        this.listSection.hidden = true;
         return;
       }
       if (!this.tab.enabled) {
         this.top.replaceChildren(this.renderDisabled());
-        this.addSection.hidden = true;
+        this.listSection.hidden = true;
         return;
       }
-      this.addSection.hidden = false;
-      this.top.replaceChildren(
-        ...[this.renderPending(), this.renderBanner(), this.renderList()].filter((n): n is HTMLElement => !!n),
-      );
+      this.listSection.hidden = false;
+      this.top.replaceChildren(...[this.renderPending(), this.renderBanner()].filter((n): n is HTMLElement => !!n));
+      this.renderList();
       this.updateAddHelp();
     } finally {
       this.rendering = false;
@@ -856,30 +930,32 @@ function renderTabs(): void {
 const app = document.getElementById('app')!;
 app.replaceChildren(tabBar, pages.claude.root, pages.codex.root);
 
-// Fixed toolbar at the bottom of the panel: shared by both pages, mode is the current tab
-const FOOTER_TOOLS = [
-  ['info', 'footer.versions', 'cliVersions'],
-  ['refresh', 'common.reloadWindow', 'reloadWindow'],
-  ['debug-restart', 'footer.restartExtHost', 'restartExtHost'],
-  ['book', 'footer.help', 'openHelp'],
-  ['star-empty', 'footer.star', 'openStar'],
-] as const satisfies ReadonlyArray<readonly [icon: string, title: MessageKey, tool: ToolId]>;
+// Fixed toolbar at the bottom of the panel: shared by both pages, mode is the current tab. Groups are divided by a
+// separator: information and help, the two disruptive actions together, and the star link on its own
+const FOOTER_GROUPS = [
+  [['info', 'footer.versions', 'cliVersions'], ['book', 'footer.help', 'openHelp']],
+  [['refresh', 'common.reloadWindow', 'reloadWindow'], ['debug-restart', 'footer.restartExtHost', 'restartExtHost']],
+  [['star-empty', 'footer.star', 'openStar']],
+] as const satisfies ReadonlyArray<ReadonlyArray<readonly [icon: string, title: MessageKey, tool: ToolId]>>;
 const footer = h('div', { class: 'tools', role: 'toolbar' });
 const footerVersion = h('div', { class: 'extension-version' });
 function renderFooter(): void {
   footer.setAttribute('aria-label', t('tools.title'));
   footerVersion.textContent = t('footer.version', { version: __PLANSWAP_VERSION__ });
   footer.replaceChildren(
-    ...FOOTER_TOOLS.map(([icon, title, tool]) =>
-      toolbarButton(icon, t(title), () => {
-        // The info button hides an open versions card locally; only opening asks the host (which runs the CLIs)
-        if (tool === 'cliVersions' && !versionsCard.hidden) {
-          versionsCard.hidden = true;
-          return;
-        }
-        send({ type: 'tool', mode: activeTab ?? state.active, tool });
-      }),
-    ),
+    ...FOOTER_GROUPS.flatMap((group, index) => [
+      index > 0 && h('span', { class: 'tools-sep', role: 'separator', 'aria-orientation': 'vertical' }),
+      ...group.map(([icon, title, tool]) =>
+        toolbarButton(icon, t(title), () => {
+          // The info button hides an open versions card locally; only opening asks the host (which runs the CLIs)
+          if (tool === 'cliVersions' && !versionsCard.hidden) {
+            versionsCard.hidden = true;
+            return;
+          }
+          send({ type: 'tool', mode: activeTab ?? state.active, tool });
+        }),
+      ),
+    ]).filter((n): n is HTMLElement => !!n),
   );
 }
 // Versions card: shown above the footer toolbar; the info button again or the close button hides it

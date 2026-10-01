@@ -5,6 +5,8 @@
   --radius-row: 8px;
   --radius-pill: 999px;
   --muted: var(--vscode-descriptionForeground);
+  /* One step more contrast than --muted: email, usage labels, reset times and other text people need to read */
+  --secondary: color-mix(in srgb, var(--muted) 70%, var(--ink));
   --accent: var(--vscode-focusBorder);
   --base: var(--vscode-sideBar-background, var(--vscode-editor-background));
   --ink: var(--vscode-foreground);
@@ -17,9 +19,6 @@
   --surface-2: color-mix(in srgb, var(--ink) 8%, var(--base));
   --line: color-mix(in srgb, var(--ink) 10%, transparent);
   --line-strong: color-mix(in srgb, var(--ink) 16%, transparent);
-  /* Shadow color: the theme's widget shadow; high-contrast themes define no shadow and get their widget border instead */
-  --shadow-color: var(--vscode-widget-shadow, var(--vscode-widget-border));
-  --shadow: 0 2px 10px color-mix(in srgb, var(--shadow-color) 28%, transparent);
   /* White in every built-in theme (button text); used for highlights instead of a literal white */
   --highlight: var(--vscode-button-foreground);
   --ease: 120ms ease-out;
@@ -115,7 +114,7 @@ body {
 .banner-icon { flex: none; color: var(--info); margin-top: 2px; }
 .banner-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .banner-title { font-weight: 600; overflow-wrap: anywhere; }
-.banner-text { color: var(--muted); font-size: 0.9em; overflow-wrap: anywhere; }
+.banner-text { color: var(--muted); font-size: max(11px, 0.9em); overflow-wrap: anywhere; }
 .banner-actions { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
 .banner-actions vscode-button { max-width: 100%; min-width: 0; }
 .banner-actions vscode-button::part(base) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -123,14 +122,12 @@ body {
 .banner > .icon-btn { position: absolute; top: 6px; right: 6px; margin: 0; }
 .banner:has(> .icon-btn) .banner-title { padding-right: 26px; }
 
-/* ---------- Plan colors: data-plan -> --plan-color / --plan-color-2 / --plan-ink ---------- */
-/* Every value derives from the theme's chart / description colors, which already have dark, light and high-contrast variants */
-[data-plan] { --plan-color: var(--accent); --plan-color-2: var(--plan-color); --plan-ink: var(--plan-color); }
-/* Darkened plan color for text on a solid plan-colored background (relative color syntax keeps the hue) */
-[data-plan="tier3"], [data-plan="tier2"] { --plan-ink: rgb(from var(--plan-color) calc(r * 0.3) calc(g * 0.3) calc(b * 0.3)); }
-/* Top tier: amber (chart yellow) to bright gold (chart yellow lightened with the highlight color) */
-[data-plan="tier3"] { --plan-color: var(--vscode-charts-yellow); --plan-color-2: color-mix(in srgb, var(--vscode-charts-yellow) 60%, var(--highlight)); }
-/* High tier: champagne gold, a softened chart yellow */
+/* ---------- Plan colors: data-plan -> --plan-color ---------- */
+/* Every value derives from the theme's chart / description colors, which already have dark, light and high-contrast variants.
+   Only the current card shows the plan color; other cards keep their plan tag neutral */
+[data-plan] { --plan-color: var(--accent); }
+[data-plan="tier3"] { --plan-color: var(--vscode-charts-yellow); }
+/* High tier: a softened chart yellow */
 [data-plan="tier2"] { --plan-color: color-mix(in srgb, var(--vscode-charts-yellow) 70%, var(--highlight)); }
 [data-plan="tier1"] { --plan-color: var(--vscode-charts-blue); }
 /* Teal: halfway between the chart blue and green */
@@ -144,63 +141,79 @@ body {
 .warn { color: var(--warn); }
 
 /* ---------- Avatar ---------- */
-/* 20px disc; position: relative and overflow: visible let the default account's home badge overhang the bottom-right corner */
+/* 20px flat disc, a letter for every account; the default account shows a home icon in the same disc */
 .avatar {
-  position: relative;
   flex: none;
   display: grid;
   place-items: center;
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  overflow: visible;
   font-size: 0.7em;
   font-weight: 700;
   color: var(--vscode-button-foreground, var(--vscode-editor-background));
-  background: linear-gradient(145deg, color-mix(in srgb, var(--avatar-color, var(--accent)) 100%, transparent), color-mix(in srgb, var(--avatar-color, var(--accent)) 65%, var(--base)));
+  background: var(--avatar-color, var(--accent));
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--base) 60%, transparent);
 }
-/* Home badge of the default account: at the avatar's bottom-right, ringed with the sidebar color to separate it from the avatar */
-.avatar-badge {
-  position: absolute;
-  right: -4px;
-  bottom: -4px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
-  color: var(--vscode-foreground);
-  box-shadow: 0 0 0 1px var(--line-strong, var(--line));
-}
-.avatar-badge vscode-icon { color: var(--vscode-foreground); }
+.avatar vscode-icon { color: inherit; }
 
 /* ---------- Sections ---------- */
 .section { display: flex; flex-direction: column; gap: var(--gap); }
+/* Section headings and collapsible headers share one small label style (no uppercase or tracking for Chinese and Japanese) */
 .section-title {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 6px;
   padding: 0 2px;
-  font-size: 0.72em;
+}
+.section-title, .tools-summary {
+  font-size: max(11px, 0.72em);
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted);
 }
+.section-title:lang(zh), .section-title:lang(ja), .tools-summary:lang(zh), .tools-summary:lang(ja),
+.versions-head:lang(zh), .versions-head:lang(ja) { letter-spacing: 0; text-transform: none; }
+.title-main { display: flex; align-items: center; gap: 6px; min-width: 0; }
+/* Neutral count: not a notification badge */
 .count {
   min-width: 18px;
   padding: 0 6px;
   border-radius: var(--radius-pill);
-  font-size: 10px;
-  line-height: 18px;
+  font-size: 11px;
+  line-height: 16px;
   text-align: center;
   letter-spacing: 0;
-  color: var(--vscode-badge-foreground);
-  background: var(--vscode-badge-background);
+  color: var(--secondary);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
 }
+/* "+ Add" at the right of the list heading; the form opens below it */
+.add-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 1px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: max(11px, 0.72em);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  line-height: 18px;
+  cursor: pointer;
+  transition: background var(--ease);
+}
+.add-toggle vscode-icon { color: inherit; }
+.add-toggle:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.add-toggle.is-open { background: color-mix(in srgb, var(--ink) 12%, transparent); }
+.add-toggle:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
 
 /* ---------- Account list ---------- */
 .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -212,7 +225,6 @@ body {
   grid-template-areas:
     'avatar title'
     'sub sub'
-    'dir dir'
     'usage usage'
     'foot foot'
     'hint hint'
@@ -221,7 +233,7 @@ body {
   align-items: center;
   padding: 8px 8px 8px 12px;
   border-radius: var(--radius-row);
-  border: 1px solid var(--plan-color, var(--line));
+  border: 1px solid var(--line);
   background: var(--surface-1);
   outline: none;
   transition: background var(--ease), border-color var(--ease);
@@ -242,19 +254,12 @@ body {
 .row:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .row.is-current, .row.is-current[data-plan="none"] {
   border-color: var(--plan-color, var(--accent));
-  background:
-    radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--plan-color-2, var(--accent)) 26%, transparent) 0%, transparent 55%),
-    linear-gradient(135deg, color-mix(in srgb, var(--plan-color, var(--accent)) 18%, var(--base)), color-mix(in srgb, var(--plan-color-2, var(--accent)) 6%, var(--base)));
-  box-shadow: var(--shadow);
-  /* Clip the left accent bar to the rounded corners; box-shadow is outside the box and unaffected by overflow */
+  background: var(--surface-2);
+  /* Clip the left accent bar to the rounded corners */
   overflow: hidden;
 }
 .row.is-current::before { inset: 0 auto 0 0; width: 3px; border-radius: 0; opacity: 1; }
-.row.is-current:hover {
-  background:
-    radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--plan-color-2, var(--accent)) 30%, transparent) 0%, transparent 55%),
-    linear-gradient(135deg, color-mix(in srgb, var(--plan-color, var(--accent)) 22%, var(--base)), color-mix(in srgb, var(--plan-color-2, var(--accent)) 10%, var(--base)));
-}
+.row.is-current:hover { background: color-mix(in srgb, var(--ink) 11%, var(--base)); }
 /* When the name wraps, the avatar sticks to the top instead of floating in the middle */
 .row > .avatar { grid-area: avatar; align-self: start; }
 .row-main { display: contents; }
@@ -283,24 +288,6 @@ body {
 .rename-btn:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 12%, transparent); }
 .rename-btn:focus-visible { opacity: 1; outline: 1px solid var(--vscode-focusBorder); outline-offset: 1px; }
 .row.is-current .row-name { font-size: 1.05em; font-weight: 700; }
-/* Current-account badge: 16px raised disc, light-to-dark gradient + top highlight + drop shadow; an outer ring of base color separates it from the card */
-.current-icon {
-  flex: none;
-  margin-left: auto;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  color: var(--highlight);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 70%, var(--highlight)) 0%, var(--accent) 55%, rgb(from var(--accent) calc(r * 0.75) calc(g * 0.75) calc(b * 0.75)) 100%);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--highlight) 55%, transparent),
-    inset 0 -1px 0 var(--shadow-color),
-    0 0 0 1.5px var(--vscode-editor-background),
-    0 1px 2px var(--shadow-color);
-}
-.current-icon vscode-icon { color: var(--highlight); filter: drop-shadow(0 1px 0 var(--shadow-color)); }
 /* Shared-account badge: 16px flat disc right after the name, same size as the current-account badge */
 .shared-icon {
   flex: none;
@@ -316,53 +303,74 @@ body {
   box-shadow: 0 0 0 1px var(--line-strong);
 }
 .shared-icon vscode-icon { color: var(--ink); }
-.row-sub { grid-area: sub; margin-top: 2px; color: var(--muted); font-size: 0.88em; min-width: 0; overflow-wrap: anywhere; }
+.row-sub { grid-area: sub; margin-top: 2px; color: var(--secondary); font-size: max(11px, 0.88em); min-width: 0; overflow-wrap: anywhere; }
 .row-identity { display: flex; align-items: center; gap: 5px; }
 .row-email { flex: 1; min-width: 0; }
 .row-sub.ok { display: flex; align-items: center; gap: 5px; }
 .row-sub.ok::before { content: ''; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
-.row-usage { grid-area: usage; min-width: 0; margin-top: 5px; font-size: 0.82em; overflow-wrap: anywhere; }
-.usage-window + .usage-window { margin-top: 7px; }
-.usage-labels { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px; margin-bottom: 4px; color: var(--muted); }
-.usage-labels span:first-child { min-width: 0; overflow-wrap: anywhere; }
-.usage-labels span:last-child { color: var(--ink); font-variant-numeric: tabular-nums; }
-.usage-track { height: 4px; border-radius: var(--radius-pill); overflow: hidden; background: var(--line-strong); }
-.usage-fill { height: 100%; border-radius: inherit; background: var(--ink); }
-.usage-reset { margin-top: 4px; color: var(--muted); font-size: 0.95em; overflow-wrap: anywhere; }
-.usage-more { margin-top: 7px; }
-.usage-more-summary { cursor: pointer; color: var(--muted); overflow-wrap: anywhere; }
-.usage-more-summary:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 1px; }
-.usage-more[open] > .usage-more-summary { margin-bottom: 7px; }
-/* Directory of the current row: monospace, secondary color */
-.row-dir { grid-area: dir; margin-top: 2px; color: var(--muted); font-size: 0.82em; font-family: var(--vscode-editor-font-family); min-width: 0; overflow-wrap: anywhere; }
+/* Muted lines (pre-existing) use --muted; usage text is read often, so it uses --secondary */
+.row-usage { grid-area: usage; min-width: 0; margin-top: 6px; font-size: max(11px, 0.85em); overflow-wrap: anywhere; }
+.usage-window + .usage-window { margin-top: 8px; }
+/* One label line per window: name and reset time on the left, remaining percentage on the right; it wraps when narrow */
+.usage-labels { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 8px; margin-bottom: 4px; color: var(--secondary); }
+.usage-name { display: flex; flex-wrap: wrap; gap: 0 6px; min-width: 0; }
+.usage-duration { min-width: 0; overflow-wrap: anywhere; color: var(--ink); }
+.usage-reset { color: var(--secondary); }
+.usage-pct { margin-left: auto; color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
+.usage-flag { margin-left: 6px; padding: 0 5px; border: 1px solid color-mix(in srgb, var(--error) 70%, transparent); border-radius: 4px; color: var(--error); font-weight: 600; white-space: nowrap; }
+.usage-track { height: 6px; border-radius: var(--radius-pill); overflow: hidden; background: var(--line-strong); box-shadow: 0 0 0 1px var(--line); }
+.usage-fill { height: 100%; border-radius: inherit; background: var(--ok); }
+/* Remaining quota level: amber at 30% or less, red at 10% or less; used up shows a hatched, outlined empty track. The
+   percentage text (and the "Used up" tag) states every level too, so color is never the only signal */
+.usage-track[data-level="warn"] .usage-fill { background: var(--warn); }
+.usage-track[data-level="low"] .usage-fill { background: var(--error); }
+.usage-track[data-level="empty"] {
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--error) 60%, transparent) 0 3px, transparent 3px 6px);
+  box-shadow: 0 0 0 1px var(--error);
+}
+.usage-labels:has(+ .usage-track[data-level="low"]) .usage-pct, .usage-labels:has(+ .usage-track[data-level="empty"]) .usage-pct { color: var(--error); }
+/* High contrast: the track is outlined with the theme's contrast border, so the bar length reads without color */
+.vscode-high-contrast .usage-track, .vscode-high-contrast-light .usage-track { background: transparent; box-shadow: 0 0 0 1px var(--vscode-contrastBorder, var(--ink)); }
+.vscode-high-contrast .usage-fill, .vscode-high-contrast-light .usage-fill { box-shadow: 0 0 0 1px var(--vscode-contrastBorder, var(--ink)); }
+/* Expandable rows (model-specific limits, Tools): chevron, label, optional summary value */
+.usage-more { margin-top: 8px; border-top: 1px solid var(--line); }
+.usage-more-summary, .tools-summary { display: flex; align-items: center; gap: 6px; list-style: none; cursor: pointer; }
+.usage-more-summary { padding: 5px 0; color: var(--secondary); }
+.usage-more-summary::-webkit-details-marker, .tools-summary::-webkit-details-marker { display: none; }
+.usage-more-summary:focus-visible, .tools-summary:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 1px; }
+.chevron { flex: none; color: inherit; transition: transform var(--ease); }
+details[open] > summary > .chevron { transform: rotate(90deg); }
+.usage-more-label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.usage-more-value { flex: none; margin-left: auto; color: var(--ink); font-variant-numeric: tabular-nums; }
+.usage-more-value[data-level="low"], .usage-more-value[data-level="empty"] { color: var(--error); }
+.usage-more[open] > .usage-more-summary { margin-bottom: 6px; }
 .row-foot { grid-area: foot; margin-top: 4px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; min-width: 0; }
 .row-tags { flex: 1 1 auto; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; min-width: 0; }
 .row-tags:empty { display: none; }
-.row-hint { grid-area: hint; color: var(--muted); font-size: 0.8em; margin-top: 4px; opacity: 0.85; min-width: 0; overflow-wrap: anywhere; }
-.row-actions { display: flex; align-items: center; justify-content: flex-end; gap: 2px; flex: none; max-width: 100%; margin-left: auto; opacity: 0.6; transition: opacity var(--ease); }
-.row:hover .row-actions, .row:focus-within .row-actions { opacity: 1; }
-/* The log-in button on logged-out rows is always prominent */
-.row:has(.login-button) .row-actions { opacity: 1; }
+.row-hint { grid-area: hint; color: var(--secondary); font-size: max(11px, 0.8em); margin-top: 4px; min-width: 0; overflow-wrap: anywhere; }
+.row-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px; flex: none; max-width: 100%; margin-left: auto; }
+/* The text buttons (Switch, Log in) are always fully visible; the icon buttons are dimmed until the row is hovered or focused */
+.row-actions .icon-btn { opacity: 0.75; transition: opacity var(--ease); }
+.row:hover .row-actions .icon-btn, .row:focus-within .row-actions .icon-btn { opacity: 1; }
 
-/* Wide panel (container >= 340px), two lines: name+tags / email; buttons vertically centered on the right */
+/* Wide panel (container >= 340px): the plan tag moves up beside the name; the buttons stay on their own line below */
 @container panel (min-width: 340px) {
   /* The tags column takes at most 40% before its pills wrap, so longer (e.g. English) pills never squeeze the name to nothing */
   .row {
-    grid-template-columns: 20px minmax(0, 1fr) fit-content(40%) auto;
+    grid-template-columns: 20px minmax(0, 1fr) fit-content(40%);
     grid-template-areas:
-      'avatar title tags actions'
-      '. sub sub actions'
-      '. dir dir actions'
-      '. usage usage actions'
-      '. hint hint actions'
-      '. error error actions';
+      'avatar title tags'
+      '. sub sub'
+      '. usage usage'
+      '. actions actions'
+      '. hint hint'
+      '. error error';
   }
   .row-foot { display: contents; }
   .row-tags { grid-area: tags; margin-top: 0; }
-  .row-actions { grid-area: actions; align-self: center; margin-left: 4px; }
-  .row-sub, .row-dir, .row-hint, .row-error { margin-top: 1px; }
-  /* Edit mode: the hidden button group keeps its column (so the email and hint lines keep their width and wrapping);
-     the edit line spans over the tags and that column, and the plan tag is hidden meanwhile */
+  .row-actions { grid-area: actions; justify-self: end; margin-top: 4px; }
+  .row-sub, .row-hint, .row-error { margin-top: 1px; }
+  /* Edit mode: the edit line spans over the tags column, and the plan tag is hidden meanwhile */
   .row.is-editing .row-title { grid-column: 2 / -1; }
   .row.is-editing .row-tags { display: none; }
 }
@@ -377,13 +385,14 @@ body {
   --vscode-toolbar-hoverBackground: color-mix(in srgb, var(--ink) 12%, transparent);
   --vscode-toolbar-activeBackground: color-mix(in srgb, var(--ink) 18%, transparent);
 }
-.login-button {
+/* Small text buttons in a card: Switch (secondary) and Log in (primary) */
+.row-btn {
   height: 24px;
   --vscode-font-size: 11px;
   --vsc-border-left-radius: 6px;
   --vsc-border-right-radius: 6px;
 }
-.login-button::part(base) { font-weight: 600; }
+.row-btn::part(base) { font-weight: 600; }
 
 /* ---------- Pills ---------- */
 .pill {
@@ -391,7 +400,7 @@ body {
   flex: none;
   padding: 0 7px;
   border-radius: var(--radius-pill);
-  font-size: 0.72em;
+  font-size: max(11px, 0.72em);
   font-weight: 600;
   line-height: 16px;
   letter-spacing: 0.02em;
@@ -408,35 +417,31 @@ body {
   line-height: 14px;
 }
 /* Plan: tinted background + plan-colored border and text; small radius to differ from the capsule-shaped "Not logged in" */
+/* Plan: a neutral outline on every card; the current card carries the plan color (tinted, plan-colored border and text) */
 .pill.plan {
-  color: var(--plan-ink, var(--plan-color));
-  border: 1px solid var(--plan-color);
+  color: var(--secondary);
+  border: 1px solid var(--line-strong);
   border-radius: 4px;
-  background: color-mix(in srgb, var(--plan-color) 18%, transparent);
+  background: transparent;
   line-height: 14px;
   font-weight: 600;
   white-space: nowrap;
 }
-/* Light themes: the chart colors are tuned for lines on white, so the text of the tinted pills (not the gold tiers, whose text is already dark) is a darkened plan color */
-.vscode-light .row:not([data-plan="tier3"], [data-plan="tier2"]) .pill.plan,
-.vscode-high-contrast-light .row:not([data-plan="tier3"], [data-plan="tier2"]) .pill.plan { color: rgb(from var(--plan-color) calc(r * 0.6) calc(g * 0.6) calc(b * 0.6)); }
-/* Max 20x: gold gradient background + dark gold text + top highlight */
-[data-plan="tier3"] .pill.plan {
-  background: linear-gradient(180deg, var(--plan-color-2), var(--plan-color));
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--highlight) 45%, transparent);
+.row.is-current .pill.plan {
+  color: var(--plan-color);
+  border-color: var(--plan-color);
+  background: color-mix(in srgb, var(--plan-color) 14%, transparent);
 }
-/* High tier (Max 5x / Pro Lite): solid champagne-gold background + dark text; bolder than a tint, one gradient highlight less than the top tier */
-[data-plan="tier2"] .pill.plan {
-  background: color-mix(in srgb, var(--plan-color) 85%, transparent);
-  border-color: rgb(from var(--plan-color) calc(r * 0.7) calc(g * 0.7) calc(b * 0.7));
-}
+/* Light themes: the chart colors are tuned for lines on white, so the text is a darkened plan color */
+.vscode-light .row.is-current .pill.plan,
+.vscode-high-contrast-light .row.is-current .pill.plan { color: rgb(from var(--plan-color) calc(r * 0.6) calc(g * 0.6) calc(b * 0.6)); }
 
 /* ---------- Inline rename (not for the external directory row) ---------- */
 .row.is-editing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 /* Name line in edit mode: keeps the height the name line had before editing (--rename-h, set by the frontend), so the
    card does not change height. The 26px field (fixed by the component) is centered in it; when the name line was
    shorter (a single line, 18px), the negative block margin lets the field overhang into the row padding and the gap
-   above the email line. The opaque editor background keeps contrast on plan-colored gradient cards */
+   above the email line. The opaque editor background keeps contrast on the highlighted current card */
 .row.is-editing .row-title {
   display: flex;
   align-items: center;
@@ -448,7 +453,7 @@ body {
   border-radius: 5px;
   background: var(--vscode-editor-background);
 }
-/* The button group keeps its space (narrow: the height of the last line; wide: its column) but is invisible and cannot be clicked or focused */
+/* The button group keeps its line (so the card keeps its height) but is invisible and cannot be clicked or focused */
 .row.is-editing .row-actions { visibility: hidden; }
 /* Field: theme input background + accent border; 2px border + glow when focused; 26px tall (24px component + border) */
 .rename-field {
@@ -471,7 +476,7 @@ body {
 .rename-field[focused] { box-shadow: 0 0 0 1px var(--accent), 0 0 0 3px color-mix(in srgb, var(--accent) 40%, transparent); }
 .rename-field[invalid][focused] { box-shadow: 0 0 0 1px var(--error), 0 0 0 3px color-mix(in srgb, var(--error) 35%, transparent); }
 .row.is-editing:has(.rename-field[invalid]) { border-color: var(--error); box-shadow: 0 0 0 1px var(--error); }
-.row-error { grid-area: error; color: var(--error); font-size: 0.8em; margin-top: 4px; min-width: 0; overflow-wrap: anywhere; }
+.row-error { grid-area: error; color: var(--error); font-size: max(11px, 0.8em); margin-top: 4px; min-width: 0; overflow-wrap: anywhere; }
 
 /* ---------- Inline remove confirmation ---------- */
 .row.is-confirming {
@@ -486,10 +491,13 @@ body {
 .row.is-confirming::before { background: var(--error); opacity: 1; }
 .confirm-text { display: flex; align-items: flex-start; gap: 6px; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
 .confirm-text vscode-icon { flex: none; margin-top: 2px; color: var(--error); }
-.confirm-hint { color: var(--muted); font-size: 0.85em; overflow-wrap: anywhere; }
+.confirm-hint { color: var(--muted); font-size: max(11px, 0.85em); overflow-wrap: anywhere; }
 .confirm-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
 
-/* ---------- Page tools: four small text buttons (three without Re-link), at least 96px each; they wrap when they do not fit (2+1 or stacked) and stretch to fill the line ---------- */
+/* ---------- Page tools: a collapsed section with four small text buttons (three without Re-link), at least 96px each; they wrap when they do not fit (2+1 or stacked) and stretch to fill the line ---------- */
+.page-tools { min-width: 0; border-top: 1px solid var(--line); padding-top: 6px; }
+.tools-summary { padding: 2px; }
+.page-tools[open] > .tools-summary { margin-bottom: var(--gap); }
 .page-tools-row { display: flex; flex-wrap: wrap; gap: var(--gap); min-width: 0; }
 .page-tools-row vscode-button {
   flex: 1 1 auto;
@@ -502,7 +510,8 @@ body {
 .page-tools-row vscode-button::part(base) { width: 100%; justify-content: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---------- Add account ---------- */
-.add { padding-top: calc(var(--gap) * 2); border-top: 1px solid var(--line); }
+/* The form opens right under the list heading */
+.add { display: flex; flex-direction: column; gap: var(--gap); padding: var(--gap); border-radius: var(--radius-row); border: 1px solid var(--line); background: var(--surface-1); }
 .add[hidden] { display: none; }
 .input-group {
   display: flex;
@@ -558,7 +567,7 @@ body {
 .input-group vscode-button:not([disabled])[focused]::part(base) { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
 /* Shared / independent choice under the input: full width, the label wraps on narrow panels */
 .add-shared { display: block; max-width: 100%; min-width: 0; overflow-wrap: anywhere; }
-.help { color: var(--muted); font-size: 0.8em; padding: 0 2px; min-width: 0; overflow-wrap: anywhere; }
+.help { color: var(--muted); font-size: max(11px, 0.8em); padding: 0 2px; min-width: 0; overflow-wrap: anywhere; }
 .help.error { color: var(--error); }
 
 /* ---------- Codex not enabled: empty-state guide ---------- */
@@ -587,7 +596,7 @@ body {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 .disabled-title { font-size: 1.05em; font-weight: 700; }
-.disabled-text { color: var(--muted); font-size: 0.88em; line-height: 1.55; max-width: 30em; min-width: 0; overflow-wrap: anywhere; }
+.disabled-text { color: var(--muted); font-size: max(11px, 0.88em); line-height: 1.55; max-width: 30em; min-width: 0; overflow-wrap: anywhere; }
 .disabled-actions { margin-top: 8px; max-width: 100%; }
 .disabled-actions vscode-button { max-width: 100%; }
 .disabled-actions vscode-button::part(base) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -605,6 +614,8 @@ body {
   background: var(--surface-1);
 }
 .tools .icon-btn { flex: none; color: var(--muted); }
+/* Divider between footer groups */
+.tools-sep { flex: none; width: 1px; height: 16px; background: var(--line-strong); }
 .extension-version {
   flex: none;
   min-width: 0;
@@ -618,9 +629,9 @@ body {
 /* Versions card: sits right above the footer toolbar */
 .versions { flex: none; min-width: 0; padding: 8px 12px 8px; border-top: 1px solid var(--line); background: var(--surface-1); }
 .versions[hidden] { display: none; }
-.versions-head { display: flex; align-items: center; justify-content: space-between; font-size: 0.8em; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.versions-head { display: flex; align-items: center; justify-content: space-between; font-size: max(11px, 0.8em); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
 .versions-list { margin: 6px 0 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .version-item { min-width: 0; }
-.version-label { color: var(--muted); font-size: 0.78em; letter-spacing: 0.04em; }
+.version-label { color: var(--muted); font-size: max(11px, 0.78em); letter-spacing: 0.04em; }
 .version-value { color: var(--ink); font-size: 0.95em; font-family: var(--vscode-editor-font-family); min-width: 0; overflow-wrap: anywhere; white-space: normal; }
 .tools .icon-btn:hover { color: var(--ink); }
