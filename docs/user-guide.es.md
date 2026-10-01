@@ -1,0 +1,271 @@
+# Guía de uso de PlanSwap
+
+[English](user-guide.md) · [简体中文](user-guide.zh-cn.md) · **Español** · [日本語](user-guide.ja.md)
+
+PlanSwap te permite mantener varias cuentas de Claude Code y Codex con la sesión iniciada y elegir cuál usa tu editor. Esta guía recorre los controles de la barra lateral, la configuración de cuentas, el cambio de cuenta, los límites de uso y el mantenimiento diario. Claude y Codex se gestionan por separado: cambiar uno no cambia el otro.
+
+Los nombres de botones de esta guía son los de la interfaz en español. Pasa el puntero sobre un icono para ver su nombre. El icono del libro en el pie, en la parte inferior del panel, abre esta guía.
+
+## Contenido
+
+- [Antes de empezar](#antes-de-empezar)
+- [Orientarte en la barra lateral](#orientarte-en-la-barra-lateral)
+- [Añadir una cuenta e iniciar sesión](#añadir-una-cuenta-e-iniciar-sesión)
+- [Cambiar de cuenta de Claude](#cambiar-de-cuenta-de-claude)
+- [Activar y cambiar cuentas de Codex](#activar-y-cambiar-cuentas-de-codex)
+- [Elegir cuentas vinculadas o independientes](#elegir-cuentas-vinculadas-o-independientes)
+- [Consultar y actualizar los límites de uso](#consultar-y-actualizar-los-límites-de-uso)
+- [Renombrar o quitar cuentas](#renombrar-o-quitar-cuentas)
+- [Usar las herramientas](#usar-las-herramientas)
+- [Cambiar el idioma y los ajustes de visualización](#cambiar-el-idioma-y-los-ajustes-de-visualización)
+- [Solucionar problemas comunes](#solucionar-problemas-comunes)
+- [Desactivar el cambio de cuenta o desinstalar](#desactivar-el-cambio-de-cuenta-o-desinstalar)
+
+## Antes de empezar
+
+Necesitas:
+
+- Un editor compatible con VS Code 1.107+ (VS Code, Antigravity IDE o VSCodium). PlanSwap funciona en una ventana remota de WSL, en Windows nativo, en un escritorio Linux local o en otra ventana remota. macOS no es compatible.
+- PlanSwap y la extensión oficial de Claude Code o de Codex (o ambas) instaladas donde se ejecuta esa ventana.
+- El comando `claude` en el PATH de ese entorno, para iniciar sesión desde el terminal y consultar los límites de uso de Claude. El comando `codex`, para iniciar sesión en Codex desde el terminal. Las consultas de uso de Codex también funcionan sin él si la extensión de Codex está instalada.
+- Para cambiar de cuenta de Codex fuera de Windows nativo: Bash como shell de inicio de sesión.
+
+Consulta las [instrucciones de instalación](../README.md#install) y los [editores compatibles](../README.md#supported-editors) para la configuración y el grado de prueba de cada editor.
+
+## Orientarte en la barra lateral
+
+Haz clic en **PlanSwap** en la barra de actividad y elige la pestaña **Claude** o **Codex**.
+
+- **Cuenta predeterminada:** tu configuración existente, normalmente `~/.claude` o `~/.codex`. En Windows, `~` es tu perfil de usuario de Windows; en WSL, tu directorio personal dentro de esa distribución. Si el editor ya define `CLAUDE_CONFIG_DIR`, el directorio predeterminado de Claude lo sigue.
+- **Cuentas con nombre:** cuentas como `work` o `personal`, cada una en su propio directorio, por ejemplo `~/.claude-work` o `~/.codex-work`.
+- **Directorio externo:** un directorio que el editor está usando y que no está en la lista de cuentas de PlanSwap. No se puede renombrar ni quitar en PlanSwap.
+- **Primera fila resaltada:** la cuenta actual. En Codex es la cuenta en vigor en esta ventana, que puede ser distinta de una cuenta que seleccionaste y que espera un reinicio.
+- **Insignia de enlace:** una cuenta vinculada, que usa los ajustes, reglas, Skills, historial y sesiones de la cuenta predeterminada. Su inicio de sesión sigue siendo independiente.
+
+Términos usados en esta guía:
+
+- *Iniciar sesión* y el botón **Acceder** significan lo mismo; una fila sin sesión iniciada muestra **Sin sesión**.
+- *Vinculada* es el modo que la interfaz indica con la insignia de enlace. El comando **Compartir con la cuenta predeterminada** convierte una cuenta independiente en vinculada.
+- En Codex, la cuenta *efectiva* es la que usa esta ventana ahora; la cuenta *seleccionada* es la que usará después del próximo reinicio.
+
+Cada tarjeta muestra el nombre visible de la cuenta y su estado de sesión, además de su correo, plan y límites de uso cuando se conocen. Pasa el puntero sobre la tarjeta para ver su directorio.
+
+Hay dos tipos de botones de actualizar:
+
+- El botón de actualizar de la barra de título del panel vuelve a examinar ambas listas de cuentas y recarga la información de sesión.
+- Los iconos junto a **Todas las cuentas** consultan los límites de uso. Consulta [Consultar y actualizar los límites de uso](#consultar-y-actualizar-los-límites-de-uso).
+
+El pie, en la parte inferior del panel, sigue visible en ambas pestañas. Sus botones muestran las versiones, abren esta guía, recargan la ventana, reinician el Extension Host y abren el repositorio de GitHub. Debajo aparece la versión de PlanSwap instalada.
+
+## Añadir una cuenta e iniciar sesión
+
+En Codex, [activa el cambio de cuenta](#activar-y-cambiar-cuentas-de-codex) primero.
+
+1. En la pestaña correspondiente, haz clic en **+ Añadir** junto a **Todas las cuentas**.
+2. Escribe un nombre, como `work`. Reglas para los nombres:
+   - Usa letras, dígitos, guiones bajos o guiones.
+   - `default` está reservado.
+   - Un nombre no puede coincidir, sin distinguir mayúsculas y minúsculas, con el nombre o el nombre visible de otra cuenta de la misma pestaña.
+3. Deja marcada la casilla **Vincular ajustes e historial a la cuenta predeterminada** para compartir tu configuración existente, o desmárcala para empezar con una copia independiente de la configuración predeterminada. Lee los [modos de cuenta](#elegir-cuentas-vinculadas-o-independientes) antes de elegir.
+4. Haz clic en **Añadir** o pulsa Enter. PlanSwap crea el directorio de la cuenta, o reutiliza un directorio existente con ese nombre. Si informa de archivos que no pudo vincular o copiar, lee la lista: esos archivos se quedan como están.
+5. Haz clic en **Acceder** en la nueva fila. Se abre un terminal; completa allí la configuración inicial y el inicio de sesión del cliente oficial. En Claude también puedes cambiar a la cuenta e iniciar sesión desde el panel de Claude Code.
+6. Si la fila sigue mostrando **Sin sesión**, haz clic en el botón de actualizar de la barra de título del panel. Cerrar el terminal de PlanSwap también actualiza la lista.
+
+Añadir una cuenta o iniciar sesión en ella no hace que el editor la use; cambia a ella cuando estés listo. Tus otras cuentas siguen con la sesión iniciada, así que no hace falta cerrar sesión en ellas antes. Cerrar sesión en un terminal termina la sesión de esa cuenta concreta.
+
+En una cuenta con sesión iniciada, el icono de terminal abre la CLI oficial con la cuenta de esa fila, sin cambiar la cuenta del editor. Las pestañas de terminal se llaman `Claude (<label>)` o `Codex (<label>)`.
+
+## Cambiar de cuenta de Claude
+
+1. Haz clic en el icono de flecha **Cambiar a esta cuenta** de una fila que no sea la actual. También puedes hacer doble clic en la tarjeta, o enfocarla con Tab y pulsar Enter.
+2. Confirma con **Cambiar**. Las sesiones nuevas de Claude usan la cuenta seleccionada.
+3. Haz clic en **Recargar ventana** en el aviso para pasar los paneles de Claude abiertos a la nueva cuenta. Las sesiones existentes conservan la cuenta anterior hasta que recargues.
+
+El comando **Cuenta de Claude: Cambiar de cuenta** (Claude Account: Switch Account) de la paleta de comandos muestra un selector de cuentas y cambia sin el diálogo de confirmación.
+
+Cambiar de cuenta modifica un ajuste del editor compartido por las demás ventanas del mismo equipo, así que esas ventanas también cambian. Recarga cada ventana cuyas sesiones de Claude abiertas deban usar la nueva cuenta.
+
+## Activar y cambiar cuentas de Codex
+
+### Activar una vez
+
+Abre la pestaña **Codex** y haz clic en **Activar cambio de cuenta de Codex**. Revisa y confirma los cambios que propone:
+
+- **WSL, Linux local y otras ventanas remotas:** PlanSwap añade bloques delimitados a `~/.profile` y `~/.bashrc` y comprueba que un shell de inicio de sesión de Bash recoge la cuenta seleccionada. Si informa de una asignación de `CODEX_HOME` o una configuración de shell en conflicto, corrige lo que indica y vuelve a intentarlo.
+- **Windows nativo:** PlanSwap gestiona tu variable de entorno de usuario `CODEX_HOME`. Si tú mismo definiste `CODEX_HOME` con otro valor, se rechaza la activación. Si ya apunta a un directorio de cuenta de PlanSwap (`~/.codex-<name>`), PlanSwap pasa a gestionarla.
+
+Si la extensión de Codex de Windows está configurada para ejecutarse dentro de WSL, gestiona sus cuentas desde una ventana de WSL, o desactiva `chatgpt.runCodexInWindowsSubsystemForLinux` antes de gestionar cuentas de Windows.
+
+### Seleccionar una cuenta y aplicarla
+
+1. Añade la cuenta que quieras e inicia sesión en ella.
+2. Guarda tu trabajo y haz clic en su icono de flecha **Cambiar a esta cuenta**.
+3. Lee la confirmación y sigue las instrucciones de reinicio para tu editor.
+
+| Entorno | Cómo se aplica la selección |
+| --- | --- |
+| Antigravity o VSCodium en WSL | Confirma con **Cambiar y reiniciar**. PlanSwap reinicia el servidor WSL del editor; haz clic en **Recargar ventana** en cada ventana desconectada. Si el reinicio automático no es posible, sigue las instrucciones manuales que se muestran. |
+| VS Code en WSL | Confirma con **Guardar selección**. Cierra todas las ventanas de VS Code conectadas a esa distribución, espera unos segundos y vuelve a abrirlas. |
+| Otros editores en WSL | Confirma con **Guardar selección** y sigue las instrucciones de reinicio manual del diálogo. |
+| Windows nativo | Confirma con **Guardar selección**, cierra por completo el editor y vuelve a abrirlo desde el menú Inicio o la barra de tareas. Un terminal abierto antes del cambio sigue teniendo la cuenta anterior. |
+| Linux local u otra ventana remota | Confirma con **Guardar selección**. Después sigue el diálogo: reinicia el editor, o el servidor remoto, para que arranque con el `CODEX_HOME` seleccionado. |
+
+Reiniciar un servidor WSL desconecta sus ventanas del editor y cierra sus terminales integrados y sesiones de CLI. **Recargar ventana** o **Reiniciar Extension Host** por sí solos no aplican una selección de cuenta de Codex.
+
+Hasta que se complete el reinicio, un aviso indica la cuenta seleccionada, y la fila resaltada sigue siendo la cuenta en vigor en esta ventana. Para volver a ver los pasos de reinicio, ejecuta **Aplicar cuenta de Codex: reiniciar o ver instrucciones** (Apply Codex Account: Restart or Show Instructions) desde la paleta de comandos (en la categoría **Cuenta de Codex**).
+
+¿Cambiaste de idea antes de reiniciar? Haz clic en el icono de flecha de la fila resaltada (efectiva). Esto cancela la selección pendiente; no hace falta reiniciar.
+
+## Elegir cuentas vinculadas o independientes
+
+| Contenido | Cuenta vinculada | Cuenta independiente |
+| --- | --- | --- |
+| Ajustes, reglas y Skills | Usa los de la cuenta predeterminada | Empieza con una copia; los cambios posteriores son independientes |
+| Historial de prompts y sesiones | Usa los de la cuenta predeterminada | Tiene los suyos |
+| Inicio de sesión | Independiente | Independiente |
+| Memories de Codex | Independientes | Independientes |
+| Bases de datos de conversaciones de Codex | Compartidas en WSL y en Linux; independientes en Windows nativo | Independientes |
+
+Vincular no garantiza que otra cuenta pueda reanudar una sesión, sobre todo entre organizaciones de ChatGPT distintas. No abras la misma sesión desde dos cuentas a la vez.
+
+Algunos ajustes nunca se vinculan: un archivo de ajustes que contiene su propia configuración de inicio de sesión o de proveedor (por ejemplo, un asistente de clave de API o un proveedor de modelos personalizado) sigue siendo independiente. El mensaje de resultado nombra esos archivos.
+
+En las cuentas de Claude vinculadas, PlanSwap también copia en la cuenta los servidores MCP de la cuenta predeterminada y sus ajustes de confianza por proyecto. Cuando la cuenta tiene la sesión iniciada, también copia el estado de configuración inicial de la cuenta predeterminada, para que Claude Code no repita su configuración inicial.
+
+### Cambiar el modo de una cuenta existente
+
+Antes de convertir una cuenta:
+
+1. Cambia a otra cuenta. En Codex, completa el reinicio para que la cuenta no sea ni la efectiva ni la seleccionada.
+2. Cierra sus sesiones y sus pestañas de terminal de PlanSwap.
+
+Después:
+
+- **Vincular a la cuenta predeterminada:** haz clic en el icono de enlace de una fila con nombre independiente, o ejecuta el comando **Compartir con la cuenta predeterminada** del producto. Los ajustes y el historial propios de la cuenta se mueven a la cuenta predeterminada. Los archivos que difieren de los de la cuenta predeterminada se conservan uno junto al otro para que los fusiones a mano, y el resultado los enumera.
+- **Desvincular de la cuenta predeterminada:** haz clic en el icono de desconexión de una fila con nombre vinculada. La cuenta recibe su propia copia de la configuración predeterminada y conserva su inicio de sesión y los archivos que no estaban vinculados. El historial y las sesiones permanecen en la cuenta predeterminada y no se copian de vuelta. Desvincular no deshace la fusión hecha al vincular la cuenta.
+- **Revincular:** despliega **Herramientas** y haz clic en **Revincular** después de cambiar la configuración de la cuenta predeterminada, o cuando haya que reparar enlaces. Revisa todas las cuentas vinculadas de esa pestaña y enumera lo que requiera atención. En Claude también actualiza sus servidores MCP a partir de la cuenta predeterminada.
+
+### Vincular en Windows
+
+- Los directorios vinculados usan uniones de directorio (junctions), que funcionan sin permisos adicionales.
+- Vincular archivos sueltos requiere el Modo de desarrollador de Windows o ejecutar el editor como administrador. Sin ello, PlanSwap ofrece copiar una vez los archivos de configuración pequeños; los cambios posteriores en esas copias son independientes.
+- Para vincularlos correctamente más adelante, elige **Abrir configuración para desarrolladores**, activa el Modo de desarrollador y haz clic en **Revincular**. Crea los enlaces que faltan y convierte en enlaces las copias sin cambios.
+- Si el terminal de PlanSwap de la cuenta se abre mientras PlanSwap pregunta por la copia, la conversión se detiene sin cambiar nada. Cierra el terminal y vuelve a intentarlo.
+
+## Consultar y actualizar los límites de uso
+
+Las barras de uso y los porcentajes muestran lo que **queda**. La duración junto a cada límite, como `2d 5h`, es el tiempo hasta que se restablece; pasa el puntero sobre ella para ver la fecha y hora exactas. Un límite agotado muestra `0%` y su hora de restablecimiento en rojo. Si no hay línea de uso, es que aún no hay datos, no que el uso sea cero ni que la cuota sea ilimitada.
+
+Las consultas de uso requieren un inicio de sesión con suscripción de Claude, o un inicio de sesión de ChatGPT en Codex (no el modo de clave de API). Ejecutan la CLI oficial.
+
+### Actualizar desde la barra lateral
+
+Los iconos junto a **Todas las cuentas**:
+
+- **Actualizar los límites de uso de la cuenta actual** (icono de actualizar): consulta la cuenta actual de Claude, o la cuenta efectiva de Codex. Se muestra cuando esa cuenta se puede consultar.
+- **Actualizar los límites de uso de todas las cuentas** (icono de capas apiladas): consulta, una por una, todas las cuentas con sesión iniciada de esa pestaña, para que puedas compararlas antes de cambiar. Cada fila se actualiza en cuanto termina su consulta. Nunca cambia de cuenta, y puedes cancelarlo en la notificación de progreso. Se muestra cuando al menos una cuenta de la lista se puede consultar.
+
+En la pestaña Codex no aparece ninguno de los dos iconos mientras el cambio de cuenta de Codex está desactivado, ni en Windows mientras Codex se ejecuta dentro de WSL.
+
+La paleta de comandos ofrece las mismas acciones: **Actualizar límites de uso de Claude**, **Actualizar límites de uso de todas las cuentas de Claude**, **Actualizar límites de uso de Codex** y **Actualizar límites de uso de todas las cuentas de Codex**.
+
+Una cuenta consultada hace menos de un minuto no se vuelve a consultar. En ese caso, una actualización manual muestra «Los límites de uso se consultaron hace menos de un minuto; vuelve a intentarlo en N s.». Cuenta cualquier consulta, incluidas las automáticas; en Claude, también una hecha en otra ventana o en un terminal. La actualización de todas las cuentas omite esas cuentas e indica cuántas omitió.
+
+### Consultas automáticas
+
+De forma predeterminada, PlanSwap consulta automáticamente la cuenta actual de cada producto: unos segundos después de abrir la ventana y luego aproximadamente cada 15 minutos mientras la ventana tiene el foco. Puedes cambiar el intervalo o desactivar las consultas automáticas en los [ajustes](#cambiar-el-idioma-y-los-ajustes-de-visualización).
+
+Las demás filas muestran el resultado de su última consulta. Los valores desaparecen tras su hora de restablecimiento o pasadas 24 horas, y se ocultan si la cuenta ha vuelto a iniciar sesión desde entonces. Pasa el puntero sobre el área de uso de una tarjeta para ver cuándo se consultó.
+
+### Barra de estado
+
+La barra de estado muestra cuánto queda del límite corto de cada producto, por ejemplo `Claude 97% · Codex 82%`. Su fondo cambia al color de advertencia del tema cuando algún límite general, incluidos los más largos, está al 30 % o menos, y al color de error al 10 % o menos.
+
+Pasa el puntero sobre ella para ver una tabla con una fila de encabezado por producto (correo, plan y un icono de actualizar) y una fila por límite. Haz clic en ella para abrir PlanSwap.
+
+## Renombrar o quitar cuentas
+
+### Cambiar un nombre visible
+
+Pasa el puntero sobre una cuenta con nombre, o enfócala, y haz clic en el lápiz junto a su nombre. Escribe un nombre visible y pulsa Enter, haz clic en la marca de verificación o haz clic fuera para guardar; Escape cancela.
+
+Un nombre visible puede contener espacios, tener hasta 32 caracteres y no puede coincidir con el nombre o el nombre visible de otra cuenta de esa pestaña. Renombrar no cambia el directorio ni el inicio de sesión. Las filas predeterminada y externa no se pueden renombrar.
+
+### Quitar una cuenta
+
+1. Primero cambia a otra cuenta. En Codex, completa el reinicio para que la cuenta no sea ni la efectiva ni la seleccionada. Cierra las sesiones y terminales de esa cuenta.
+2. Haz clic en el icono de la papelera y confirma con **Quitar** en la fila, o usa el comando de eliminar del producto en la paleta de comandos.
+3. Un segundo diálogo pregunta si también quieres eliminar el directorio de la cuenta.
+
+Si conservas el directorio, solo se quitan la entrada de la lista y su nombre visible. PlanSwap deja de detectar la cuenta hasta que vuelvas a añadir el mismo nombre.
+
+Si eliminas el directorio, su inicio de sesión y todo lo guardado en él se eliminan de forma permanente:
+
+- En una cuenta vinculada, los datos de la cuenta predeterminada se conservan; se eliminan el inicio de sesión propio de la cuenta, sus copias de seguridad y los demás archivos que no estaban vinculados. En Codex esto incluye las Memories de la cuenta.
+- Si PlanSwap se niega porque la cuenta está en uso, cierra las sesiones o procesos que indica y vuelve a intentarlo.
+
+Los directorios de cuenta con nombres válidos que PlanSwap encuentra en tu directorio personal se añaden automáticamente a la lista al iniciarse o al actualizar.
+
+## Usar las herramientas
+
+Despliega **Herramientas** debajo de la lista de cuentas para ver las acciones propias de esa pestaña:
+
+| Herramienta | Acción |
+| --- | --- |
+| `CLAUDE.md` o `AGENTS.md` | Abre el archivo de reglas de la cuenta actual de Claude o de la cuenta efectiva de Codex. Si el archivo no existe, pregunta antes de crearlo. |
+| Ajustes | Abre los ajustes de la extensión oficial de Claude Code o de Codex. |
+| Revincular | Repara los enlaces de las cuentas vinculadas de esta pestaña (en Claude también actualiza sus servidores MCP). Solo se muestra si existe una cuenta vinculada. |
+| Actualizar CLI | Abre un terminal que ejecuta el comando de actualización del producto. Sigue allí el progreso y las preguntas que aparezcan; si instalaste la CLI de otra forma, puede que tengas que actualizarla de esa forma. |
+
+El pie ofrece:
+
+| Botón | Acción |
+| --- | --- |
+| Ver versiones de CLI y extensiones | Muestra u oculta una tarjeta con ambas CLI y ambas extensiones oficiales. Lo que no esté instalado muestra **No encontrado**. |
+| Guía de uso | Abre esta guía en GitHub. |
+| Recargar ventana | Recarga la ventana actual de inmediato, sin preguntar. |
+| Reiniciar Extension Host | Reinicia el Extension Host de inmediato, sin preguntar. |
+| Star | Abre el repositorio de PlanSwap en GitHub. |
+
+Para obtener un informe de diagnóstico, ejecuta **PlanSwap: Vista previa del informe de diagnóstico** (PlanSwap: Preview Diagnostics Report) desde la paleta de comandos. Léelo y elige **Copiar informe** si quieres compartirlo. El informe se refiere a las cuentas por número y omite nombres de cuenta, correos, directorios y credenciales. No se sube nada automáticamente.
+
+## Cambiar el idioma y los ajustes de visualización
+
+Haz clic en el icono de ajustes de la barra de título del panel, o ejecuta **PlanSwap: Abrir ajustes de PlanSwap**. Los cambios se aplican al instante:
+
+| Ajuste | Predeterminado | Función |
+| --- | --- | --- |
+| `planswap.language` | `auto` | Seguir el editor, o elegir `en`, `zh-cn`, `es` o `ja`. |
+| `planswap.sidebar.showEmail` | `true` | Mostrar el correo de las cuentas en las tarjetas de la barra lateral. |
+| `planswap.sidebar.showFiveHourLimit` | `true` | Mostrar el límite de 5 horas en las tarjetas. |
+| `planswap.sidebar.showWeeklyLimit` | `true` | Mostrar el límite de 7 días en las tarjetas. |
+| `planswap.sidebar.showModelLimits` | `false` | Añadir a las tarjetas los límites de Claude por modelo. |
+| `planswap.claude.usageAutoRefresh` | `true` | Consultar automáticamente los límites de uso de Claude. |
+| `planswap.claude.usageRefreshMinutes` | `15` | Minutos entre consultas automáticas de Claude, 10–1440. |
+| `planswap.codex.usageAutoRefresh` | `true` | Consultar automáticamente los límites de uso de Codex. |
+| `planswap.codex.usageRefreshMinutes` | `15` | Minutos entre consultas automáticas de Codex, 5–1440. |
+
+Con las consultas automáticas desactivadas, los iconos y comandos de actualizar siguen funcionando. Los ajustes de visualización de la barra lateral no cambian la barra de estado. Los títulos de la paleta de comandos y el nombre de la barra lateral siguen el idioma de visualización del editor, no `planswap.language`.
+
+## Solucionar problemas comunes
+
+| Lo que ves | Qué comprobar |
+| --- | --- |
+| Claude sigue usando la cuenta anterior | Recarga la ventana para pasar los paneles de Claude abiertos a la nueva cuenta. Comprueba si hay un aviso de PlanSwap de que credenciales del entorno o ajustes de proveedor sustituyen el inicio de sesión de la cuenta. |
+| Codex muestra una selección pendiente | Completa el reinicio correspondiente a tu entorno. Recargar la ventana no sustituye reiniciar el editor ni el servidor WSL. |
+| No se puede activar el cambio de cuenta de Codex | Lee el conflicto de shell o de `CODEX_HOME` indicado. En Windows, comprueba si Codex está configurado para ejecutarse dentro de WSL. |
+| Una cuenta sigue mostrando **Sin sesión** | Inicia sesión con el botón **Acceder** de esa fila y actualiza. Un inicio de sesión de Codex guardado solo en el llavero del sistema operativo no se puede detectar, porque PlanSwap busca el `auth.json` de la cuenta. |
+| Dos cuentas generan un aviso de inicio de sesión duplicado | Ambas tienen la sesión iniciada con la misma cuenta y espacio de trabajo, así que cambiar entre ellas no te da límites separados. Inicia sesión con la identidad que corresponda en una de ellas. |
+| No hay barras de uso, o una consulta falló | Comprueba que la cuenta tiene un inicio de sesión con suscripción (Claude) o de ChatGPT (Codex) y que el comando `claude` está instalado (Claude). Actualiza a mano y lee el mensaje de error; si indica un tiempo de espera, espera antes de reintentar. |
+| Los ajustes o el historial no se comparten como esperabas | Revisa la insignia de enlace y el resultado de la conversión o de Revincular. Algunos archivos siguen siendo independientes o requieren fusión manual; en Windows, comprueba si los enlaces de archivo están disponibles. |
+| Una lista parece desactualizada | Haz clic en el botón de actualizar de la barra de título del panel. Los cambios hechos en otra ventana aparecen tras actualizar. |
+
+Para las sustituciones del inicio de sesión, los límites al compartir sesiones y las salvedades de Windows, consulta las [limitaciones conocidas](../README.md#known-limitations) y [Windows nativo](../README.md#native-windows). Consulta [privacidad](../README.md#privacy) para saber qué guarda PlanSwap localmente y cómo se usan los clientes oficiales para las consultas de uso.
+
+## Desactivar el cambio de cuenta o desinstalar
+
+1. Vuelve a cambiar Claude a `default` y recarga la ventana.
+2. Si el cambio de cuenta de Codex está activado, ejecuta **Desactivar el cambio de cuentas de Codex** (Disable Codex Account Switching; en **Cuenta de Codex** en la paleta de comandos) y confirma. Esto quita los bloques de shell de PlanSwap (o, en Windows, su `CODEX_HOME` de usuario) y borra la selección. Las ventanas abiertas conservan la cuenta anterior hasta que las reinicies como se describe en [Seleccionar una cuenta y aplicarla](#seleccionar-una-cuenta-y-aplicarla).
+3. Si quieres, desinstala PlanSwap desde la vista Extensiones.
+
+Los directorios de las cuentas se conservan. Para borrar también las listas de cuentas, los nombres visibles y los registros de uso guardados por PlanSwap, consulta las [instrucciones de desinstalación](../README.md#uninstall). Esto no toca los archivos propios de las cuentas.

@@ -9,7 +9,7 @@ import { ensureClaudeLinks, isSharedClaudeAccount, mirrorClaudeJson, type LinkOp
 import { askCopyFallback } from './linkPolicy';
 import { describeShareReport, type ShareReportLike } from './shareReport';
 import type { PanelMode, ToolId } from './protocol';
-import { t } from './i18n';
+import { getLocale, t, type Locale } from './i18n';
 import { CLAUDE_REFRESH_ALL_USAGE_COMMAND, CLAUDE_REFRESH_USAGE_COMMAND, CODEX_REFRESH_ALL_USAGE_COMMAND, REFRESH_USAGE_COMMAND } from './statusBar';
 import { isWindows } from './platform';
 import { accountTerminalShell } from './terminalShell';
@@ -51,10 +51,16 @@ export function mirrorClaudeJsonInto(fromJson: string, dir: string): void {
 const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
 /** Tool entry shared by the panel toolbar and the Command Palette */
+// The user guide on GitHub in the UI language; English is the source and has no suffix
+const USER_GUIDE_FILES: Record<Locale, string> = { en: 'user-guide.md', 'zh-cn': 'user-guide.zh-cn.md', es: 'user-guide.es.md', ja: 'user-guide.ja.md' };
+function userGuideUrl(): string {
+  return `https://github.com/n2ns/planswap/blob/main/docs/${USER_GUIDE_FILES[getLocale()]}`;
+}
+
 export async function runTool(mode: PanelMode, tool: ToolId, deps: ToolDeps): Promise<void> {
   switch (tool) {
     case 'openHelp':
-      await vscode.env.openExternal(vscode.Uri.parse('https://github.com/n2ns/planswap#readme'));
+      await vscode.env.openExternal(vscode.Uri.parse(userGuideUrl()));
       return;
     case 'openStar':
       await vscode.env.openExternal(vscode.Uri.parse('https://github.com/n2ns/planswap'));

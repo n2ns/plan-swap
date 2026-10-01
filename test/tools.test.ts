@@ -2,7 +2,7 @@ import { after, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { runTool } from '../src/tools';
 import { setLocale, t } from '../src/i18n';
-import { commands, window } from './stubs/vscode';
+import { commands, env, window } from './stubs/vscode';
 import { inLocale } from './helpers';
 
 describe('re-link result messages', () => {
@@ -54,5 +54,19 @@ describe('usage refresh tools from the panel buttons', () => {
   test('refreshAllUsage runs the product\'s own refresh-all command', async (ctx) => {
     assert.deepEqual(await run(ctx, 'claude', 'refreshAllUsage'), ['planswap.claude.refreshAllUsage']);
     assert.deepEqual(await run(ctx, 'codex', 'refreshAllUsage'), ['planswap.codex.refreshAllUsage']);
+  });
+});
+
+describe('user guide button', () => {
+  test('opens the guide in the UI language; English has no suffix', async (ctx) => {
+    const open = ctx.mock.method(env, 'openExternal', async () => true);
+    const expected = { en: 'user-guide.md', 'zh-cn': 'user-guide.zh-cn.md', es: 'user-guide.es.md', ja: 'user-guide.ja.md' } as const;
+    try {
+      for (const [locale, file] of Object.entries(expected) as Array<[keyof typeof expected, string]>) {
+        setLocale(locale);
+        await runTool('claude', 'openHelp', {});
+        assert.equal(String(open.mock.calls.at(-1)?.arguments[0]), `https://github.com/n2ns/planswap/blob/main/docs/${file}`, locale);
+      }
+    } finally { setLocale('en'); }
   });
 });

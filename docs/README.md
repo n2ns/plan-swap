@@ -7,6 +7,7 @@ Each document owns a different kind of information. Read the sections relevant t
 | Document | Owns | Does not own |
 |---|---|---|
 | [README](../README.md) | Product introduction, requirements, installation, quick start, privacy and concise limitations for users. | Detailed module contracts or development procedures. |
+| [User guide](user-guide.md) | Step-by-step sidebar instructions, account setup, switching, usage limits, settings and everyday troubleshooting for users. English is the source; [简体中文](user-guide.zh-cn.md), [Español](user-guide.es.md) and [日本語](user-guide.ja.md) translations, opened by the footer button in that UI language, must be updated in the same change. | Detailed behavior specifications, module contracts or verification procedures. |
 | [Features](features.md) | Detailed observable behavior of Claude and Codex account flows, commands, tools and localization. | Function signatures, upstream research or test execution records. |
 | [Claude design](design.md) | Claude switching and shared UI architecture, data model, algorithms, rationale, dated upstream evidence and limitations. | Build instructions, exhaustive module inventories or acceptance scripts. |
 | [Codex design](codex-design.md) | Codex switching, shell/environment propagation, editor restart and sharing design, dated evidence and limitations. | Shared interface definitions or developer setup. |
