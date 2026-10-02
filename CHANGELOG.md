@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.3.0] - 2026-10-02
 
 ### Added
 
@@ -8,6 +8,10 @@
 - `planswap.claude.confirmSwitch` (default on): turn it off to switch Claude accounts from the sidebar without the confirmation dialog. Codex switching still asks, because it needs an editor restart.
 - `planswap.claude.usageTimeoutSeconds` (default 30, 10–120) and `planswap.codex.usageTimeoutSeconds` (default 15, 5–120): how many seconds one usage limit check may run before it is reported as timed out, for automatic checks, manual refreshes and refresh-all alike.
 - The sidebar tabs show the Claude and OpenAI logos next to their names.
+
+### Changed
+
+- The sidebar tabs look like folder tabs: the selected tab opens into its page, which fills the panel down to the footer, and the tabs stay at the top while the account list scrolls.
 
 ## [0.2.3] - 2026-10-02
 
