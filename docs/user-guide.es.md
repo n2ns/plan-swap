@@ -151,10 +151,12 @@ Después:
 - Vincular archivos sueltos requiere el Modo de desarrollador de Windows o ejecutar el editor como administrador. Sin ello, PlanSwap ofrece copiar una vez los archivos de configuración pequeños; los cambios posteriores en esas copias son independientes.
 - Para vincularlos correctamente más adelante, elige **Abrir configuración para desarrolladores**, activa el Modo de desarrollador y haz clic en **Revincular**. Crea los enlaces que faltan y convierte en enlaces las copias sin cambios.
 - Si el terminal de PlanSwap de la cuenta se abre mientras PlanSwap pregunta por la copia, la conversión se detiene sin cambiar nada. Cierra el terminal y vuelve a intentarlo.
+- Las bases de datos de hilos de Codex (`*.sqlite`) nunca se vinculan en Windows, porque allí SQLite puede perder datos escritos a través de un enlace. Cada cuenta conserva las suyas, mientras que las sesiones, el historial y la configuración se siguen compartiendo.
+- En Windows, PlanSwap no puede saber a qué cuenta pertenece un proceso de Claude o Codex en ejecución. Cierra las sesiones de la cuenta y sus pestañas de terminal de PlanSwap antes de vincularla, desvincularla o quitarla, aunque la CLI ya haya terminado.
 
 ## Consultar y actualizar los límites de uso
 
-Las barras de uso y los porcentajes muestran lo que **queda** (con `planswap.usageDisplay` en `used` muestran lo que se ha usado). La duración junto a cada límite, como `2d 5h`, es el tiempo hasta que se restablece. Pasa el puntero sobre una barra para ver lo que queda y lo que se ha usado, por ejemplo `97% restante (3% usado)`. Un límite agotado muestra `0%` y su hora de restablecimiento en rojo. Si no hay línea de uso, es que aún no hay datos, no que el uso sea cero ni que la cuota sea ilimitada.
+Las barras de uso y los porcentajes muestran lo que **queda**; pon `planswap.usageDisplay` en `used` en los [ajustes](#cambiar-el-idioma-y-los-ajustes-de-visualización) para que muestren lo que se ha usado. La duración junto a cada límite, como `2d 5h`, es el tiempo hasta que se restablece. Pasa el puntero sobre una barra para ver ambos valores, por ejemplo `97% restante (3% usado)`. Una barra se vuelve amarilla cuando queda un 30 % o menos y roja con un 10 % o menos, también cuando muestra lo usado; puedes cambiar estos niveles con `planswap.sidebar.warningThreshold` y `planswap.sidebar.errorThreshold`. Un límite agotado muestra su porcentaje y su hora de restablecimiento en rojo. Si no hay línea de uso, es que aún no hay datos, no que el uso sea cero ni que la cuota sea ilimitada.
 
 Las consultas de uso requieren un inicio de sesión con suscripción de Claude, o un inicio de sesión de ChatGPT en Codex (no el modo de clave de API). Ejecutan la CLI oficial.
 
@@ -173,13 +175,13 @@ Una cuenta consultada hace menos de un minuto no se vuelve a consultar. En ese c
 
 ### Consultas automáticas
 
-De forma predeterminada, PlanSwap consulta automáticamente todas las cuentas con sesión iniciada de cada producto, primero la actual y después las demás de una en una: unos 20 segundos después de abrir la ventana y luego aproximadamente cada 15 minutos mientras la ventana tiene el foco. Para consultar solo las cuentas actuales, activa `planswap.usageAutoRefreshCurrentOnly`. Puedes cambiar el intervalo o desactivar las consultas automáticas en los [ajustes](#cambiar-el-idioma-y-los-ajustes-de-visualización).
+De forma predeterminada, PlanSwap consulta automáticamente todas las cuentas con sesión iniciada de cada producto, primero la actual y después las demás de una en una: unos 20 segundos después de abrir la ventana y luego aproximadamente cada 15 minutos mientras la ventana tiene el foco. Para consultar solo las cuentas actuales, activa `planswap.usageAutoRefreshCurrentOnly`. También puedes cambiar el intervalo o desactivar las consultas automáticas en los [ajustes](#cambiar-el-idioma-y-los-ajustes-de-visualización).
 
 Las demás filas muestran el resultado de su última consulta. Los valores desaparecen tras su hora de restablecimiento o pasadas 24 horas, y se ocultan si la cuenta ha vuelto a iniciar sesión desde entonces.
 
 ### Barra de estado
 
-La barra de estado muestra cuánto queda del límite corto de cada producto, por ejemplo `Claude 97% · Codex 82%`. Su fondo cambia al color de advertencia del tema cuando algún límite general, incluidos los más largos, está al 30 % o menos, y al color de error al 10 % o menos. Puedes cambiar estos umbrales, mostrar un solo producto, mover el elemento a la izquierda u ocultarlo ([Cambiar el idioma y los ajustes de visualización](#cambiar-el-idioma-y-los-ajustes-de-visualización)).
+La barra de estado muestra el límite corto de cada producto, por ejemplo `Claude 97% · Codex 82%`: lo que queda, o lo que se ha usado cuando `planswap.usageDisplay` está en `used`. Su fondo cambia al color de advertencia del tema cuando algún límite general, incluidos los más largos, está al 30 % o menos, y al color de error al 10 % o menos. Puedes cambiar estos umbrales, mostrar un solo producto, mover el elemento a la izquierda u ocultarlo ([Cambiar el idioma y los ajustes de visualización](#cambiar-el-idioma-y-los-ajustes-de-visualización)).
 
 Pasa el puntero sobre ella para ver una tabla con una fila de encabezado por producto (correo, plan y, cuando la cuenta se puede consultar, un icono de actualizar) y una fila por límite general. Haz clic en ella para abrir PlanSwap.
 
@@ -213,9 +215,9 @@ Los directorios de cuenta con nombres válidos que PlanSwap encuentra en tu dire
 | Herramienta | Acción |
 | --- | --- |
 | `CLAUDE.md` o `AGENTS.md` | Abre el archivo de reglas de la cuenta actual de Claude o de la cuenta efectiva de Codex. Si el archivo no existe, pregunta antes de crearlo. |
-| Ajustes | Abre los ajustes de la extensión oficial de Claude Code o de Codex. |
-| Revincular | Repara los enlaces de las cuentas vinculadas de esta pestaña (en Claude también actualiza sus servidores MCP). Solo se muestra si existe una cuenta vinculada. |
+| Ajustes de Claude o Ajustes de Codex | Abre los ajustes de la extensión oficial de Claude Code o de Codex (los ajustes de PlanSwap están en el engranaje de la barra de título del panel). |
 | Actualizar CLI | Abre un terminal que ejecuta el comando de actualización del producto. Sigue allí el progreso y las preguntas que aparezcan; si instalaste la CLI de otra forma, puede que tengas que actualizarla de esa forma. |
+| Revincular | Repara los enlaces de las cuentas vinculadas de esta pestaña (en Claude también actualiza sus servidores MCP). Solo se muestra si existe una cuenta vinculada. |
 
 El pie ofrece:
 
@@ -231,7 +233,7 @@ Para obtener un informe de diagnóstico, ejecuta **PlanSwap: Vista previa del in
 
 ## Cambiar el idioma y los ajustes de visualización
 
-Haz clic en el icono de ajustes de la barra de título del panel, o ejecuta **PlanSwap: Abrir ajustes de PlanSwap**. Los cambios se aplican al instante:
+Haz clic en el icono de ajustes de la barra de título del panel, o ejecuta **PlanSwap: Abrir ajustes de PlanSwap**. El editor de configuración los agrupa en General, Barra lateral, Barra de estado, Claude y Codex; la tabla sigue ese orden. Para encontrar un ajuste, escribe su nombre de la tabla en el cuadro de búsqueda de la configuración. Los cambios se aplican al instante:
 
 | Ajuste | Predeterminado | Función |
 | --- | --- | --- |
@@ -245,18 +247,18 @@ Haz clic en el icono de ajustes de la barra de título del panel, o ejecuta **Pl
 | `planswap.sidebar.showModelLimits` | `false` | Añadir a las tarjetas los límites de Claude por modelo. |
 | `planswap.sidebar.warningThreshold` | `30` | Las barras de las tarjetas usan el color de advertencia con este porcentaje restante o menos, 0–100. |
 | `planswap.sidebar.errorThreshold` | `10` | Las barras de las tarjetas usan el color de error con este porcentaje restante o menos, 0–100. Tiene prioridad sobre el color de advertencia. |
+| `planswap.statusBar.enabled` | `true` | Mostrar el elemento de PlanSwap en la barra de estado. |
+| `planswap.statusBar.products` | `both` | Productos del elemento de la barra de estado: `both`, `claude` o `codex`. |
+| `planswap.statusBar.warningThreshold` | `30` | Color de advertencia con este porcentaje restante o menos, 0–100. |
+| `planswap.statusBar.errorThreshold` | `10` | Color de error con este porcentaje restante o menos, 0–100. Tiene prioridad sobre el color de advertencia. |
+| `planswap.statusBar.alignment` | `right` | Lado de la barra de estado: `left` o `right`. |
+| `planswap.claude.confirmSwitch` | `true` | Pedir confirmación antes de cambiar de cuenta de Claude desde la barra lateral. El cambio de Codex siempre la pide. Si está desactivado, el doble clic o Enter en una fila con el foco cambia de inmediato. |
 | `planswap.claude.usageAutoRefresh` | `true` | Consultar automáticamente los límites de uso de Claude. |
 | `planswap.claude.usageRefreshMinutes` | `15` | Minutos entre consultas automáticas de Claude, 10–1440. |
 | `planswap.claude.usageTimeoutSeconds` | `30` | Segundos que puede durar una consulta de Claude antes de agotar el tiempo, 10–120. |
 | `planswap.codex.usageAutoRefresh` | `true` | Consultar automáticamente los límites de uso de Codex. |
 | `planswap.codex.usageRefreshMinutes` | `15` | Minutos entre consultas automáticas de Codex, 5–1440. |
 | `planswap.codex.usageTimeoutSeconds` | `15` | Segundos que puede durar una consulta de Codex antes de agotar el tiempo, 5–120. |
-| `planswap.claude.confirmSwitch` | `true` | Pedir confirmación antes de cambiar de cuenta de Claude desde la barra lateral. El cambio de Codex siempre la pide. Si está desactivado, el doble clic o Enter en una fila con el foco cambia de inmediato. |
-| `planswap.statusBar.enabled` | `true` | Mostrar el elemento de PlanSwap en la barra de estado. |
-| `planswap.statusBar.products` | `both` | Productos del elemento de la barra de estado: `both`, `claude` o `codex`. |
-| `planswap.statusBar.warningThreshold` | `30` | Color de advertencia con este porcentaje restante o menos, 0–100. |
-| `planswap.statusBar.errorThreshold` | `10` | Color de error con este porcentaje restante o menos, 0–100. Tiene prioridad sobre el color de advertencia. |
-| `planswap.statusBar.alignment` | `right` | Lado de la barra de estado: `left` o `right`. |
 
 Con las consultas automáticas desactivadas, los iconos y comandos de actualizar siguen funcionando. Los ajustes de visualización de la barra lateral no cambian la barra de estado. Los títulos de la paleta de comandos y el nombre de la barra lateral siguen el idioma de visualización del editor, no `planswap.language`.
 
@@ -273,7 +275,21 @@ Con las consultas automáticas desactivadas, los iconos y comandos de actualizar
 | Los ajustes o el historial no se comparten como esperabas | Revisa la insignia de enlace y el resultado de la conversión o de Revincular. Algunos archivos siguen siendo independientes o requieren fusión manual; en Windows, comprueba si los enlaces de archivo están disponibles. |
 | Una lista parece desactualizada | Haz clic en el botón de actualizar de la barra de título del panel. Los cambios hechos en otra ventana aparecen tras actualizar. |
 
-Para las sustituciones del inicio de sesión, los límites al compartir sesiones y las salvedades de Windows, consulta las [limitaciones conocidas](../README.md#known-limitations) y [Windows nativo](../README.md#native-windows). Consulta [privacidad](../README.md#privacy) para saber qué guarda PlanSwap localmente y cómo se usan los clientes oficiales para las consultas de uso.
+### Inicios de sesión que se aplican a todas las cuentas
+
+Estos tienen prioridad sobre el inicio de sesión propio de cada cuenta, así que cambiar de cuenta de Claude no tiene efecto mientras haya uno definido. PlanSwap avisa cuando encuentra uno en el entorno:
+
+- una clave de API, un token de autenticación o un token OAuth de larga duración: `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`;
+- un perfil de Anthropic con nombre (`ANTHROPIC_PROFILE`) o las variables de federación (`ANTHROPIC_FEDERATION_RULE_ID` con `ANTHROPIC_ORGANIZATION_ID`);
+- un ajuste de proveedor en la nube: `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`, `CLAUDE_CODE_USE_FOUNDRY`.
+
+Un inicio de sesión de Claude Console sin clave de API se guarda fuera de los directorios de las cuentas (`~/.config/anthropic`, en Windows `%APPDATA%\Anthropic`) y cierra todas las sesiones de claude.ai del equipo, así que no se puede mantener por cuenta ([autenticación de Claude Code](https://code.claude.com/docs/en/authentication#sign-in-without-an-api-key)).
+
+### OneDrive en Windows
+
+PlanSwap avisa cuando tu carpeta de usuario se sincroniza con OneDrive. Se sabe que la sincronización de OneDrive daña el `.claude.json` de Claude Code, y todos los directorios de cuentas están dentro de esa carpeta.
+
+Para otras limitaciones, como continuar la sesión de otra cuenta, consulta las [limitaciones conocidas](../README.md#known-limitations). Consulta la [privacidad](privacy.md) para saber qué lee, guarda y envía PlanSwap.
 
 ## Desactivar el cambio de cuenta o desinstalar
 

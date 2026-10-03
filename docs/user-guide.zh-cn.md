@@ -151,10 +151,12 @@ PlanSwap 让你同时保持多个 Claude Code 和 Codex 账号的登录状态，
 - 链接单个文件需要开启 Windows 开发人员模式，或以管理员身份运行编辑器。否则，PlanSwap 会提议改为把较小的配置文件复制一次；之后对这些副本的修改各自独立。
 - 以后要正式链接这些文件，请选择 **打开开发者设置**，开启开发人员模式，然后点击 **重新链接**。它会创建缺失的链接，并把未修改的副本换成链接。
 - 如果在 PlanSwap 询问是否复制时该账号的 PlanSwap 终端被打开，转换会停止且不做任何更改。关闭终端后重试。
+- 在 Windows 上，Codex 的会话数据库（`*.sqlite`）从不链接，因为在 Windows 上通过链接写入 SQLite 可能丢失数据。每个账号各自保留一份，会话、历史和配置仍然共享。
+- 在 Windows 上，PlanSwap 无法判断正在运行的 Claude 或 Codex 进程属于哪个账号。链接、拆分或删除账号前，请先关闭该账号的会话和 PlanSwap 终端标签页，即使 CLI 已经退出。
 
 ## 查看和刷新用量额度
 
-用量条和百分比显示的是**剩余**额度（将 `planswap.usageDisplay` 设为 `used` 可改为显示已用量）。每项额度旁边的时长（如 `2天5小时`）是距离重置的时间。将鼠标悬停在用量条上可查看剩余和已用的比例，例如 `剩余 97%（已用 3%）`。已用完的额度会以红色显示 `0%` 及其重置时间。没有用量行表示还没有数据，而不是用量为零或额度无限。
+用量条和百分比显示的是**剩余**额度；在[设置](#更改语言和显示设置)中将 `planswap.usageDisplay` 设为 `used` 可改为显示已用量。每项额度旁边的时长（如 `2天5小时`）是距离重置的时间。将鼠标悬停在用量条上可同时看到两者，例如 `剩余 97%（已用 3%）`。剩余 30% 或更少时用量条变黄，剩余 10% 或更少时变红，显示已用量时也是如此；这两个界线可以用 `planswap.sidebar.warningThreshold` 和 `planswap.sidebar.errorThreshold` 调整。已用完的额度会以红色显示百分比和重置时间。没有用量行表示还没有数据，而不是用量为零或额度无限。
 
 查询用量需要以 Claude 订阅登录，或以 Codex 的 ChatGPT 方式登录（不支持 API 密钥模式）。查询会运行官方 CLI。
 
@@ -173,13 +175,13 @@ PlanSwap 让你同时保持多个 Claude Code 和 Codex 账号的登录状态，
 
 ### 自动查询
 
-默认情况下，PlanSwap 会自动查询每个产品所有已登录的账号，先查当前账号，再逐个查询其他账号：窗口打开约 20 秒后查询一次，之后在窗口获得焦点时大约每 15 分钟查询一次。如果只想查询当前账号，请开启 `planswap.usageAutoRefreshCurrentOnly`。你可以在[设置](#更改语言和显示设置)中更改间隔或关闭自动查询。
+默认情况下，PlanSwap 会自动查询每个产品所有已登录的账号，先查当前账号，再逐个查询其他账号：窗口打开约 20 秒后查询一次，之后在窗口获得焦点时大约每 15 分钟查询一次。如果只想查询当前账号，请开启 `planswap.usageAutoRefreshCurrentOnly`。你也可以在[设置](#更改语言和显示设置)中更改间隔或关闭自动查询。
 
 其他行显示的是各自上次查询的结果。这些数值会在重置时间过后或 24 小时后消失，如果账号此后重新登录过，也会隐藏。
 
 ### 状态栏
 
-状态栏显示每个产品的短周期额度还剩多少，例如 `Claude 97% · Codex 82%`。当任一通用额度（包括较长周期的额度）剩余 30% 或更少时，其背景会变为主题的警告色；剩余 10% 或更少时变为错误色。你可以更改这些阈值、只显示一个产品、把该项移到左侧或隐藏它（[更改语言和显示设置](#更改语言和显示设置)）。
+状态栏显示每个产品的短周期额度，例如 `Claude 97% · Codex 82%`：默认是剩余量，`planswap.usageDisplay` 设为 `used` 时是已用量。当任一通用额度（包括较长周期的额度）剩余 30% 或更少时，其背景会变为主题的警告色；剩余 10% 或更少时变为错误色。你可以更改这些阈值、只显示一个产品、把该项移到左侧或隐藏它（[更改语言和显示设置](#更改语言和显示设置)）。
 
 悬停可查看一张表格：每个产品一行表头（邮箱、套餐，以及账号可查询时的刷新图标），每项通用额度一行。点击它可打开 PlanSwap。
 
@@ -213,9 +215,9 @@ PlanSwap 启动或刷新时，会把在你的主目录中找到的、名称有�
 | 工具 | 作用 |
 | --- | --- |
 | `CLAUDE.md` 或 `AGENTS.md` | 打开当前 Claude 账号或生效 Codex 账号的规则文件。文件不存在时，会先询问是否创建。 |
-| 插件设置 | 打开官方 Claude Code 或 Codex 插件的设置。 |
-| 重新链接 | 修复该标签页中链接账号的链接（Claude：还会更新它们的 MCP 服务器）。仅在存在链接账号时显示。 |
+| Claude 设置或 Codex 设置 | 打开官方 Claude Code 或 Codex 插件的设置（PlanSwap 自己的设置在面板标题栏的齿轮里）。 |
 | 更新 CLI | 打开一个终端，运行该产品的更新命令。在终端中关注进度和提示；如果你用其他方式安装了 CLI，可能需要用同样的方式更新。 |
+| 重新链接 | 修复该标签页中链接账号的链接（Claude：还会更新它们的 MCP 服务器）。仅在存在链接账号时显示。 |
 
 页脚提供：
 
@@ -231,7 +233,7 @@ PlanSwap 启动或刷新时，会把在你的主目录中找到的、名称有�
 
 ## 更改语言和显示设置
 
-点击面板标题栏中的设置图标，或运行 **PlanSwap: 打开 PlanSwap 设置**（PlanSwap: Open PlanSwap Settings）。更改立即生效：
+点击面板标题栏中的设置图标，或运行 **PlanSwap: 打开 PlanSwap 设置**（PlanSwap: Open PlanSwap Settings）。设置界面将它们分为通用、侧边栏、状态栏、Claude 和 Codex 几组；下表按相同顺序排列。在设置界面的搜索框中输入表中的设置名即可找到对应设置。更改立即生效：
 
 | 设置 | 默认值 | 用途 |
 | --- | --- | --- |
@@ -245,18 +247,18 @@ PlanSwap 启动或刷新时，会把在你的主目录中找到的、名称有�
 | `planswap.sidebar.showModelLimits` | `false` | 在卡片上额外显示 Claude 的按模型额度。 |
 | `planswap.sidebar.warningThreshold` | `30` | 剩余百分比小于或等于此值时，卡片上的用量条显示警告色，0–100。 |
 | `planswap.sidebar.errorThreshold` | `10` | 剩余百分比小于或等于此值时，卡片上的用量条显示错误色，0–100。优先于警告色。 |
+| `planswap.statusBar.enabled` | `true` | 在状态栏中显示 PlanSwap 项。 |
+| `planswap.statusBar.products` | `both` | 状态栏项包含的产品：`both`、`claude` 或 `codex`。 |
+| `planswap.statusBar.warningThreshold` | `30` | 剩余百分比小于或等于此值时显示警告色，0–100。 |
+| `planswap.statusBar.errorThreshold` | `10` | 剩余百分比小于或等于此值时显示错误色，0–100。优先于警告色。 |
+| `planswap.statusBar.alignment` | `right` | 所在的状态栏一侧：`left` 或 `right`。 |
+| `planswap.claude.confirmSwitch` | `true` | 从侧边栏切换 Claude 账号前先确认。Codex 切换始终需要确认。关闭后，在有焦点的行上双击或按回车会立即切换。 |
 | `planswap.claude.usageAutoRefresh` | `true` | 自动查询 Claude 用量额度。 |
 | `planswap.claude.usageRefreshMinutes` | `15` | 自动查询 Claude 的间隔分钟数，10–1440。 |
 | `planswap.claude.usageTimeoutSeconds` | `30` | 单次查询 Claude 超时前允许运行的秒数，10–120。 |
 | `planswap.codex.usageAutoRefresh` | `true` | 自动查询 Codex 用量额度。 |
 | `planswap.codex.usageRefreshMinutes` | `15` | 自动查询 Codex 的间隔分钟数，5–1440。 |
 | `planswap.codex.usageTimeoutSeconds` | `15` | 单次查询 Codex 超时前允许运行的秒数，5–120。 |
-| `planswap.claude.confirmSwitch` | `true` | 从侧边栏切换 Claude 账号前先确认。Codex 切换始终需要确认。关闭后，在有焦点的行上双击或按回车会立即切换。 |
-| `planswap.statusBar.enabled` | `true` | 在状态栏中显示 PlanSwap 项。 |
-| `planswap.statusBar.products` | `both` | 状态栏项包含的产品：`both`、`claude` 或 `codex`。 |
-| `planswap.statusBar.warningThreshold` | `30` | 剩余百分比小于或等于此值时显示警告色，0–100。 |
-| `planswap.statusBar.errorThreshold` | `10` | 剩余百分比小于或等于此值时显示错误色，0–100。优先于警告色。 |
-| `planswap.statusBar.alignment` | `right` | 所在的状态栏一侧：`left` 或 `right`。 |
 
 关闭自动查询后，刷新图标和命令仍然可用。侧边栏显示设置不影响状态栏。命令面板标题和侧边栏名称跟随编辑器的显示语言，而不是 `planswap.language`。
 
@@ -273,7 +275,21 @@ PlanSwap 启动或刷新时，会把在你的主目录中找到的、名称有�
 | 设置或历史没有按预期共享 | 检查链接标记，以及转换或重新链接的结果。有些文件会保持独立或需要手动合并；在 Windows 上，检查是否能创建文件链接。 |
 | 列表看起来过时了 | 点击面板标题栏中的刷新按钮。在其他窗口中所做的更改要刷新后才会显示。 |
 
-关于登录被覆盖、会话共享的限制和 Windows 注意事项，请参阅[已知限制](../README.md#known-limitations)和[原生 Windows](../README.md#native-windows)。PlanSwap 在本地存储哪些内容、以及查询用量时如何使用官方客户端，请参阅[隐私](../README.md#privacy)。
+### 对所有账号生效的登录方式
+
+以下登录方式优先于每个账号自己的登录，设置了其中任何一项时，切换 Claude 账号不会生效。PlanSwap 在环境中发现它们时会发出提醒：
+
+- API 密钥、认证令牌或长期 OAuth 令牌：`ANTHROPIC_API_KEY`、`ANTHROPIC_AUTH_TOKEN`、`CLAUDE_CODE_OAUTH_TOKEN`；
+- 命名的 Anthropic 配置（`ANTHROPIC_PROFILE`），或联合登录变量（`ANTHROPIC_FEDERATION_RULE_ID` 与 `ANTHROPIC_ORGANIZATION_ID`）；
+- 云服务商设置：`CLAUDE_CODE_USE_BEDROCK`、`CLAUDE_CODE_USE_VERTEX`、`CLAUDE_CODE_USE_FOUNDRY`。
+
+不使用 API 密钥的 Claude Console 登录保存在账号目录之外（`~/.config/anthropic`，Windows 上为 `%APPDATA%\Anthropic`），并会登出本机所有 claude.ai 登录，因此无法按账号分开保存（[Claude Code 认证说明](https://code.claude.com/docs/en/authentication#sign-in-without-an-api-key)）。
+
+### Windows 上的 OneDrive
+
+如果你的用户文件夹由 OneDrive 同步，PlanSwap 会发出提醒。已知 OneDrive 同步会损坏 Claude Code 的 `.claude.json`，而所有账号目录都在这个文件夹里。
+
+其他限制（例如继续另一个账号的会话）请参阅[已知限制](../README.md#known-limitations)。PlanSwap 读取、存储和发送哪些内容，请参阅[隐私说明](privacy.md)。
 
 ## 停用切换或卸载
 

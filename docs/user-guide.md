@@ -151,10 +151,12 @@ Then:
 - Linking single files needs Windows Developer Mode or an editor run as administrator. Without it, PlanSwap offers to copy small configuration files once instead; later edits to those copies stay separate.
 - To link them properly later, choose **Open Developer Settings**, turn on Developer Mode, then click **Re-link**. It creates the missing links and turns unchanged copies into links.
 - If the account's PlanSwap terminal opens while PlanSwap asks about copying, the conversion stops without changing anything. Close the terminal and try again.
+- Codex thread databases (`*.sqlite`) are never linked on Windows, because SQLite there can lose data written through a link. Each account keeps its own, while sessions, history and configuration are still shared.
+- PlanSwap cannot tell on Windows which account a running Claude or Codex process belongs to. Close the account's sessions and PlanSwap terminal tabs before linking, unlinking or removing it, even if the CLI has already exited.
 
 ## Read and refresh usage limits
 
-Usage bars and percentages show what is **left** (set `planswap.usageDisplay` to `used` to show what is used instead). The duration next to each limit, such as `2d 5h`, is the time until it resets. Hover a bar to see what is left and what is used, for example `97% left (3% used)`. A used-up limit shows `0%` and its reset time in red. No usage line means no data yet, not zero usage or unlimited quota.
+Usage bars and percentages show what is **left**; set `planswap.usageDisplay` to `used` in [settings](#change-language-and-display-settings) to show what is used instead. The duration next to each limit, such as `2d 5h`, is the time until it resets. Hover a bar to see both, for example `97% left (3% used)`. A bar turns yellow when 30% or less is left and red at 10% or less, also when it shows what is used; change these levels with `planswap.sidebar.warningThreshold` and `planswap.sidebar.errorThreshold`. A used-up limit shows its percentage and reset time in red. No usage line means no data yet, not zero usage or unlimited quota.
 
 Usage checks need a Claude subscription sign-in, or a Codex ChatGPT sign-in (not API key mode). They run the official CLI.
 
@@ -173,13 +175,13 @@ An account checked less than a minute ago is not checked again. A manual refresh
 
 ### Automatic checks
 
-By default, PlanSwap checks every signed-in account of each product automatically, the current one first and the others one at a time: about 20 seconds after the window opens, then about every 15 minutes while the window is focused. To check only the current accounts, turn on `planswap.usageAutoRefreshCurrentOnly`. You can change the interval or turn automatic checks off in [settings](#change-language-and-display-settings).
+By default, PlanSwap checks every signed-in account of each product automatically, the current one first and the others one at a time: about 20 seconds after the window opens, then about every 15 minutes while the window is focused. To check only the current accounts, turn on `planswap.usageAutoRefreshCurrentOnly`. You can also change the interval or turn automatic checks off in [settings](#change-language-and-display-settings).
 
 Other rows show the result of their last check. Values disappear after their reset time or after 24 hours, and are hidden when the account has since signed in again.
 
 ### Status bar
 
-The status bar shows how much of each product's short limit is left, for example `Claude 97% · Codex 82%`. Its background turns to the theme's warning color when any general limit, including longer ones, is at 30% or less, and to the error color at 10% or less. You can change these thresholds, show only one product, move the item to the left or hide it ([Change language and display settings](#change-language-and-display-settings)).
+The status bar shows each product's short limit, for example `Claude 97% · Codex 82%`: what is left, or what is used when `planswap.usageDisplay` is `used`. Its background turns to the theme's warning color when any general limit, including longer ones, is at 30% or less, and to the error color at 10% or less. You can change these thresholds, show only one product, move the item to the left or hide it ([Change language and display settings](#change-language-and-display-settings)).
 
 Hover it for a table with one header row per product (email, plan and, when the account can be checked, a refresh icon) and one row per general limit. Click it to open PlanSwap.
 
@@ -213,9 +215,9 @@ Account directories with valid names that PlanSwap finds in your home directory 
 | Tool | Action |
 | --- | --- |
 | `CLAUDE.md` or `AGENTS.md` | Opens the rules file of the current Claude account or the effective Codex account. If the file does not exist, asks before creating it. |
-| Settings | Opens the settings of the official Claude Code or Codex extension. |
-| Re-link | Repairs the links of linked accounts in this tab (Claude: also updates their MCP servers). Shown only when a linked account exists. |
+| Claude Settings or Codex Settings | Opens the settings of the official Claude Code or Codex extension (PlanSwap's own settings are behind the gear in the panel title bar). |
 | Update CLI | Opens a terminal that runs the product's update command. Follow the progress and any prompts there; if you installed the CLI another way, you may need to update it that way. |
+| Re-link | Repairs the links of linked accounts in this tab (Claude: also updates their MCP servers). Shown only when a linked account exists. |
 
 The footer provides:
 
@@ -231,7 +233,7 @@ To get a troubleshooting report, run **PlanSwap: Preview Diagnostics Report** fr
 
 ## Change language and display settings
 
-Click the settings icon in the panel title bar, or run **PlanSwap: Open PlanSwap Settings**. Changes apply immediately:
+Click the settings icon in the panel title bar, or run **PlanSwap: Open PlanSwap Settings**. The Settings editor groups them as General, Sidebar, Status Bar, Claude and Codex; the table follows that order. To find a setting, type its name from the table into the Settings search box. Changes apply immediately:
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
@@ -245,18 +247,18 @@ Click the settings icon in the panel title bar, or run **PlanSwap: Open PlanSwap
 | `planswap.sidebar.showModelLimits` | `false` | Add Claude's model-specific limits to cards. |
 | `planswap.sidebar.warningThreshold` | `30` | Card bars turn to the warning color at or below this remaining percentage, 0–100. |
 | `planswap.sidebar.errorThreshold` | `10` | Card bars turn to the error color at or below this remaining percentage, 0–100. It wins over the warning color. |
+| `planswap.statusBar.enabled` | `true` | Show the PlanSwap item in the status bar. |
+| `planswap.statusBar.products` | `both` | Products in the status bar item: `both`, `claude` or `codex`. |
+| `planswap.statusBar.warningThreshold` | `30` | Warning color at or below this remaining percentage, 0–100. |
+| `planswap.statusBar.errorThreshold` | `10` | Error color at or below this remaining percentage, 0–100. It wins over the warning color. |
+| `planswap.statusBar.alignment` | `right` | Side of the status bar: `left` or `right`. |
+| `planswap.claude.confirmSwitch` | `true` | Ask before switching Claude accounts from the sidebar. Codex switching always asks. When off, double-click or Enter on a focused row switches at once. |
 | `planswap.claude.usageAutoRefresh` | `true` | Check Claude usage limits automatically. |
 | `planswap.claude.usageRefreshMinutes` | `15` | Minutes between automatic Claude checks, 10–1440. |
 | `planswap.claude.usageTimeoutSeconds` | `30` | Seconds one Claude check may run before it times out, 10–120. |
 | `planswap.codex.usageAutoRefresh` | `true` | Check Codex usage limits automatically. |
 | `planswap.codex.usageRefreshMinutes` | `15` | Minutes between automatic Codex checks, 5–1440. |
 | `planswap.codex.usageTimeoutSeconds` | `15` | Seconds one Codex check may run before it times out, 5–120. |
-| `planswap.claude.confirmSwitch` | `true` | Ask before switching Claude accounts from the sidebar. Codex switching always asks. When off, double-click or Enter on a focused row switches at once. |
-| `planswap.statusBar.enabled` | `true` | Show the PlanSwap item in the status bar. |
-| `planswap.statusBar.products` | `both` | Products in the status bar item: `both`, `claude` or `codex`. |
-| `planswap.statusBar.warningThreshold` | `30` | Warning color at or below this remaining percentage, 0–100. |
-| `planswap.statusBar.errorThreshold` | `10` | Error color at or below this remaining percentage, 0–100. It wins over the warning color. |
-| `planswap.statusBar.alignment` | `right` | Side of the status bar: `left` or `right`. |
 
 With automatic checks off, the refresh icons and commands still work. The sidebar display settings do not change the status bar. Command Palette titles and the sidebar's name follow the editor's display language, not `planswap.language`.
 
@@ -273,7 +275,21 @@ With automatic checks off, the refresh icons and commands still work. The sideba
 | Settings or history are not shared as expected | Check the link badge and the conversion or Re-link result. Some files stay separate or need merging by hand; on Windows, check whether file links are available. |
 | A list looks outdated | Click the refresh button in the panel title bar. Changes made in another window appear after a refresh. |
 
-For sign-in overrides, session-sharing limits and Windows caveats, see [known limitations](../README.md#known-limitations) and [native Windows](../README.md#native-windows). See [privacy](../README.md#privacy) for what PlanSwap stores locally and how the official clients are used for usage checks.
+### Sign-ins that apply to every account
+
+These take precedence over every account's own sign-in, so switching has no effect on Claude while one is set. PlanSwap warns when it sees one in the environment:
+
+- an API key, auth token or long-lived OAuth token: `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`;
+- a named Anthropic profile (`ANTHROPIC_PROFILE`) or the federation variables (`ANTHROPIC_FEDERATION_RULE_ID` with `ANTHROPIC_ORGANIZATION_ID`);
+- a cloud provider setting: `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`, `CLAUDE_CODE_USE_FOUNDRY`.
+
+A Claude Console sign-in without an API key is stored outside the account directories (`~/.config/anthropic`, on Windows `%APPDATA%\Anthropic`) and signs out every claude.ai login on the machine, so it cannot be kept per account ([Claude Code authentication](https://code.claude.com/docs/en/authentication#sign-in-without-an-api-key)).
+
+### OneDrive on Windows
+
+PlanSwap warns when your user folder is synced by OneDrive. OneDrive sync is known to corrupt Claude Code's `.claude.json`, and every account directory is inside that folder.
+
+For other limits, such as continuing another account's session, see [known limitations](../README.md#known-limitations). See [privacy](privacy.md) for what PlanSwap reads, stores and sends.
 
 ## Disable switching or uninstall
 

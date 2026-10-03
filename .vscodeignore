@@ -16,3 +16,5 @@ TODO.md
 .vscode/**
 .github/**
 resources/planswap-banner.webp
+resources/planswap-sidebar-claude.png
+resources/planswap-sidebar-codex.png

@@ -16,7 +16,8 @@ Each document owns one kind of information. Read the relevant sections before ch
 
 | Document | Owns (not) |
 |---|---|
-| [README](README.md) | Product intro, requirements, install, quick start, privacy, short limitations for users (not module contracts or dev procedures). |
+| [README](README.md) | Product intro, requirements, install, quick start, privacy summary, short limitations for users (not module contracts or dev procedures). |
+| [Privacy](docs/privacy.md) | For users: what PlanSwap reads, stores, changes and sends over the network (not credential rules for agents, which stay in this file). |
 | [User guide](docs/user-guide.md) | Step-by-step user instructions: sidebar, setup, switching, usage limits, settings, troubleshooting. English is the source of the `zh-cn` / `zh-tw` / `es` / `ja` translations (not behavior specs, contracts or verification). |
 | [Features](docs/features.md) | Observable behavior of Claude/Codex flows, commands, tools and localization (not signatures, upstream research or test records). |
 | [Claude design](docs/design.md) | Claude switching and shared UI architecture, data model, algorithms, rationale, dated upstream evidence, limitations (not build steps, module inventories or acceptance scripts). |

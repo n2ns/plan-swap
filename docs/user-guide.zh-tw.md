@@ -151,10 +151,12 @@ PlanSwap 讓你同時保持多個 Claude Code 和 Codex 帳號的登入狀態，
 - 連結單一檔案需要開啟 Windows 開發人員模式，或以系統管理員身分執行編輯器。否則，PlanSwap 會提議改為將較小的設定檔複製一次；之後對這些副本的修改各自獨立。
 - 日後若要正式連結這些檔案，請選擇 **開啟開發人員設定**，開啟開發人員模式，然後按一下 **重新連結**。它會建立缺少的連結，並把未修改的副本換成連結。
 - 如果在 PlanSwap 詢問是否複製時，該帳號的 PlanSwap 終端機被開啟，轉換會停止且不做任何變更。請關閉終端機後再試一次。
+- 在 Windows 上，Codex 的工作階段資料庫（`*.sqlite`）一律不連結，因為在 Windows 上透過連結寫入 SQLite 可能遺失資料。每個帳號各自保留一份，工作階段、歷程記錄和設定仍然共用。
+- 在 Windows 上，PlanSwap 無法判斷正在執行的 Claude 或 Codex 處理程序屬於哪個帳號。連結、拆分或移除帳號前，請先關閉該帳號的工作階段和 PlanSwap 終端機索引標籤，即使 CLI 已經結束。
 
 ## 查看和重新整理用量額度
 
-用量條和百分比顯示的是**剩餘**額度（將 `planswap.usageDisplay` 設為 `used` 可改為顯示已用量）。每項額度旁的時間長度（例如 `2 天 5 小時`）是距離重設的時間。將游標停留在用量條上可查看剩餘和已用的比例，例如 `剩餘 97%（已用 3%）`。已用完的額度會以紅色顯示 `0%` 及其重設時間。沒有用量列表示還沒有資料，而不是用量為零或額度無限。
+用量條和百分比顯示的是**剩餘**額度；在[設定](#變更語言和顯示設定)中將 `planswap.usageDisplay` 設為 `used` 可改為顯示已用量。每項額度旁的時間長度（例如 `2 天 5 小時`）是距離重設的時間。將游標停留在用量條上可同時看到兩者，例如 `剩餘 97%（已用 3%）`。剩餘 30% 或更少時用量條變黃，剩餘 10% 或更少時變紅，顯示已用量時也是如此；這兩個界線可以用 `planswap.sidebar.warningThreshold` 和 `planswap.sidebar.errorThreshold` 調整。已用完的額度會以紅色顯示百分比和重設時間。沒有用量列表示還沒有資料，而不是用量為零或額度無限。
 
 查詢用量需要以 Claude 訂閱登入，或以 Codex 的 ChatGPT 方式登入（不支援 API 金鑰模式）。查詢會執行官方 CLI。
 
@@ -173,13 +175,13 @@ PlanSwap 讓你同時保持多個 Claude Code 和 Codex 帳號的登入狀態，
 
 ### 自動查詢
 
-根據預設，PlanSwap 會自動查詢每個產品所有已登入的帳號，先查目前帳號，再逐一查詢其他帳號：視窗開啟約 20 秒後查詢一次，之後在視窗取得焦點時大約每 15 分鐘查詢一次。如果只想查詢目前帳號，請開啟 `planswap.usageAutoRefreshCurrentOnly`。你可以在[設定](#變更語言和顯示設定)中變更間隔或關閉自動查詢。
+根據預設，PlanSwap 會自動查詢每個產品所有已登入的帳號，先查目前帳號，再逐一查詢其他帳號：視窗開啟約 20 秒後查詢一次，之後在視窗取得焦點時大約每 15 分鐘查詢一次。如果只想查詢目前帳號，請開啟 `planswap.usageAutoRefreshCurrentOnly`。你也可以在[設定](#變更語言和顯示設定)中變更間隔或關閉自動查詢。
 
 其他列顯示的是各自上次查詢的結果。這些數值會在重設時間過後或 24 小時後消失；如果帳號在那之後重新登入過，也會隱藏。
 
 ### 狀態列
 
-狀態列會顯示每個產品的短週期額度還剩多少，例如 `Claude 97% · Codex 82%`。當任一一般額度（包括較長週期的額度）剩餘 30% 或更少時，其背景會變為佈景主題的警告色；剩餘 10% 或更少時則變為錯誤色。你可以變更這些臨界值、只顯示一個產品、將該項目移到左側或隱藏它（[變更語言和顯示設定](#變更語言和顯示設定)）。
+狀態列會顯示每個產品的短週期額度，例如 `Claude 97% · Codex 82%`：預設是剩餘量，`planswap.usageDisplay` 設為 `used` 時是已用量。當任一一般額度（包括較長週期的額度）剩餘 30% 或更少時，其背景會變為佈景主題的警告色；剩餘 10% 或更少時則變為錯誤色。你可以變更這些臨界值、只顯示一個產品、將該項目移到左側或隱藏它（[變更語言和顯示設定](#變更語言和顯示設定)）。
 
 將游標停留在上面可查看一張表格：每個產品一列標題（電子郵件、方案，以及帳號可查詢時的重新整理圖示），每項一般額度一列。按一下它可開啟 PlanSwap。
 
@@ -213,9 +215,9 @@ PlanSwap 啟動或重新整理時，會把在你的主目錄中找到、名稱�
 | 工具 | 動作 |
 | --- | --- |
 | `CLAUDE.md` 或 `AGENTS.md` | 開啟目前 Claude 帳號或生效 Codex 帳號的規則檔案。檔案不存在時，會先詢問是否建立。 |
-| 擴充功能設定 | 開啟官方 Claude Code 或 Codex 擴充功能的設定。 |
-| 重新連結 | 修復該索引標籤中已連結帳號的連結（Claude：還會更新它們的 MCP 伺服器）。僅在有已連結帳號時顯示。 |
+| Claude 設定或 Codex 設定 | 開啟官方 Claude Code 或 Codex 擴充功能的設定（PlanSwap 自己的設定在面板標題列的齒輪中）。 |
 | 更新 CLI | 開啟一個終端機，執行該產品的更新命令。請在終端機中留意進度和提示；如果你是用其他方式安裝 CLI，可能需要用同樣的方式更新。 |
+| 重新連結 | 修復該索引標籤中已連結帳號的連結（Claude：還會更新它們的 MCP 伺服器）。僅在有已連結帳號時顯示。 |
 
 頁尾提供：
 
@@ -231,7 +233,7 @@ PlanSwap 啟動或重新整理時，會把在你的主目錄中找到、名稱�
 
 ## 變更語言和顯示設定
 
-按一下面板標題列中的設定圖示，或執行 **PlanSwap: 開啟 PlanSwap 設定**（PlanSwap: Open PlanSwap Settings）。變更會立即生效：
+按一下面板標題列中的設定圖示，或執行 **PlanSwap: 開啟 PlanSwap 設定**（PlanSwap: Open PlanSwap Settings）。設定編輯器將它們分為一般、側邊欄、狀態列、Claude 和 Codex 幾組；下表依相同順序排列。在設定編輯器的搜尋框中輸入表中的設定名稱即可找到對應設定。變更會立即生效：
 
 | 設定 | 預設值 | 用途 |
 | --- | --- | --- |
@@ -245,18 +247,18 @@ PlanSwap 啟動或重新整理時，會把在你的主目錄中找到、名稱�
 | `planswap.sidebar.showModelLimits` | `false` | 在卡片上額外顯示 Claude 的各模型額度。 |
 | `planswap.sidebar.warningThreshold` | `30` | 剩餘百分比小於或等於此值時，卡片上的用量條顯示警告色，0–100。 |
 | `planswap.sidebar.errorThreshold` | `10` | 剩餘百分比小於或等於此值時，卡片上的用量條顯示錯誤色，0–100。優先於警告色。 |
+| `planswap.statusBar.enabled` | `true` | 在狀態列中顯示 PlanSwap 項目。 |
+| `planswap.statusBar.products` | `both` | 狀態列項目包含的產品：`both`、`claude` 或 `codex`。 |
+| `planswap.statusBar.warningThreshold` | `30` | 剩餘百分比小於或等於此值時顯示警告色，0–100。 |
+| `planswap.statusBar.errorThreshold` | `10` | 剩餘百分比小於或等於此值時顯示錯誤色，0–100。優先於警告色。 |
+| `planswap.statusBar.alignment` | `right` | 所在的狀態列一側：`left` 或 `right`。 |
+| `planswap.claude.confirmSwitch` | `true` | 從側邊欄切換 Claude 帳號前先確認。Codex 切換一律需要確認。關閉後，在有焦點的列上按兩下或按 Enter 會立即切換。 |
 | `planswap.claude.usageAutoRefresh` | `true` | 自動查詢 Claude 用量額度。 |
 | `planswap.claude.usageRefreshMinutes` | `15` | 自動查詢 Claude 的間隔分鐘數，10–1440。 |
 | `planswap.claude.usageTimeoutSeconds` | `30` | 單次查詢 Claude 逾時前允許執行的秒數，10–120。 |
 | `planswap.codex.usageAutoRefresh` | `true` | 自動查詢 Codex 用量額度。 |
 | `planswap.codex.usageRefreshMinutes` | `15` | 自動查詢 Codex 的間隔分鐘數，5–1440。 |
 | `planswap.codex.usageTimeoutSeconds` | `15` | 單次查詢 Codex 逾時前允許執行的秒數，5–120。 |
-| `planswap.claude.confirmSwitch` | `true` | 從側邊欄切換 Claude 帳號前先確認。Codex 切換一律需要確認。關閉後，在有焦點的列上按兩下或按 Enter 會立即切換。 |
-| `planswap.statusBar.enabled` | `true` | 在狀態列中顯示 PlanSwap 項目。 |
-| `planswap.statusBar.products` | `both` | 狀態列項目包含的產品：`both`、`claude` 或 `codex`。 |
-| `planswap.statusBar.warningThreshold` | `30` | 剩餘百分比小於或等於此值時顯示警告色，0–100。 |
-| `planswap.statusBar.errorThreshold` | `10` | 剩餘百分比小於或等於此值時顯示錯誤色，0–100。優先於警告色。 |
-| `planswap.statusBar.alignment` | `right` | 所在的狀態列一側：`left` 或 `right`。 |
 
 關閉自動查詢後，重新整理圖示和命令仍然可用。側邊欄顯示設定不會影響狀態列。命令選擇區標題和側邊欄名稱會跟隨編輯器的顯示語言，而不是 `planswap.language`。
 
@@ -273,7 +275,21 @@ PlanSwap 啟動或重新整理時，會把在你的主目錄中找到、名稱�
 | 設定或記錄沒有如預期共用 | 檢查連結標記，以及轉換或重新連結的結果。有些檔案會保持獨立或需要手動合併；在 Windows 上，檢查是否能建立檔案連結。 |
 | 清單看起來不是最新的 | 按一下面板標題列中的重新整理按鈕。在其他視窗中所做的變更要重新整理後才會顯示。 |
 
-關於登入被覆寫、工作階段共用的限制和 Windows 注意事項，請參閱[已知限制](../README.md#known-limitations)和[原生 Windows](../README.md#native-windows)。PlanSwap 在本機儲存哪些內容，以及查詢用量時如何使用官方用戶端，請參閱[隱私權](../README.md#privacy)。
+### 對所有帳號生效的登入方式
+
+以下登入方式優先於每個帳號自己的登入，設定其中任何一項時，切換 Claude 帳號不會生效。PlanSwap 在環境中發現它們時會發出提醒：
+
+- API 金鑰、驗證權杖或長期 OAuth 權杖：`ANTHROPIC_API_KEY`、`ANTHROPIC_AUTH_TOKEN`、`CLAUDE_CODE_OAUTH_TOKEN`；
+- 具名的 Anthropic 設定檔（`ANTHROPIC_PROFILE`），或同盟登入變數（`ANTHROPIC_FEDERATION_RULE_ID` 與 `ANTHROPIC_ORGANIZATION_ID`）；
+- 雲端供應商設定：`CLAUDE_CODE_USE_BEDROCK`、`CLAUDE_CODE_USE_VERTEX`、`CLAUDE_CODE_USE_FOUNDRY`。
+
+不使用 API 金鑰的 Claude Console 登入儲存在帳號目錄之外（`~/.config/anthropic`，Windows 上為 `%APPDATA%\Anthropic`），並會登出本機所有 claude.ai 登入，因此無法依帳號分開保存（[Claude Code 驗證說明](https://code.claude.com/docs/en/authentication#sign-in-without-an-api-key)）。
+
+### Windows 上的 OneDrive
+
+如果你的使用者資料夾由 OneDrive 同步，PlanSwap 會發出提醒。已知 OneDrive 同步會損壞 Claude Code 的 `.claude.json`，而所有帳號目錄都在這個資料夾中。
+
+其他限制（例如繼續另一個帳號的工作階段）請參閱[已知限制](../README.md#known-limitations)。PlanSwap 讀取、儲存和傳送哪些內容，請參閱[隱私權說明](privacy.md)。
 
 ## 停用切換或解除安裝
 

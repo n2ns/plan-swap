@@ -39,6 +39,8 @@ export const en = {
   'codex.mdTitle': 'Open global AGENTS.md',
   'claude.settingsTitle': 'Open Claude Code extension settings',
   'codex.settingsTitle': 'Open Codex extension settings',
+  'claude.settingsLabel': 'Claude Settings',
+  'codex.settingsLabel': 'Codex Settings',
   'claude.syncTitle': 'Re-link linked accounts to the default account and sync its MCP servers',
   'codex.syncTitle': 'Re-link linked accounts to the default account',
 
@@ -101,7 +103,6 @@ export const en = {
   'banner.dismiss': 'Dismiss',
 
   'tools.title': 'Tools',
-  'tools.settings': 'Settings',
   'tools.sync': 'Re-link',
   'tools.updateCli': 'Update CLI',
   'tools.updateCliTitle': 'Update CLI in a terminal',
@@ -148,6 +149,8 @@ export const zhCn: Record<MessageKey, string> = {
   'codex.mdTitle': '打开全局 AGENTS.md',
   'claude.settingsTitle': '打开 Claude Code 插件设置',
   'codex.settingsTitle': '打开 Codex 插件设置',
+  'claude.settingsLabel': 'Claude 设置',
+  'codex.settingsLabel': 'Codex 设置',
   'claude.syncTitle': '将链接账号重新链接到默认账号，并同步 MCP 服务器',
   'codex.syncTitle': '将链接账号重新链接到默认账号',
 
@@ -210,7 +213,6 @@ export const zhCn: Record<MessageKey, string> = {
   'banner.dismiss': '关闭提示',
 
   'tools.title': '工具',
-  'tools.settings': '插件设置',
   'tools.sync': '重新链接',
   'tools.updateCli': '更新 CLI',
   'tools.updateCliTitle': '在终端中更新 CLI',
@@ -255,6 +257,8 @@ export const zhTw: Record<MessageKey, string> = {
   'codex.mdTitle': '開啟全域 AGENTS.md',
   'claude.settingsTitle': '開啟 Claude Code 擴充功能設定',
   'codex.settingsTitle': '開啟 Codex 擴充功能設定',
+  'claude.settingsLabel': 'Claude 設定',
+  'codex.settingsLabel': 'Codex 設定',
   'claude.syncTitle': '將已連結帳號重新連結到預設帳號，並同步其 MCP 伺服器',
   'codex.syncTitle': '將已連結帳號重新連結到預設帳號',
 
@@ -317,7 +321,6 @@ export const zhTw: Record<MessageKey, string> = {
   'banner.dismiss': '關閉提示',
 
   'tools.title': '工具',
-  'tools.settings': '擴充功能設定',
   'tools.sync': '重新連結',
   'tools.updateCli': '更新 CLI',
   'tools.updateCliTitle': '在終端機中更新 CLI',
@@ -362,6 +365,8 @@ export const es: Record<MessageKey, string> = {
   'codex.mdTitle': 'Abrir AGENTS.md global',
   'claude.settingsTitle': 'Abrir ajustes de la extensión Claude Code',
   'codex.settingsTitle': 'Abrir ajustes de la extensión Codex',
+  'claude.settingsLabel': 'Ajustes de Claude',
+  'codex.settingsLabel': 'Ajustes de Codex',
   'claude.syncTitle': 'Volver a vincular las cuentas vinculadas a la cuenta predeterminada y sincronizar sus servidores MCP',
   'codex.syncTitle': 'Volver a vincular las cuentas vinculadas a la cuenta predeterminada',
 
@@ -423,7 +428,6 @@ export const es: Record<MessageKey, string> = {
   'banner.dismiss': 'Cerrar aviso',
 
   'tools.title': 'Herramientas',
-  'tools.settings': 'Ajustes',
   'tools.sync': 'Revincular',
   'tools.updateCli': 'Actualizar CLI',
   'tools.updateCliTitle': 'Actualizar CLI en un terminal',
@@ -468,6 +472,8 @@ export const ja: Record<MessageKey, string> = {
   'codex.mdTitle': 'グローバル AGENTS.md を開く',
   'claude.settingsTitle': 'Claude Code 拡張機能の設定を開く',
   'codex.settingsTitle': 'Codex 拡張機能の設定を開く',
+  'claude.settingsLabel': 'Claude の設定',
+  'codex.settingsLabel': 'Codex の設定',
   'claude.syncTitle': 'リンク済みアカウントを既定のアカウントに再リンクし、MCP サーバーを同期します',
   'codex.syncTitle': 'リンク済みアカウントを既定のアカウントに再リンクします',
 
@@ -529,7 +535,6 @@ export const ja: Record<MessageKey, string> = {
   'banner.dismiss': '通知を閉じる',
 
   'tools.title': 'ツール',
-  'tools.settings': '設定',
   'tools.sync': '再リンク',
   'tools.updateCli': 'CLI を更新',
   'tools.updateCliTitle': 'ターミナルで CLI を更新',

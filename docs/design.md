@@ -104,7 +104,7 @@ The sidebar is a `WebviewView` (one view, `planswap.accounts`, holding a Claude 
 - On light themes `tier2` mixes the chart yellow with the foreground instead of white, since a softened yellow outline is nearly invisible on a light card; small error and warning text uses the theme color darkened there, where the raw colors are below 4.5:1 on the card (`panel.css`; `test/webviewColors.test.ts` only checks that colors are theme variables, not contrast).
 - A single click on a row does nothing, to avoid accidental switches; double-click or Enter switches after the same confirmation as the Switch button (6.1); with `planswap.claude.confirmSwitch` off they switch directly, by the user's choice.
 - The usage refresh buttons need no pending state, because the host joins concurrent queries and guards refresh-all against re-entry.
-- The "Tools" section is always shown below the account list; Re-link is shown only while the page has a linked account, since it does nothing otherwise.
+- The "Tools" section is always shown below the account list; Re-link is shown only while the page has a linked account, since it does nothing otherwise, and comes last so that its showing or hiding never moves the other buttons. The settings button names the product (Claude Settings / Codex Settings) because a bare "Settings" read as PlanSwap's own settings.
 - Tool buttons of one line share it equally, so their size does not depend on label length; a button never gets narrower than its label and wraps to its own line instead, because a cut-off label reads worse than an unequal line (Spanish "Actualizar CLI" at 240px).
 - The add-account form is created once and only shown or hidden, so list refreshes keep its typed text and focus.
 

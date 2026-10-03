@@ -798,8 +798,8 @@ class Page {
     return row;
   }
 
-  // Page tools, including CLI updates (shown even when Codex is not enabled), always shown;
-  // Re-link only when the page has a linked account
+  // Page tools, including CLI updates (shown even when Codex is not enabled), always shown; Re-link only when the page
+  // has a linked account, so it comes last and its showing or hiding never moves the other buttons
   private renderTools(): HTMLElement {
     const btn = (icon: string, label: string, title: string, tool: ToolId): HTMLElement =>
       onClick(h('vscode-button', { secondary: true, icon, title }, label), () => this.send({ type: 'tool', tool }));
@@ -813,9 +813,9 @@ class Page {
         'div',
         { class: 'page-tools-row' },
         btn('symbol-ruler', this.text.mdLabel, t(`${this.mode}.mdTitle`), 'openGlobalMd'),
-        btn('settings-gear', t('tools.settings'), t(`${this.mode}.settingsTitle`), 'openSettings'),
-        this.syncButton,
+        btn('settings-gear', t(`${this.mode}.settingsLabel`), t(`${this.mode}.settingsTitle`), 'openSettings'),
         btn('cloud-download', t('tools.updateCli'), t('tools.updateCliTitle'), 'updateCli'),
+        this.syncButton,
       ),
     );
   }
