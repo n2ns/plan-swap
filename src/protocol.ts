@@ -67,6 +67,9 @@ export interface PanelState {
   codex: TabState;
   // Setting planswap.usageDisplay; absent means 'remaining'
   usageDisplay?: UsageDisplay;
+  // Settings planswap.sidebar.warningThreshold / errorThreshold: remaining percentages at or below which a usage bar
+  // turns to the warning / error color (error wins); absent means 30 / 10
+  usageThresholds?: { warning: number; error: number };
 }
 
 export type ToWebview =

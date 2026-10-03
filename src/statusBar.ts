@@ -104,8 +104,8 @@ export interface StatusBarSettings {
   alignment: 'left' | 'right';
 }
 
-// A threshold setting clamped to 0..100 like the manifest range; anything that is not a number takes the default
-function threshold(value: unknown, fallback: number): number {
+/** A threshold setting clamped to 0..100 like the manifest range; anything that is not a number takes the default. */
+export function threshold(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : fallback;
 }
 

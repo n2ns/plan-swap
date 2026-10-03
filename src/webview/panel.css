@@ -376,7 +376,7 @@ body {
 .usage-pct { flex: none; min-width: 4.2ch; font-size: calc(1em - 2px); color: var(--ink); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .usage-track { flex: 1 1 auto; min-width: 0; height: 6px; border-radius: 2px; overflow: hidden; background: var(--line-strong); box-shadow: 0 0 0 1px var(--line); }
 .usage-fill { height: 100%; border-radius: inherit; background: var(--ok); }
-/* Remaining quota level: amber at 30% or less, red at 10% or less; used up shows a hatched, outlined empty track. The
+/* Remaining quota level: amber / red at or below planswap.sidebar.warningThreshold / errorThreshold (default 30% / 10%); used up shows a hatched, outlined empty track. The
    percentage text states every level too, so color is never the only signal */
 .usage-track[data-level="warn"] .usage-fill { background: var(--warn); }
 .usage-track[data-level="low"] .usage-fill { background: var(--error); }

@@ -56,6 +56,8 @@
   "config.codexUsageAutoRefresh.description": "有効な Codex アカウントの使用量の上限を自動で確認します（起動の数秒後とサインインの変更後、その後はウィンドウにフォーカスがあり前回の確認から間隔が過ぎたとき）。手動更新は常に使えます。",
   "config.codexUsageRefreshMinutes.description": "有効な Codex アカウントの使用量の上限を自動確認する間隔（分、5–1440）。",
   "config.codexUsageTimeoutSeconds.description": "Codex アカウントの使用量の上限を 1 回確認するときの最大時間。超えると確認を終了してタイムアウトとして報告します（秒、5–120）。自動確認と手動更新の両方に適用されます。",
+  "config.sidebarWarningThreshold.description": "サイドバーの使用量の上限の残りの割合がこの値以下になると、バーが警告色になります（0–100）。",
+  "config.sidebarErrorThreshold.description": "サイドバーの使用量の上限の残りの割合がこの値以下になると、バーがエラー色になります（0–100）。警告のしきい値より優先されます。",
   "config.statusBarEnabled.description": "ステータスバーに PlanSwap の使用量項目を表示します。",
   "config.statusBarProducts.description": "ステータスバー項目に含める製品。含めない製品は、テキスト、ツールチップ、背景色から除かれます。選択した製品がどれも設定されていない場合、項目は非表示になります。",
   "config.statusBarProducts.both": "Claude と Codex",

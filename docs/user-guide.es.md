@@ -241,6 +241,8 @@ Haz clic en el icono de ajustes de la barra de título del panel, o ejecuta **Pl
 | `planswap.sidebar.showFiveHourLimit` | `true` | Mostrar el límite de 5 horas en las tarjetas. |
 | `planswap.sidebar.showWeeklyLimit` | `true` | Mostrar el límite de 7 días en las tarjetas. |
 | `planswap.sidebar.showModelLimits` | `false` | Añadir a las tarjetas los límites de Claude por modelo. |
+| `planswap.sidebar.warningThreshold` | `30` | Las barras de las tarjetas usan el color de advertencia con este porcentaje restante o menos, 0–100. |
+| `planswap.sidebar.errorThreshold` | `10` | Las barras de las tarjetas usan el color de error con este porcentaje restante o menos, 0–100. Tiene prioridad sobre el color de advertencia. |
 | `planswap.claude.usageAutoRefresh` | `true` | Consultar automáticamente los límites de uso de Claude. |
 | `planswap.claude.usageRefreshMinutes` | `15` | Minutos entre consultas automáticas de Claude, 10–1440. |
 | `planswap.claude.usageTimeoutSeconds` | `30` | Segundos que puede durar una consulta de Claude antes de agotar el tiempo, 10–120. |

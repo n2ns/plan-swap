@@ -648,6 +648,20 @@ async function usedDisplay() {
     }
   }
   results.interactions.push('usageDisplay used: bars, percentages and tooltips show what is used in every locale and width; colors follow what is left');
+
+  // planswap.sidebar.warningThreshold / errorThreshold move the color levels (remaining 58% and 14%)
+  const levels = async (thresholds) => {
+    await page.evaluate((thresholds) => {
+      window.preview.apply({ locale: 'en', width: 280, active: 'codex' });
+      window.preview.post({ type: 'state', state: { ...structuredClone(window.preview.state()), usageThresholds: thresholds } });
+    }, thresholds);
+    return page.locator(`${row('codex', 'work')} .usage-track`).evaluateAll((tracks) => tracks.map((t) => t.dataset.level));
+  };
+  assert.deepEqual(await levels({ warning: 30, error: 10 }), ['ok', 'warn']);
+  assert.deepEqual(await levels({ warning: 60, error: 20 }), ['warn', 'low']);
+  assert.deepEqual(await levels({ warning: 10, error: 30 }), ['ok', 'low'], 'error wins over warning');
+  await shot('codex-thresholds.png', 'codex');
+  results.interactions.push('sidebar thresholds move the bar colors; error wins over warning');
 }
 
 async function addFormAndTools() {

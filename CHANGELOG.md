@@ -4,6 +4,7 @@
 
 ### Added
 
+- `planswap.sidebar.warningThreshold` (default 30) and `planswap.sidebar.errorThreshold` (default 10), both 0–100: the remaining percentages at or below which the sidebar's usage bars turn to the warning or error color, separate from the status bar thresholds.
 - `planswap.usageDisplay` (`remaining` by default, or `used`): usage bars and percentages in the sidebar and the status bar show what is left or what is used. Colors and the status bar thresholds still follow what is left.
 
 ### Changed

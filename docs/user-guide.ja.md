@@ -241,6 +241,8 @@ PlanSwap がホームディレクトリで見つけた、有効な名前を持�
 | `planswap.sidebar.showFiveHourLimit` | `true` | カードに 5 時間の上限を表示します。 |
 | `planswap.sidebar.showWeeklyLimit` | `true` | カードに 7 日間の上限を表示します。 |
 | `planswap.sidebar.showModelLimits` | `false` | カードに Claude のモデル別の上限を追加します。 |
+| `planswap.sidebar.warningThreshold` | `30` | 残りの割合がこの値以下になると、カードのバーが警告色になります。0–100。 |
+| `planswap.sidebar.errorThreshold` | `10` | 残りの割合がこの値以下になると、カードのバーがエラー色になります。0–100。警告色より優先されます。 |
 | `planswap.claude.usageAutoRefresh` | `true` | Claude の使用量の上限を自動で確認します。 |
 | `planswap.claude.usageRefreshMinutes` | `15` | Claude を自動確認する間隔（分、10–1440）。 |
 | `planswap.claude.usageTimeoutSeconds` | `30` | Claude の 1 回の確認がタイムアウトするまでの時間（秒、10–120）。 |

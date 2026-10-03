@@ -272,6 +272,24 @@
             "scope": "application",
             "description": "%config.sidebarModelLimits.description%",
             "order": 3
+          },
+          "planswap.sidebar.warningThreshold": {
+            "type": "number",
+            "default": 30,
+            "minimum": 0,
+            "maximum": 100,
+            "scope": "application",
+            "description": "%config.sidebarWarningThreshold.description%",
+            "order": 4
+          },
+          "planswap.sidebar.errorThreshold": {
+            "type": "number",
+            "default": 10,
+            "minimum": 0,
+            "maximum": 100,
+            "scope": "application",
+            "description": "%config.sidebarErrorThreshold.description%",
+            "order": 5
           }
         }
       },

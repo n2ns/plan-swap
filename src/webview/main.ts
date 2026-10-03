@@ -186,8 +186,10 @@ function loginStatus(a: AccountView, hideEmail?: boolean): HTMLElement | null {
 
 type UsageWindowView = NonNullable<AccountView['usage']>['windows'][number];
 
+// Color level of what is left: the thresholds come from planswap.sidebar.warningThreshold / errorThreshold (error wins)
 function usageLevel(remaining: number): 'empty' | 'low' | 'warn' | 'ok' {
-  return remaining <= 0 ? 'empty' : remaining <= 10 ? 'low' : remaining <= 30 ? 'warn' : 'ok';
+  const { warning, error } = state.usageThresholds ?? { warning: 30, error: 10 };
+  return remaining <= 0 ? 'empty' : remaining <= error ? 'low' : remaining <= warning ? 'warn' : 'ok';
 }
 
 // Remaining percentage of a usage window: 100 - usedPercent with at most two decimals (the status bar rounds down, see remainingOf in src/statusBar.ts)
@@ -844,7 +846,7 @@ class Page {
   private renderedKey?: string;
 
   private renderKey(): string {
-    return `${receivedState}|${getLocale()}|${JSON.stringify([this.tab, codexRestart(), state.usageDisplay])}`;
+    return `${receivedState}|${getLocale()}|${JSON.stringify([this.tab, codexRestart(), state.usageDisplay, state.usageThresholds])}`;
   }
 
   renderIfChanged(): void {

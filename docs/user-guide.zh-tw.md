@@ -241,6 +241,8 @@ PlanSwap 啟動或重新整理時，會把在你的主目錄中找到、名稱�
 | `planswap.sidebar.showFiveHourLimit` | `true` | 在卡片上顯示 5 小時額度。 |
 | `planswap.sidebar.showWeeklyLimit` | `true` | 在卡片上顯示 7 天額度。 |
 | `planswap.sidebar.showModelLimits` | `false` | 在卡片上額外顯示 Claude 的各模型額度。 |
+| `planswap.sidebar.warningThreshold` | `30` | 剩餘百分比小於或等於此值時，卡片上的用量條顯示警告色，0–100。 |
+| `planswap.sidebar.errorThreshold` | `10` | 剩餘百分比小於或等於此值時，卡片上的用量條顯示錯誤色，0–100。優先於警告色。 |
 | `planswap.claude.usageAutoRefresh` | `true` | 自動查詢 Claude 用量額度。 |
 | `planswap.claude.usageRefreshMinutes` | `15` | 自動查詢 Claude 的間隔分鐘數，10–1440。 |
 | `planswap.claude.usageTimeoutSeconds` | `30` | 單次查詢 Claude 逾時前允許執行的秒數，10–120。 |

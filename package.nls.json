@@ -56,6 +56,8 @@
   "config.codexUsageAutoRefresh.description": "Check the usage limits of the effective Codex account automatically (a few seconds after start-up, after a sign-in change, then while the window is focused once the last check is older than the interval). Manual refreshes always work.",
   "config.codexUsageRefreshMinutes.description": "Minutes between automatic usage limit checks of the effective Codex account (5–1440).",
   "config.codexUsageTimeoutSeconds.description": "Maximum seconds one usage limit check of a Codex account may run before it is ended and reported as timed out (5–120). Applies to automatic and manual checks.",
+  "config.sidebarWarningThreshold.description": "A usage limit bar in the sidebar turns to the warning color when the remaining percentage is at or below this value (0–100).",
+  "config.sidebarErrorThreshold.description": "A usage limit bar in the sidebar turns to the error color when the remaining percentage is at or below this value (0–100). Takes precedence over the warning threshold.",
   "config.statusBarEnabled.description": "Show the PlanSwap usage item in the status bar.",
   "config.statusBarProducts.description": "Products covered by the status bar item. A product left out is dropped from its text, tooltip and background color; the item is hidden when none of the selected products is set up.",
   "config.statusBarProducts.both": "Claude and Codex",

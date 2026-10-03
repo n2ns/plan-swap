@@ -241,6 +241,8 @@ PlanSwap 启动或刷新时，会把在你的主目录中找到的、名称有�
 | `planswap.sidebar.showFiveHourLimit` | `true` | 在卡片上显示 5 小时额度。 |
 | `planswap.sidebar.showWeeklyLimit` | `true` | 在卡片上显示 7 天额度。 |
 | `planswap.sidebar.showModelLimits` | `false` | 在卡片上额外显示 Claude 的按模型额度。 |
+| `planswap.sidebar.warningThreshold` | `30` | 剩余百分比小于或等于此值时，卡片上的用量条显示警告色，0–100。 |
+| `planswap.sidebar.errorThreshold` | `10` | 剩余百分比小于或等于此值时，卡片上的用量条显示错误色，0–100。优先于警告色。 |
 | `planswap.claude.usageAutoRefresh` | `true` | 自动查询 Claude 用量额度。 |
 | `planswap.claude.usageRefreshMinutes` | `15` | 自动查询 Claude 的间隔分钟数，10–1440。 |
 | `planswap.claude.usageTimeoutSeconds` | `30` | 单次查询 Claude 超时前允许运行的秒数，10–120。 |

@@ -241,6 +241,8 @@ Click the settings icon in the panel title bar, or run **PlanSwap: Open PlanSwap
 | `planswap.sidebar.showFiveHourLimit` | `true` | Show the 5-hour limit on cards. |
 | `planswap.sidebar.showWeeklyLimit` | `true` | Show the 7-day limit on cards. |
 | `planswap.sidebar.showModelLimits` | `false` | Add Claude's model-specific limits to cards. |
+| `planswap.sidebar.warningThreshold` | `30` | Card bars turn to the warning color at or below this remaining percentage, 0–100. |
+| `planswap.sidebar.errorThreshold` | `10` | Card bars turn to the error color at or below this remaining percentage, 0–100. It wins over the warning color. |
 | `planswap.claude.usageAutoRefresh` | `true` | Check Claude usage limits automatically. |
 | `planswap.claude.usageRefreshMinutes` | `15` | Minutes between automatic Claude checks, 10–1440. |
 | `planswap.claude.usageTimeoutSeconds` | `30` | Seconds one Claude check may run before it times out, 10–120. |

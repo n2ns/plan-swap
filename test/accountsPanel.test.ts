@@ -3,13 +3,14 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type * as vscode from 'vscode';
-import { AccountsPanel, applySidebarDisplay, claudePanelSource, type PanelSource } from '../src/accountsPanel';
+import { AccountsPanel, applySidebarDisplay, claudePanelSource, sidebarThresholds, type PanelSource } from '../src/accountsPanel';
 import { AccountStore } from '../src/accounts';
 import { LabelStore } from '../src/labels';
 import { readAccountInfo } from '../src/paths';
 import type { FromWebview, ToWebview } from '../src/protocol';
 import { makeTempHome, MemoryMemento } from './helpers';
 import { intlLocale, setLocale, t } from '../src/i18n';
+import { resetConfig, setConfig } from './stubs/vscode';
 
 function harness() {
   const messages: ToWebview[] = [];
@@ -106,6 +107,19 @@ test('Claude panel rows show the email but never carry the identity comparison k
     assert.equal(row?.loggedIn, true);
     for (const r of rows) assert.ok(!('identity' in r), `row ${r.name} has no identity`);
   } finally { tmp.restore(); }
+});
+
+test('the sidebar color thresholds default to 30 / 10 and are clamped to 0..100', () => {
+  resetConfig();
+  try {
+    assert.deepEqual(sidebarThresholds(), { warning: 30, error: 10 });
+    setConfig('planswap', 'sidebar.warningThreshold', 60);
+    setConfig('planswap', 'sidebar.errorThreshold', -5);
+    assert.deepEqual(sidebarThresholds(), { warning: 60, error: 0 });
+    setConfig('planswap', 'sidebar.warningThreshold', 'x');
+    setConfig('planswap', 'sidebar.errorThreshold', 150);
+    assert.deepEqual(sidebarThresholds(), { warning: 30, error: 100 });
+  } finally { resetConfig(); }
 });
 
 test('the sidebar display settings hide the email and the general 5-hour / 7-day windows of every row', () => {

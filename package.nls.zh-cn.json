@@ -56,6 +56,8 @@
   "config.codexUsageAutoRefresh.description": "自动查询当前生效 Codex 账号的用量额度（启动几秒后、登录变化后查一次，之后在窗口获得焦点且距上次查询超过间隔时再查）。手动刷新始终可用。",
   "config.codexUsageRefreshMinutes.description": "自动查询当前生效 Codex 账号用量额度的间隔（分钟，5–1440）。",
   "config.codexUsageTimeoutSeconds.description": "单次查询 Codex 账号用量额度允许运行的最长时间，超时后结束查询并报告超时（秒，5–120）。自动查询和手动刷新都适用。",
+  "config.sidebarWarningThreshold.description": "侧边栏中用量额度的剩余百分比小于或等于此值时，进度条显示警告色（0–100）。",
+  "config.sidebarErrorThreshold.description": "侧边栏中用量额度的剩余百分比小于或等于此值时，进度条显示错误色（0–100）。优先于警告阈值。",
   "config.statusBarEnabled.description": "在状态栏中显示 PlanSwap 用量项。",
   "config.statusBarProducts.description": "状态栏项包含哪些产品。未选中的产品不出现在其文字、悬停提示和背景色中；所选产品都未配置时隐藏该项。",
   "config.statusBarProducts.both": "Claude 和 Codex",
