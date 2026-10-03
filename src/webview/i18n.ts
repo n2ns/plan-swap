@@ -11,7 +11,7 @@ export type Locale = PanelState['locale'];
 
 // English is the source of truth; all tables must have exactly the same keys (enforced by the Record<MessageKey, string> type)
 export const en = {
-  'usage.observed': 'Last observed: {time}',
+  'usage.barTitle': '{remaining}% left ({used}% used)',
   'usage.remaining': '{percent}% remaining',
   'usage.window': 'Limit',
   'usage.days': '{n}-day limit',
@@ -118,7 +118,7 @@ export const en = {
 export type MessageKey = keyof typeof en;
 
 export const zhCn: Record<MessageKey, string> = {
-  'usage.observed': '采集于 {time}',
+  'usage.barTitle': '剩余 {remaining}%（已用 {used}%）',
   'usage.remaining': '剩余 {percent}%',
   'usage.window': '额度',
   'usage.days': '{n} 天额度',
@@ -223,7 +223,7 @@ export const zhCn: Record<MessageKey, string> = {
 };
 
 export const zhTw: Record<MessageKey, string> = {
-  'usage.observed': '擷取於 {time}',
+  'usage.barTitle': '剩餘 {remaining}%（已用 {used}%）',
   'usage.remaining': '剩餘 {percent}%',
   'usage.window': '額度',
   'usage.days': '{n} 天額度',
@@ -328,7 +328,7 @@ export const zhTw: Record<MessageKey, string> = {
 };
 
 export const es: Record<MessageKey, string> = {
-  'usage.observed': 'Última consulta: {time}',
+  'usage.barTitle': '{remaining}% restante ({used}% usado)',
   'usage.remaining': '{percent}% restante',
   'usage.window': 'Límite',
   'usage.days': '{n, plural, one {Límite de # día} other {Límite de # días}}',
@@ -432,7 +432,7 @@ export const es: Record<MessageKey, string> = {
 };
 
 export const ja: Record<MessageKey, string> = {
-  'usage.observed': '取得日時: {time}',
+  'usage.barTitle': '残り {remaining}%（使用済み {used}%）',
   'usage.remaining': '残り {percent}%',
   'usage.window': '利用枠',
   'usage.days': '{n} 日間の上限',

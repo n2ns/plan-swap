@@ -48,7 +48,7 @@ Términos usados en esta guía:
 - *Vinculada* es el modo que la interfaz indica con la insignia de enlace. El comando **Compartir con la cuenta predeterminada** convierte una cuenta independiente en vinculada.
 - En Codex, la cuenta *efectiva* es la que usa esta ventana ahora; la cuenta *seleccionada* es la que usará después del próximo reinicio.
 
-Cada tarjeta muestra el nombre visible de la cuenta y su estado de sesión, además de su correo, plan y límites de uso cuando se conocen. Pasa el puntero sobre la tarjeta para ver su directorio.
+Cada tarjeta muestra el nombre visible de la cuenta y su estado de sesión, además de su correo, plan y límites de uso cuando se conocen. Pasa el puntero sobre el avatar para ver su directorio.
 
 Hay dos tipos de botones de actualizar:
 
@@ -143,7 +143,7 @@ Después:
 
 - **Vincular a la cuenta predeterminada:** haz clic en el icono de enlace de una fila con nombre independiente, o ejecuta el comando **Compartir con la cuenta predeterminada** del producto. Los ajustes y el historial propios de la cuenta se mueven a la cuenta predeterminada. Los archivos que difieren de los de la cuenta predeterminada se conservan uno junto al otro para que los fusiones a mano, y el resultado los enumera.
 - **Desvincular de la cuenta predeterminada:** haz clic en el icono de desconexión de una fila con nombre vinculada. La cuenta recibe su propia copia de la configuración predeterminada y conserva su inicio de sesión y los archivos que no estaban vinculados. El historial y las sesiones permanecen en la cuenta predeterminada y no se copian de vuelta. Desvincular no deshace la fusión hecha al vincular la cuenta.
-- **Revincular:** despliega **Herramientas** y haz clic en **Revincular** después de cambiar la configuración de la cuenta predeterminada, o cuando haya que reparar enlaces. Revisa todas las cuentas vinculadas de esa pestaña y enumera lo que requiera atención. En Claude también actualiza sus servidores MCP a partir de la cuenta predeterminada.
+- **Revincular:** haz clic en **Revincular** en **Herramientas** después de cambiar la configuración de la cuenta predeterminada, o cuando haya que reparar enlaces. Revisa todas las cuentas vinculadas de esa pestaña y enumera lo que requiera atención. En Claude también actualiza sus servidores MCP a partir de la cuenta predeterminada.
 
 ### Vincular en Windows
 
@@ -154,7 +154,7 @@ Después:
 
 ## Consultar y actualizar los límites de uso
 
-Las barras de uso y los porcentajes muestran lo que **queda**. La duración junto a cada límite, como `2d 5h`, es el tiempo hasta que se restablece; pasa el puntero sobre ella para ver la fecha y hora exactas. Un límite agotado muestra `0%` y su hora de restablecimiento en rojo. Si no hay línea de uso, es que aún no hay datos, no que el uso sea cero ni que la cuota sea ilimitada.
+Las barras de uso y los porcentajes muestran lo que **queda**. La duración junto a cada límite, como `2d 5h`, es el tiempo hasta que se restablece. Pasa el puntero sobre una barra para ver lo que queda y lo que se ha usado, por ejemplo `97% restante (3% usado)`. Un límite agotado muestra `0%` y su hora de restablecimiento en rojo. Si no hay línea de uso, es que aún no hay datos, no que el uso sea cero ni que la cuota sea ilimitada.
 
 Las consultas de uso requieren un inicio de sesión con suscripción de Claude, o un inicio de sesión de ChatGPT en Codex (no el modo de clave de API). Ejecutan la CLI oficial.
 
@@ -175,7 +175,7 @@ Una cuenta consultada hace menos de un minuto no se vuelve a consultar. En ese c
 
 De forma predeterminada, PlanSwap consulta automáticamente la cuenta actual de cada producto: unos segundos después de abrir la ventana y luego aproximadamente cada 15 minutos mientras la ventana tiene el foco. Puedes cambiar el intervalo o desactivar las consultas automáticas en los [ajustes](#cambiar-el-idioma-y-los-ajustes-de-visualización).
 
-Las demás filas muestran el resultado de su última consulta. Los valores desaparecen tras su hora de restablecimiento o pasadas 24 horas, y se ocultan si la cuenta ha vuelto a iniciar sesión desde entonces. Pasa el puntero sobre el área de uso de una tarjeta para ver cuándo se consultó.
+Las demás filas muestran el resultado de su última consulta. Los valores desaparecen tras su hora de restablecimiento o pasadas 24 horas, y se ocultan si la cuenta ha vuelto a iniciar sesión desde entonces.
 
 ### Barra de estado
 
@@ -208,7 +208,7 @@ Los directorios de cuenta con nombres válidos que PlanSwap encuentra en tu dire
 
 ## Usar las herramientas
 
-Despliega **Herramientas** debajo de la lista de cuentas para ver las acciones propias de esa pestaña:
+**Herramientas**, debajo de la lista de cuentas, reúne las acciones propias de esa pestaña:
 
 | Herramienta | Acción |
 | --- | --- |

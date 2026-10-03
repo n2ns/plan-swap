@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- The Tools section below the account list is always shown instead of collapsed.
+- Hovering a usage bar shows what is left and what is used (for example "97% left (3% used)"). The other hover texts of the usage area (collection time, remaining percentage, exact reset date) are gone.
+- An account's directory is shown when hovering its avatar instead of the whole card.
+
 ## [0.3.0] - 2026-10-02
 
 ### Added

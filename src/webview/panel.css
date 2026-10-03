@@ -390,12 +390,6 @@ body {
 /* High contrast: the track is outlined with the theme's contrast border, so the bar length reads without color */
 .vscode-high-contrast .usage-track, .vscode-high-contrast-light .usage-track { background: transparent; box-shadow: 0 0 0 1px var(--vscode-contrastBorder, var(--ink)); }
 .vscode-high-contrast .usage-fill, .vscode-high-contrast-light .usage-fill { box-shadow: 0 0 0 1px var(--vscode-contrastBorder, var(--ink)); }
-/* Expandable Tools row: chevron and label */
-.tools-summary { display: flex; align-items: center; gap: 6px; list-style: none; cursor: pointer; }
-.tools-summary::-webkit-details-marker { display: none; }
-.tools-summary:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 1px; }
-.chevron { flex: none; color: inherit; transition: transform var(--ease); }
-details[open] > summary > .chevron { transform: rotate(90deg); }
 .row-tags { flex: 0 1 auto; margin-left: auto; max-width: 100%; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 4px; min-width: 0; }
 .row-tags:empty { display: none; }
 .row-hint { grid-area: hint; color: var(--secondary); font-size: max(11px, 0.8em); margin-top: 4px; min-width: 0; overflow-wrap: anywhere; }
@@ -530,10 +524,9 @@ details[open] > summary > .chevron { transform: rotate(90deg); }
 .confirm-hint { color: var(--muted); font-size: max(11px, 0.85em); overflow-wrap: anywhere; }
 .confirm-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
 
-/* ---------- Page tools: a collapsed section with four small text buttons (three without Re-link), at least 96px each; they wrap when they do not fit (2+1 or stacked) and stretch to fill the line ---------- */
+/* ---------- Page tools: a section with four small text buttons (three without Re-link), at least 96px each; they wrap when they do not fit (2+1 or stacked) and stretch to fill the line ---------- */
 .page-tools { min-width: 0; border-top: 1px solid var(--line); padding-top: 6px; }
-.tools-summary { padding: 2px; }
-.page-tools[open] > .tools-summary { margin-bottom: var(--gap); }
+.tools-summary { padding: 2px; margin-bottom: var(--gap); }
 .page-tools-row { display: flex; flex-wrap: wrap; gap: var(--gap); min-width: 0; }
 .page-tools-row vscode-button {
   flex: 1 1 auto;

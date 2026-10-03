@@ -135,7 +135,7 @@ function nameWithTail(label: string, ...icons: Child[]): Child[] {
   return [chars.join(''), h('span', { class: 'name-tail' }, last, ...icons)];
 }
 
-// Avatar color: a theme chart color picked stably from the account name
+// Avatar color: a theme chart color picked stably from the account name; the directory is the avatar's hover hint
 const AVATAR_COLORS = ['blue', 'green', 'purple', 'orange', 'yellow', 'red'];
 function avatar(a: AccountView): HTMLElement {
   let hash = 0;
@@ -144,9 +144,9 @@ function avatar(a: AccountView): HTMLElement {
   const letter = a.kind === 'external' ? '?' : a.label.charAt(0).toUpperCase();
   // Default account: the same disc with a home icon instead of a letter, marking it as the home-directory account
   if (a.kind === 'default') {
-    return h('div', { class: 'avatar', style: `--avatar-color: var(--vscode-charts-${color})`, title: t('account.default'), role: 'img', 'aria-label': t('account.default') }, h('vscode-icon', { name: 'home', size: '12' }));
+    return h('div', { class: 'avatar', style: `--avatar-color: var(--vscode-charts-${color})`, title: a.dirLabel, role: 'img', 'aria-label': t('account.default') }, h('vscode-icon', { name: 'home', size: '12' }));
   }
-  return h('div', { class: 'avatar', style: `--avatar-color: var(--vscode-charts-${color})` }, letter);
+  return h('div', { class: 'avatar', style: `--avatar-color: var(--vscode-charts-${color})`, title: a.dirLabel }, letter);
 }
 
 function planPill(a: AccountView): HTMLElement | null {
@@ -222,26 +222,28 @@ function usageWindow(w: UsageWindowView): HTMLElement {
   const duration = w.scope ? t('usage.scoped', { limit, scope: w.scope }) : limit;
   const remaining = remainingPercent(w);
   const label = t('usage.remaining', { percent: remaining });
+  const used = Number((100 - remaining).toFixed(2));
   const level = usageLevel(remaining);
   const exhausted = level === 'empty';
   // Two lines per window: the duration with the time until the reset (clock icon + short duration) at the right, then
-  // the bar with the remaining percentage at its right. The full reset sentence and date are the reset's tooltip and
-  // part of the bar's screen reader value
+  // the bar with the remaining percentage at its right. Only the bar has a tooltip, saying that its length is what is
+  // left; the full reset sentence and date are part of the bar's screen reader value
   const resetText = w.resetsAt !== undefined && t('usage.resetsIn', {
     time: relativeTime(w.resetsAt),
     date: new Date(w.resetsAt * 1000).toLocaleString(intlLocale(), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }),
   });
-  const reset = resetText && h('span', { class: 'usage-reset', title: resetText, 'aria-hidden': 'true' },
+  const reset = resetText && h('span', { class: 'usage-reset', 'aria-hidden': 'true' },
     h('vscode-icon', { name: 'clock', size: '12' }), h('span', { class: 'usage-reset-time' }, relativeTime(w.resetsAt!)));
   return h('div', { class: 'usage-window', 'data-level': level },
     h('div', { class: 'usage-labels' }, h('span', { class: 'usage-duration' }, duration), reset),
     h('div', { class: 'usage-bar' },
       h('div', {
         class: 'usage-track', 'data-level': level, role: 'progressbar', 'aria-label': duration,
+        title: t('usage.barTitle', { remaining, used }),
         'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(remaining),
         'aria-valuetext': [label, exhausted && t('usage.exhausted'), resetText].filter(Boolean).join(', '),
       }, h('div', { class: 'usage-fill', style: `width: ${remaining}%` })),
-      h('span', { class: 'usage-pct', title: label, 'aria-hidden': 'true' }, `${remaining}%`),
+      h('span', { class: 'usage-pct', 'aria-hidden': 'true' }, `${remaining}%`),
     ),
   );
 }
@@ -250,10 +252,9 @@ function usageWindow(w: UsageWindowView): HTMLElement {
 // windows, always shown
 function usageHistory(a: AccountView): HTMLElement | null {
   if (!a.usage) return null;
-  const time = new Date(a.usage.checkedAt).toLocaleString(intlLocale());
   const general = a.usage.windows.filter((w) => !w.scope);
   const scoped = a.usage.windows.filter((w) => w.scope);
-  return h('div', { class: 'row-usage', title: t('usage.observed', { time }) }, ...general.map(usageWindow), ...scoped.map(usageWindow));
+  return h('div', { class: 'row-usage' }, ...general.map(usageWindow), ...scoped.map(usageWindow));
 }
 
 /** One tab page: its own add section, adding state, confirmingDir and inline-rename state */
@@ -272,7 +273,6 @@ class Page {
   private readonly refreshButton: HTMLElement;
   private readonly refreshAllButton: HTMLElement;
   private addOpen = false;
-  private toolsOpen = false;
   private readonly addField: TextField;
   private readonly addButton: HTMLElement & { disabled: boolean };
   // Shared (links to the default account) vs independent (copied settings); checked by default, kept across re-renders
@@ -767,8 +767,8 @@ class Page {
       'li',
       {
         class: classes.join(' '), 'data-plan': planClass(a.plan, this.mode), 'data-dir': a.dir, tabindex: !canSwitch || editing ? undefined : '0',
-        // The directory is a hover hint instead of a card line; the current card is marked for assistive technology only
-        title: editing ? undefined : a.dirLabel, 'aria-current': a.isCurrent ? 'true' : undefined,
+        // The current card is marked for assistive technology only
+        'aria-current': a.isCurrent ? 'true' : undefined,
       },
       h('div', { class: 'row-head' }, h('div', { class: 'row-ident' }, avatar(a), title), inlineActions && actions, tags),
       h(
@@ -793,17 +793,17 @@ class Page {
     return row;
   }
 
-  // Page tools, including CLI updates (shown even when Codex is not enabled), in a section that starts collapsed;
+  // Page tools, including CLI updates (shown even when Codex is not enabled), always shown;
   // Re-link only when the page has a linked account
   private renderTools(): HTMLElement {
     const btn = (icon: string, label: string, title: string, tool: ToolId): HTMLElement =>
       onClick(h('vscode-button', { secondary: true, icon, title }, label), () => this.send({ type: 'tool', tool }));
     this.syncButton = btn('sync', t('tools.sync'), t(`${this.mode}.syncTitle`), 'sync');
     this.updateSyncButton();
-    const details = h(
-      'details',
-      { class: 'page-tools', open: this.toolsOpen },
-      h('summary', { class: 'tools-summary' }, h('vscode-icon', { name: 'chevron-right', size: '12', class: 'chevron' }), h('span', {}, t('tools.title'))),
+    return h(
+      'div',
+      { class: 'page-tools' },
+      h('div', { class: 'tools-summary' }, t('tools.title')),
       h(
         'div',
         { class: 'page-tools-row' },
@@ -812,11 +812,7 @@ class Page {
         this.syncButton,
         btn('cloud-download', t('tools.updateCli'), t('tools.updateCliTitle'), 'updateCli'),
       ),
-    ) as HTMLDetailsElement;
-    details.addEventListener('toggle', () => {
-      this.toolsOpen = details.open;
-    });
-    return details;
+    );
   }
 
   // Re-link only acts on linked accounts, so it is hidden while the page has none

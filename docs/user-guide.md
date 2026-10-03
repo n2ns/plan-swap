@@ -48,7 +48,7 @@ Terms used in this guide:
 - *Linked* is the mode the UI shows with the link badge. The **Share with Default Account** command turns an independent account into a linked one.
 - For Codex, the *effective* account is the one this window uses now; the *selected* account is the one it will use after the next restart.
 
-Each card shows the account's display name and sign-in state, plus its email, plan and usage limits once they are known. Hover the card to see its directory.
+Each card shows the account's display name and sign-in state, plus its email, plan and usage limits once they are known. Hover the avatar to see its directory.
 
 Two kinds of refresh buttons:
 
@@ -143,7 +143,7 @@ Then:
 
 - **Link to the default account:** click the link icon on an independent named row, or run the product's **Share with Default Account** command. The account's own settings and history move into the default account. Files that differ from the default account's are kept side by side for you to merge by hand, and the result lists them.
 - **Unlink from the default account:** click the disconnect icon on a linked named row. The account gets its own copy of the default configuration and keeps its sign-in and any files that were not linked. History and sessions stay in the default account and are not copied back. Unlinking does not undo the merge made when the account was linked.
-- **Re-link:** expand **Tools** and click **Re-link** after you change the default account's setup, or when links need repair. It checks every linked account in that tab and lists anything that needs attention. For Claude, it also updates their MCP servers from the default account.
+- **Re-link:** click **Re-link** in **Tools** after you change the default account's setup, or when links need repair. It checks every linked account in that tab and lists anything that needs attention. For Claude, it also updates their MCP servers from the default account.
 
 ### Linking on Windows
 
@@ -154,7 +154,7 @@ Then:
 
 ## Read and refresh usage limits
 
-Usage bars and percentages show what is **left**. The duration next to each limit, such as `2d 5h`, is the time until it resets; hover it for the exact date and time. A used-up limit shows `0%` and its reset time in red. No usage line means no data yet, not zero usage or unlimited quota.
+Usage bars and percentages show what is **left**. The duration next to each limit, such as `2d 5h`, is the time until it resets. Hover a bar to see what is left and what is used, for example `97% left (3% used)`. A used-up limit shows `0%` and its reset time in red. No usage line means no data yet, not zero usage or unlimited quota.
 
 Usage checks need a Claude subscription sign-in, or a Codex ChatGPT sign-in (not API key mode). They run the official CLI.
 
@@ -175,7 +175,7 @@ An account checked less than a minute ago is not checked again. A manual refresh
 
 By default, PlanSwap checks the current account of each product automatically: a few seconds after the window opens, then about every 15 minutes while the window is focused. You can change the interval or turn automatic checks off in [settings](#change-language-and-display-settings).
 
-Other rows show the result of their last check. Values disappear after their reset time or after 24 hours, and are hidden when the account has since signed in again. Hover a card's usage area to see when it was checked.
+Other rows show the result of their last check. Values disappear after their reset time or after 24 hours, and are hidden when the account has since signed in again.
 
 ### Status bar
 
@@ -208,7 +208,7 @@ Account directories with valid names that PlanSwap finds in your home directory 
 
 ## Use the tools
 
-Expand **Tools** below the account list for actions specific to that tab:
+**Tools** below the account list holds actions specific to that tab:
 
 | Tool | Action |
 | --- | --- |

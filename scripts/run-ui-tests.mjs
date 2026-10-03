@@ -10,8 +10,13 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const output = path.join(root, '.test-out', 'ui');
 const locales = ['en', 'zh-cn', 'zh-tw', 'es', 'ja'];
 const widths = [200, 240, 280, 340, 420];
-const observed = ['Last observed: ', '采集于 ', '擷取於 ', 'Última consulta: ', '取得日時: '];
-// Reset tooltip: the short duration shown on the card plus the absolute date
+// Bar tooltip: what is left and what is used
+const barTitle = {
+  en: (left) => `${left}% left (${100 - left}% used)`, 'zh-cn': (left) => `剩余 ${left}%（已用 ${100 - left}%）`,
+  'zh-tw': (left) => `剩餘 ${left}%（已用 ${100 - left}%）`,
+  es: (left) => `${left}% restante (${100 - left}% usado)`, ja: (left) => `残り ${left}%（使用済み ${100 - left}%）`,
+};
+// Reset sentence in the bar's screen reader value: the short duration shown on the card plus the absolute date
 const resetsIn = {
   en: (time, date) => `Resets in ${time} (${date})`, 'zh-cn': (time, date) => `${time}后重置（${date}）`,
   'zh-tw': (time, date) => `${time}後重設（${date}）`,
@@ -90,7 +95,7 @@ async function cardChecks(mode, locale, width) {
       const button = row.querySelector('[data-action="switch"]');
       const style = getComputedStyle(row);
       return {
-        dir: row.dataset.dir, title: row.title, ariaCurrent: row.getAttribute('aria-current'),
+        dir: row.dataset.dir, title: row.title, avatarTitle: row.querySelector('.avatar').title, ariaCurrent: row.getAttribute('aria-current'),
         switchText: button?.textContent.trim() ?? null, switchTitle: button?.title ?? null,
         switchLabel: button?.shadowRoot?.querySelector('button')?.getAttribute('aria-label') ?? null,
         switchIcon: button?.getAttribute('icon') ?? null,
@@ -152,7 +157,8 @@ async function cardChecks(mode, locale, width) {
   assert.equal(new Set(data.avatarSizes).size, 1, `avatars differ in size at ${where}`);
   for (const row of data.rows) {
     const current = row.ariaCurrent === 'true';
-    assert.equal(row.title, row.dir, `row title is the directory at ${where}`);
+    assert.equal(row.title, '', `the card itself has no tooltip at ${where}`);
+    assert.equal(row.avatarTitle, row.dir, `avatar title is the directory at ${where}`);
     if (current) {
       assert.equal(row.boxShadow, 'none', `current card has a shadow at ${where}`);
       assert.equal(row.backgroundImage, 'none', `current card has a gradient at ${where}`);
@@ -215,8 +221,6 @@ async function runCase(locale, width) {
       usageVisible: !!usage && rect(usage).width > 0 && rect(usage).height > 0,
       usageText: usage?.textContent ?? '',
       usageTitle: usage?.title ?? '',
-      observedTime: new Date(window.preview.state().codex.accounts.find((a) => a.dir === '/fixture/.codex-work').usage.checkedAt)
-        .toLocaleString(document.documentElement.lang),
       windows: [...usage.querySelectorAll('.usage-window')].map((item, index) => {
         const labels = item.querySelector('.usage-labels');
         const track = item.querySelector('.usage-track');
@@ -231,7 +235,7 @@ async function runCase(locale, width) {
           valueText: track.getAttribute('aria-valuetext'), fill: fill.style.width,
           fillRatio: rect(fill).width / rect(track).width,
           resetText: reset?.textContent,
-          resetTitle: reset?.title,
+          resetTitle: reset?.title, trackTitle: track.title,
           resetRelative: relative(usageState.windows[index].resetsAt),
           pctText: pct.textContent, pctTitle: pct.title, trackWidth: rect(track).width,
           pctBesideBar: rect(pct).top < rect(track).bottom && rect(pct).bottom > rect(track).top,
@@ -266,7 +270,7 @@ async function runCase(locale, width) {
   assert.equal(data.usageActionsOverlap, false, `usage overlaps actions at ${name(locale, width)}`);
   assert.equal(data.emptyUsage, false);
   assert.equal(data.defaultUsage, false);
-  assert.equal(data.usageTitle, observed[locales.indexOf(locale)] + data.observedTime);
+  assert.equal(data.usageTitle, '', 'only the bars have a tooltip');
   assert.equal(data.windows.length, 2);
   for (const [index, percent] of [58, 14].entries()) {
     const window = data.windows[index];
@@ -274,18 +278,20 @@ async function runCase(locale, width) {
     assert.equal(window.label, durations[locale][index]);
     assert.ok(window.text.includes(window.label));
     assert.equal(window.pctText, `${percent}%`);
-    assert.equal(window.pctTitle, remaining[locale](percent));
-    assert.equal(window.valueText, `${remaining[locale](percent)}, ${window.resetTitle}`);
+    assert.equal(window.pctTitle, '');
+    assert.equal(window.resetTitle, '');
+    assert.equal(window.trackTitle, barTitle[locale](percent));
+    const resetSentence = resetsIn[locale](window.resetRelative, window.resetTime);
+    assert.equal(window.valueText, `${remaining[locale](percent)}, ${resetSentence}`);
     assert.equal(window.value, String(percent));
     assert.equal(window.min, '0');
     assert.equal(window.max, '100');
     assert.equal(window.fill, `${percent}%`);
     assert.ok(Math.abs(window.fillRatio - percent / 100) < 0.02);
     assert.equal(window.resetText, window.resetRelative);
-    assert.equal(window.resetTitle, resetsIn[locale](window.resetRelative, window.resetTime));
-    if (locale === 'zh-cn') assert.match(window.resetTitle, /^\d+(天|小时|分钟).*后重置（\d{1,2}月\d{1,2}日 \d{2}:\d{2}）$/);
-    if (locale === 'zh-tw') assert.match(window.resetTitle, /^\d+ (天|小時|分鐘).*後重設（.+）$/);
-    assert.ok(!data.usageText.includes(window.resetTime), `absolute reset time must stay in the title at ${name(locale, width)}`);
+    if (locale === 'zh-cn') assert.match(resetSentence, /^\d+(天|小时|分钟).*后重置（\d{1,2}月\d{1,2}日 \d{2}:\d{2}）$/);
+    if (locale === 'zh-tw') assert.match(resetSentence, /^\d+ (天|小時|分鐘).*後重設（.+）$/);
+    assert.ok(!data.usageText.includes(window.resetTime), `absolute reset time must stay out of the visible text at ${name(locale, width)}`);
     assert.equal(window.resetVisible, true);
     assert.equal(window.resetInLabelLine, true, `reset time must sit at the right of its window's label line at ${name(locale, width)}`);
     assert.equal(window.pctBesideBar, true, `percentage must sit beside the bar at ${name(locale, width)}`);
@@ -302,7 +308,7 @@ async function runCase(locale, width) {
   const usageLocator = page.locator(`${row('codex', 'work')} .row-usage`);
   const beforeHover = await usageLocator.boundingBox();
   await usageLocator.hover();
-  assert.equal(await usageLocator.getAttribute('title'), data.usageTitle);
+  assert.equal(await usageLocator.getAttribute('title'), null);
   assert.equal(await usageLocator.textContent(), data.usageText);
   assert.deepEqual(await usageLocator.boundingBox(), beforeHover, `usage moved on hover at ${name(locale, width)}`);
   await shot(`${name(locale, width)}-codex-hover.png`, 'codex');
@@ -340,13 +346,10 @@ async function runCase(locale, width) {
           first: item.querySelector('.usage-duration').textContent,
           value: track.getAttribute('aria-valuenow'),
           resetVisible: !!reset && rect(reset).width > 0 && rect(reset).height > 0,
-          resetTitle: reset?.title,
+          resetTitle: reset?.title, trackTitle: track.title,
           resetRelative: eval(shortReset)(usageState.windows[index].resetsAt),
           pctText: item.querySelector('.usage-pct').textContent, trackWidth: rect(track).width,
           resetActionsOverlap: !!reset && intersects(rect(reset), rect(actions)),
-          resetTime: new Date(usageState.windows[index].resetsAt * 1000).toLocaleString(document.documentElement.lang, {
-            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
-          }),
           resetText: reset?.textContent,
           overlap: intersects(rect(labels), rect(track)),
           overflow: item.scrollWidth > item.clientWidth || labels.scrollWidth > labels.clientWidth,
@@ -375,7 +378,8 @@ async function runCase(locale, width) {
     assert.equal(window.value, String(percent));
     assert.equal(window.resetVisible, true);
     assert.equal(window.resetText, window.resetRelative);
-    assert.equal(window.resetTitle, resetsIn[locale](window.resetRelative, window.resetTime));
+    assert.equal(window.resetTitle, '');
+    assert.equal(window.trackTitle, barTitle[locale](percent));
     assert.equal(window.resetActionsOverlap, false, `claude reset date overlaps actions at ${name(locale, width)}`);
     assert.equal(window.overlap, false, `claude usage labels overlap track at ${name(locale, width)}`);
     assert.equal(window.overflow, false, `claude usage window overflow at ${name(locale, width)}`);
@@ -389,7 +393,7 @@ async function runCase(locale, width) {
     }
     window.preview.post({ type: 'state', state });
   });
-  assert.equal(await page.locator('#panel-claude details').count(), 1, 'only the Tools section folds');
+  assert.equal(await page.locator('#panel-claude details').count(), 0, 'no section folds');
   assert.equal(await page.locator('#panel-claude .row[data-dir="/fixture/.claude-work"] .usage-window').count(), 2);
   await shot(`${name(locale, width)}-claude-model-limits-hidden.png`, 'claude');
   // planswap.sidebar.showEmail off: the host sends hideEmail and no emails; no row shows an email or "Logged in" line
@@ -611,7 +615,7 @@ async function resetDateStates() {
 }
 
 // The add form starts collapsed behind the "+ Add" toggle; focusAdd expands and focuses it; Escape and a successful add collapse it.
-// The Tools section starts collapsed and keeps its state across re-renders
+// The Tools section is always shown
 async function addFormAndTools() {
   for (const mode of ['claude', 'codex']) {
     await page.evaluate((mode) => { window.preview.apply({ locale: 'en', width: 280, active: mode }); window.preview.clearMessages(); }, mode);
@@ -667,23 +671,17 @@ async function addFormAndTools() {
     assert.equal(await field.inputValue(), '');
     assert.equal(await toggle.evaluate((el) => el === document.activeElement), true);
 
-    // Tools: collapsed by default, Re-link follows the shared-account rule, state survives a re-render
-    const tools = page.locator(`${panel} details.page-tools`);
-    assert.equal(await tools.evaluate((el) => el.open), false);
-    assert.equal(await page.locator(`${panel} .page-tools-row`).isVisible(), false);
-    await tools.locator('summary').click();
+    // Tools: always shown, Re-link follows the shared-account rule
+    assert.equal(await page.locator(`${panel} .page-tools-row`).isVisible(), true);
     assert.equal(await page.locator(`${panel} .page-tools-row vscode-button:visible`).count(), 4);
     await page.evaluate((mode) => {
       const state = structuredClone(window.preview.state());
       for (const a of state[mode].accounts) if (a.kind === 'named') a.shared = false;
       window.preview.post({ type: 'state', state });
     }, mode);
-    assert.equal(await tools.evaluate((el) => el.open), true);
     assert.equal(await page.locator(`${panel} .page-tools-row vscode-button:visible`).count(), 3, `${mode} Re-link must hide without shared accounts`);
-    await tools.locator('summary').click();
-    assert.equal(await tools.evaluate((el) => el.open), false);
     await shot(`${mode}-add-tools.png`, mode);
-    results.interactions.push(`${mode}: add form collapsed by default, expands on toggle/focusAdd, collapses on Escape/success; Tools collapsed, Re-link rule intact`);
+    results.interactions.push(`${mode}: add form collapsed by default, expands on toggle/focusAdd, collapses on Escape/success; Tools always shown, Re-link rule intact`);
   }
 }
 
