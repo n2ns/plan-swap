@@ -11,7 +11,7 @@ import { ensureCodexLinks, isSharedCodexAccount } from './codex/codexShare';
 import { CLAUDE_REFRESH_ALL_USAGE_COMMAND, CLAUDE_REFRESH_USAGE_COMMAND, CODEX_REFRESH_ALL_USAGE_COMMAND, REFRESH_USAGE_COMMAND, StatusBar, claudeUsageFailureText, codexUsageFailureText } from './statusBar';
 import { registerCommands } from './commands';
 import { affectsSetting, currentDir, isExplicitConfigDir, settingEnv, settingEnvNames } from './claudeSettings';
-import { oneAtATime, queryClaudeUsage, queryEach, readClaudeUsage, readUsageFetchedAt } from './claudeUsage';
+import { oneAtATime, queryClaudeUsage, queryEach, readClaudeUsage, readUsageFetchedAt, type ClaudeQueryResult } from './claudeUsage';
 import { ClaudeUsageMonitor } from './claudeUsageMonitor';
 import { CodexAccountStore } from './codex/codexStore';
 import { codexPanelSource, codexRunsInWsl, registerCodexCommands, restartServerInteractive } from './codex/codexCommands';
@@ -28,17 +28,33 @@ import { findBundledCodex, readCodexUsageWithFallback, type UsageResult } from '
 import { readCodexAccountInfo } from './codex/codexPaths';
 import { IdentityWarnings, claudeIdentity, codexIdentity, type IdentitySource } from './identityWarnings';
 import { UsageCooldown } from './usageCooldown';
+import { OtherAccountChecks } from './usageOthers';
 
 // The Codex extension, whose bundled codex binary answers the usage query when the CLI is not on PATH
 const CODEX_EXTENSION_ID = 'openai.chatgpt';
-// While the window is focused, usage limits are re-checked once they are older than the stale interval
+// Re-render interval for usage values that expire, independent of the checks
 const USAGE_TICK_MS = 60_000;
-const USAGE_FIRST_CHECK_MS = 5_000;
+// planswap.usageCheckIntervalSeconds: how often automatic checks look for an account whose refresh interval has passed
+const USAGE_CHECK_SECONDS = { min: 30, max: 600, default: 120 };
+// The first automatic check waits until the window has finished starting up
+const USAGE_FIRST_CHECK_MS = 20_000;
 // planswap.<product>.usageAutoRefresh / usageRefreshMinutes; the interval is clamped to the range the manifest declares
 // Claude's usage endpoint is rate limited per account (shared with the user's own sessions), so its floor is higher
 const USAGE_MINUTES_MIN: Record<PanelMode, number> = { claude: 10, codex: 5 };
 const USAGE_MINUTES_MAX = 1440;
 const USAGE_MINUTES_DEFAULT = 15;
+
+/** planswap.usageCheckIntervalSeconds in ms, clamped to the range the manifest declares. */
+function usageCheckMs(): number {
+  const seconds = vscode.workspace.getConfiguration('planswap').get<number>('usageCheckIntervalSeconds', USAGE_CHECK_SECONDS.default);
+  const valid = typeof seconds === 'number' && Number.isFinite(seconds) ? seconds : USAGE_CHECK_SECONDS.default;
+  return Math.min(USAGE_CHECK_SECONDS.max, Math.max(USAGE_CHECK_SECONDS.min, valid)) * 1000;
+}
+
+/** planswap.usageAutoRefreshCurrentOnly: automatic checks query only the current Claude / effective Codex account. */
+function usageCurrentOnly(): boolean {
+  return vscode.workspace.getConfiguration('planswap').get<boolean>('usageAutoRefreshCurrentOnly', false) === true;
+}
 
 /** Automatic usage checks of one product: on/off and the interval in ms. Manual refreshes do not depend on them. */
 function usageSchedule(product: PanelMode): { auto: boolean; staleMs: number } {
@@ -149,15 +165,20 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     }, { clientVersion: version, signal, timeoutMs: usageTimeoutMs('codex') });
   // Every query of an account (scheduled, manual, refresh-all) starts its manual-refresh cooldown
   const codexCooldown = new UsageCooldown();
+  // Every codex usage process of this window (effective account, other accounts, refresh-all) runs after the previous one ended
+  const codexQueue = oneAtATime();
+  // One query, marking its cooldown when it starts; codexQuery runs it in the queue
+  const runCodexQuery = (dir: string, signal?: AbortSignal): Promise<UsageResult> => {
+    codexCooldown.mark(dir);
+    return readCodex(dir, signal);
+  };
+  const codexQuery = (dir: string, signal?: AbortSignal): Promise<UsageResult> => codexQueue(() => runCodexQuery(dir, signal));
   const usage = codex
     ? new CodexUsageMonitor(effectiveDir, (s) => {
       statusBar.setCodexUsage(s);
       if (!s.checking) panel.refresh();
     }, {
-      read: (dir) => {
-        codexCooldown.mark(dir);
-        return readCodex(dir);
-      },
+      read: (dir) => codexQuery(dir),
       staleMs: () => usageSchedule('codex').staleMs,
       onAccepted: (dir, result, stamp) => usageHistory.record(dir, result, stamp),
     })
@@ -170,10 +191,12 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   const claudeCooldown = new UsageCooldown();
   // Claude Code's usage cache tells when any window or terminal last fetched the account's usage
   const claudeCooldownLeft = (dir: string): number => claudeCooldown.remaining(dir, readUsageFetchedAt(dir, isExplicitConfigDir(dir)));
-  const claudeQuery = (dir: string, signal?: AbortSignal) => claudeQueue(() => {
+  // One query, marking its cooldown when it starts; claudeQuery runs it in the queue
+  const runClaudeQuery = (dir: string, signal?: AbortSignal) => {
     claudeCooldown.mark(dir);
     return queryClaudeUsage(dir, isExplicitConfigDir(dir), { env: settingEnv(), signal, timeoutMs: usageTimeoutMs('claude') });
-  });
+  };
+  const claudeQuery = (dir: string, signal?: AbortSignal) => claudeQueue(() => runClaudeQuery(dir, signal));
   const claudeUsage = new ClaudeUsageMonitor(currentDir, (s) => {
     statusBar.setClaudeUsage(s);
     if (!s.checking) panel.refresh();
@@ -212,7 +235,17 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
         (progress, token) => {
           // Cancelling also ends the claude process that is running now
           token.onCancellationRequested(() => abort.abort());
-          return queryEach(targets, async (dir) => {
+          return queryEach(targets, async (dir): Promise<ClaudeQueryResult> => {
+            // The current account was refreshed from its own button after this run started (running now, or within the
+            // cooldown): join it or take its result instead of querying it a second time
+            if (samePath(dir, currentDir())) {
+              const joined = claudeUsage.current().checking;
+              if (joined) await claudeUsage.refresh();
+              if (joined || claudeCooldownLeft(dir) > 0) {
+                const failure = claudeUsage.current().failure;
+                return failure && samePath(failure.dir, dir) ? { ok: false, reason: failure.reason, detail: failure.detail } : { ok: true };
+              }
+            }
             const result = await claudeQuery(dir, abort.signal);
             if (!abort.signal.aborted) claudeUsage.record(dir, result);
             return result;
@@ -281,15 +314,13 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
           token.onCancellationRequested(() => abort.abort());
           return queryEach(targets, async (dir): Promise<UsageResult> => {
             if (!samePath(dir, effectiveDir())) {
-              const result = await queryCodexAccount(dir, (d) => {
-                codexCooldown.mark(d);
-                return readCodex(d, abort.signal);
-              }, (d, r, stamp) => usageHistory.record(d, r, stamp));
+              const result = await queryCodexAccount(dir, (d) => codexQuery(d, abort.signal), (d, r, stamp) => usageHistory.record(d, r, stamp));
               // The history is not watched: show this account's row now instead of after the whole run
               panel.refresh();
               return result;
             }
-            await usage.refresh();
+            // A refresh from its own button that ran after this run started is not repeated; a running one is joined
+            if (usage.current().checking || codexCooldown.remaining(dir) === 0) await usage.refresh();
             // No result: the monitor discarded the response because the sign-in changed while it ran
             return usage.current().result ?? { ok: false, reason: 'failed', detail: 'discarded' };
           }, (target, index) => progress.report({
@@ -317,20 +348,77 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
       refreshingAllCodex = false;
     }
   };
+  // Manual single-account refreshes waiting or running, per product (refresh-all has its own flag)
+  const manualRefreshes: Record<PanelMode, number> = { claude: 0, codex: 0 };
+  const manualRefresh = async (product: PanelMode, refresh: () => Promise<void>): Promise<void> => {
+    manualRefreshes[product]++;
+    try { await refresh(); } finally { manualRefreshes[product]--; }
+  };
+  // Automatic checks of the registered accounts other than the current (Claude) / effective (Codex) one, which the
+  // monitors check (OtherAccountChecks decides which are due). Manual refreshes come first: a run stops while one is
+  // waiting or running, and a background query re-checks that when its turn in the product's queue comes, so it never
+  // runs before or twice with a button's. Every query of an account, manual and failed ones included, counts as a check,
+  // so after a button the background leaves that account alone for the refresh interval. Not with
+  // planswap.usageAutoRefreshCurrentOnly; a run also stops when the window loses focus or automatic checks are turned off
+  const othersAllowed = (product: PanelMode, refreshingAllOf: () => boolean) => (): boolean =>
+    vscode.window.state.focused && usageSchedule(product).auto && !usageCurrentOnly() && !refreshingAllOf() && manualRefreshes[product] === 0;
+  const claudeOthersAllowed = othersAllowed('claude', () => refreshingAll);
+  const codexOthersAllowed = othersAllowed('codex', () => refreshingAllCodex);
+  const latest = (...times: Array<number | undefined>): number | undefined => {
+    const known = times.filter((at): at is number => at !== undefined);
+    return known.length ? Math.max(...known) : undefined;
+  };
+  const otherClaudeChecks = new OtherAccountChecks({
+    allowed: claudeOthersAllowed,
+    staleMs: () => usageSchedule('claude').staleMs,
+    checkedAt: (dir) => latest(readUsageFetchedAt(dir, isExplicitConfigDir(dir)), claudeCooldown.lastQueried(dir)),
+    query: (dir) => claudeQueue(async () => {
+      if (!claudeOthersAllowed()) return false;
+      // The account may have become the current one meanwhile: the monitor then takes the result as its attempt
+      claudeUsage.record(dir, await runClaudeQuery(dir));
+      return true;
+    }),
+  });
+  const otherCodexChecks = new OtherAccountChecks({
+    allowed: codexOthersAllowed,
+    staleMs: () => usageSchedule('codex').staleMs,
+    checkedAt: (dir) => latest(usageHistory.get(dir)?.checkedAt, codexCooldown.lastQueried(dir)),
+    query: (dir) => codexQueue(async () => {
+      if (!codexOthersAllowed()) return false;
+      await queryCodexAccount(dir, (d) => runCodexQuery(d), (d, r, stamp) => usageHistory.record(d, r, stamp));
+      // The history is not watched: show this account's row now
+      panel.refresh();
+      return true;
+    }),
+  });
+  const otherClaudeDirs = (): string[] => store.all().map((a) => a.dir)
+    .filter((dir) => !samePath(dir, currentDir()) && readAccountInfo(dir, isExplicitConfigDir(dir)).identity !== undefined);
+  const otherCodexDirs = (): string[] => (codex?.store.all() ?? []).map((a) => a.dir).filter((dir) => {
+    if (samePath(dir, effectiveDir())) return false;
+    const info = readCodexAccountInfo(dir);
+    return info.loggedIn && info.plan !== 'API key';
+  });
   // Account-info changes re-check Claude usage only after the first scheduled check, not during start-up
   let usageStarted = false;
-  // Automatic checks of both products: 5 s after activation, every 60 s, on regaining focus, after a usage setting change
+  // Automatic checks of both products: 20 s after activation, every planswap.usageCheckIntervalSeconds (default 120 s), on regaining focus, after a usage setting change
   // and after a claudeCode.environmentVariables change (a switched account is checked at once). Only the focused window
   // queries; each product needs its usageAutoRefresh, and Codex is skipped while it runs inside WSL. The monitors'
-  // refreshIfStale decides whether a query is actually due
+  // refreshIfStale decides whether a query of the current / effective account is actually due, OtherAccountChecks
+  // whether one of another registered account is
   const checkUsage = (): void => {
     usageStarted = true;
     if (!vscode.window.state.focused) return;
-    if (usageSchedule('claude').auto) void claudeUsage.refreshIfStale();
-    if (usage && !codexRunsInWsl() && usageSchedule('codex').auto) void usage.refreshIfStale();
+    if (usageSchedule('claude').auto) {
+      void claudeUsage.refreshIfStale();
+      if (!usageCurrentOnly()) void otherClaudeChecks.run(otherClaudeDirs());
+    }
+    if (usage && !codexRunsInWsl() && usageSchedule('codex').auto) {
+      void usage.refreshIfStale();
+      if (!usageCurrentOnly()) void otherCodexChecks.run(otherCodexDirs());
+    }
   };
   const firstUsageCheck = setTimeout(checkUsage, USAGE_FIRST_CHECK_MS);
-  const usageTick = setInterval(checkUsage, USAGE_TICK_MS);
+  let usageTick = setInterval(checkUsage, usageCheckMs());
 
   // Two registered accounts signed in to the same identity are pointed out once per situation
   const identitySources: IdentitySource[] = [
@@ -407,7 +495,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
         void vscode.window.showInformationMessage(t('usage.cooldown', { seconds: cooldownSeconds(left) }));
         return;
       }
-      await claudeUsage.refresh();
+      await manualRefresh('claude', () => claudeUsage.refresh());
     }),
     vscode.commands.registerCommand(CLAUDE_REFRESH_ALL_USAGE_COMMAND, () => refreshAllClaudeUsage()),
     ...(usage
@@ -421,7 +509,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
           void vscode.window.showInformationMessage(t('usage.cooldown', { seconds: cooldownSeconds(left) }));
           return;
         }
-        await usage.refresh();
+        await manualRefresh('codex', () => usage.refresh());
       }), vscode.commands.registerCommand(CODEX_REFRESH_ALL_USAGE_COMMAND, () => refreshAllCodexUsage())]
       : []),
     vscode.workspace.onDidChangeConfiguration((e) => {
@@ -430,7 +518,13 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
       // Sidebar display settings (email, 5-hour and 7-day limits, Claude's model-specific limits) and remaining/used display
       if (e.affectsConfiguration('planswap.sidebar') || e.affectsConfiguration('planswap.usageDisplay')) panel.refresh();
       // Automatic usage checks turned on or a shorter interval: check now when due
-      if (['claude', 'codex'].some((p) => e.affectsConfiguration(`planswap.${p}.usageAutoRefresh`) || e.affectsConfiguration(`planswap.${p}.usageRefreshMinutes`))) checkUsage();
+      if (['claude', 'codex'].some((p) => e.affectsConfiguration(`planswap.${p}.usageAutoRefresh`) || e.affectsConfiguration(`planswap.${p}.usageRefreshMinutes`))
+        || e.affectsConfiguration('planswap.usageAutoRefreshCurrentOnly')) checkUsage();
+      // A new check interval replaces the timer at once
+      if (e.affectsConfiguration('planswap.usageCheckIntervalSeconds')) {
+        clearInterval(usageTick);
+        usageTick = setInterval(checkUsage, usageCheckMs());
+      }
       if (!affectsSetting(e)) return;
       setClaudeSettingEnv(settingEnvNames());
       panel.refresh();

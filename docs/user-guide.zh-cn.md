@@ -173,7 +173,7 @@ PlanSwap 让你同时保持多个 Claude Code 和 Codex 账号的登录状态，
 
 ### 自动查询
 
-默认情况下，PlanSwap 会自动查询每个产品的当前账号：窗口打开几秒后查询一次，之后在窗口获得焦点时大约每 15 分钟查询一次。你可以在[设置](#更改语言和显示设置)中更改间隔或关闭自动查询。
+默认情况下，PlanSwap 会自动查询每个产品所有已登录的账号，先查当前账号，再逐个查询其他账号：窗口打开约 20 秒后查询一次，之后在窗口获得焦点时大约每 15 分钟查询一次。如果只想查询当前账号，请开启 `planswap.usageAutoRefreshCurrentOnly`。你可以在[设置](#更改语言和显示设置)中更改间隔或关闭自动查询。
 
 其他行显示的是各自上次查询的结果。这些数值会在重置时间过后或 24 小时后消失，如果账号此后重新登录过，也会隐藏。
 
@@ -237,6 +237,8 @@ PlanSwap 启动或刷新时，会把在你的主目录中找到的、名称有�
 | --- | --- | --- |
 | `planswap.language` | `auto` | 跟随编辑器，或选择 `en`、`zh-cn`、`zh-tw`、`es` 或 `ja`。 |
 | `planswap.usageDisplay` | `remaining` | 侧边栏和状态栏中的用量条和百分比显示剩余量（`remaining`）还是已用量（`used`）。颜色始终按剩余量计算。 |
+| `planswap.usageAutoRefreshCurrentOnly` | `false` | 自动查询只查 Claude 和 Codex 的当前账号。 |
+| `planswap.usageCheckIntervalSeconds` | `120` | 每隔多少秒检查一次是否有账号到了自动查询的时间，30–600。每个账号仍按各产品的刷新间隔查询。 |
 | `planswap.sidebar.showEmail` | `true` | 在侧边栏卡片上显示账号邮箱。 |
 | `planswap.sidebar.showFiveHourLimit` | `true` | 在卡片上显示 5 小时额度。 |
 | `planswap.sidebar.showWeeklyLimit` | `true` | 在卡片上显示 7 天额度。 |

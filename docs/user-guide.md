@@ -173,7 +173,7 @@ An account checked less than a minute ago is not checked again. A manual refresh
 
 ### Automatic checks
 
-By default, PlanSwap checks the current account of each product automatically: a few seconds after the window opens, then about every 15 minutes while the window is focused. You can change the interval or turn automatic checks off in [settings](#change-language-and-display-settings).
+By default, PlanSwap checks every signed-in account of each product automatically, the current one first and the others one at a time: about 20 seconds after the window opens, then about every 15 minutes while the window is focused. To check only the current accounts, turn on `planswap.usageAutoRefreshCurrentOnly`. You can change the interval or turn automatic checks off in [settings](#change-language-and-display-settings).
 
 Other rows show the result of their last check. Values disappear after their reset time or after 24 hours, and are hidden when the account has since signed in again.
 
@@ -237,6 +237,8 @@ Click the settings icon in the panel title bar, or run **PlanSwap: Open PlanSwap
 | --- | --- | --- |
 | `planswap.language` | `auto` | Follow the editor, or choose `en`, `zh-cn`, `zh-tw`, `es` or `ja`. |
 | `planswap.usageDisplay` | `remaining` | Usage bars and percentages, in the sidebar and the status bar, show what is left (`remaining`) or what is used (`used`). Colors always follow what is left. |
+| `planswap.usageAutoRefreshCurrentOnly` | `false` | Automatic checks query only the current Claude and Codex accounts. |
+| `planswap.usageCheckIntervalSeconds` | `120` | Seconds between looks for accounts due for an automatic check, 30–600. Each account is still checked at its product's refresh interval. |
 | `planswap.sidebar.showEmail` | `true` | Show account emails on sidebar cards. |
 | `planswap.sidebar.showFiveHourLimit` | `true` | Show the 5-hour limit on cards. |
 | `planswap.sidebar.showWeeklyLimit` | `true` | Show the 7-day limit on cards. |

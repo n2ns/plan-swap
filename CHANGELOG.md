@@ -4,15 +4,22 @@
 
 ### Added
 
+- `planswap.usageCheckIntervalSeconds` (default 120, 30–600): how often automatic usage checks look for accounts whose refresh interval has passed; previously fixed at 60 seconds.
+- Automatic usage checks now cover every signed-in account of each product, not only the current one: after the current account, the others are checked one at a time at the same interval, each only when no window has checked it within the interval. Turn on `planswap.usageAutoRefreshCurrentOnly` to check only the current Claude and Codex accounts. Refresh buttons take precedence: the background checks pause while one waits or runs, and leave an account alone for the interval after any check of it, a failed manual one included. A window now runs one `codex` usage process at a time, as it already did for `claude`.
 - `planswap.sidebar.warningThreshold` (default 30) and `planswap.sidebar.errorThreshold` (default 10), both 0–100: the remaining percentages at or below which the sidebar's usage bars turn to the warning or error color, separate from the status bar thresholds.
 - `planswap.usageDisplay` (`remaining` by default, or `used`): usage bars and percentages in the sidebar and the status bar show what is left or what is used. Colors and the status bar thresholds still follow what is left.
 
 ### Changed
 
+- The first automatic usage check runs about 20 seconds after the window opens instead of 5, once start-up has finished.
 - The Tools section below the account list is always shown instead of collapsed.
 - PlanSwap settings are grouped in the Settings editor (General, Sidebar, Status Bar, Claude, Codex), each group in a fixed order.
 - Hovering a usage bar shows what is left and what is used (for example "97% left (3% used)"). The other hover texts of the usage area (collection time, remaining percentage, exact reset date) are gone.
 - An account's directory is shown when hovering its avatar instead of the whole card.
+
+### Fixed
+
+- Refreshing the current account from its button while **Refresh all** runs no longer queries that account a second time within a minute: Refresh all joins the running refresh or takes its result (Claude and Codex).
 
 ## [0.3.0] - 2026-10-02
 

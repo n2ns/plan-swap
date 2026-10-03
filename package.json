@@ -237,6 +237,22 @@
             ],
             "description": "%config.usageDisplay.description%",
             "order": 1
+          },
+          "planswap.usageAutoRefreshCurrentOnly": {
+            "type": "boolean",
+            "default": false,
+            "scope": "application",
+            "description": "%config.usageAutoRefreshCurrentOnly.description%",
+            "order": 2
+          },
+          "planswap.usageCheckIntervalSeconds": {
+            "type": "number",
+            "default": 120,
+            "minimum": 30,
+            "maximum": 600,
+            "scope": "application",
+            "description": "%config.usageCheckIntervalSeconds.description%",
+            "order": 3
           }
         }
       },

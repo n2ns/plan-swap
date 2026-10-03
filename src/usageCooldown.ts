@@ -19,6 +19,11 @@ export class UsageCooldown {
     else this.last.push({ dir, at: this.now() });
   }
 
+  /** When the last query of dir started, or undefined when it was never queried. */
+  lastQueried(dir: string): number | undefined {
+    return this.last.find((e) => samePath(e.dir, dir))?.at;
+  }
+
   /**
    * Milliseconds left before dir may be queried manually again; 0 when it may. `elsewhere` is a check time from
    * another source (Claude's usage cache, refreshed by any window or terminal); a time in the future is ignored.

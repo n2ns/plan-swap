@@ -2,6 +2,17 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { USAGE_COOLDOWN_MS, UsageCooldown } from '../src/usageCooldown';
 
+test('lastQueried gives the start of the last query of an account', () => {
+  let now = 1_000_000;
+  const cooldown = new UsageCooldown(() => now);
+  assert.equal(cooldown.lastQueried('/a'), undefined);
+  cooldown.mark('/a');
+  now += 5_000;
+  cooldown.mark('/a');
+  assert.equal(cooldown.lastQueried('/a'), 1_005_000);
+  assert.equal(cooldown.lastQueried('/b'), undefined);
+});
+
 test('an account may be queried again only after the cooldown since its last query', () => {
   let now = 1_000_000;
   const cooldown = new UsageCooldown(() => now);

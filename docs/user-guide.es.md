@@ -173,7 +173,7 @@ Una cuenta consultada hace menos de un minuto no se vuelve a consultar. En ese c
 
 ### Consultas automáticas
 
-De forma predeterminada, PlanSwap consulta automáticamente la cuenta actual de cada producto: unos segundos después de abrir la ventana y luego aproximadamente cada 15 minutos mientras la ventana tiene el foco. Puedes cambiar el intervalo o desactivar las consultas automáticas en los [ajustes](#cambiar-el-idioma-y-los-ajustes-de-visualización).
+De forma predeterminada, PlanSwap consulta automáticamente todas las cuentas con sesión iniciada de cada producto, primero la actual y después las demás de una en una: unos 20 segundos después de abrir la ventana y luego aproximadamente cada 15 minutos mientras la ventana tiene el foco. Para consultar solo las cuentas actuales, activa `planswap.usageAutoRefreshCurrentOnly`. Puedes cambiar el intervalo o desactivar las consultas automáticas en los [ajustes](#cambiar-el-idioma-y-los-ajustes-de-visualización).
 
 Las demás filas muestran el resultado de su última consulta. Los valores desaparecen tras su hora de restablecimiento o pasadas 24 horas, y se ocultan si la cuenta ha vuelto a iniciar sesión desde entonces.
 
@@ -237,6 +237,8 @@ Haz clic en el icono de ajustes de la barra de título del panel, o ejecuta **Pl
 | --- | --- | --- |
 | `planswap.language` | `auto` | Seguir el editor, o elegir `en`, `zh-cn`, `zh-tw`, `es` o `ja`. |
 | `planswap.usageDisplay` | `remaining` | Las barras y los porcentajes de uso, en la barra lateral y la barra de estado, muestran lo que queda (`remaining`) o lo que se ha usado (`used`). Los colores siempre se basan en lo que queda. |
+| `planswap.usageAutoRefreshCurrentOnly` | `false` | Las consultas automáticas solo consultan las cuentas actuales de Claude y Codex. |
+| `planswap.usageCheckIntervalSeconds` | `120` | Segundos entre cada búsqueda de cuentas pendientes de una consulta automática, 30–600. Cada cuenta se sigue consultando según el intervalo de actualización de su producto. |
 | `planswap.sidebar.showEmail` | `true` | Mostrar el correo de las cuentas en las tarjetas de la barra lateral. |
 | `planswap.sidebar.showFiveHourLimit` | `true` | Mostrar el límite de 5 horas en las tarjetas. |
 | `planswap.sidebar.showWeeklyLimit` | `true` | Mostrar el límite de 7 días en las tarjetas. |

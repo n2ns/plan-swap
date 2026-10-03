@@ -46,6 +46,8 @@
   "config.usageDisplay.description": "侧边栏和状态栏中的用量额度进度条和百分比显示剩余量还是已用量。颜色和状态栏阈值始终按剩余量计算。",
   "config.usageDisplay.remaining": "剩余量",
   "config.usageDisplay.used": "已用量",
+  "config.usageAutoRefreshCurrentOnly.description": "自动用量查询（planswap.claude.usageAutoRefresh、planswap.codex.usageAutoRefresh）只查询 Claude 当前账号和 Codex 当前生效账号。关闭时，其他已添加的账号也会按相同间隔逐个查询。不影响手动刷新。",
+  "config.usageCheckIntervalSeconds.description": "自动用量查询每隔多少秒检查一次是否有账号已到刷新间隔（planswap.claude.usageRefreshMinutes、planswap.codex.usageRefreshMinutes）（30–600）。只查询已到期的账号。",
   "config.sidebarModelLimits.description": "在侧边栏中显示 Claude 的按模型用量额度。开启后，直接显示在通用额度下方。",
   "config.sidebarEmail.description": "在侧边栏中显示各账号的邮箱。",
   "config.sidebarFiveHour.description": "在侧边栏中显示各账号的 5 小时用量额度。",

@@ -46,6 +46,8 @@
   "config.usageDisplay.description": "Whether usage limit bars and percentages in the sidebar and the status bar show what is left or what is used. Colors and the status bar thresholds always follow what is left.",
   "config.usageDisplay.remaining": "What is left",
   "config.usageDisplay.used": "What is used",
+  "config.usageAutoRefreshCurrentOnly.description": "Automatic usage checks (planswap.claude.usageAutoRefresh, planswap.codex.usageAutoRefresh) query only the current Claude account and the effective Codex account. When off, the other registered accounts are checked too, one at a time, at the same interval. Manual refreshes are not affected.",
+  "config.usageCheckIntervalSeconds.description": "How often, in seconds, automatic usage checks look for accounts whose refresh interval (planswap.claude.usageRefreshMinutes, planswap.codex.usageRefreshMinutes) has passed (30–600). Only due accounts are queried.",
   "config.sidebarModelLimits.description": "Show Claude’s model-specific usage limits in the sidebar. When enabled, they appear below the general limits.",
   "config.sidebarEmail.description": "Show the email of each account in the sidebar.",
   "config.sidebarFiveHour.description": "Show the 5-hour usage limit of each account in the sidebar.",

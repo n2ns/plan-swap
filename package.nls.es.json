@@ -46,6 +46,8 @@
   "config.usageDisplay.description": "Indica si las barras y los porcentajes de los límites de uso en la barra lateral y la barra de estado muestran lo que queda o lo que se ha usado. Los colores y los umbrales de la barra de estado siempre se basan en lo que queda.",
   "config.usageDisplay.remaining": "Lo que queda",
   "config.usageDisplay.used": "Lo que se ha usado",
+  "config.usageAutoRefreshCurrentOnly.description": "Las consultas automáticas de uso (planswap.claude.usageAutoRefresh, planswap.codex.usageAutoRefresh) solo consultan la cuenta actual de Claude y la cuenta efectiva de Codex. Si está desactivado, también se consultan las demás cuentas registradas, de una en una y con el mismo intervalo. No afecta a las actualizaciones manuales.",
+  "config.usageCheckIntervalSeconds.description": "Cada cuántos segundos las consultas automáticas de uso buscan cuentas cuyo intervalo de actualización (planswap.claude.usageRefreshMinutes, planswap.codex.usageRefreshMinutes) ya ha pasado (30–600). Solo se consultan las cuentas pendientes.",
   "config.sidebarModelLimits.description": "Muestra los límites de uso de Claude por modelo en la barra lateral, directamente debajo de los límites generales.",
   "config.sidebarEmail.description": "Muestra el correo de cada cuenta en la barra lateral.",
   "config.sidebarFiveHour.description": "Muestra el límite de uso de 5 horas de cada cuenta en la barra lateral.",

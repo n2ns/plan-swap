@@ -46,6 +46,8 @@
   "config.usageDisplay.description": "側邊欄和狀態列中的用量額度進度條和百分比顯示剩餘量還是已用量。顏色和狀態列臨界值一律依剩餘量計算。",
   "config.usageDisplay.remaining": "剩餘量",
   "config.usageDisplay.used": "已用量",
+  "config.usageAutoRefreshCurrentOnly.description": "自動用量查詢（planswap.claude.usageAutoRefresh、planswap.codex.usageAutoRefresh）只查詢 Claude 目前帳號和 Codex 目前生效帳號。關閉時，其他已新增的帳號也會依相同間隔逐一查詢。不影響手動重新整理。",
+  "config.usageCheckIntervalSeconds.description": "自動用量查詢每隔多少秒檢查一次是否有帳號已到重新整理間隔（planswap.claude.usageRefreshMinutes、planswap.codex.usageRefreshMinutes）（30–600）。只查詢已到期的帳號。",
   "config.sidebarModelLimits.description": "在側邊欄中顯示 Claude 的各模型用量額度。啟用後，會直接顯示在一般額度下方。",
   "config.sidebarEmail.description": "在側邊欄中顯示各帳號的電子郵件。",
   "config.sidebarFiveHour.description": "在側邊欄中顯示各帳號的 5 小時用量額度。",
