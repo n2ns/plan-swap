@@ -5,6 +5,8 @@ import type { Locale } from './i18n';
 
 export type AccountKind = 'default' | 'named' | 'external';
 export type PanelMode = 'claude' | 'codex';
+// Setting planswap.usageDisplay: usage bars and percentages show what is left (the default) or what is used
+export type UsageDisplay = 'remaining' | 'used';
 export type ToolId = 'openGlobalMd' | 'openSettings' | 'reloadWindow' | 'restartExtHost' | 'restartServer' | 'cliVersions' | 'sync' | 'updateCli' | 'openHelp' | 'openStar' | 'refreshUsage' | 'refreshAllUsage';
 
 export interface AccountView {
@@ -63,6 +65,8 @@ export interface PanelState {
   locale: Locale;
   claude: TabState;
   codex: TabState;
+  // Setting planswap.usageDisplay; absent means 'remaining'
+  usageDisplay?: UsageDisplay;
 }
 
 export type ToWebview =

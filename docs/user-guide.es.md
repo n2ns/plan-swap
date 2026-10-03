@@ -154,7 +154,7 @@ Después:
 
 ## Consultar y actualizar los límites de uso
 
-Las barras de uso y los porcentajes muestran lo que **queda**. La duración junto a cada límite, como `2d 5h`, es el tiempo hasta que se restablece. Pasa el puntero sobre una barra para ver lo que queda y lo que se ha usado, por ejemplo `97% restante (3% usado)`. Un límite agotado muestra `0%` y su hora de restablecimiento en rojo. Si no hay línea de uso, es que aún no hay datos, no que el uso sea cero ni que la cuota sea ilimitada.
+Las barras de uso y los porcentajes muestran lo que **queda** (con `planswap.usageDisplay` en `used` muestran lo que se ha usado). La duración junto a cada límite, como `2d 5h`, es el tiempo hasta que se restablece. Pasa el puntero sobre una barra para ver lo que queda y lo que se ha usado, por ejemplo `97% restante (3% usado)`. Un límite agotado muestra `0%` y su hora de restablecimiento en rojo. Si no hay línea de uso, es que aún no hay datos, no que el uso sea cero ni que la cuota sea ilimitada.
 
 Las consultas de uso requieren un inicio de sesión con suscripción de Claude, o un inicio de sesión de ChatGPT en Codex (no el modo de clave de API). Ejecutan la CLI oficial.
 
@@ -236,6 +236,7 @@ Haz clic en el icono de ajustes de la barra de título del panel, o ejecuta **Pl
 | Ajuste | Predeterminado | Función |
 | --- | --- | --- |
 | `planswap.language` | `auto` | Seguir el editor, o elegir `en`, `zh-cn`, `zh-tw`, `es` o `ja`. |
+| `planswap.usageDisplay` | `remaining` | Las barras y los porcentajes de uso, en la barra lateral y la barra de estado, muestran lo que queda (`remaining`) o lo que se ha usado (`used`). Los colores siempre se basan en lo que queda. |
 | `planswap.sidebar.showEmail` | `true` | Mostrar el correo de las cuentas en las tarjetas de la barra lateral. |
 | `planswap.sidebar.showFiveHourLimit` | `true` | Mostrar el límite de 5 horas en las tarjetas. |
 | `planswap.sidebar.showWeeklyLimit` | `true` | Mostrar el límite de 7 días en las tarjetas. |

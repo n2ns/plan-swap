@@ -9,6 +9,7 @@ import { EXTERNAL_NAME, labelFor, type LabelStore } from './labels';
 import type { AccountView, FromWebview, PanelMode, PanelState, RestartInfo, TabState, ToWebview } from './protocol';
 import { isSharedClaudeAccount } from './claudeShare';
 import { readClaudeUsage } from './claudeUsage';
+import { usageDisplay } from './statusBar';
 import { getLocale, intlLocale, t } from './i18n';
 import { comparablePath, isWindows } from './platform';
 
@@ -286,6 +287,7 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
       locale: getLocale(),
       claude: this.tabState('claude'),
       codex: this.tabState('codex'),
+      usageDisplay: usageDisplay() === 'used' ? 'used' : undefined,
     };
     console.debug(`[planswap] state read: ${(performance.now() - startedAt).toFixed(1)}ms; claude=${state.claude.accounts.length}, codex=${state.codex.accounts.length}`);
     this.post({ type: 'state', state });

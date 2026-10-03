@@ -616,6 +616,40 @@ async function resetDateStates() {
 
 // The add form starts collapsed behind the "+ Add" toggle; focusAdd expands and focuses it; Escape and a successful add collapse it.
 // The Tools section is always shown
+// planswap.usageDisplay used: bars, percentages, screen reader values and the bar tooltip show what is used, in every
+// locale and width; the level (color) still follows what is left
+const usedTitle = {
+  en: (used) => `${used}% used (${100 - used}% left)`, 'zh-cn': (used) => `已用 ${used}%（剩余 ${100 - used}%）`,
+  'zh-tw': (used) => `已用 ${used}%（剩餘 ${100 - used}%）`,
+  es: (used) => `${used}% usado (${100 - used}% restante)`, ja: (used) => `使用済み ${used}%（残り ${100 - used}%）`,
+};
+async function usedDisplay() {
+  for (const locale of locales) {
+    for (const width of widths) {
+      await page.evaluate(({ locale, width }) => {
+        window.preview.apply({ locale, width, active: 'codex' });
+        window.preview.post({ type: 'state', state: { ...structuredClone(window.preview.state()), usageDisplay: 'used' } });
+      }, { locale, width });
+      const windows = await page.locator(`${row('codex', 'work')} .usage-window`).evaluateAll((items) => items.map((item) => {
+        const track = item.querySelector('.usage-track');
+        return {
+          level: track.dataset.level, value: track.getAttribute('aria-valuenow'), title: track.title,
+          fill: item.querySelector('.usage-fill').style.width, pct: item.querySelector('.usage-pct').textContent,
+          overflow: item.scrollWidth > item.clientWidth,
+        };
+      }));
+      const where = `used display ${name(locale, width)}`;
+      assert.deepEqual(windows.map((w) => w.level), ['ok', 'warn'], `levels follow what is left at ${where}`);
+      for (const [index, used] of [42, 86].entries()) {
+        assert.deepEqual(windows[index], { level: windows[index].level, value: String(used), title: usedTitle[locale](used), fill: `${used}%`, pct: `${used}%`, overflow: false }, where);
+      }
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth), false, `horizontal overflow at ${where}`);
+      await shot(`${name(locale, width)}-codex-used.png`, 'codex');
+    }
+  }
+  results.interactions.push('usageDisplay used: bars, percentages and tooltips show what is used in every locale and width; colors follow what is left');
+}
+
 async function addFormAndTools() {
   for (const mode of ['claude', 'codex']) {
     await page.evaluate((mode) => { window.preview.apply({ locale: 'en', width: 280, active: mode }); window.preview.clearMessages(); }, mode);
@@ -751,6 +785,7 @@ async function interactions() {
   assert.equal(await page.locator('#panel-codex .row-usage').count(), 0);
   results.interactions.push('host state without usage removed historical rows');
 
+  await usedDisplay();
   await addFormAndTools();
   await footerAndSwitch();
 

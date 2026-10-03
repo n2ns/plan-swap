@@ -203,7 +203,7 @@ describe('locale metadata', () => {
   });
   test('the planswap.language setting lists auto plus every locale, each with a label', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-    const setting = pkg.contributes.configuration.properties['planswap.language'];
+    const setting = pkg.contributes.configuration.find((c: { properties: Record<string, unknown> }) => 'planswap.language' in c.properties).properties['planswap.language'];
     assert.deepEqual(setting.enum, ['auto', ...LOCALES]);
     assert.equal(setting.enumDescriptions.length, setting.enum.length);
     const nlsEn = JSON.parse(fs.readFileSync(path.join(root, 'package.nls.json'), 'utf8'));

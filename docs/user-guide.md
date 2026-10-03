@@ -154,7 +154,7 @@ Then:
 
 ## Read and refresh usage limits
 
-Usage bars and percentages show what is **left**. The duration next to each limit, such as `2d 5h`, is the time until it resets. Hover a bar to see what is left and what is used, for example `97% left (3% used)`. A used-up limit shows `0%` and its reset time in red. No usage line means no data yet, not zero usage or unlimited quota.
+Usage bars and percentages show what is **left** (set `planswap.usageDisplay` to `used` to show what is used instead). The duration next to each limit, such as `2d 5h`, is the time until it resets. Hover a bar to see what is left and what is used, for example `97% left (3% used)`. A used-up limit shows `0%` and its reset time in red. No usage line means no data yet, not zero usage or unlimited quota.
 
 Usage checks need a Claude subscription sign-in, or a Codex ChatGPT sign-in (not API key mode). They run the official CLI.
 
@@ -236,6 +236,7 @@ Click the settings icon in the panel title bar, or run **PlanSwap: Open PlanSwap
 | Setting | Default | Purpose |
 | --- | --- | --- |
 | `planswap.language` | `auto` | Follow the editor, or choose `en`, `zh-cn`, `zh-tw`, `es` or `ja`. |
+| `planswap.usageDisplay` | `remaining` | Usage bars and percentages, in the sidebar and the status bar, show what is left (`remaining`) or what is used (`used`). Colors always follow what is left. |
 | `planswap.sidebar.showEmail` | `true` | Show account emails on sidebar cards. |
 | `planswap.sidebar.showFiveHourLimit` | `true` | Show the 5-hour limit on cards. |
 | `planswap.sidebar.showWeeklyLimit` | `true` | Show the 7-day limit on cards. |

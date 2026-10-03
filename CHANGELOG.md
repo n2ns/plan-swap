@@ -2,9 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- `planswap.usageDisplay` (`remaining` by default, or `used`): usage bars and percentages in the sidebar and the status bar show what is left or what is used. Colors and the status bar thresholds still follow what is left.
+
 ### Changed
 
 - The Tools section below the account list is always shown instead of collapsed.
+- PlanSwap settings are grouped in the Settings editor (General, Sidebar, Status Bar, Claude, Codex), each group in a fixed order.
 - Hovering a usage bar shows what is left and what is used (for example "97% left (3% used)"). The other hover texts of the usage area (collection time, remaining percentage, exact reset date) are gone.
 - An account's directory is shown when hovering its avatar instead of the whole card.
 

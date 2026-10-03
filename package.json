@@ -194,159 +194,223 @@
         "icon": "$(sync)"
       }
     ],
-    "configuration": {
-      "title": "%config.title%",
-      "properties": {
-        "planswap.language": {
-          "type": "string",
-          "enum": [
-            "auto",
-            "en",
-            "zh-cn",
-            "zh-tw",
-            "es",
-            "ja"
-          ],
-          "default": "auto",
-          "scope": "application",
-          "enumDescriptions": [
-            "%config.language.auto%",
-            "%config.language.en%",
-            "%config.language.zhCn%",
-            "%config.language.zhTw%",
-            "%config.language.es%",
-            "%config.language.ja%"
-          ],
-          "description": "%config.language.description%"
-        },
-        "planswap.sidebar.showModelLimits": {
-          "type": "boolean",
-          "default": false,
-          "scope": "application",
-          "description": "%config.sidebarModelLimits.description%"
-        },
-        "planswap.sidebar.showEmail": {
-          "type": "boolean",
-          "default": true,
-          "scope": "application",
-          "description": "%config.sidebarEmail.description%"
-        },
-        "planswap.sidebar.showFiveHourLimit": {
-          "type": "boolean",
-          "default": true,
-          "scope": "application",
-          "description": "%config.sidebarFiveHour.description%"
-        },
-        "planswap.sidebar.showWeeklyLimit": {
-          "type": "boolean",
-          "default": true,
-          "scope": "application",
-          "description": "%config.sidebarWeekly.description%"
-        },
-        "planswap.statusBar.enabled": {
-          "type": "boolean",
-          "default": true,
-          "scope": "application",
-          "description": "%config.statusBarEnabled.description%"
-        },
-        "planswap.statusBar.products": {
-          "type": "string",
-          "enum": [
-            "both",
-            "claude",
-            "codex"
-          ],
-          "default": "both",
-          "scope": "application",
-          "enumDescriptions": [
-            "%config.statusBarProducts.both%",
-            "%config.statusBarProducts.claude%",
-            "%config.statusBarProducts.codex%"
-          ],
-          "description": "%config.statusBarProducts.description%"
-        },
-        "planswap.statusBar.warningThreshold": {
-          "type": "number",
-          "default": 30,
-          "minimum": 0,
-          "maximum": 100,
-          "scope": "application",
-          "description": "%config.statusBarWarningThreshold.description%"
-        },
-        "planswap.statusBar.errorThreshold": {
-          "type": "number",
-          "default": 10,
-          "minimum": 0,
-          "maximum": 100,
-          "scope": "application",
-          "description": "%config.statusBarErrorThreshold.description%"
-        },
-        "planswap.statusBar.alignment": {
-          "type": "string",
-          "enum": [
-            "left",
-            "right"
-          ],
-          "default": "right",
-          "scope": "application",
-          "enumDescriptions": [
-            "%config.statusBarAlignment.left%",
-            "%config.statusBarAlignment.right%"
-          ],
-          "description": "%config.statusBarAlignment.description%"
-        },
-        "planswap.claude.confirmSwitch": {
-          "type": "boolean",
-          "default": true,
-          "scope": "application",
-          "description": "%config.claudeConfirmSwitch.description%"
-        },
-        "planswap.claude.usageAutoRefresh": {
-          "type": "boolean",
-          "default": true,
-          "scope": "application",
-          "description": "%config.claudeUsageAutoRefresh.description%"
-        },
-        "planswap.claude.usageRefreshMinutes": {
-          "type": "number",
-          "default": 15,
-          "minimum": 10,
-          "maximum": 1440,
-          "scope": "application",
-          "description": "%config.claudeUsageRefreshMinutes.description%"
-        },
-        "planswap.claude.usageTimeoutSeconds": {
-          "type": "number",
-          "default": 30,
-          "minimum": 10,
-          "maximum": 120,
-          "scope": "application",
-          "description": "%config.claudeUsageTimeoutSeconds.description%"
-        },
-        "planswap.codex.usageAutoRefresh": {
-          "type": "boolean",
-          "default": true,
-          "scope": "application",
-          "description": "%config.codexUsageAutoRefresh.description%"
-        },
-        "planswap.codex.usageRefreshMinutes": {
-          "type": "number",
-          "default": 15,
-          "minimum": 5,
-          "maximum": 1440,
-          "scope": "application",
-          "description": "%config.codexUsageRefreshMinutes.description%"
-        },
-        "planswap.codex.usageTimeoutSeconds": {
-          "type": "number",
-          "default": 15,
-          "minimum": 5,
-          "maximum": 120,
-          "scope": "application",
-          "description": "%config.codexUsageTimeoutSeconds.description%"
+    "configuration": [
+      {
+        "id": "planswap",
+        "title": "%config.group.general%",
+        "order": 0,
+        "properties": {
+          "planswap.language": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "en",
+              "zh-cn",
+              "zh-tw",
+              "es",
+              "ja"
+            ],
+            "default": "auto",
+            "scope": "application",
+            "enumDescriptions": [
+              "%config.language.auto%",
+              "%config.language.en%",
+              "%config.language.zhCn%",
+              "%config.language.zhTw%",
+              "%config.language.es%",
+              "%config.language.ja%"
+            ],
+            "description": "%config.language.description%",
+            "order": 0
+          },
+          "planswap.usageDisplay": {
+            "type": "string",
+            "enum": [
+              "remaining",
+              "used"
+            ],
+            "default": "remaining",
+            "scope": "application",
+            "enumDescriptions": [
+              "%config.usageDisplay.remaining%",
+              "%config.usageDisplay.used%"
+            ],
+            "description": "%config.usageDisplay.description%",
+            "order": 1
+          }
+        }
+      },
+      {
+        "id": "planswap.sidebar",
+        "title": "%config.group.sidebar%",
+        "order": 1,
+        "properties": {
+          "planswap.sidebar.showEmail": {
+            "type": "boolean",
+            "default": true,
+            "scope": "application",
+            "description": "%config.sidebarEmail.description%",
+            "order": 0
+          },
+          "planswap.sidebar.showFiveHourLimit": {
+            "type": "boolean",
+            "default": true,
+            "scope": "application",
+            "description": "%config.sidebarFiveHour.description%",
+            "order": 1
+          },
+          "planswap.sidebar.showWeeklyLimit": {
+            "type": "boolean",
+            "default": true,
+            "scope": "application",
+            "description": "%config.sidebarWeekly.description%",
+            "order": 2
+          },
+          "planswap.sidebar.showModelLimits": {
+            "type": "boolean",
+            "default": false,
+            "scope": "application",
+            "description": "%config.sidebarModelLimits.description%",
+            "order": 3
+          }
+        }
+      },
+      {
+        "id": "planswap.statusBar",
+        "title": "%config.group.statusBar%",
+        "order": 2,
+        "properties": {
+          "planswap.statusBar.enabled": {
+            "type": "boolean",
+            "default": true,
+            "scope": "application",
+            "description": "%config.statusBarEnabled.description%",
+            "order": 0
+          },
+          "planswap.statusBar.products": {
+            "type": "string",
+            "enum": [
+              "both",
+              "claude",
+              "codex"
+            ],
+            "default": "both",
+            "scope": "application",
+            "enumDescriptions": [
+              "%config.statusBarProducts.both%",
+              "%config.statusBarProducts.claude%",
+              "%config.statusBarProducts.codex%"
+            ],
+            "description": "%config.statusBarProducts.description%",
+            "order": 1
+          },
+          "planswap.statusBar.warningThreshold": {
+            "type": "number",
+            "default": 30,
+            "minimum": 0,
+            "maximum": 100,
+            "scope": "application",
+            "description": "%config.statusBarWarningThreshold.description%",
+            "order": 2
+          },
+          "planswap.statusBar.errorThreshold": {
+            "type": "number",
+            "default": 10,
+            "minimum": 0,
+            "maximum": 100,
+            "scope": "application",
+            "description": "%config.statusBarErrorThreshold.description%",
+            "order": 3
+          },
+          "planswap.statusBar.alignment": {
+            "type": "string",
+            "enum": [
+              "left",
+              "right"
+            ],
+            "default": "right",
+            "scope": "application",
+            "enumDescriptions": [
+              "%config.statusBarAlignment.left%",
+              "%config.statusBarAlignment.right%"
+            ],
+            "description": "%config.statusBarAlignment.description%",
+            "order": 4
+          }
+        }
+      },
+      {
+        "id": "planswap.claude",
+        "title": "Claude",
+        "order": 3,
+        "properties": {
+          "planswap.claude.confirmSwitch": {
+            "type": "boolean",
+            "default": true,
+            "scope": "application",
+            "description": "%config.claudeConfirmSwitch.description%",
+            "order": 0
+          },
+          "planswap.claude.usageAutoRefresh": {
+            "type": "boolean",
+            "default": true,
+            "scope": "application",
+            "description": "%config.claudeUsageAutoRefresh.description%",
+            "order": 1
+          },
+          "planswap.claude.usageRefreshMinutes": {
+            "type": "number",
+            "default": 15,
+            "minimum": 10,
+            "maximum": 1440,
+            "scope": "application",
+            "description": "%config.claudeUsageRefreshMinutes.description%",
+            "order": 2
+          },
+          "planswap.claude.usageTimeoutSeconds": {
+            "type": "number",
+            "default": 30,
+            "minimum": 10,
+            "maximum": 120,
+            "scope": "application",
+            "description": "%config.claudeUsageTimeoutSeconds.description%",
+            "order": 3
+          }
+        }
+      },
+      {
+        "id": "planswap.codex",
+        "title": "Codex",
+        "order": 4,
+        "properties": {
+          "planswap.codex.usageAutoRefresh": {
+            "type": "boolean",
+            "default": true,
+            "scope": "application",
+            "description": "%config.codexUsageAutoRefresh.description%",
+            "order": 0
+          },
+          "planswap.codex.usageRefreshMinutes": {
+            "type": "number",
+            "default": 15,
+            "minimum": 5,
+            "maximum": 1440,
+            "scope": "application",
+            "description": "%config.codexUsageRefreshMinutes.description%",
+            "order": 1
+          },
+          "planswap.codex.usageTimeoutSeconds": {
+            "type": "number",
+            "default": 15,
+            "minimum": 5,
+            "maximum": 120,
+            "scope": "application",
+            "description": "%config.codexUsageTimeoutSeconds.description%",
+            "order": 2
+          }
         }
       }
-    },
+    ],
     "viewsContainers": {
       "activitybar": [
         {

@@ -427,8 +427,8 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     vscode.workspace.onDidChangeConfiguration((e) => {
       // The Codex extension's run-in-WSL switch changes what the Codex section of the tooltip can say
       if (e.affectsConfiguration('chatgpt.runCodexInWindowsSubsystemForLinux')) { statusBar.update(); panel.refresh(); }
-      // Sidebar display settings: email, 5-hour and 7-day limits, Claude's model-specific limits
-      if (e.affectsConfiguration('planswap.sidebar')) panel.refresh();
+      // Sidebar display settings (email, 5-hour and 7-day limits, Claude's model-specific limits) and remaining/used display
+      if (e.affectsConfiguration('planswap.sidebar') || e.affectsConfiguration('planswap.usageDisplay')) panel.refresh();
       // Automatic usage checks turned on or a shorter interval: check now when due
       if (['claude', 'codex'].some((p) => e.affectsConfiguration(`planswap.${p}.usageAutoRefresh`) || e.affectsConfiguration(`planswap.${p}.usageRefreshMinutes`))) checkUsage();
       if (!affectsSetting(e)) return;

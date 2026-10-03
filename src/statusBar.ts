@@ -15,6 +15,7 @@ import type { CodexUsage, UsageFailure, UsageWindow } from './codex/codexUsage';
 import { USAGE_HISTORY_MAX_AGE_MS } from './codex/codexUsageHistory';
 import { readClaudeUsage, type ClaudeUsage, type ClaudeUsageFailure, type ClaudeUsageWindow } from './claudeUsage';
 import type { ClaudeUsageState } from './claudeUsageMonitor';
+import type { UsageDisplay } from './protocol';
 
 // Refresh commands; only the two single-account ones are trusted command links in the tooltip (buildTooltip)
 export const REFRESH_USAGE_COMMAND = 'planswap.codex.refreshUsage';
@@ -58,14 +59,25 @@ export function remainingOf(w: { usedPercent: number }): number {
   return Math.max(0, Math.min(100, Math.floor(100 - w.usedPercent)));
 }
 
+/** Setting planswap.usageDisplay, read on every update; anything but 'used' shows what is left. */
+export function usageDisplay(): UsageDisplay {
+  return vscode.workspace.getConfiguration('planswap').get<string>('usageDisplay', 'remaining') === 'used' ? 'used' : 'remaining';
+}
+
+/** The percentage a window shows: remainingOf, or what is used (100 minus it, so both add up to 100). */
+export function shownPercent(w: { usedPercent: number }, display: UsageDisplay): number {
+  const remaining = remainingOf(w);
+  return display === 'used' ? 100 - remaining : remaining;
+}
+
 const BAR_CELLS = 10;
 
 /**
- * Fixed-width progress bar of the remaining share: always 10 cells of █/░ (one Unicode block, so both glyphs share a
+ * Fixed-width progress bar of the shown share (shownPercent): always 10 cells of █/░ (one Unicode block, so both glyphs share a
  * width); a non-empty window always shows at least one filled cell.
  */
-export function usageBar(remaining: number): string {
-  const clamped = Math.max(0, Math.min(100, remaining));
+export function usageBar(percent: number): string {
+  const clamped = Math.max(0, Math.min(100, percent));
   const filled = clamped <= 0 ? 0 : Math.max(1, Math.round(clamped / 100 * BAR_CELLS));
   return '█'.repeat(filled) + '░'.repeat(BAR_CELLS - filled);
 }
@@ -145,31 +157,32 @@ export function relativeReset(epochSeconds: number, now: number = Date.now()): s
     .join(durationUnitSeparator);
 }
 
-/** Status bar text ("Claude 97% · Codex 82%"): product names with the remaining percentage of their short window when known. */
-export function statusText(parts: ReadonlyArray<{ product: string; remaining?: number }>): string {
-  return parts.map((p) => p.remaining === undefined ? p.product : t('status.textUsage', { product: p.product, percent: p.remaining })).join(' · ');
+/** Status bar text ("Claude 97% · Codex 82%"): product names with the shown percentage (shownPercent) of their short window when known. */
+export function statusText(parts: ReadonlyArray<{ product: string; percent?: number }>): string {
+  return parts.map((p) => p.percent === undefined ? p.product : t('status.textUsage', { product: p.product, percent: p.percent })).join(' · ');
 }
 
-/** Screen reader label of the status bar item ("PlanSwap: Claude 97% left, Codex"). */
-export function statusAccessibilityLabel(parts: ReadonlyArray<{ product: string; remaining?: number }>): string {
-  const items = parts.map((p) => p.remaining === undefined ? p.product : `${p.product} ${t('status.remainingShort', { percent: p.remaining })}`);
+/** Screen reader label of the status bar item ("PlanSwap: Claude 97% left, Codex", or "3% used" when showing what is used). */
+export function statusAccessibilityLabel(parts: ReadonlyArray<{ product: string; percent?: number }>, display: UsageDisplay = 'remaining'): string {
+  const key = display === 'used' ? 'status.usedShort' : 'status.remainingShort';
+  const items = parts.map((p) => p.percent === undefined ? p.product : `${p.product} ${t(key, { percent: p.percent })}`);
   return `PlanSwap: ${items.join(', ')}`;
 }
 
 /**
- * One usage window as an HTML table row: name, bar, remaining percentage (with a warning mark at 0%), relative reset
+ * One usage window as an HTML table row: name, bar, shown percentage (shownPercent; with a warning mark when used up), relative reset
  * time. The name is the duration ("5h"), `#n` without one, or "{window} · {scope}" for a model-specific window; the
  * reset cell is empty without a reset time.
  */
-export function windowRow(w: UsageWindow | ClaudeUsageWindow, index: number, now: number = Date.now()): string {
+export function windowRow(w: UsageWindow | ClaudeUsageWindow, index: number, now: number = Date.now(), display: UsageDisplay = 'remaining'): string {
   const duration = w.windowMinutes ? formatDuration(w.windowMinutes) : `#${index + 1}`;
   const scope = 'scope' in w ? w.scope : undefined;
   const name = scope ? t('status.scopedWindow', { window: duration, scope }) : duration;
-  const remaining = remainingOf(w);
+  const shown = shownPercent(w, display);
   const exhausted = Number((100 - w.usedPercent).toFixed(2)) <= 0;
-  const percent = exhausted ? `${remaining}% ${icon('warning')} ${escapeHtml(t('status.exhausted'))}` : `${remaining}%`;
+  const percent = exhausted ? `${shown}% ${icon('warning')} ${escapeHtml(t('status.exhausted'))}` : `${shown}%`;
   const reset = w.resetsAt !== undefined ? `${icon('clock')} ${escapeHtml(relativeReset(w.resetsAt, now))}` : '';
-  return `<tr><td>${escapeHtml(name)}</td><td>${usageBar(remaining)}</td><td align="right">${percent}</td><td align="right">${reset}</td></tr>`;
+  return `<tr><td>${escapeHtml(name)}</td><td>${usageBar(shown)}</td><td align="right">${percent}</td><td align="right">${reset}</td></tr>`;
 }
 
 /** A refresh icon link running one of PlanSwap's own refresh commands; the hover title is our own localized text. */
@@ -229,14 +242,14 @@ function codexWindows(state: CodexUsageState | undefined, now: number): UsageWin
  * out). Rows: the live windows sorted by duration. Notes (italic): limit reached, a failure other than notLoggedIn,
  * then "checking" while a query runs.
  */
-export function codexUsageParts(state: CodexUsageState | undefined, now: number = Date.now()): UsageParts {
+export function codexUsageParts(state: CodexUsageState | undefined, now: number = Date.now(), display: UsageDisplay = 'remaining'): UsageParts {
   const parts: UsageParts = { rows: [], notes: [] };
   if (!state) return parts;
   const r = state.result;
   if (r?.ok) {
     const usage = liveCodexUsage(r.usage, now);
     if (usage) {
-      parts.rows.push(...byDuration(usage.windows).map((w, i) => windowRow(w, i, now)));
+      parts.rows.push(...byDuration(usage.windows).map((w, i) => windowRow(w, i, now, display)));
       if (usage.limitReached) parts.notes.push(`<em>${icon('warning')} ${escapeHtml(t('status.usageReached'))}</em>`);
     }
   } else if (r && r.reason !== 'notLoggedIn') {
@@ -253,10 +266,11 @@ export function codexUsageParts(state: CodexUsageState | undefined, now: number 
  */
 export function claudeUsageParts(
   usage: ClaudeUsage | undefined, state: ClaudeUsageState | undefined, dir: string, now: number = Date.now(),
+  display: UsageDisplay = 'remaining',
 ): UsageParts {
   const parts: UsageParts = { rows: [], notes: [] };
   if (usage) {
-    parts.rows.push(...byDuration(usage.windows.filter((w) => !w.scope)).map((w, i) => windowRow(w, i, now)));
+    parts.rows.push(...byDuration(usage.windows.filter((w) => !w.scope)).map((w, i) => windowRow(w, i, now, display)));
   }
   if (state?.checking) parts.notes.push(italic(t('status.usageChecking')));
   else if (state?.failure && samePath(state.failure.dir, dir)) parts.notes.push(italic(t('status.usageFailedShort')));
@@ -298,7 +312,7 @@ interface Block {
   usage: UsageParts;
 }
 
-interface Product { product: string; remaining?: number }
+interface Product { product: string; percent?: number }
 interface Candidate { remaining: number; product: string; window: string }
 
 // The lowest remaining percentage among the general windows (model-specific ones never count)
@@ -312,6 +326,8 @@ function candidatesOf(product: string, windows: ReadonlyArray<UsageWindow | Clau
  * The PlanSwap status bar item; a click opens the PlanSwap view. The planswap.statusBar.* settings (statusBarSettings)
  * apply on every update, and a change of any of them updates at once: enabled off hides the item, products leaves a vendor out of the text, tooltip and background,
  * the thresholds pick the background, and an alignment change replaces the item (a status bar item's side is fixed).
+ * planswap.usageDisplay (usageDisplay) picks whether the text, bars and percentages show what is left or what is used;
+ * the background always follows what is left.
  *
  * A selected vendor is shown when its effective configuration directory or a registered account directory exists (Claude also
  * when its resolved .claude.json exists); no network access or sign-in is needed, and with neither vendor the item is
@@ -334,7 +350,7 @@ export class StatusBar implements vscode.Disposable {
   private alignment = statusBarSettings().alignment;
   private item = createItem(this.alignment);
   private readonly settingsListener = vscode.workspace.onDidChangeConfiguration((e) => {
-    if (e.affectsConfiguration('planswap.statusBar')) this.update();
+    if (e.affectsConfiguration('planswap.statusBar') || e.affectsConfiguration('planswap.usageDisplay')) this.update();
   });
   private codexUsage: CodexUsageState | undefined;
   private claudeUsage: ClaudeUsageState | undefined;
@@ -361,6 +377,7 @@ export class StatusBar implements vscode.Disposable {
 
   update(): void {
     const settings = statusBarSettings();
+    const display = usageDisplay();
     if (settings.alignment !== this.alignment) {
       this.item.dispose();
       this.alignment = settings.alignment;
@@ -386,13 +403,13 @@ export class StatusBar implements vscode.Disposable {
       const showUsage = info.identity !== undefined;
       const usage = showUsage ? readClaudeUsage(dir, explicit) : undefined;
       const short = usage ? shortWindow(usage.windows) : undefined;
-      products.push({ product: 'Claude', remaining: short ? remainingOf(short) : undefined });
+      products.push({ product: 'Claude', percent: short ? shownPercent(short, display) : undefined });
       if (usage) candidates.push(...candidatesOf('Claude', usage.windows));
       blocks.push({
         identity: info.email ?? (info.loggedIn ? label : t('common.notLoggedIn')),
         plan: info.plan,
         refresh: showUsage && this.claudeUsage !== undefined ? CLAUDE_REFRESH_USAGE_COMMAND : undefined,
-        usage: showUsage ? claudeUsageParts(usage, this.claudeUsage, dir, now) : { rows: [], notes: [] },
+        usage: showUsage ? claudeUsageParts(usage, this.claudeUsage, dir, now, display) : { rows: [], notes: [] },
       });
     }
     const codexDir = effectiveDir();
@@ -415,17 +432,17 @@ export class StatusBar implements vscode.Disposable {
       const inWsl = codexRunsInWsl();
       const showUsage = !inWsl && !apiKey && info.loggedIn;
       if (inWsl) usage.notes.push(italic(t('status.codexRunsInWsl')));
-      let remaining: number | undefined;
+      let percent: number | undefined;
       if (showUsage) {
-        const shown = codexUsageParts(this.codexUsage, now);
+        const shown = codexUsageParts(this.codexUsage, now, display);
         usage.rows.push(...shown.rows);
         usage.notes.push(...shown.notes);
         const windows = codexWindows(this.codexUsage, now);
         const short = windows ? shortWindow(windows) : undefined;
-        remaining = short ? remainingOf(short) : undefined;
+        percent = short ? shownPercent(short, display) : undefined;
         if (windows) candidates.push(...candidatesOf('Codex', windows));
       }
-      products.push({ product: 'Codex', remaining });
+      products.push({ product: 'Codex', percent });
       blocks.push({
         identity: apiKey ? 'API key' : info.email ?? (info.loggedIn ? label : t('common.notLoggedIn')),
         plan: apiKey ? undefined : info.plan,
@@ -438,7 +455,7 @@ export class StatusBar implements vscode.Disposable {
     for (const c of candidates) if (!lowest || c.remaining < lowest.remaining) lowest = c;
     const background = backgroundIdFor(lowest?.remaining, settings);
     this.item.text = products.length ? `$(dashboard) ${statusText(products)}` : '';
-    this.item.accessibilityInformation = products.length ? { label: statusAccessibilityLabel(products), role: 'button' } : undefined;
+    this.item.accessibilityInformation = products.length ? { label: statusAccessibilityLabel(products, display), role: 'button' } : undefined;
     this.item.backgroundColor = background ? new vscode.ThemeColor(background) : undefined;
     this.item.tooltip = buildTooltip(blocks);
     if (products.length) this.item.show();

@@ -13,6 +13,8 @@ export type Locale = PanelState['locale'];
 export const en = {
   'usage.barTitle': '{remaining}% left ({used}% used)',
   'usage.remaining': '{percent}% remaining',
+  'usage.barTitleUsed': '{used}% used ({remaining}% left)',
+  'usage.used': '{percent}% used',
   'usage.window': 'Limit',
   'usage.days': '{n}-day limit',
   'usage.hours': '{n}-hour limit',
@@ -120,6 +122,8 @@ export type MessageKey = keyof typeof en;
 export const zhCn: Record<MessageKey, string> = {
   'usage.barTitle': '剩余 {remaining}%（已用 {used}%）',
   'usage.remaining': '剩余 {percent}%',
+  'usage.barTitleUsed': '已用 {used}%（剩余 {remaining}%）',
+  'usage.used': '已用 {percent}%',
   'usage.window': '额度',
   'usage.days': '{n} 天额度',
   'usage.hours': '{n} 小时额度',
@@ -225,6 +229,8 @@ export const zhCn: Record<MessageKey, string> = {
 export const zhTw: Record<MessageKey, string> = {
   'usage.barTitle': '剩餘 {remaining}%（已用 {used}%）',
   'usage.remaining': '剩餘 {percent}%',
+  'usage.barTitleUsed': '已用 {used}%（剩餘 {remaining}%）',
+  'usage.used': '已用 {percent}%',
   'usage.window': '額度',
   'usage.days': '{n} 天額度',
   'usage.hours': '{n} 小時額度',
@@ -330,6 +336,8 @@ export const zhTw: Record<MessageKey, string> = {
 export const es: Record<MessageKey, string> = {
   'usage.barTitle': '{remaining}% restante ({used}% usado)',
   'usage.remaining': '{percent}% restante',
+  'usage.barTitleUsed': '{used}% usado ({remaining}% restante)',
+  'usage.used': '{percent}% usado',
   'usage.window': 'Límite',
   'usage.days': '{n, plural, one {Límite de # día} other {Límite de # días}}',
   'usage.hours': 'Límite de {n} h',
@@ -434,6 +442,8 @@ export const es: Record<MessageKey, string> = {
 export const ja: Record<MessageKey, string> = {
   'usage.barTitle': '残り {remaining}%（使用済み {used}%）',
   'usage.remaining': '残り {percent}%',
+  'usage.barTitleUsed': '使用済み {used}%（残り {remaining}%）',
+  'usage.used': '使用済み {percent}%',
   'usage.window': '利用枠',
   'usage.days': '{n} 日間の上限',
   'usage.hours': '{n} 時間の上限',

@@ -180,9 +180,10 @@ describe('pure helpers', () => {
   });
 
   test('statusText and the screen reader label carry product names and the short window only', () => {
-    assert.equal(statusText([{ product: 'Claude', remaining: 97 }, { product: 'Codex', remaining: 82 }]), 'Claude 97% · Codex 82%');
-    assert.equal(statusText([{ product: 'Claude' }, { product: 'Codex', remaining: 0 }]), 'Claude · Codex 0%');
-    assert.equal(statusAccessibilityLabel([{ product: 'Claude', remaining: 97 }, { product: 'Codex' }]), 'PlanSwap: Claude 97% left, Codex');
+    assert.equal(statusText([{ product: 'Claude', percent: 97 }, { product: 'Codex', percent: 82 }]), 'Claude 97% · Codex 82%');
+    assert.equal(statusText([{ product: 'Claude' }, { product: 'Codex', percent: 0 }]), 'Claude · Codex 0%');
+    assert.equal(statusAccessibilityLabel([{ product: 'Claude', percent: 97 }, { product: 'Codex' }]), 'PlanSwap: Claude 97% left, Codex');
+    assert.equal(statusAccessibilityLabel([{ product: 'Claude', percent: 3 }, { product: 'Codex' }], 'used'), 'PlanSwap: Claude 3% used, Codex');
   });
 
   test('escapeHtml neutralizes tags, links, emphasis, icons, table pipes and line breaks', () => {
@@ -207,6 +208,9 @@ describe('Codex usage limits in the tooltip', () => {
     assert.equal(rows[0], '<tr><td>5h</td><td>██████░░░░</td><td align="right">58%</td><td align="right"><span class="codicon codicon-clock"></span> 1h</td></tr>');
     assert.equal(htmlText(rows[1]), '| 7d | ░░░░░░░░░░ | 0% $(warning) Used up |  |');
     assert.equal(htmlText(rows[2]), '| #3 | ██████████ | 97% |  |');
+    // Showing what is used: the bar and percentage are the used share, which adds up to 100 with what is left
+    assert.equal(htmlText(windowRow({ usedPercent: 42.5, windowMinutes: 300 }, 0, now, 'used')), '| 5h | ████░░░░░░ | 43% |  |');
+    assert.equal(htmlText(windowRow({ usedPercent: 100, windowMinutes: 10080 }, 1, now, 'used')), '| 7d | ██████████ | 100% $(warning) Used up |  |');
     const link = refreshLink('planswap.claude.refreshUsage');
     assert.equal(link, '<a href="command:planswap.claude.refreshUsage" title="Refresh usage limits"><span class="codicon codicon-refresh"></span></a>');
     assert.equal(
@@ -289,6 +293,23 @@ describe('Codex usage limits in the tooltip', () => {
         assert.equal(item.accessibilityInformation?.label, 'PlanSwap: Codex 58% left');
         assert.equal(item.backgroundColor, undefined);
       } finally { bar.dispose(); }
+    });
+
+    test('planswap.usageDisplay used: the text, bars and percentages show what is used; the background still follows what is left', () => {
+      fs.writeFileSync(path.join(temp.home, '.codex', 'auth.json'), '{}');
+      const { bar, item } = make();
+      try {
+        bar.setCodexUsage(ok);
+        setConfig('planswap', 'usageDisplay', 'used');
+        fireConfigurationChange('planswap.usageDisplay');
+        assert.equal(item.text, '$(dashboard) Codex 42%');
+        assert.equal(item.accessibilityInformation?.label, 'PlanSwap: Codex 42% used');
+        assert.match(tooltipText(item.tooltip), /\| 5h \| ████░░░░░░ \| 42% \|[^\n]*\n\| 7d \| █░░░░░░░░░ \| 7% \|/);
+        assert.equal(item.backgroundColor, undefined);
+        setConfig('planswap', 'statusBar.warningThreshold', 60);
+        fireConfigurationChange('planswap.statusBar.warningThreshold');
+        assert.equal((item.backgroundColor as ThemeColor | undefined)?.id, 'statusBarItem.warningBackground', '58% left is below a 60% threshold');
+      } finally { resetConfig(); bar.dispose(); }
     });
 
     test('a cached failure shows the short failure line in the current locale', () => {

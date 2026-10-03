@@ -4,7 +4,7 @@ import '@vscode-elements/elements/dist/vscode-checkbox/index.js';
 import '@vscode-elements/elements/dist/vscode-textfield/index.js';
 import '@vscode-elements/elements/dist/vscode-toolbar-button/index.js';
 import '@vscode-elements/elements/dist/vscode-icon/index.js';
-import type { AccountView, FromWebview, PanelMode, PanelState, RestartInfo, TabState, ToolId, ToWebview } from '../protocol';
+import type { AccountView, FromWebview, PanelMode, PanelState, RestartInfo, TabState, ToolId, ToWebview, UsageDisplay } from '../protocol';
 import { getLocale, intlLocale, joinSentences, matchLocale, setLocale, t, WEB_LOCALE_INFO, type MessageKey } from './i18n';
 
 declare const __PLANSWAP_VERSION__: string;
@@ -212,7 +212,7 @@ function relativeTime(epochSeconds: number): string {
     .join(durationUnitSeparator);
 }
 
-function usageWindow(w: UsageWindowView): HTMLElement {
+function usageWindow(w: UsageWindowView, display: UsageDisplay): HTMLElement {
   const minutes = w.windowMinutes;
   const limit = minutes === undefined ? t('usage.window')
     : minutes % 1440 === 0 ? t('usage.days', { n: minutes / 1440 })
@@ -221,13 +221,15 @@ function usageWindow(w: UsageWindowView): HTMLElement {
   // Claude model-specific limits carry the model name (account-independent text, rendered via textContent)
   const duration = w.scope ? t('usage.scoped', { limit, scope: w.scope }) : limit;
   const remaining = remainingPercent(w);
-  const label = t('usage.remaining', { percent: remaining });
   const used = Number((100 - remaining).toFixed(2));
+  // planswap.usageDisplay picks what the bar and percentage show; the level (color) always follows what is left
+  const shown = display === 'used' ? used : remaining;
+  const label = display === 'used' ? t('usage.used', { percent: used }) : t('usage.remaining', { percent: remaining });
   const level = usageLevel(remaining);
   const exhausted = level === 'empty';
   // Two lines per window: the duration with the time until the reset (clock icon + short duration) at the right, then
-  // the bar with the remaining percentage at its right. Only the bar has a tooltip, saying that its length is what is
-  // left; the full reset sentence and date are part of the bar's screen reader value
+  // the bar with the shown percentage at its right. Only the bar has a tooltip, saying whether its length is what is
+  // left or what is used; the full reset sentence and date are part of the bar's screen reader value
   const resetText = w.resetsAt !== undefined && t('usage.resetsIn', {
     time: relativeTime(w.resetsAt),
     date: new Date(w.resetsAt * 1000).toLocaleString(intlLocale(), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }),
@@ -239,11 +241,11 @@ function usageWindow(w: UsageWindowView): HTMLElement {
     h('div', { class: 'usage-bar' },
       h('div', {
         class: 'usage-track', 'data-level': level, role: 'progressbar', 'aria-label': duration,
-        title: t('usage.barTitle', { remaining, used }),
-        'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(remaining),
+        title: t(display === 'used' ? 'usage.barTitleUsed' : 'usage.barTitle', { remaining, used }),
+        'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(shown),
         'aria-valuetext': [label, exhausted && t('usage.exhausted'), resetText].filter(Boolean).join(', '),
-      }, h('div', { class: 'usage-fill', style: `width: ${remaining}%` })),
-      h('span', { class: 'usage-pct', 'aria-hidden': 'true' }, `${remaining}%`),
+      }, h('div', { class: 'usage-fill', style: `width: ${shown}%` })),
+      h('span', { class: 'usage-pct', 'aria-hidden': 'true' }, `${shown}%`),
     ),
   );
 }
@@ -254,7 +256,8 @@ function usageHistory(a: AccountView): HTMLElement | null {
   if (!a.usage) return null;
   const general = a.usage.windows.filter((w) => !w.scope);
   const scoped = a.usage.windows.filter((w) => w.scope);
-  return h('div', { class: 'row-usage' }, ...general.map(usageWindow), ...scoped.map(usageWindow));
+  const display = state.usageDisplay ?? 'remaining';
+  return h('div', { class: 'row-usage' }, ...[...general, ...scoped].map((w) => usageWindow(w, display)));
 }
 
 /** One tab page: its own add section, adding state, confirmingDir and inline-rename state */
@@ -841,7 +844,7 @@ class Page {
   private renderedKey?: string;
 
   private renderKey(): string {
-    return `${receivedState}|${getLocale()}|${JSON.stringify([this.tab, codexRestart()])}`;
+    return `${receivedState}|${getLocale()}|${JSON.stringify([this.tab, codexRestart(), state.usageDisplay])}`;
   }
 
   renderIfChanged(): void {
