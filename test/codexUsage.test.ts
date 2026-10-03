@@ -383,7 +383,8 @@ describe('readCodexUsage', () => {
       const f = fakeSpawn(() => undefined, { enoent: (n) => n === 1 });
       const trees: number[] = [];
       const spawn: UsageOptions['spawn'] = (c, a, o) => Object.assign(f.spawn(c, a, o), { pid: 4242 });
-      const r = await readCodexUsage(acct, { ...base(spawn), platform: 'win32', timeoutMs: 30, killTree: (pid) => trees.push(pid) });
+      // The deadline leaves a slow CI runner time to report ENOENT for codex and start codex.cmd before it expires
+      const r = await readCodexUsage(acct, { ...base(spawn), platform: 'win32', timeoutMs: 300, killTree: (pid) => trees.push(pid) });
       assert.deepEqual(r, { ok: false, reason: 'timeout' });
       await settle();
       assert.deepEqual(trees, [4242]);

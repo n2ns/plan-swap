@@ -240,7 +240,8 @@ test('queryClaudeUsage falls back to claude.cmd through the shell on Windows and
     };
     const killed: number[] = [];
     const r = await withEnv({ PATH: bin }, () => queryClaudeUsage(path.join(tmp.home, '.claude-work'), true,
-      { spawn, platform: 'win32', timeoutMs: 30, killTree: (pid) => killed.push(pid) }));
+      // The deadline leaves a slow CI runner time to report ENOENT for claude and start claude.cmd before it expires
+      { spawn, platform: 'win32', timeoutMs: 300, killTree: (pid) => killed.push(pid) }));
     assert.deepEqual(r, { ok: false, reason: 'timeout' });
     assert.equal(runs.length, 2);
     assert.equal(runs[1].command, 'claude.cmd -p /usage --output-format json --no-session-persistence --setting-sources user');
