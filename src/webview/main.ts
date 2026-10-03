@@ -1,4 +1,8 @@
-// Sidebar webview frontend: only renders and exchanges messages; all business logic lives in the extension host
+// Sidebar webview frontend: only renders and exchanges messages; all business logic lives in the extension host.
+// Boundaries: depends only on @vscode-elements/elements, @vscode/codicons and types from ../protocol (no Node or vscode
+// imports; every message is typed in src/protocol.ts). Account text (names, labels, emails, directories) is rendered
+// with textContent, never interpolated innerHTML. Visible strings go through t() with a key in every locale table.
+// CSS colors in panel.css use only --vscode-* theme variables.
 import '@vscode-elements/elements/dist/vscode-button/index.js';
 import '@vscode-elements/elements/dist/vscode-checkbox/index.js';
 import '@vscode-elements/elements/dist/vscode-textfield/index.js';

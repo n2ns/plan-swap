@@ -1,5 +1,5 @@
 // Consistency checks between the documentation and the code: manifest contributions, relative links and anchors,
-// the AGENTS.md document routing and the UI test locale list.
+// the document map (docs/doc-map.md) and the UI test locale list.
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
@@ -144,8 +144,8 @@ describe('Markdown links', () => {
   });
 });
 
-test('AGENTS.md links every docs/*.md file except translated user guides', () => {
-  const map = read('AGENTS.md');
+test('the document map links every docs/*.md file except translated user guides', () => {
+  const map = read('docs/doc-map.md').replace(/\]\((?!\.\.\/)/g, '](docs/');
   const missing = fs.readdirSync(path.join(root, 'docs'))
     .filter((f) => f.endsWith('.md') && !/^user-guide\.[a-z-]+\.md$/.test(f))
     .filter((f) => !map.includes(`](docs/${f}`));

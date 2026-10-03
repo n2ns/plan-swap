@@ -301,6 +301,9 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
     this.changed.fire();
   }
 
+  // Security boundary, never relaxed: default-src 'none', nonce-only scripts, styles from the Webview source plus
+  // 'unsafe-inline' for the Lit fallback, fonts from the Webview source only, and localResourceRoots limited to dist/media
+  // (resolveWebviewView). The codicon stylesheet keeps id="vscode-codicon-stylesheet", which vscode-icon looks up.
   private html(webview: vscode.Webview, media: vscode.Uri): string {
     const nonce = randomBytes(16).toString('base64');
     const uri = (file: string) => webview.asWebviewUri(vscode.Uri.joinPath(media, file)).toString();

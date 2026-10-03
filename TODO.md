@@ -25,14 +25,14 @@ is still missing. Remove an item once it is done or decided.
   conflict; `CODEX_SHARED_ENTRIES` must be updated by hand. Codex corruption recovery also renames the link away.
 - **Codex `plugins/cache` sharing** is based on low-to-medium-confidence research (the remote marketplace is synced per
   account). Verify plugins still install and load in a shared account.
-- **Codex memories stay per account** ([Codex design fact 17](docs/codex-design.md#2-background-facts-verified)). Revisit
+- **Codex memories stay per account** ([Codex research, fact 17](docs/research/codex.md#facts)). Revisit
   if Codex adds a memory location option.
 - **Refusal reasons are not specific.** When `settings.json` / `config.toml` is not shared for safety, the report only
   names the file, not the identity key that caused it.
 - **Codex usage limits** (per-account observations and the status bar) are not yet accepted with real accounts, on WSL or
   Windows (`codex.cmd` fallback, the binary bundled with the Codex extension when `codex` is not on PATH), including switches, editor restarts, reset/24-hour expiry and sign-in changes. Run
   [the usage checks](docs/manual-verification.md#usage-limits-sign-in-tip-and-duplicate-sign-ins); re-verify the
-  `codex app-server` facts ([Codex design §2](docs/codex-design.md#2-background-facts-verified)) after CLI upgrades.
+  `codex app-server` facts ([Codex research](docs/research/codex.md#facts)) after CLI upgrades.
 - **Status bar text, warning background and tooltip** are covered by unit tests only; a headless preview cannot render
   the status bar. Look at them in a real editor in light, dark and high-contrast themes and in every UI language
   ([Claude usage checks](docs/manual-verification.md#claude-usage-limits), step 8).

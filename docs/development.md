@@ -22,7 +22,7 @@ Purpose: repository layout, build, test and release mechanics, localization term
 
 ## Testing, build and release
 
-The rules (what must pass before committing, temporary HOME, fake processes, no restart tests, release authorization) are in [AGENTS.md](../AGENTS.md#commands-and-verification). This section describes the mechanics.
+The rules (what must pass before committing, temporary HOME, fake processes, no restart tests, release authorization) are in [AGENTS.md](../AGENTS.md#test-and-release-safety). This section describes the mechanics.
 
 ### Commands
 
