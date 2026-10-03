@@ -181,6 +181,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
       read: (dir) => codexQuery(dir),
       staleMs: () => usageSchedule('codex').staleMs,
       onAccepted: (dir, result, stamp) => usageHistory.record(dir, result, stamp),
+      cachedUsage: (dir) => usageHistory.get(dir),
     })
     : undefined;
   if (usage) statusBar.setCodexUsage(usage.current());

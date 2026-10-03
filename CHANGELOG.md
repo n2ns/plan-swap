@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Automatic Codex usage checks of the effective account now count an observation made by another window within the refresh interval as a check and show it at once, instead of each window querying on its own.
+- A Codex token refresh (by Codex itself or by another window's check) no longer makes every open window query the usage limits immediately; the shown values stay and the next timed check decides. A changed `auth.json` after a failed check, such as a re-login after an expired sign-in, is still checked at once.
+
 ## [0.3.1] - 2026-10-03
 
 ### Added

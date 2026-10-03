@@ -2,14 +2,15 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { authFileStamp, CodexUsageMonitor, queryCodexAccount, type CodexUsageState } from '../src/codex/codexUsageMonitor';
-import type { UsageResult } from '../src/codex/codexUsage';
+import { authFileStamp, CodexUsageMonitor, queryCodexAccount, type CodexUsageState, type UsageMonitorOptions } from '../src/codex/codexUsageMonitor';
+import type { CodexUsage, UsageResult } from '../src/codex/codexUsage';
 import { makeTempHome } from './helpers';
 
 const okResult = (checkedAt: number, usedPercent = 10): UsageResult => ({
   ok: true,
   usage: { windows: [{ usedPercent }], limitReached: false, checkedAt },
 });
+const usageAt = (checkedAt: number): CodexUsage => ({ windows: [{ usedPercent: 10 }], limitReached: false, checkedAt });
 const signedOut: UsageResult = { ok: false, reason: 'notLoggedIn' };
 const failed: UsageResult = { ok: false, reason: 'failed', detail: 'boom' };
 const expired: UsageResult = { ok: false, reason: 'authExpired' };
@@ -29,7 +30,7 @@ interface Harness {
   accepted: Array<{ dir: string; result: UsageResult; stamp: string }>;
 }
 
-function harness(dir = '/home/u/.codex-work', staleMs = 1000): Harness {
+function harness(dir = '/home/u/.codex-work', staleMs = 1000, extra: Pick<UsageMonitorOptions, 'cachedUsage'> = {}): Harness {
   const h = {
     states: [] as CodexUsageState[],
     calls: [] as string[],
@@ -56,6 +57,7 @@ function harness(dir = '/home/u/.codex-work', staleMs = 1000): Harness {
         if (next) return Promise.resolve(next);
         return new Promise<UsageResult>((resolve) => h.resolvers.push(resolve));
       },
+      ...extra,
     },
   );
   return {
@@ -77,6 +79,12 @@ function harness(dir = '/home/u/.codex-work', staleMs = 1000): Harness {
     },
   };
 }
+
+// checkedAt of the shown successful result, or undefined
+const shownCheckedAt = (h: Harness): number | undefined => {
+  const r = h.monitor.current().result;
+  return r?.ok ? r.usage.checkedAt : undefined;
+};
 
 describe('CodexUsageMonitor', () => {
   test('initial state is not checking and has no result', () => {
@@ -251,6 +259,104 @@ describe('CodexUsageMonitor', () => {
     await h.monitor.refreshIfAuthChanged();
     assert.equal(h.calls.length, 2);
     assert.equal(h.monitor.current().result?.ok, true);
+  });
+
+  test('a token refresh for the same identity keeps a good result, re-stamps it and leaves the query to the interval', async () => {
+    const h = harness();
+    const r = okResult(1);
+    h.queue.push(r);
+    await h.monitor.refresh();
+    assert.deepEqual(h.accepted.map((a) => a.stamp), ['x']);
+
+    h.stamp.v = 'rotated';
+    await h.monitor.refreshIfAuthChanged();
+    assert.equal(h.calls.length, 1, 'no query for a rotation within the interval');
+    assert.deepEqual(h.monitor.current(), { checking: false, result: r });
+    assert.deepEqual(h.accepted.at(-1), { dir: '/home/u/.codex-work', result: r, stamp: 'rotated' });
+    assert.ok(!JSON.stringify(h.accepted).includes('user-a'));
+
+    // The new stamp is the accepted one: a repeated event is a no-op
+    await h.monitor.refreshIfAuthChanged();
+    assert.equal(h.accepted.length, 2);
+    assert.equal(h.calls.length, 1);
+
+    // The timed check queries once the attempt is old
+    h.clock.t = 1000;
+    h.queue.push(okResult(2));
+    await h.monitor.refreshIfStale();
+    assert.equal(h.calls.length, 2);
+
+    // A rotation after the interval has passed is checked right away
+    h.clock.t = 2000;
+    h.stamp.v = 'rotated-again';
+    h.queue.push(okResult(3));
+    await h.monitor.refreshIfAuthChanged();
+    assert.equal(h.calls.length, 3);
+    assert.deepEqual(h.accepted.at(-1)?.stamp, 'rotated-again');
+  });
+
+  test('an auth.json change after a failed result is queried at once, whatever the identity', async () => {
+    for (const result of [failed, expired, signedOut, { ok: false, reason: 'timeout' } as UsageResult]) {
+      const h = harness();
+      h.queue.push(result);
+      await h.monitor.refresh();
+      h.stamp.v = 'y';
+      h.queue.push(okResult(1));
+      await h.monitor.refreshIfAuthChanged();
+      assert.equal(h.calls.length, 2, `result ${result.ok ? 'ok' : result.reason}`);
+    }
+  });
+
+  test('a token refresh with a good result but an unknown identity is still queried at once', async () => {
+    const h = harness();
+    h.identity.v = undefined;
+    h.queue.push(okResult(1));
+    await h.monitor.refresh();
+    h.stamp.v = 'y';
+    h.queue.push(okResult(2));
+    await h.monitor.refreshIfAuthChanged();
+    assert.equal(h.calls.length, 2);
+  });
+
+  test('refreshIfStale takes a fresh shared observation instead of querying, and queries once it is old', async () => {
+    const shared = { v: undefined as CodexUsage | undefined };
+    const h = harness(undefined, 1000, { cachedUsage: () => shared.v });
+    shared.v = usageAt(500);
+    h.clock.t = 600;
+    await h.monitor.refreshIfStale();
+    assert.equal(h.calls.length, 0);
+    assert.deepEqual(h.monitor.current(), { checking: false, result: { ok: true, usage: shared.v } });
+    assert.equal(h.accepted.length, 0, 'an adopted observation is not persisted again');
+
+    // Adopted once; an older shared observation does not replace it
+    await h.monitor.refreshIfStale();
+    shared.v = usageAt(400);
+    await h.monitor.refreshIfStale();
+    assert.equal(h.states.length, 1);
+    assert.equal(shownCheckedAt(h), 500);
+
+    // Its stamp is the accepted one: a rotation keeps it
+    h.stamp.v = 'rotated';
+    await h.monitor.refreshIfAuthChanged();
+    assert.equal(h.calls.length, 0);
+
+    // Older than the interval: queried
+    h.clock.t = 1500;
+    h.queue.push(okResult(1500));
+    await h.monitor.refreshIfStale();
+    assert.equal(h.calls.length, 1);
+
+    // A newer shared observation is shown once this window's attempt is old; one dated in the future is not fresh
+    shared.v = usageAt(2400);
+    h.clock.t = 2600;
+    await h.monitor.refreshIfStale();
+    assert.equal(h.calls.length, 1);
+    assert.equal(shownCheckedAt(h), 2400);
+    shared.v = usageAt(2600 + 3 * 60_000);
+    h.clock.t = 3500;
+    h.queue.push(okResult(3500));
+    await h.monitor.refreshIfStale();
+    assert.equal(h.calls.length, 2);
   });
 
   test('an auth.json change for the same identity during our own query is absorbed', async () => {

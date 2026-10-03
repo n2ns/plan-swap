@@ -5,12 +5,14 @@
 // discarded and stays eligible for the next auth-change or stale check. A known identity change permits one
 // sequential follow-up query per refresh chain. onAccepted receives the verified stamp for persistence, and identity is
 // checked again after it settles before the result is published. Identity keys never enter the callback, the live
-// state or persistent history; the state lives in memory only.
+// state or persistent history; the state lives in memory only. A token refresh of the known identity outside a query
+// (Codex itself, another window) moves the accepted stamp without a query, and a shared observation younger than
+// staleMs (cachedUsage) stands in for a scheduled query, so several windows share one schedule.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { samePath } from '../paths';
 import { readCodexAccountInfo } from './codexPaths';
-import { readCodexUsage, type UsageResult } from './codexUsage';
+import { readCodexUsage, type CodexUsage, type UsageResult } from './codexUsage';
 
 export interface CodexUsageState {
   // A query is running (a previous result stays visible only for the same known identity)
@@ -30,9 +32,15 @@ export interface UsageMonitorOptions {
   authIdentity?: (dir: string) => string | undefined;
   // Persists an accepted result with its verified stamp (CodexUsageHistory.record); a failure here is ignored
   onAccepted?: (dir: string, result: UsageResult, stamp: string) => Promise<void> | void;
+  // The shared observation of dir, accepted by any window under the current auth.json stamp (CodexUsageHistory.get);
+  // one younger than staleMs makes a scheduled query unnecessary. Default: none
+  cachedUsage?: (dir: string) => CodexUsage | undefined;
 }
 
 interface AuthSnapshot { dir: string; stamp: string; identity?: string }
+
+// An observation dated further in the future than this (clock moved back) does not count as fresh
+const FUTURE_TOLERANCE_MS = 2 * 60_000;
 
 function sameAuth(a: AuthSnapshot, b: AuthSnapshot): boolean {
   if (!samePath(a.dir, b.dir)) return false;
@@ -93,6 +101,7 @@ export class CodexUsageMonitor {
   private readonly authStamp: (dir: string) => string;
   private readonly authIdentity: (dir: string) => string | undefined;
   private readonly onAccepted: UsageMonitorOptions['onAccepted'];
+  private readonly cachedUsage: (dir: string) => CodexUsage | undefined;
 
   constructor(
     private readonly dirOf: () => string,
@@ -106,6 +115,7 @@ export class CodexUsageMonitor {
     this.authStamp = options.authStamp ?? authFileStamp;
     this.authIdentity = options.authIdentity ?? ((dir) => readCodexAccountInfo(dir).identity);
     this.onAccepted = options.onAccepted;
+    this.cachedUsage = options.cachedUsage ?? (() => undefined);
   }
 
   current(): CodexUsageState {
@@ -122,19 +132,39 @@ export class CodexUsageMonitor {
     return this.running;
   }
 
-  /** Queries after a discarded response, when nothing was tried yet, or when the last attempt (failures included) is
-   *  older than staleMs; otherwise joins a running query or does nothing. */
+  /**
+   * Queries after a discarded response, when nothing was tried yet, or when the last attempt (failures included) is
+   * older than staleMs; otherwise joins a running query or does nothing. A shared observation younger than staleMs
+   * (cachedUsage; one dated more than 2 minutes in the future does not count) also starts nothing and becomes the live
+   * result when it is newer than the shown one, so a window opened after another's query shows its values at once.
+   */
   refreshIfStale(): Promise<void> {
-    if (!this.needsRefresh && this.lastAttempt !== undefined && this.now() - this.lastAttempt < this.staleMs()) return this.running ?? Promise.resolve();
+    if (this.running) return this.running;
+    if (this.needsRefresh) return this.refresh();
+    const now = this.now();
+    const staleMs = this.staleMs();
+    if (this.lastAttempt !== undefined && now - this.lastAttempt < staleMs) return Promise.resolve();
+    const shared = this.cachedUsage(this.dirOf());
+    if (shared && shared.checkedAt <= now + FUTURE_TOLERANCE_MS && now - shared.checkedAt < staleMs) {
+      const shown = this.state.result;
+      if (!shown?.ok || shown.usage.checkedAt < shared.checkedAt) {
+        this.accepted = this.snapshot();
+        this.set({ checking: false, result: { ok: true, usage: shared } });
+      }
+      return Promise.resolve();
+    }
     return this.refresh();
   }
 
   /**
    * Queries when auth.json changed since the last accepted response: a sign-in, a re-login after an expired sign-in, or a
-   * sign-out. Other account-info events (tab switches, other accounts' files) start nothing. While a query runs it is
+   * sign-out. A changed stamp for the same known identity while a successful result is shown is a token refresh (by
+   * Codex itself or another window's query): the result stays, the accepted stamp moves to the new one (onAccepted
+   * re-stamps the persisted observation) and the check follows refreshIfStale, so a rotation does not start a query in
+   * every window. Other account-info events (tab switches, other accounts' files) start nothing. While a query runs it is
    * joined, and a changed sign-in marks its response for discarding (a shown result is dropped while checking).
    */
-  refreshIfAuthChanged(): Promise<void> {
+  async refreshIfAuthChanged(): Promise<void> {
     if (this.running) {
       if (this.queryAuth && !sameAuth(this.queryAuth, this.snapshot())) {
         this.needsRefresh = true;
@@ -142,7 +172,16 @@ export class CodexUsageMonitor {
       }
       return this.running;
     }
-    if (!this.needsRefresh && (!this.accepted || this.authStamp(this.dirOf()) === this.accepted.stamp)) return Promise.resolve();
+    if (this.needsRefresh) return this.refresh();
+    if (!this.accepted) return;
+    const current = this.snapshot();
+    if (current.stamp === this.accepted.stamp) return;
+    const result = this.state.result;
+    if (result?.ok && sameAuth(this.accepted, current)) {
+      this.accepted = current;
+      try { await this.onAccepted?.(current.dir, result, current.stamp); } catch { /* a history failure does not hide live usage */ }
+      return this.refreshIfStale();
+    }
     return this.refresh();
   }
 
