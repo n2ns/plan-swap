@@ -188,6 +188,25 @@ async function cardChecks(mode, locale, width) {
     assert.equal(row.textButtonsLeft, true, `text buttons not on the left at ${where}`);
     assert.equal(row.iconsRight, true, `icon buttons not on the right at ${where}`);
   }
+  // Tools: the buttons of one line are equally wide unless a label needs more (that button is then exactly as wide as its
+  // label), and no label is cut off
+  const tools = await page.evaluate((mode) => [...document.querySelectorAll(`#panel-${mode} .page-tools-row vscode-button`)]
+    .filter((b) => !b.hidden).map((b) => {
+      const r = b.getBoundingClientRect();
+      const base = b.shadowRoot.querySelector('[part~="base"]');
+      b.style.flex = 'none';
+      const natural = b.getBoundingClientRect().width;
+      b.style.flex = '';
+      return { label: b.textContent.trim(), top: Math.round(r.top), width: r.width, natural, cut: !!base && base.scrollWidth > base.clientWidth + 1 };
+    }), mode);
+  const lines = Map.groupBy(tools, (b) => b.top);
+  for (const line of lines.values()) {
+    const narrowest = Math.min(...line.map((b) => b.width));
+    for (const b of line.filter((b) => b.width > narrowest + 1)) {
+      assert.ok(Math.abs(b.width - b.natural) <= 1, `tool button ${b.label} is wider than its line share without needing it at ${where}`);
+    }
+  }
+  assert.deepEqual(tools.filter((b) => b.cut), [], `tool button label cut off at ${where}`);
   return data;
 }
 

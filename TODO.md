@@ -50,6 +50,12 @@ is still missing. Remove an item once it is done or decided.
 
 ## UI polish
 
+- **Tools stay reachable with many accounts.** The account heading, cards and Tools scroll as one block between the
+  sticky tabs and the footer, so with many cards Tools ends up below the fold. Options discussed on 2026-10-03, not yet
+  decided: (1) make the Tools section sticky at the bottom (a few CSS lines; the heading and its Add / Refresh buttons
+  still scroll away); (2) scroll only the card list, keeping the banners, the heading with the add form and Tools fixed
+  (needs a minimum list height and a fallback to whole-page scrolling in short panels). Either needs the preview checks
+  and a UI test asserting Tools stays visible with many cards.
 - **Consistent card height.** The current card shows usage while cards without an observation show nothing. A
   placeholder (for example "Show usage") was not added: a missing observation must not read as 0% (see
   [Features](docs/features.md#codex-account-usage-observations)), so the wording needs a decision first.

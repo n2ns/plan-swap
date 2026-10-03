@@ -524,19 +524,21 @@ body {
 .confirm-hint { color: var(--muted); font-size: max(11px, 0.85em); overflow-wrap: anywhere; }
 .confirm-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
 
-/* ---------- Page tools: a section with four small text buttons (three without Re-link), at least 96px each; they wrap when they do not fit (2+1 or stacked) and stretch to fill the line ---------- */
+/* ---------- Page tools: a section with four small text buttons (three without Re-link), at least 96px each; they wrap when they do not fit (2+1 or stacked), and the buttons of a line share it equally whatever their labels, except that a button never gets narrower than its label ---------- */
 .page-tools { min-width: 0; border-top: 1px solid var(--line); padding-top: 6px; }
 .tools-summary { padding: 2px; margin-bottom: var(--gap); }
 .page-tools-row { display: flex; flex-wrap: wrap; gap: var(--gap); min-width: 0; }
 .page-tools-row vscode-button {
-  flex: 1 1 auto;
-  min-width: 0;
+  flex: 1 1 0;
+  /* Never narrower than the label; the 96px floor is on the base part */
+  min-width: max-content;
   height: 26px;
   --vsc-border-left-radius: 6px;
   --vsc-border-right-radius: 6px;
 }
 .page-tools-row vscode-button[hidden] { display: none; }
-.page-tools-row vscode-button::part(base) { width: 100%; justify-content: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: calc(var(--vscode-font-size, 13px) - 2px); }
+/* Narrower side padding than the default 13px, so labels still fit in equal-width buttons two to a line */
+.page-tools-row vscode-button::part(base) { width: 100%; min-width: 96px; padding-inline: 8px; justify-content: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: calc(var(--vscode-font-size, 13px) - 2px); }
 
 /* ---------- Add account ---------- */
 /* The form opens right under the list heading */

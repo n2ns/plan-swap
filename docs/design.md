@@ -105,6 +105,7 @@ The sidebar is a `WebviewView` (one view, `planswap.accounts`, holding a Claude 
 - A single click on a row does nothing, to avoid accidental switches; double-click or Enter switches after the same confirmation as the Switch button (6.1); with `planswap.claude.confirmSwitch` off they switch directly, by the user's choice.
 - The usage refresh buttons need no pending state, because the host joins concurrent queries and guards refresh-all against re-entry.
 - The "Tools" section is always shown below the account list; Re-link is shown only while the page has a linked account, since it does nothing otherwise.
+- Tool buttons of one line share it equally, so their size does not depend on label length; a button never gets narrower than its label and wraps to its own line instead, because a cut-off label reads worse than an unequal line (Spanish "Actualizar CLI" at 240px).
 - The add-account form is created once and only shown or hidden, so list refreshes keep its typed text and focus.
 
 ### 5.2 Frontend/backend split and message protocol
