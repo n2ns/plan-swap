@@ -7,7 +7,8 @@
 // checked again after it settles before the result is published. Identity keys never enter the callback, the live
 // state or persistent history; the state lives in memory only. A token refresh of the known identity outside a query
 // (Codex itself, another window) moves the accepted stamp without a query, and a shared observation younger than
-// staleMs (cachedUsage) stands in for a scheduled query, so several windows share one schedule.
+// staleMs (cachedUsage) stands in for a scheduled query, so several windows share one schedule. adoptCached shows the
+// shared observation without any query at all, so the status bar shows it even with automatic checks off.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { samePath } from '../paths';
@@ -146,14 +147,29 @@ export class CodexUsageMonitor {
     if (this.lastAttempt !== undefined && now - this.lastAttempt < staleMs) return Promise.resolve();
     const shared = this.cachedUsage(this.dirOf());
     if (shared && shared.checkedAt <= now + FUTURE_TOLERANCE_MS && now - shared.checkedAt < staleMs) {
-      const shown = this.state.result;
-      if (!shown?.ok || shown.usage.checkedAt < shared.checkedAt) {
-        this.accepted = this.snapshot();
-        this.set({ checking: false, result: { ok: true, usage: shared } });
-      }
+      this.adoptCached();
       return Promise.resolve();
     }
     return this.refresh();
+  }
+
+  /**
+   * Shows the shared observation of dirOf() (cachedUsage: accepted by any window under the current auth.json stamp)
+   * without querying, when it is newer than the shown result; one dated more than 2 minutes in the future does not
+   * count, and nothing happens while a query runs. The accepted auth snapshot moves to the current one, so a later
+   * auth change is detected against it. Returns whether it was adopted. Called at start-up, on every check tick and
+   * after account-info changes, whatever the automatic-check setting, so the status bar shows what another window
+   * or an earlier session observed, as the sidebar row does.
+   */
+  adoptCached(): boolean {
+    if (this.running) return false;
+    const shared = this.cachedUsage(this.dirOf());
+    if (!shared || shared.checkedAt > this.now() + FUTURE_TOLERANCE_MS) return false;
+    const shown = this.state.result;
+    if (shown?.ok && shown.usage.checkedAt >= shared.checkedAt) return false;
+    this.accepted = this.snapshot();
+    this.set({ checking: false, result: { ok: true, usage: shared } });
+    return true;
   }
 
   /**

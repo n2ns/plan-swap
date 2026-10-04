@@ -18,6 +18,8 @@ Which document owns which kind of information, and the rules for keeping them. R
 | [CHANGELOG](../CHANGELOG.md) | User-facing release history (not current plans or agent instructions). |
 | Research: [Claude Code](research/claude-code.md), [Codex](research/codex.md), [Windows](research/windows.md), [Claude usage](research/claude-usage.md), [Account-read baseline](research/account-read-performance.md) | All dated upstream evidence: the numbered facts the designs rest on, each with its version and source, upstream and own measurements, and how each was obtained (source inspection or runtime check) (not design decisions, implemented behavior or real-account acceptance). |
 | [Branding candidates](branding/candidates/) | Image-generation prompts and candidate design records. |
+| [Feature feasibility research](research/feature-feasibility.md) | Dated official-interface evidence and verification limits for proposed account workflow improvements. |
+| [Feature expansion proposal](plans/feature-expansion.md) | Proposed delivery order, scope, acceptance criteria, and research gates (not implemented behavior or release commitments). |
 
 ## Rules
 

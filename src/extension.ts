@@ -416,9 +416,11 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
       void claudeUsage.refreshIfStale();
       if (!usageCurrentOnly()) void otherClaudeChecks.run(otherClaudeDirs());
     }
-    if (usage && !codexRunsInWsl() && usageSchedule('codex').auto) {
-      void usage.refreshIfStale();
-      if (!usageCurrentOnly()) void otherCodexChecks.run(otherCodexDirs());
+    if (usage && !codexRunsInWsl()) {
+      if (usageSchedule('codex').auto) {
+        void usage.refreshIfStale();
+        if (!usageCurrentOnly()) void otherCodexChecks.run(otherCodexDirs());
+      } else usage.adoptCached();
     }
   };
   const firstUsageCheck = setTimeout(checkUsage, USAGE_FIRST_CHECK_MS);
@@ -453,6 +455,8 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   };
 
   const panel = new AccountsPanel(ctx.extensionUri, { claude: claudePanelSource(store, claudeLabels, claudeExclusions), codex: codexSource }, ctx.globalState);
+  // A stored observation of the effective Codex account (another window, an earlier session) is shown from the start
+  usage?.adoptCached();
   // Re-render expiry even when no query is due, including accounts other than the effective one.
   const historyTick = setInterval(() => panel.refresh(), USAGE_TICK_MS);
   // On init failure, Codex actions in the panel and Command Palette show a clear message instead of silently doing nothing
@@ -481,10 +485,14 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
       statusBar.update();
       // A sign-in of the current Claude account is checked at once; a recent check is not repeated
       if (usageStarted && vscode.window.state.focused && usageSchedule('claude').auto) void claudeUsage.refreshIfStale();
-      // With automatic checks off nothing is queried, but a result of a previous sign-in is not shown for a new one
+      // With automatic checks off nothing is queried, but a result of a previous sign-in is not shown for a new one,
+      // and a stored observation under the current sign-in is shown
       if (usage && !codexRunsInWsl()) {
         if (usageSchedule('codex').auto) void usage.refreshIfAuthChanged();
-        else usage.clearIfAuthChanged();
+        else {
+          usage.clearIfAuthChanged();
+          usage.adoptCached();
+        }
       }
       identityWarnings.check();
     }),

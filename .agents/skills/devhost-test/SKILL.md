@@ -1,37 +1,39 @@
 ---
 name: devhost-test
-description: Runs the PlanSwap sidebar in a real, disposable VS Code (Extension Development Host) with fake Claude and Codex accounts and drives the Webview over the Chrome DevTools Protocol. Use after a sidebar or Webview change, when a check needs real theme injection, host-side state writes or settings round-trips that the synthetic preview (npm run test:ui) cannot give, or to screenshot the sidebar in real themes. Never for real accounts.
-compatibility: Linux/WSL with a display (WSLg) or xvfb-run; the project's node_modules (@vscode/test-electron, playwright) and the cached VS Code in .vscode-test/.
+description: Runs the extension in a real, disposable VS Code (Extension Development Host) with fake data and drives its Webview over the Chrome DevTools Protocol. Use after a sidebar or Webview change, when a check needs real theme injection, host-side state writes or settings round-trips that the synthetic preview (npm run test:ui) cannot give, or to screenshot the sidebar in real themes. Never for real accounts.
+compatibility: Linux/WSL with a display (WSLg) or xvfb-run; the project's node_modules (@vscode/test-electron, playwright) and the VS Code build cached in .vscode-test/.
+allowed-tools: Bash(node ${CLAUDE_SKILL_DIR}/scripts/run.mjs *) Read
+argument-hint: [scenario]
 ---
 
-# Real-editor sidebar checks with fake accounts
+# Disposable-editor checks
 
-## What it does
-
-`scripts/run.mjs` builds nothing: run `npm run build` first. It then creates a temporary HOME with fake accounts (`fixtures/accounts.mjs`), launches the cached VS Code 1.107.0 through `@vscode/test-electron` with `--remote-debugging-port`, connects with Playwright over CDP, finds the PlanSwap Webview frame and runs one scenario from `scenarios/`. Screenshots and `report.json` land in `.test-out/devhost/<scenario>/`; the editor is closed and the temporary HOME removed when the scenario ends, also on failure.
+One command builds the project, launches the cached VS Code with a temporary HOME, connects over CDP and runs one scenario; it prints only the `ok`/`FAIL` step lines and a summary, exits 1 on any failure, and always closes the editor and removes the temporary HOME.
 
 ```bash
-npm run build
-node .agents/skills/devhost-test/scripts/run.mjs recommendation            # exit code 1 on any failed step
-node .agents/skills/devhost-test/scripts/run.mjs recommendation --window=4040,442,2480,1500   # window position
+node ${CLAUDE_SKILL_DIR}/scripts/run.mjs list                 # available scenarios
+node ${CLAUDE_SKILL_DIR}/scripts/run.mjs <scenario>           # ~90 s; --no-build skips the build
 ```
 
-Read `report.json` for the step results and look at the screenshots: the themes are real editor themes, which `npm run test:ui` cannot provide. Every run takes about 90 seconds.
+Artifacts: `.test-out/devhost/<scenario>/` holds `report.json`, the scenario's screenshots and, for every failed step, `fail-N.png` plus `fail-N.txt` (the Webview text at that moment); `.test-out/devhost/<scenario>.log` is the editor's full output. Read the report and the screenshots; do not re-run just to see a failure.
 
-## Isolation rules (not negotiable)
+With `xvfb-run` installed the editor runs on a virtual display and no window opens; `--visible` uses the real display, and `--window=x,y,w,h` (or `"window"` in the machine-local `.vscode-test/devhost/local.json`) places it there. `.vscode-test/devhost/` also keeps the editor's user-data directory and the run lock (one editor at a time); `npm test` wipes `.test-out`, so artifacts are disposable and these are not.
 
-- The editor runs with its own HOME, XDG directories, extensions directory and `.test-out/devhost-user-data` as user data. No real account file (`~/.claude*`, `~/.codex*`, `~/.config/planswap`) is read or written; do not point the script at a real home and do not add fixtures that read one.
-- `claude` and `codex` are kept off PATH and automatic usage checks are off in the editor settings, so no CLI ever runs. Keep it that way in new scenarios.
-- One editor at a time; the script closes its own editor. Never kill editors by name; if a run hangs, stop the `node` process you started by its PID.
-- Artifacts under `.test-out/` are ignored by git; do not commit them.
+## What belongs where
 
-## Writing a scenario
+- This skill (`scripts/`) is the tool: launcher, isolation, CDP connection, driver API. It does not change with the project's features.
+- `test/devhost/devhost.config.mjs` names the extension, its focus command, the Webview frame selector, project settings, stub extensions and the default fixture. `test/devhost/scenarios/*.mjs` are the checks; project DOM helpers sit next to them. Feature work edits `test/devhost/`, not this skill.
 
-A scenario module exports `run(ctx)` and may export `seed(home)` to replace the default fixture. `ctx` offers: `dump()` (card, banner, rows with usage levels and toggles of the visible page), `shot(file)`, `rowAction(dir, action)`, `tab(mode)`, `waitFor(pred, ms)`, `writeSettings(extra)` / `readSettings()`, `readState()`, `notifications()`, `step(label, ok, detail)`, `page`, `frame`, `dirs`, `sleep`. Use `step` for every assertion; a thrown error is recorded as a failure too. `scenarios/recommendation.mjs` is the reference.
+## Isolation (enforced by the launcher)
 
-## Known limits
+Own HOME, XDG, extensions and `.vscode-test/devhost/user-data` (settings rewritten each run; keeps only window state and the extension's globalState); `PATH` holds system directories only, so project CLIs cannot run; the config's `clearEnv` variables are unset. Never point a scenario at a real home or real credentials. If a run hangs past its 15-minute cap, stop the `node run.mjs` process by its pid; never kill editors by name.
 
-- The test-mode editor refuses modal dialogs ("DialogService: refused to show dialog in tests") and reports the refusal in a notification that quotes the dialog text; use that to prove a confirmation was asked, and turn the confirmation setting off to exercise the action itself.
-- VS Code only writes registered settings, so the launcher installs a stub extension declaring `claudeCode.environmentVariables`; a scenario that needs another extension's setting must extend that stub.
-- It is VS Code 1.107.0 on Linux, not the user's editor version or the Windows client with a WSL server; WSL server restarts, real sign-ins and CLI queries stay user-operated ([Manual verification](../../../docs/manual-verification.md)).
-- The rc marker block in the fixture duplicates `rcBlock()` from `src/codex/codexState.ts`; a drift shows as a disabled Codex page.
+## Scenario contract
+
+A scenario module exports `run(ctx)` and optionally `seed(home)` (returns `ctx.dirs`). `ctx`: `page`, `frame`, `home`, `dirs`, `out`, `step(label, ok, detail)`, `shot(file)`, `waitFor(fn, pred, ms)`, `writeSettings(extra)`, `readSettings()`, `readHomeJson(rel)`, `notifications()`, `sleep`. Record every assertion with `step`; a thrown error is captured as a failure with a screenshot.
+
+## Editor limits
+
+- Test mode refuses modal dialogs; the refusal notification quotes the dialog text, which proves a confirmation was asked. Turn the confirmation setting off to exercise the action itself.
+- VS Code only writes registered settings: declare another extension's setting through `stubExtensions` in the config.
+- It is the cached VS Code on Linux, not the user's editor version or a Windows client with a WSL server.

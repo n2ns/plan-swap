@@ -6,6 +6,10 @@
 
 - When the current account's usage runs low (its bar turns yellow), a card above the account list recommends the signed-in account with the most left, showing its limits and how long ago they were checked, with **Switch** (Claude) and **Terminal** buttons. Click the lightbulb on an account card to keep that account out of recommendations; `planswap.sidebar.showRecommendation` turns the card off.
 
+### Fixed
+
+- With automatic Codex usage checks turned off, the status bar now shows the effective account's last observation (from another window or an earlier session) like the sidebar does, instead of only the product name.
+
 ### Changed
 
 - With several windows open, Codex usage is checked once per interval instead of once per window: a window shows the result another window just got instead of running its own check.

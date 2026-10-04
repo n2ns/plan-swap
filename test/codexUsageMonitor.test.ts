@@ -318,6 +318,36 @@ describe('CodexUsageMonitor', () => {
     assert.equal(h.calls.length, 2);
   });
 
+  test('adoptCached shows the shared observation without a query, whatever its age, and only when newer than the shown one', async () => {
+    const shared = { v: undefined as CodexUsage | undefined };
+    const h = harness(undefined, 1000, { cachedUsage: () => shared.v });
+    assert.equal(h.monitor.adoptCached(), false, 'nothing stored');
+    // Older than staleMs: still shown (refreshIfStale would query, adoptCached never does)
+    shared.v = usageAt(100);
+    h.clock.t = 5000;
+    assert.equal(h.monitor.adoptCached(), true);
+    assert.equal(h.calls.length, 0);
+    assert.deepEqual(h.monitor.current(), { checking: false, result: { ok: true, usage: shared.v } });
+    assert.equal(h.accepted.length, 0, 'not persisted again');
+    // The same or an older observation changes nothing; a newer one replaces it; a future-dated one does not count
+    assert.equal(h.monitor.adoptCached(), false);
+    shared.v = usageAt(50);
+    assert.equal(h.monitor.adoptCached(), false);
+    assert.equal(shownCheckedAt(h), 100);
+    shared.v = usageAt(5000 + 3 * 60_000);
+    assert.equal(h.monitor.adoptCached(), false);
+    shared.v = usageAt(4000);
+    assert.equal(h.monitor.adoptCached(), true);
+    assert.equal(shownCheckedAt(h), 4000);
+    assert.equal(h.states.length, 2);
+    // Adopted under the current stamp: a later sign-out drops it without a query (automatic checks off)
+    h.stamp.v = 'missing';
+    h.identity.v = undefined;
+    h.monitor.clearIfAuthChanged();
+    assert.equal(h.monitor.current().result, undefined);
+    assert.equal(h.calls.length, 0);
+  });
+
   test('refreshIfStale takes a fresh shared observation instead of querying, and queries once it is old', async () => {
     const shared = { v: undefined as CodexUsage | undefined };
     const h = harness(undefined, 1000, { cachedUsage: () => shared.v });
