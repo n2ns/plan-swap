@@ -7,12 +7,12 @@ import { AccountsPanel, applySidebarDisplay, claudePanelSource, sidebarThreshold
 import { AccountStore } from '../src/accounts';
 import { LabelStore } from '../src/labels';
 import { readAccountInfo } from '../src/paths';
-import type { FromWebview, ToWebview } from '../src/protocol';
+import type { AccountView, FromWebview, ToWebview } from '../src/protocol';
 import { makeTempHome, MemoryMemento } from './helpers';
 import { intlLocale, setLocale, t } from '../src/i18n';
 import { resetConfig, setConfig } from './stubs/vscode';
 
-function harness() {
+function harness(claude?: PanelSource) {
   const messages: ToWebview[] = [];
   let receive!: (msg: FromWebview) => void;
   let visibility!: () => void;
@@ -28,7 +28,7 @@ function harness() {
     onDidChangeVisibility: (listener: typeof visibility) => { visibility = listener; },
     onDidDispose: (listener: typeof dispose) => { dispose = listener; },
   };
-  const source: PanelSource = { accounts: () => [], enabled: () => true, pendingDir: () => undefined, watchTargets: () => [] };
+  const source: PanelSource = claude ?? { accounts: () => [], enabled: () => true, pendingDir: () => undefined, watchTargets: () => [] };
   const panel = new AccountsPanel({ path: '/extension' } as vscode.Uri, { claude: source, codex: source }, new MemoryMemento());
   panel.resolveWebviewView(view as unknown as vscode.WebviewView);
   return { panel, view, messages, receive: (msg: FromWebview) => receive(msg), visible(value: boolean) { view.visible = value; visibility(); }, dispose: () => dispose() };
@@ -109,6 +109,34 @@ test('Claude panel rows show the email but never carry the identity comparison k
   } finally { tmp.restore(); }
 });
 
+test('each tab carries the recommendation computed on the full rows; the setting turns it off', () => {
+  resetConfig();
+  const usage = (used: number) => ({ windows: [{ usedPercent: used, windowMinutes: 300 }], checkedAt: 1 });
+  const rows = (): AccountView[] => [
+    { kind: 'default', name: 'default', label: 'default', dir: '/h/.claude', dirLabel: '~/.claude', loggedIn: true, isCurrent: true, usage: usage(80) },
+    { kind: 'named', name: 'work', label: 'work', dir: '/h/.claude-work', dirLabel: '~/.claude-work', loggedIn: true, isCurrent: false, usage: usage(10) },
+  ];
+  const h = harness({ accounts: rows, enabled: () => true, pendingDir: () => undefined, watchTargets: () => [] });
+  const state = (): ToWebview => { h.messages.length = 0; h.receive({ type: 'ready' }); return h.messages[0]; };
+  try {
+    let msg = state();
+    assert.ok(msg.type === 'state');
+    assert.equal(msg.state.claude.recommended, '/h/.claude-work');
+    assert.equal(msg.state.claude.hideRecommendation, undefined);
+    // The 5-hour window hidden for display still counts for the recommendation
+    setConfig('planswap', 'sidebar.showFiveHourLimit', false);
+    msg = state();
+    assert.ok(msg.type === 'state');
+    assert.deepEqual(msg.state.claude.accounts[0].usage, { windows: [], checkedAt: 1 });
+    assert.equal(msg.state.claude.recommended, '/h/.claude-work');
+    setConfig('planswap', 'sidebar.showRecommendation', false);
+    msg = state();
+    assert.ok(msg.type === 'state');
+    assert.equal(msg.state.claude.recommended, undefined);
+    assert.equal(msg.state.claude.hideRecommendation, true);
+  } finally { h.panel.dispose(); resetConfig(); }
+});
+
 test('the sidebar color thresholds default to 30 / 10 and are clamped to 0..100', () => {
   resetConfig();
   try {
@@ -138,6 +166,6 @@ test('the sidebar display settings hide the email and the general 5-hour / 7-day
   const noWeekly = applySidebarDisplay(rows, { ...all, weekly: false })[0];
   assert.deepEqual(noWeekly.usage?.windows.map((w) => [w.windowMinutes, w.scope]), [[300, undefined], [10080, 'Fable']], 'model-specific windows follow their own setting');
   const generalOnly = [{ ...rows[0], usage: { checkedAt: now, windows: rows[0].usage!.windows.slice(0, 2) } }];
-  assert.equal(applySidebarDisplay(generalOnly, { email: true, fiveHour: false, weekly: false })[0].usage, undefined, 'no window left: no usage block');
+  assert.deepEqual(applySidebarDisplay(generalOnly, { email: true, fiveHour: false, weekly: false })[0].usage, { checkedAt: now, windows: [] }, 'no window left: the observation time stays');
   assert.equal(rows[0].email, 'a@example.com', 'the input rows are not changed');
 });

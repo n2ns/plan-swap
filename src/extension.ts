@@ -6,6 +6,7 @@ import { claudeCredentialOverrides, oneDriveHome, pathVarsWithSpaces } from './e
 import { AccountsPanel, VIEW_ID, claudePanelSource, type PanelSource } from './accountsPanel';
 import { LabelStore, labelFor } from './labels';
 import { FileMemento } from './fileState';
+import { RecommendExclusions } from './recommend';
 import { readAccountInfo, samePath, setClaudeSettingEnv } from './paths';
 import { ensureCodexLinks, isSharedCodexAccount } from './codex/codexShare';
 import { CLAUDE_REFRESH_ALL_USAGE_COMMAND, CLAUDE_REFRESH_USAGE_COMMAND, CODEX_REFRESH_ALL_USAGE_COMMAND, REFRESH_USAGE_COMMAND, StatusBar, claudeUsageFailureText, codexUsageFailureText } from './statusBar';
@@ -126,12 +127,14 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   await state.importOnce(ctx.globalState);
   const store = new AccountStore(state);
   const claudeLabels = new LabelStore(state, 'claude.labels');
-  await store.syncWithDisk(claudeLabels);
+  const claudeExclusions = new RecommendExclusions(state, 'claude.recommendExcluded');
+  await store.syncWithDisk(claudeLabels, claudeExclusions);
   const codexLabels = new LabelStore(state, 'codex.labels');
+  const codexExclusions = new RecommendExclusions(state, 'codex.recommendExcluded');
   const usageHistory = new CodexUsageHistory(state);
 
   // A Codex init failure is only logged and does not affect Claude: the Codex tab renders as "not enabled, no accounts"
-  let codex: { store: CodexAccountStore; labels: LabelStore } | undefined;
+  let codex: { store: CodexAccountStore; labels: LabelStore; exclusions: RecommendExclusions } | undefined;
   let codexSource: PanelSource = { accounts: () => [], enabled: () => false, pendingDir: () => undefined, watchTargets: () => [] };
   let codexInitError: string | undefined;
   // Setups written before the rename (ai-switcher) are migrated in place; on failure the Codex page shows the usual
@@ -143,9 +146,9 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   }
   try {
     const codexStore = new CodexAccountStore(state);
-    await codexStore.syncWithDisk(codexLabels);
-    codexSource = codexPanelSource(codexStore, codexLabels, usageHistory);
-    codex = { store: codexStore, labels: codexLabels };
+    await codexStore.syncWithDisk(codexLabels, codexExclusions);
+    codexSource = codexPanelSource(codexStore, codexLabels, usageHistory, codexExclusions);
+    codex = { store: codexStore, labels: codexLabels, exclusions: codexExclusions };
   } catch (err) {
     codexInitError = err instanceof Error ? err.message : String(err);
     console.error('[planswap] Codex initialization failed:', err);
@@ -449,7 +452,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     },
   };
 
-  const panel = new AccountsPanel(ctx.extensionUri, { claude: claudePanelSource(store, claudeLabels), codex: codexSource }, ctx.globalState);
+  const panel = new AccountsPanel(ctx.extensionUri, { claude: claudePanelSource(store, claudeLabels, claudeExclusions), codex: codexSource }, ctx.globalState);
   // Re-render expiry even when no query is due, including accounts other than the effective one.
   const historyTick = setInterval(() => panel.refresh(), USAGE_TICK_MS);
   // On init failure, Codex actions in the panel and Command Palette show a clear message instead of silently doing nothing
@@ -466,9 +469,9 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     panel,
     vscode.window.registerWebviewViewProvider(VIEW_ID, panel),
     statusBar,
-    ...registerCommands({ store, panel, statusBar, labels: claudeLabels, codex, tools, provideTerminalCheck: (check) => { terminalChecks.claude = check; } }),
+    ...registerCommands({ store, panel, statusBar, labels: claudeLabels, exclusions: claudeExclusions, codex, tools, provideTerminalCheck: (check) => { terminalChecks.claude = check; } }),
     ...(codex
-      ? registerCodexCommands({ store: codex.store, panel, labels: codexLabels, tools, provideTerminalCheck: (check) => { terminalChecks.codex = check; } })
+      ? registerCodexCommands({ store: codex.store, panel, labels: codexLabels, exclusions: codexExclusions, tools, provideTerminalCheck: (check) => { terminalChecks.codex = check; } })
       : []),
     ...registerToolCommands(tools),
     registerDiagnosticsCommand({ store, codexStore: codex?.store, extensionVersion: version }),

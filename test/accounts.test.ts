@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { AccountStore } from '../src/accounts';
+import { RecommendExclusions } from '../src/recommend';
 import { LabelStore } from '../src/labels';
 import { CASE_SENSITIVE_FS, makeTempHome, MemoryMemento, type TempHome } from './helpers';
 
@@ -110,6 +111,16 @@ describe('AccountStore syncWithDisk', () => {
       { name: 'c', dir: elsewhere },
       { name: 'renamed', dir: path.join(home, '.claude-d') },
     ]);
+  });
+
+  test('a pruned account loses its recommendation mark', async () => {
+    const { memento, store } = make();
+    const exclusions = new RecommendExclusions(memento, 'claude.recommendExcluded');
+    await store.add({ name: 'gone', dir: path.join(home, '.claude-gone') });
+    await exclusions.set('gone', true);
+    await store.syncWithDisk(undefined, exclusions);
+    assert.equal(store.find('gone'), undefined);
+    assert.equal(exclusions.has('gone'), false);
   });
 
   test('does not write when nothing is missing', async () => {

@@ -7,6 +7,7 @@ import { codexPanelSource, codexRunsInWsl, manualRestartMessages, registerCodexC
 import { CodexAccountStore } from '../src/codex/codexStore';
 import { setLocale, t } from '../src/i18n';
 import { LabelStore } from '../src/labels';
+import { RecommendExclusions } from '../src/recommend';
 import { env, window, commands, setConfig, type StubTerminal } from './stubs/vscode';
 import type { AccountsPanel } from '../src/accountsPanel';
 import type { FromWebview, ToWebview } from '../src/protocol';
@@ -252,6 +253,7 @@ describe('panel message handlers', () => {
   interface Harness {
     store: CodexAccountStore;
     labels: LabelStore;
+    exclusions: RecommendExclusions;
     handle(message: FromWebview): Promise<void>;
     posted: ToWebview[];
     refreshes(): number;
@@ -279,8 +281,9 @@ describe('panel message handlers', () => {
       refresh() { refreshes++; },
       post(message: ToWebview) { posted.push(message); },
     } as unknown as AccountsPanel;
-    const disposables = registerCodexCommands({ store, labels, panel, tools: {} });
-    return { store, labels, handle: (m) => handle(m), posted, refreshes: () => refreshes, dispose: () => disposables.forEach((d) => d.dispose()) };
+    const exclusions = new RecommendExclusions(state, 'codex.recommendExcluded');
+    const disposables = registerCodexCommands({ store, labels, exclusions, panel, tools: {} });
+    return { store, labels, exclusions, handle: (m) => handle(m), posted, refreshes: () => refreshes, dispose: () => disposables.forEach((d) => d.dispose()) };
   };
   const named = (name: string): CodexAccount => ({ name, dir: codexAccountDir(name) });
   const bashrc = (): string => path.join(fxHome, '.bashrc');
@@ -512,6 +515,27 @@ describe('panel message handlers', () => {
       await h.handle({ type: 'add', mode: 'codex', name: 'own', shared: false });
       assert.deepEqual(h.posted.at(-1), { type: 'addResult', mode: 'codex', error: t('name.exists') });
       assert.equal(h.refreshes(), 2);
+    } finally {
+      h.dispose();
+    }
+  });
+
+  test('recommendExclude marks a registered account and refreshes the panel; remove clears the mark', async (ctx) => {
+    const a = named('mark');
+    const h = await harness([a]);
+    fs.writeFileSync(path.join(a.dir, 'auth.json'), '{}');
+    writeSelectedDir(undefined);
+    modal(ctx, () => undefined);
+    try {
+      const before = h.refreshes();
+      await h.handle({ type: 'recommendExclude', mode: 'codex', dir: a.dir, excluded: true });
+      assert.equal(h.exclusions.has('mark'), true);
+      assert.equal(h.refreshes(), before + 1);
+      await h.handle({ type: 'recommendExclude', mode: 'codex', dir: codexAccountDir('nope'), excluded: false });
+      assert.equal(h.exclusions.has('mark'), true, 'an unresolved directory changes nothing');
+      await h.handle({ type: 'remove', mode: 'codex', dir: a.dir });
+      assert.equal(h.store.find('mark'), undefined);
+      assert.equal(h.exclusions.has('mark'), false, 'the mark goes with the account');
     } finally {
       h.dispose();
     }

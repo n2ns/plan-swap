@@ -31,6 +31,7 @@ import type { AccountStore } from './accounts';
 import type { AccountsPanel } from './accountsPanel';
 import type { StatusBar } from './statusBar';
 import { labelFor, sameName, type LabelStore, EXTERNAL_NAME } from './labels';
+import type { RecommendExclusions } from './recommend';
 import type { FromWebview } from './protocol';
 import type { CodexAccountStore } from './codex/codexStore';
 import { mirrorClaudeJsonInto, runTool, type TerminalCheck, type ToolDeps } from './tools';
@@ -48,8 +49,10 @@ export interface Deps {
   statusBar: StatusBar;
   // Aliases of Claude accounts (claude.labels)
   labels: LabelStore;
+  // Accounts excluded from recommendations (claude.recommendExcluded); cleared with the account. Tests may leave it out
+  exclusions?: RecommendExclusions;
   // Codex-side store; the refresh command applies to both tabs
-  codex?: { store: CodexAccountStore; labels: LabelStore };
+  codex?: { store: CodexAccountStore; labels: LabelStore; exclusions?: RecommendExclusions };
   // Panel 'tool' messages of the Claude page go to runTool('claude', tool, tools)
   tools: ToolDeps;
   // Root of the process tree for the busy checks; tests pass a fake, product code leaves the default /proc
@@ -76,12 +79,14 @@ export interface Deps {
  *   after the Command Palette confirmation and again after the delete-directory confirmation. The alias is cleared with
  *   the account; the directory is deleted only through deleteAccountDir, after which it is no longer ignored.
  * - Rename: named rows only; always answers renameResult.
+ * - recommendExclude: registered rows only (the external row is ignored); sets or clears the recommendation mark and
+ *   refreshes the panel. The mark is cleared with the account (remove, or a pruned directory on sync).
  * - Terminals: on Linux a non-default folder with a control character is refused; closing a PlanSwap terminal refreshes
  *   the UI and warns when a still-registered named account is still signed out.
  * - planswap.refresh re-syncs both stores with the disk and refreshes the panel and status bar.
  */
 export function registerCommands(deps: Deps): vscode.Disposable[] {
-  const { store, panel, statusBar, labels, codex, tools } = deps;
+  const { store, panel, statusBar, labels, exclusions, codex, tools } = deps;
   const procRoot = deps.procRoot ?? '/proc';
   const MODE = 'claude';
   // Terminals created by this extension -> their account
@@ -308,6 +313,7 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
     const shared = isSharedClaudeAccount(account.dir);
     await store.remove(account.name);
     await labels.remove(account.name);
+    await exclusions?.remove(account.name);
     refreshUi();
 
     const detail = t(shared ? 'claude.removeDirDetailShared' : 'claude.removeDirDetail');
@@ -405,6 +411,13 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
         panel.post({ type: 'renameResult', mode: MODE, dir: msg.dir, error });
         return;
       }
+      case 'recommendExclude': {
+        const a = panel.resolve(MODE, msg.dir);
+        if (!a || a.kind === 'external') return;
+        await exclusions?.set(a.name, msg.excluded !== false);
+        panel.refresh();
+        return;
+      }
       case 'reload':
         await reloadWindow();
         return;
@@ -446,8 +459,8 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
       if (a) openTerminal(a);
     }),
     vscode.commands.registerCommand('planswap.refresh', async () => {
-      await store.syncWithDisk(labels);
-      if (codex) await codex.store.syncWithDisk(codex.labels);
+      await store.syncWithDisk(labels, exclusions);
+      if (codex) await codex.store.syncWithDisk(codex.labels, codex.exclusions);
       refreshUi();
     }),
     vscode.window.onDidCloseTerminal((terminal) => {

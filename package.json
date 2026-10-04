@@ -306,6 +306,13 @@
             "scope": "application",
             "description": "%config.sidebarErrorThreshold.description%",
             "order": 5
+          },
+          "planswap.sidebar.showRecommendation": {
+            "type": "boolean",
+            "default": true,
+            "scope": "application",
+            "description": "%config.sidebarRecommendation.description%",
+            "order": 6
           }
         }
       },

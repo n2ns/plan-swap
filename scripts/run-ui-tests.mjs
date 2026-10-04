@@ -533,6 +533,182 @@ async function refreshButtonVisibility() {
   results.interactions.push('refresh buttons follow usageEligible: current button needs the current account, "all" any registered one on both pages');
 }
 
+// Recommendation card and the per-row "exclude from recommendations" toggle. The host decides what is recommended; the
+// page renders the card above the list with the account's general windows, when it was observed, and the actions
+// (Claude: Switch and Open terminal; Codex: Open terminal only), and the toggle on every registered row with usage limits
+const recommendTitle = { en: 'Recommended: Work', 'zh-cn': '推荐：Work', 'zh-tw': '推薦：Work', es: 'Recomendada: Work', ja: 'おすすめ：Work' };
+const recommendSwitch = { en: 'Switch', 'zh-cn': '切换', 'zh-tw': '切換', es: 'Cambiar', ja: '切り替え' };
+const recommendTerminal = { en: 'Terminal', 'zh-cn': '终端', 'zh-tw': '終端機', es: 'Terminal', ja: 'ターミナル' };
+const excludeTitle = { en: 'Exclude from recommendations', 'zh-cn': '不参与推荐', 'zh-tw': '不參與推薦', es: 'Excluir de las recomendaciones', ja: 'おすすめから除外' };
+const includeTitle = { en: 'Include in recommendations', 'zh-cn': '恢复参与推荐', 'zh-tw': '恢復參與推薦', es: 'Incluir en las recomendaciones', ja: 'おすすめに含める' };
+const updatedNow = { en: 'Updated just now', 'zh-cn': '刚刚更新', 'zh-tw': '剛剛更新', es: 'Actualizado ahora mismo', ja: 'たった今更新' };
+async function recommendation(locale, width) {
+  for (const mode of ['claude', 'codex']) {
+    const where = `${mode} ${name(locale, width)}`;
+    await page.evaluate(({ locale, width, mode }) => {
+      window.preview.apply({ locale, width, active: mode });
+      window.preview.clearMessages();
+      const state = structuredClone(window.preview.state());
+      const tab = state[mode];
+      const now = Math.floor(Date.now() / 1000);
+      // The current account runs low (20% left in 5 hours); Work has 58% / 46% left and was observed just now
+      tab.accounts.find((a) => a.isCurrent).usage = { windows: [{ usedPercent: 80, windowMinutes: 300, resetsAt: now + 3600 }, { usedPercent: 40, windowMinutes: 10080, resetsAt: now + 86400 }], checkedAt: Date.now() - 5000 };
+      const work = tab.accounts.find((a) => a.dir === `/fixture/.${mode}-work`);
+      work.usage.windows = work.usage.windows.map((w) => (w.windowMinutes === 10080 && !w.scope ? { ...w, usedPercent: 54 } : w));
+      work.usage.checkedAt = Date.now() - 5000;
+      tab.recommended = work.dir;
+      window.preview.post({ type: 'state', state });
+    }, { locale, width, mode });
+    const data = await page.evaluate(({ mode }) => {
+      const panel = document.querySelector(`#panel-${mode}`);
+      const card = panel.querySelector('.banner.recommend');
+      const rect = (el) => el.getBoundingClientRect();
+      const sidebar = rect(document.querySelector('#sidebar'));
+      const buttons = [...card.querySelectorAll('vscode-button')];
+      return {
+        cards: panel.querySelectorAll('.banner.recommend').length,
+        dir: card.dataset.dir, role: card.getAttribute('role'), ariaLabel: card.getAttribute('aria-label'),
+        textColor: getComputedStyle(card.querySelector('.recommend-text')).color,
+        bannerTextColor: (() => { const probe = document.createElement('div'); probe.className = 'banner-text'; card.append(probe); const c = getComputedStyle(probe).color; probe.remove(); return c; })(),
+        order: [...panel.querySelectorAll('.row')].map((r) => r.dataset.dir),
+        title: card.querySelector('.banner-title').textContent, text: card.querySelector('.recommend-text').textContent,
+        icon: card.querySelector('.banner-icon').getAttribute('name'),
+        buttons: buttons.map((b) => ({ action: b.dataset.action, icon: b.getAttribute('icon'), label: b.textContent.trim(), secondary: b.hasAttribute('secondary'),
+          inside: rect(b).left >= sidebar.left - 1 && rect(b).right <= sidebar.right + 1 && rect(b).bottom <= rect(card).bottom + 1,
+          cut: (() => { const base = b.shadowRoot?.querySelector('[part~="base"]'); return !!base && base.scrollWidth > base.clientWidth + 1; })() })),
+        aboveList: rect(card).bottom <= rect(panel.querySelector('.section-title')).top,
+        afterBanners: [...panel.querySelectorAll('.page-top > *')].indexOf(card) === panel.querySelectorAll('.page-top > *').length - 1,
+        overflow: card.scrollWidth > card.clientWidth + 1 || document.documentElement.scrollWidth > document.documentElement.clientWidth,
+        textOverflow: card.querySelector('.recommend-text').scrollWidth > card.querySelector('.recommend-text').clientWidth + 1,
+        toggles: [...panel.querySelectorAll('.row [data-action="recommendExclude"]')].map((el) => ({
+          dir: el.closest('.row').dataset.dir, icon: el.getAttribute('icon'), title: el.title,
+          role: el.shadowRoot?.querySelector('button')?.getAttribute('role') ?? null,
+          checked: el.shadowRoot?.querySelector('button')?.getAttribute('aria-checked') ?? null,
+          inActions: !!el.closest('.row-icons'),
+        })),
+      };
+    }, { mode });
+    assert.equal(data.cards, 1, `one recommendation card at ${where}`);
+    assert.equal(data.dir, undefined, 'the card carries no data-dir, so focus restore never mistakes it for a row');
+    assert.equal(data.role, 'region');
+    assert.equal(data.ariaLabel, recommendTitle[locale]);
+    assert.notEqual(data.textColor, data.bannerTextColor, `card text uses the more readable color at ${where}`);
+    assert.deepEqual(data.order, [`/fixture/.${mode}`, `/fixture/.${mode}-work`, `/fixture/.${mode}-empty`], `list order unchanged at ${where}`);
+    assert.equal(data.icon, 'lightbulb');
+    assert.equal(data.title, recommendTitle[locale], `card title at ${where}`);
+    const parts = data.text.split(' · ');
+    assert.equal(parts.length, 3, `two general windows and the observation time at ${where}: ${data.text}`);
+    assert.equal(parts[0], `${durations[locale][0]} ${remaining[locale](58)}`, `5-hour part at ${where}`);
+    assert.equal(parts[1], `${durations[locale][1]} ${remaining[locale](46)}`, `7-day part at ${where}`);
+    assert.equal(parts[2], updatedNow[locale], `observation time at ${where}`);
+    assert.ok(!data.text.includes('Fable'), `model-specific windows stay out of the card at ${where}`);
+    const expected = mode === 'claude'
+      ? [{ action: 'switch', icon: 'arrow-swap', label: recommendSwitch[locale], secondary: false }, { action: 'terminal', icon: 'terminal', label: recommendTerminal[locale], secondary: true }]
+      : [{ action: 'terminal', icon: 'terminal', label: recommendTerminal[locale], secondary: true }];
+    assert.deepEqual(data.buttons.map(({ action, icon, label, secondary }) => ({ action, icon, label, secondary })), expected, `card buttons at ${where}`);
+    for (const b of data.buttons) {
+      assert.equal(b.inside, true, `${b.action} button outside the card at ${where}`);
+      assert.equal(b.cut, false, `${b.action} label cut off at ${where}`);
+    }
+    assert.equal(data.aboveList, true, `card must sit above the list heading at ${where}`);
+    assert.equal(data.afterBanners, true, `card comes after the banners at ${where}`);
+    assert.equal(data.overflow, false, `card overflow at ${where}`);
+    assert.equal(data.textOverflow, false, `card text overflow at ${where}`);
+    // Toggles on the registered rows with usage limits (Default and Work; Empty cannot be queried), none excluded yet
+    assert.deepEqual(data.toggles, [`/fixture/.${mode}`, `/fixture/.${mode}-work`].map((dir) => ({ dir, icon: 'lightbulb', title: excludeTitle[locale], role: 'switch', checked: 'false', inActions: true })), `row toggles at ${where}`);
+    await shot(`${name(locale, width)}-${mode}-recommend.png`, mode);
+    // Card actions send the recommended account's directory
+    for (const action of expected.map((b) => b.action)) await page.locator(`#panel-${mode} .banner.recommend [data-action="${action}"]`).click();
+    assert.deepEqual(await page.evaluate(() => window.preview.messages), expected.map((b) => ({ type: b.action, mode, dir: `/fixture/.${mode}-work` })), `card messages at ${where}`);
+    await page.evaluate(() => window.preview.clearMessages());
+    // planswap.usageDisplay used: the card's figures show what is used
+    await page.evaluate(() => window.preview.post({ type: 'state', state: { ...structuredClone(window.preview.state()), usageDisplay: 'used' } }));
+    const usedText = await page.locator(`#panel-${mode} .banner.recommend .recommend-text`).textContent();
+    assert.equal(usedText.split(' · ')[0], `${durations[locale][0]} ${usedLabel[locale](42)}`, `used display at ${where}`);
+  }
+}
+const usedLabel = {
+  en: (p) => `${p}% used`, 'zh-cn': (p) => `已用 ${p}%`, 'zh-tw': (p) => `已用 ${p}%`, es: (p) => `${p}% usado`, ja: (p) => `使用済み ${p}%`,
+};
+
+async function recommendationToggle() {
+  for (const mode of ['claude', 'codex']) {
+    await page.evaluate((mode) => { window.preview.apply({ locale: 'en', width: 280, active: mode }); window.preview.clearMessages(); }, mode);
+    const toggle = page.locator(`${row(mode, 'work')} [data-action="recommendExclude"]`);
+    await toggle.click();
+    assert.deepEqual(await page.evaluate(() => window.preview.messages), [{ type: 'recommendExclude', mode, dir: `/fixture/.${mode}-work`, excluded: true }]);
+    await page.evaluate((mode) => {
+      window.preview.clearMessages();
+      const state = structuredClone(window.preview.state());
+      state[mode].accounts.find((a) => a.dir === `/fixture/.${mode}-work`).recommendExcluded = true;
+      window.preview.post({ type: 'state', state });
+    }, mode);
+    assert.deepEqual(await toggle.evaluate((el) => ({ icon: el.getAttribute('icon'), title: el.title, checked: el.shadowRoot.querySelector('button').getAttribute('aria-checked') })),
+      { icon: 'lightbulb-empty', title: includeTitle.en, checked: 'true' }, `${mode} excluded row toggle`);
+    await shot(`${mode}-recommend-excluded.png`, mode);
+    await toggle.click();
+    assert.deepEqual(await page.evaluate(() => window.preview.messages), [{ type: 'recommendExclude', mode, dir: `/fixture/.${mode}-work`, excluded: false }]);
+    // planswap.sidebar.showRecommendation off: no card and no toggles, the other row buttons stay
+    await page.evaluate((mode) => {
+      const state = structuredClone(window.preview.state());
+      state[mode].hideRecommendation = true;
+      state[mode].recommended = `/fixture/.${mode}-work`;
+      window.preview.post({ type: 'state', state });
+    }, mode);
+    assert.equal(await page.locator(`#panel-${mode} .banner.recommend`).count(), 0, `${mode} card hidden by the setting`);
+    assert.equal(await page.locator(`#panel-${mode} [data-action="recommendExclude"]`).count(), 0, `${mode} toggles hidden by the setting`);
+    assert.equal(await page.locator(`${row(mode, 'work')} [data-action="terminal"]`).count(), 1);
+    // A recommended directory missing from the list shows no card; one whose windows the display settings all hid
+    // (the host then sends an empty window list with the time) still shows the card with the observation time only,
+    // and the row shows no usage block
+    await page.evaluate((mode) => {
+      const state = structuredClone(window.preview.state());
+      delete state[mode].hideRecommendation;
+      state[mode].recommended = `/fixture/.${mode}-gone`;
+      window.preview.post({ type: 'state', state });
+    }, mode);
+    assert.equal(await page.locator(`#panel-${mode} [data-action="recommendExclude"]`).count(), 2, `${mode} toggles back without the setting`);
+    assert.equal(await page.locator(`#panel-${mode} .banner.recommend`).count(), 0, `${mode} unknown recommended dir`);
+    await page.evaluate((mode) => {
+      const state = structuredClone(window.preview.state());
+      const work = state[mode].accounts.find((a) => a.dir === `/fixture/.${mode}-work`);
+      work.usage = { windows: [], checkedAt: Date.now() };
+      state[mode].recommended = work.dir;
+      window.preview.post({ type: 'state', state });
+    }, mode);
+    assert.equal(await page.locator(`#panel-${mode} .banner.recommend`).count(), 1, `${mode} card without visible windows`);
+    assert.equal(await page.locator(`#panel-${mode} .banner.recommend .recommend-text`).textContent(), updatedNow.en);
+    assert.equal(await page.locator(`${row(mode, 'work')} .row-usage`).count(), 0, `${mode} row shows no empty usage block`);
+  }
+  results.interactions.push('recommendation toggle sends excluded true/false, reflects the host mark, and the setting hides the card and the toggles');
+}
+
+// The card's observation time is refreshed every minute without a state push (a push with the same content does not
+// re-render). The fake clock is installed last, since it would freeze the page's Date.now for the earlier checks
+async function updatedAgoTicks() {
+  await page.clock.install();
+  await page.evaluate(() => {
+    window.preview.apply({ locale: 'en', width: 280, active: 'claude' });
+    const state = structuredClone(window.preview.state());
+    const current = state.claude.accounts.find((a) => a.isCurrent);
+    current.usage = { windows: [{ usedPercent: 80, windowMinutes: 300 }], checkedAt: Date.now() };
+    const work = state.claude.accounts.find((a) => a.dir === '/fixture/.claude-work');
+    work.usage.checkedAt = Date.now() - 30_000;
+    state.claude.recommended = work.dir;
+    window.preview.post({ type: 'state', state });
+  });
+  const time = page.locator('#panel-claude .banner.recommend .recommend-updated');
+  assert.equal(await time.textContent(), updatedNow.en);
+  await page.clock.runFor(60_000);
+  assert.equal(await time.textContent(), 'Updated 1 minute ago', 'the time text ticks without a state push');
+  // The same state pushed again keeps the DOM (no re-render) and the ticked text
+  await page.evaluate(() => window.preview.post({ type: 'state', state: structuredClone(window.preview.state()) }));
+  assert.equal(await time.textContent(), 'Updated 1 minute ago');
+  await page.clock.runFor(9 * 60_000);
+  assert.equal(await time.textContent(), 'Updated 10 minutes ago');
+  results.interactions.push('recommendation observation time ticks every minute without a state push');
+}
+
 async function restartControls(locale, width) {
   await page.evaluate(({ locale, width }) => window.preview.apply({ locale, width, active: 'codex' }), { locale, width });
   for (const restart of [
@@ -894,10 +1070,13 @@ try {
   for (const locale of locales) for (const width of widths) await runCase(locale, width);
   for (const locale of locales) for (const width of widths) await restartControls(locale, width);
   for (const locale of locales) for (const width of widths) await refreshButtons(locale, width);
+  for (const locale of locales) for (const width of widths) await recommendation(locale, width);
+  await recommendationToggle();
   await refreshButtonVisibility();
   await usageEndpoints();
   await resetDateStates();
   await interactions();
+  await updatedAgoTicks();
   assert.deepEqual(results.consoleErrors, [], 'preview console must have no errors or warnings');
   console.log(`UI preview passed: ${results.cases.length} layout cases, 121 Codex screenshots, ${results.interactions.length} interactions`);
 } catch (error) {

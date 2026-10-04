@@ -67,13 +67,17 @@ F5 in a WSL window uses the "Run Extension" launch configuration; `.vscode/tasks
 
 The launcher uses `makeTempHome`, clears inherited account/editor variables, and gives the editor disposable HOME, XDG, user-data, extensions and workspace directories, removed after the test process exits. Only empty account folders are created. Tests exercise real extension activation, contributed command registration, repeated sidebar focus/refresh, signed-out usage refresh and account discovery. They do not install the extension into the user's editor, log in, run account CLIs, mutate the registry or restart an editor/server. They do not assert Webview DOM rendering, real-account usage values or native Windows behavior; those remain separate preview and manual acceptance checks.
 
+### Real-editor sidebar checks with fake accounts
+
+The agent skill in `.agents/skills/devhost-test/` (linked from `.claude/skills/`) launches the same cached VS Code with a disposable HOME seeded with fake Claude and Codex accounts, connects over the Chrome DevTools Protocol and drives the sidebar: `node .agents/skills/devhost-test/scripts/run.mjs recommendation` after `npm run build`. It checks what the preview cannot (real theme injection, host-side state writes, settings round-trips) and writes screenshots and a report under `.test-out/devhost/`. Rules and limits are in its `SKILL.md`; it never touches a real account and runs on demand, not in CI.
+
 ### Repeatable Webview checks
 
 The preview serves the production `dist/media` bundle with synthetic protocol fixtures and a simulated host transport. `npm run preview` builds the extension and starts a loopback-only page at `http://127.0.0.1:8768/`; stop it with Ctrl+C. Query parameters `locale`, `width` and `active` choose an initial language, sidebar width and provider. Fixtures use only `/fixture/` paths and example identities, and no account files or CLIs are accessed.
 
 `npm run test:ui` drives the same preview in Playwright's Chromium (install it once with `npx playwright install chromium`). It runs locally on demand; CI does not run browser UI tests. By default it is headless with a fixed viewport at 100% zoom, so no window opens; `npm run test:ui -- --headed` uses a full-screen window instead (headless Linux then needs Xvfb and a window manager such as Openbox; bare Xvfb can report a full-screen state without filling the display). The runner creates and closes its own browser, page and server, and only the sidebar container changes width. It covers every locale and width in [preview verification](manual-verification.md#preview-verification), including tab/switch/rename behavior, input preservation, delete cancellation and usage observations. Screenshots and a JSON result summary are written under `.test-out/ui/`.
 
-These checks use synthetic theme colors and a fake host. They verify layout and frontend behavior, not actual VS Code theme injection, host-side account mutations, real login state or usage values. The editor smoke suite and user-operated acceptance still apply.
+These checks use synthetic theme colors and a fake host. They verify layout and frontend behavior, not actual VS Code theme injection, host-side account mutations, real login state or usage values. The [real-editor sidebar checks](#real-editor-sidebar-checks-with-fake-accounts) cover theme injection and host state with fake accounts; user-operated acceptance still applies to real accounts.
 
 ### Performance measurements
 

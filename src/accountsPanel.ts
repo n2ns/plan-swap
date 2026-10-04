@@ -10,6 +10,7 @@ import type { AccountView, FromWebview, PanelMode, PanelState, RestartInfo, TabS
 import { isSharedClaudeAccount } from './claudeShare';
 import { readClaudeUsage } from './claudeUsage';
 import { threshold, usageDisplay } from './statusBar';
+import { recommend, type RecommendExclusions } from './recommend';
 import { getLocale, intlLocale, t } from './i18n';
 import { comparablePath, isWindows } from './platform';
 
@@ -19,6 +20,8 @@ export const SHOW_MODEL_LIMITS_SETTING = 'sidebar.showModelLimits';
 export const SHOW_EMAIL_SETTING = 'sidebar.showEmail';
 export const SHOW_FIVE_HOUR_SETTING = 'sidebar.showFiveHourLimit';
 export const SHOW_WEEKLY_SETTING = 'sidebar.showWeeklyLimit';
+// Off: no recommendation card and no per-row exclude buttons
+export const SHOW_RECOMMENDATION_SETTING = 'sidebar.showRecommendation';
 
 const FIVE_HOURS = 300;
 const SEVEN_DAYS = 7 * 1440;
@@ -43,8 +46,9 @@ export function sidebarThresholds(): { warning: number; error: number } {
 
 /**
  * Applies the sidebar display settings to the rows of either page: a hidden email is not sent, and the general 5-hour
- * and 7-day windows are dropped when hidden (model-specific windows follow their own setting; a row left with no
- * window loses its usage block).
+ * and 7-day windows are dropped when hidden (model-specific windows follow their own setting). A row left with no
+ * window keeps its usage with an empty window list, so the observation time stays available (the recommendation card
+ * shows it); the Webview renders no usage block for it.
  */
 export function applySidebarDisplay(rows: AccountView[], display: SidebarDisplay): AccountView[] {
   const hidden = (w: { windowMinutes?: number; scope?: string }): boolean => !w.scope &&
@@ -54,7 +58,7 @@ export function applySidebarDisplay(rows: AccountView[], display: SidebarDisplay
     if (!next.usage) return next;
     const windows = next.usage.windows.filter((w) => !hidden(w));
     if (windows.length === next.usage.windows.length) return next;
-    return { ...next, usage: windows.length ? { ...next.usage, windows } : undefined };
+    return { ...next, usage: { ...next.usage, windows } };
   });
 }
 
@@ -78,11 +82,11 @@ export interface PanelSource {
 
 /**
  * Claude data source: one row per store.all() account (label via labelFor; email, plan, usageEligible and usage via
- * claudeRowInfo; shared via isSharedClaudeAccount for named rows), plus an "external directory" row (EXTERNAL_NAME,
- * kind 'external') when the current dir matches no registered account (findSameDir). enabled is always true and
- * pendingDir always undefined.
+ * claudeRowInfo; shared via isSharedClaudeAccount for named rows; recommendExcluded from exclusions), plus an
+ * "external directory" row (EXTERNAL_NAME, kind 'external') when the current dir matches no registered account
+ * (findSameDir). enabled is always true and pendingDir always undefined.
  */
-export function claudePanelSource(store: AccountStore, labels: LabelStore): PanelSource {
+export function claudePanelSource(store: AccountStore, labels: LabelStore, exclusions?: RecommendExclusions): PanelSource {
   const accounts = (): AccountView[] => {
     const cur = currentDir();
     const all = store.all();
@@ -96,6 +100,7 @@ export function claudePanelSource(store: AccountStore, labels: LabelStore): Pane
       ...claudeRowInfo(a.dir),
       isCurrent: i === curIdx,
       shared: a.name === DEFAULT_NAME ? undefined : isSharedClaudeAccount(a.dir),
+      recommendExcluded: exclusions?.has(a.name) || undefined,
     }));
     if (!rows.some((r) => r.isCurrent)) {
       rows.push({
@@ -271,13 +276,18 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
     this.changed.dispose();
   }
 
+  // The recommendation is computed on the full rows, before the display settings drop any window
   private tabState(mode: PanelMode): TabState {
     const source = this.sources[mode];
     const display = sidebarDisplay();
+    const rows = source.accounts();
+    const showRecommendation = vscode.workspace.getConfiguration('planswap').get<boolean>(SHOW_RECOMMENDATION_SETTING, true);
     return {
       enabled: source.enabled(),
-      accounts: applySidebarDisplay(source.accounts(), display),
+      accounts: applySidebarDisplay(rows, display),
       hideEmail: display.email ? undefined : true,
+      recommended: showRecommendation ? recommend(rows, sidebarThresholds().warning) : undefined,
+      hideRecommendation: showRecommendation ? undefined : true,
       switchedTo: mode === 'claude' ? this.switchedTo : undefined,
       pendingDir: source.pendingDir(),
       restart: source.restart?.(),
@@ -365,6 +375,7 @@ const MESSAGE_FIELDS: Record<FromWebview['type'], readonly string[]> = {
   share: ['dir'],
   unshare: ['dir'],
   rename: ['dir', 'label'],
+  recommendExclude: ['dir'],
   reload: [],
   dismissBanner: [],
   enable: [],

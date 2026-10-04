@@ -60,6 +60,7 @@
   "config.codexUsageTimeoutSeconds.description": "Segundos que puede durar como máximo una consulta de los límites de uso de una cuenta de Codex antes de detenerla e informar que se agotó el tiempo (5–120). Se aplica a las consultas automáticas y manuales.",
   "config.sidebarWarningThreshold.description": "La barra de un límite de uso en la barra lateral usa el color de advertencia cuando el porcentaje restante es igual o inferior a este valor (0–100).",
   "config.sidebarErrorThreshold.description": "La barra de un límite de uso en la barra lateral usa el color de error cuando el porcentaje restante es igual o inferior a este valor (0–100). Tiene prioridad sobre el umbral de advertencia.",
+  "config.sidebarRecommendation.description": "Recomendar otra cuenta en la barra lateral mientras el límite de uso general más bajo de la cuenta actual está en el umbral de advertencia de la barra lateral o por debajo: la cuenta con sesión iniciada a la que más le queda, excluidas las marcadas como no recomendadas. Desactivado, oculta la tarjeta de recomendación y los botones por cuenta.",
   "config.statusBarEnabled.description": "Muestra el elemento de uso de PlanSwap en la barra de estado.",
   "config.statusBarProducts.description": "Productos que incluye el elemento de la barra de estado. Un producto excluido desaparece de su texto, su información sobre herramientas y su color de fondo; el elemento se oculta cuando ninguno de los productos elegidos está configurado.",
   "config.statusBarProducts.both": "Claude y Codex",

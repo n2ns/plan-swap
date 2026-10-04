@@ -18,3 +18,5 @@ TODO.md
 resources/planswap-banner.webp
 resources/planswap-sidebar-claude.png
 resources/planswap-sidebar-codex.png
+.agents/**
+.claude/**

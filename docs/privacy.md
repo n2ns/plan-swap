@@ -20,7 +20,7 @@ The CLI then contacts Anthropic's or OpenAI's service as it always does. Sign-in
 
 ## What PlanSwap stores
 
-- **Account data**: account lists, display names, hidden-account records and dismissed warnings are saved in `~/.config/planswap/state.json` inside each WSL environment (on Windows, `%USERPROFILE%\.config\planswap\state.json`).
+- **Account data**: account lists, display names, accounts excluded from recommendations, hidden-account records and dismissed warnings are saved in `~/.config/planswap/state.json` inside each WSL environment (on Windows, `%USERPROFILE%\.config\planswap\state.json`).
 - **Codex usage records**: the same file keeps each Codex account's last usage values, when they were checked, the account directory and the size and modification time of its sign-in file; no tokens or account identifiers. Records survive restarts, are hidden when the sign-in file changes, and expire after their reset time or 24 hours.
 - **Codex selection**: the selected Codex account is saved in `~/.config/planswap/codex-home` while Codex switching is enabled.
 - **Sidebar tab**: the selected tab is saved in the editor's extension storage.

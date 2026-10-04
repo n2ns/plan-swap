@@ -179,6 +179,12 @@ By default, PlanSwap checks every signed-in account of each product automaticall
 
 Other rows show the result of their last check. Values disappear after their reset time or after 24 hours, and are hidden when the account has since signed in again.
 
+### Recommended account
+
+When the current account's lowest general limit reaches the yellow level, a green card above the list recommends another signed-in account of the same tab: the one with the most left in its lowest limit, as long as it has more left than the current account and none of its limits is used up. The card shows that account's limits and how long ago they were checked, with **Switch** (Claude; the usual confirmation follows) and **Terminal** buttons. On the Codex tab only **Terminal** is offered, since applying a Codex account restarts the editor's server. Model-specific limits are not compared, and the card never queries anything itself: its figures are as fresh as the last check of that account.
+
+To keep an account out of the recommendations, for example a work account, click the lightbulb icon on its card; click it again to include it. Turn off `planswap.sidebar.showRecommendation` in [settings](#change-language-and-display-settings) to hide the card and the lightbulb icons.
+
 ### Status bar
 
 The status bar shows each product's short limit, for example `Claude 97% · Codex 82%`: what is left, or what is used when `planswap.usageDisplay` is `used`. Its background turns to the theme's warning color when any general limit, including longer ones, is at 30% or less, and to the error color at 10% or less. You can change these thresholds, show only one product, move the item to the left or hide it ([Change language and display settings](#change-language-and-display-settings)).
@@ -247,6 +253,7 @@ Click the settings icon in the panel title bar, or run **PlanSwap: Open PlanSwap
 | `planswap.sidebar.showModelLimits` | `false` | Add Claude's model-specific limits to cards. |
 | `planswap.sidebar.warningThreshold` | `30` | Card bars turn to the warning color at or below this remaining percentage, 0–100. |
 | `planswap.sidebar.errorThreshold` | `10` | Card bars turn to the error color at or below this remaining percentage, 0–100. It wins over the warning color. |
+| `planswap.sidebar.showRecommendation` | `true` | Show the [recommended account](#recommended-account) card and the lightbulb icons on the cards. |
 | `planswap.statusBar.enabled` | `true` | Show the PlanSwap item in the status bar. |
 | `planswap.statusBar.products` | `both` | Products in the status bar item: `both`, `claude` or `codex`. |
 | `planswap.statusBar.warningThreshold` | `30` | Warning color at or below this remaining percentage, 0–100. |

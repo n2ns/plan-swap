@@ -164,6 +164,8 @@ export function snapshot(dir: string): string[] {
 /** In-memory Memento stub */
 export class MemoryMemento implements Memento {
   readonly data = new Map<string, unknown>();
+  // Number of update() calls, so tests can assert that nothing was written
+  updates = 0;
   keys(): readonly string[] { return [...this.data.keys()]; }
   get<T>(key: string): T | undefined;
   get<T>(key: string, defaultValue: T): T;
@@ -171,6 +173,7 @@ export class MemoryMemento implements Memento {
     return this.data.has(key) ? (this.data.get(key) as T) : defaultValue;
   }
   async update(key: string, value: unknown): Promise<void> {
+    this.updates++;
     if (value === undefined) this.data.delete(key);
     else this.data.set(key, value);
   }

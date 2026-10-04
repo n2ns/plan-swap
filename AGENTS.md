@@ -38,6 +38,7 @@ Read the relevant sections before changing their behavior or contracts; a task d
 | Commands, menus, views, settings or panel interactions | [Features](docs/features.md); also check `package.json` contributions, `package.nls*.json` and `src/protocol.ts`. |
 | Dependencies, building, packaging or editor troubleshooting | [Development](docs/development.md). |
 | Frontend verification or real-account acceptance | [Manual verification](docs/manual-verification.md); [TODO](TODO.md) for pending work. |
+| Sidebar checks in a real editor with fake accounts | The `devhost-test` skill ([SKILL.md](.agents/skills/devhost-test/SKILL.md)). |
 | Upgrading official clients or editor integration | The numbered facts in [Claude Code research](docs/research/claude-code.md#facts) / [Codex research](docs/research/codex.md#facts) (Windows: [Windows research](docs/research/windows.md)); re-verify the affected facts. |
 
 ## Test and release safety

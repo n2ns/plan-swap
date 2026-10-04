@@ -118,27 +118,33 @@ body {
 
 /* ---------- Banners: switched / takes effect after restart ---------- */
 .banner {
+  /* Info color by default; the recommendation card uses the success color */
+  --banner-color: var(--info);
   position: relative;
   display: flex;
   gap: var(--gap);
   align-items: flex-start;
   padding: 10px 10px 10px 14px;
   border-radius: var(--radius-row);
-  border: 1px solid color-mix(in srgb, var(--info) 35%, transparent);
-  background: color-mix(in srgb, var(--info) 10%, var(--base));
+  border: 1px solid color-mix(in srgb, var(--banner-color) 35%, transparent);
+  background: color-mix(in srgb, var(--banner-color) 10%, var(--base));
   overflow: hidden;
 }
+.banner.recommend { --banner-color: var(--ok); }
 .banner::before {
   content: '';
   position: absolute;
   left: 0; top: 0; bottom: 0;
   width: 3px;
-  background: var(--info);
+  background: var(--banner-color);
 }
-.banner-icon { flex: none; color: var(--info); margin-top: 2px; }
+.banner-icon { flex: none; color: var(--banner-color); margin-top: 2px; }
+
 .banner-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .banner-title { font-weight: 600; overflow-wrap: anywhere; }
 .banner-text { color: var(--muted); font-size: max(11px, 0.9em); overflow-wrap: anywhere; }
+/* Usage summary of the recommended account: one readable line, wrapping at the separators */
+.banner-text.recommend-text { color: var(--secondary); }
 .banner-actions { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
 .banner-actions vscode-button { max-width: 100%; min-width: 0; }
 .banner-actions vscode-button::part(base) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

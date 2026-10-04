@@ -179,6 +179,12 @@ PlanSwap 让你同时保持多个 Claude Code 和 Codex 账号的登录状态，
 
 其他行显示的是各自上次查询的结果。这些数值会在重置时间过后或 24 小时后消失，如果账号此后重新登录过，也会隐藏。
 
+### 推荐账号
+
+当前账号最低的通用额度到达黄色界线时，列表上方会出现一张绿色卡片，推荐同一标签页中的另一个已登录账号：在最低额度上剩余最多的那个，前提是它比当前账号剩得多，而且没有任何额度已用完。卡片显示该账号的各项额度和上次查询距今的时间，并提供 **切换**（Claude；之后仍有常规确认）和 **终端** 按钮。Codex 标签页只提供 **终端**，因为应用 Codex 账号需要重启编辑器的服务端。按模型额度不参与比较；卡片本身从不发起查询，数值与该账号上次查询时一样新。
+
+如果不希望某个账号被推荐（例如工作账号），点击其卡片上的灯泡图标；再点一次即可恢复。在[设置](#更改语言和显示设置)中关闭 `planswap.sidebar.showRecommendation` 可隐藏推荐卡片和灯泡图标。
+
 ### 状态栏
 
 状态栏显示每个产品的短周期额度，例如 `Claude 97% · Codex 82%`：默认是剩余量，`planswap.usageDisplay` 设为 `used` 时是已用量。当任一通用额度（包括较长周期的额度）剩余 30% 或更少时，其背景会变为主题的警告色；剩余 10% 或更少时变为错误色。你可以更改这些阈值、只显示一个产品、把该项移到左侧或隐藏它（[更改语言和显示设置](#更改语言和显示设置)）。
@@ -247,6 +253,7 @@ PlanSwap 启动或刷新时，会把在你的主目录中找到的、名称有�
 | `planswap.sidebar.showModelLimits` | `false` | 在卡片上额外显示 Claude 的按模型额度。 |
 | `planswap.sidebar.warningThreshold` | `30` | 剩余百分比小于或等于此值时，卡片上的用量条显示警告色，0–100。 |
 | `planswap.sidebar.errorThreshold` | `10` | 剩余百分比小于或等于此值时，卡片上的用量条显示错误色，0–100。优先于警告色。 |
+| `planswap.sidebar.showRecommendation` | `true` | 显示[推荐账号](#推荐账号)卡片和卡片上的灯泡图标。 |
 | `planswap.statusBar.enabled` | `true` | 在状态栏中显示 PlanSwap 项。 |
 | `planswap.statusBar.products` | `both` | 状态栏项包含的产品：`both`、`claude` 或 `codex`。 |
 | `planswap.statusBar.warningThreshold` | `30` | 剩余百分比小于或等于此值时显示警告色，0–100。 |

@@ -7,6 +7,7 @@ import { hasControlChars, shQuote } from '../commands';
 import { accountTerminalShell } from '../terminalShell';
 import { type AccountsPanel, type PanelSource, tildify, viewInfo } from '../accountsPanel';
 import { labelFor, sameName, type LabelStore, EXTERNAL_NAME } from '../labels';
+import type { RecommendExclusions } from '../recommend';
 import type { AccountView, FromWebview, RestartInfo } from '../protocol';
 import {
   CODEX_DEFAULT_NAME,
@@ -53,6 +54,8 @@ export interface CodexDeps {
   panel: AccountsPanel;
   // The Codex LabelStore (codex.labels)
   labels: LabelStore;
+  // Accounts excluded from recommendations (codex.recommendExcluded); cleared with the account. Tests may leave it out
+  exclusions?: RecommendExclusions;
   // Passed to runTool for Codex page tool messages
   tools: ToolDeps;
   // Receives this module's "account terminal open" check, so the toolbar's Re-link can treat such an account as busy
@@ -177,7 +180,7 @@ export async function restartServerInteractive(): Promise<void> {
  *   or the path for an unregistered dir; display text only.
  * - watchTargets(): auth.json of each row's dir plus STATE_FILE().
  */
-export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, history?: CodexUsageHistory): PanelSource {
+export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, history?: CodexUsageHistory, exclusions?: RecommendExclusions): PanelSource {
   const accounts = (): AccountView[] => {
     const cur = effectiveDir();
     const selected = readSelectedDir() ?? codexDefaultDir();
@@ -194,6 +197,7 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, h
       isCurrent: i === curIdx,
       isSelected: i === selIdx,
       shared: a.name === CODEX_DEFAULT_NAME ? undefined : isSharedCodexAccount(a.dir),
+      recommendExcluded: exclusions?.has(a.name) || undefined,
     }));
     if (!rows.some((r) => r.isCurrent)) {
       rows.push({
@@ -256,6 +260,8 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, h
  * - add: validateName, create the dir; shared asks for the Windows copy fallback then ensureCodexLinks with the
  *   terminal-busy callback, independent runs copyCodexIndependent; link/copy failures only warn. Add and rename always
  *   post addResult / renameResult, also when they throw.
+ * - recommendExclude: registered rows only (the external row is ignored); sets or clears the recommendation mark and
+ *   refreshes the panel. The mark is cleared with the account (remove, or a pruned directory on sync).
  * - share / unshare: effective or selected accounts (alternate spellings included) are refused before the modal and
  *   re-checked after it, then the host busy guard (codexAccountBusy or, on Windows, an open account terminal). Share
  *   passes the copy-fallback and terminal-busy options to migrateCodexToShared (busy checked again at its start; both
@@ -266,7 +272,7 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, h
  *   shows the account login tip. Tool messages go through runTool('codex', …).
  */
 export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
-  const { store, panel, labels, tools } = deps;
+  const { store, panel, labels, exclusions, tools } = deps;
   const MODE = 'codex';
   // Terminals created by this extension -> their account
   const terminals = new Map<vscode.Terminal, CodexAccount>();
@@ -635,6 +641,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     const shared = isSharedCodexAccount(account.dir);
     await store.remove(account.name);
     await labels.remove(account.name);
+    await exclusions?.remove(account.name);
     panel.refresh();
 
     const detail = t(shared ? 'share.removeDirDetail' : 'codex.removeDirDetail');
@@ -727,6 +734,13 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
           error = errText(err);
         }
         panel.post({ type: 'renameResult', mode: MODE, dir: msg.dir, error });
+        return;
+      }
+      case 'recommendExclude': {
+        const a = panel.resolve(MODE, msg.dir);
+        if (!a || a.kind === 'external') return;
+        await exclusions?.set(a.name, msg.excluded !== false);
+        panel.refresh();
         return;
       }
       case 'reload':

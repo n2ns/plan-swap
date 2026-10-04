@@ -4,6 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { CodexAccountStore } from '../src/codex/codexStore';
 import { LabelStore } from '../src/labels';
+import { RecommendExclusions } from '../src/recommend';
 import { CASE_SENSITIVE_FS, makeTempHome, MemoryMemento, type TempHome } from './helpers';
 
 let tmp: TempHome;
@@ -60,6 +61,17 @@ describe('CodexAccountStore', () => {
     await store.syncWithDisk();
     assert.deepEqual(store.named(), [{ name: 'a', dir }]);
     fs.rmSync(dir, { recursive: true });
+  });
+
+  test('syncWithDisk clears the recommendation mark of a pruned account', async () => {
+    const memento = new MemoryMemento();
+    const store = new CodexAccountStore(memento);
+    const exclusions = new RecommendExclusions(memento, 'codex.recommendExcluded');
+    await store.add({ name: 'gone', dir: path.join(home, '.codex-gone') });
+    await exclusions.set('gone', true);
+    await store.syncWithDisk(undefined, exclusions);
+    assert.equal(store.find('gone'), undefined);
+    assert.equal(exclusions.has('gone'), false);
   });
 
   test('syncWithDisk skips a scanned name equal to an existing display name until that alias changes', async () => {

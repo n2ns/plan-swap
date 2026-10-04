@@ -218,14 +218,44 @@ function relativeTime(epochSeconds: number): string {
     .join(durationUnitSeparator);
 }
 
-function usageWindow(w: UsageWindowView, display: UsageDisplay): HTMLElement {
+// "Updated 2 minutes ago" for an observation time (ms); under a minute reads "just now", from an hour on in hours.
+// The recommendation card's time text is refreshed every minute in place (refreshUpdatedAgo), since a state push with
+// unchanged content does not re-render
+const UPDATED_AGO_CLASS = 'recommend-updated';
+let updatedAgoTimer: ReturnType<typeof setInterval> | undefined;
+function updatedAgoText(checkedAtMs: number): HTMLElement {
+  // Restarted on every card render, so the first tick comes a minute after the text was computed
+  clearInterval(updatedAgoTimer);
+  updatedAgoTimer = setInterval(refreshUpdatedAgo, 60_000);
+  return h('span', { class: UPDATED_AGO_CLASS, 'data-checked-at': String(checkedAtMs) }, updatedAgo(checkedAtMs));
+}
+function refreshUpdatedAgo(): void {
+  for (const el of document.querySelectorAll<HTMLElement>(`.${UPDATED_AGO_CLASS}`)) {
+    const checkedAt = Number(el.dataset.checkedAt);
+    if (Number.isFinite(checkedAt)) el.textContent = updatedAgo(checkedAt);
+  }
+}
+function updatedAgo(checkedAtMs: number): string {
+  const minutes = Math.floor((Date.now() - checkedAtMs) / 60000);
+  if (minutes < 1) return t('recommend.updatedNow');
+  const rtf = new Intl.RelativeTimeFormat(intlLocale(), { numeric: 'always' });
+  const time = minutes < 60 ? rtf.format(-minutes, 'minute') : minutes < 1440 ? rtf.format(-Math.floor(minutes / 60), 'hour') : rtf.format(-Math.floor(minutes / 1440), 'day');
+  return t('recommend.updated', { time });
+}
+
+// Window duration text: "5-hour limit", "7-day limit", with the model name for Claude's model-specific limits
+function windowDuration(w: UsageWindowView): string {
   const minutes = w.windowMinutes;
   const limit = minutes === undefined ? t('usage.window')
     : minutes % 1440 === 0 ? t('usage.days', { n: minutes / 1440 })
       : minutes % 60 === 0 ? t('usage.hours', { n: minutes / 60 })
         : t('usage.minutes', { n: minutes });
   // Claude model-specific limits carry the model name (account-independent text, rendered via textContent)
-  const duration = w.scope ? t('usage.scoped', { limit, scope: w.scope }) : limit;
+  return w.scope ? t('usage.scoped', { limit, scope: w.scope }) : limit;
+}
+
+function usageWindow(w: UsageWindowView, display: UsageDisplay): HTMLElement {
+  const duration = windowDuration(w);
   const remaining = remainingPercent(w);
   const used = Number((100 - remaining).toFixed(2));
   // planswap.usageDisplay picks what the bar and percentage show; the level (color) always follows what is left
@@ -259,7 +289,8 @@ function usageWindow(w: UsageWindowView, display: UsageDisplay): HTMLElement {
 // Model-specific limits (Claude; only sent by the host while planswap.sidebar.showModelLimits is on) follow the general
 // windows, always shown
 function usageHistory(a: AccountView): HTMLElement | null {
-  if (!a.usage) return null;
+  // No window (none observed, or all hidden by the display settings): no block
+  if (!a.usage?.windows.length) return null;
   const general = a.usage.windows.filter((w) => !w.scope);
   const scoped = a.usage.windows.filter((w) => w.scope);
   const display = state.usageDisplay ?? 'remaining';
@@ -650,6 +681,42 @@ class Page {
     );
   }
 
+  // Recommendation card (the host decides, recommend in src/recommend.ts): the account's general windows as the row
+  // shows them (the display settings may hide some), when it was observed, and the actions. Codex gets no Switch
+  // here: applying a Codex selection restarts the editor's server, which is not what someone whose limit just ran out
+  // wants first. The card carries no data-dir: focus restore must not take it for the recommended account's row
+  private renderRecommendation(): HTMLElement | null {
+    const a = this.tab.recommended !== undefined && !this.tab.hideRecommendation ? this.tab.accounts.find((x) => x.dir === this.tab.recommended) : undefined;
+    if (!a) return null;
+    const display = state.usageDisplay ?? 'remaining';
+    const windows = (a.usage?.windows ?? []).filter((w) => !w.scope).map((w) => {
+      const remaining = remainingPercent(w);
+      const percent = display === 'used' ? Number((100 - remaining).toFixed(2)) : remaining;
+      return `${windowDuration(w)} ${t(display === 'used' ? 'usage.used' : 'usage.remaining', { percent })}`;
+    });
+    const actions = h('div', { class: 'banner-actions' });
+    if (this.mode === 'claude') {
+      actions.append(onClick(h('vscode-button', { icon: 'arrow-swap', 'data-action': 'switch' }, t('recommend.switch')), (e) => {
+        if (e.detail > 1) return;
+        this.lastSwitchAt = Date.now();
+        this.send({ type: 'switch', dir: a.dir });
+      }));
+    }
+    actions.append(onClick(h('vscode-button', { secondary: true, icon: 'terminal', 'data-action': 'terminal' }, t('recommend.terminal')), () => this.send({ type: 'terminal', dir: a.dir })));
+    return h(
+      'div',
+      { class: 'banner recommend', role: 'region', 'aria-label': t('recommend.title', { name: a.label }) },
+      h('vscode-icon', { name: 'lightbulb', class: 'banner-icon' }),
+      h(
+        'div',
+        { class: 'banner-body' },
+        h('div', { class: 'banner-title' }, t('recommend.title', { name: a.label })),
+        h('div', { class: 'banner-text recommend-text' }, ...windows.flatMap((w) => [w, ' · ']), a.usage && updatedAgoText(a.usage.checkedAt)),
+        actions,
+      ),
+    );
+  }
+
   private renderRow(a: AccountView): HTMLElement {
     const classes = ['row'];
     if (a.isCurrent) classes.push('is-current');
@@ -729,6 +796,15 @@ class Page {
       }
       if (a.loggedIn) {
         iconButtons.append(withAction(toolbarButton('terminal', t(`${this.mode}.terminalTitle`), () => this.send({ type: 'terminal', dir: a.dir })), 'terminal'));
+      }
+      // Registered accounts with usage limits can be left out of recommendations (the host keeps the mark)
+      if (a.kind !== 'external' && a.usageEligible && !this.tab.hideRecommendation) {
+        const excluded = a.recommendExcluded === true;
+        // A toggle button (role switch); the host's answer re-renders it, so the component's own flip is overridden
+        const toggle = toolbarButton(excluded ? 'lightbulb-empty' : 'lightbulb', t(excluded ? 'row.recommendInclude' : 'row.recommendExclude'), () => this.send({ type: 'recommendExclude', dir: a.dir, excluded: !excluded }));
+        toggle.setAttribute('toggleable', '');
+        if (excluded) toggle.setAttribute('checked', '');
+        iconButtons.append(withAction(toggle, 'recommendExclude'));
       }
       // The current account cannot be removed; the confirmation that opens starts with the focus on Cancel
       if (a.kind === 'named' && !a.isCurrent && !selected) {
@@ -898,7 +974,7 @@ class Page {
         return;
       }
       this.listSection.hidden = false;
-      this.top.replaceChildren(...[this.renderPending(), this.renderBanner()].filter((n): n is HTMLElement => !!n));
+      this.top.replaceChildren(...[this.renderPending(), this.renderBanner(), this.renderRecommendation()].filter((n): n is HTMLElement => !!n));
       this.renderList();
       this.updateAddHelp();
     } finally {

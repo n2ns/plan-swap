@@ -47,6 +47,7 @@ Everything PlanSwap persists, for both vendors:
 | `claude.labels` | state file | `labels.ts` (`LabelStore`) | Claude rename; cleared on remove | `importOnce` |
 | `codex.accounts`, `codex.ignoredDirs` | state file | `codex/codexStore.ts` | as the Claude keys | `importOnce` |
 | `codex.labels` | state file | `labels.ts` | Codex rename; cleared on remove | `importOnce` |
+| `claude.recommendExcluded`, `codex.recommendExcluded` | state file | `recommend.ts` (`RecommendExclusions`) | the row's exclude toggle ([Features 2.3](features.md#23-all-accounts-list)); the name is cleared on remove and when `syncWithDisk` prunes the account | none |
 | `codex.usageHistory` | state file | `codex/codexUsageHistory.ts` | accepted Codex usage observation ([Codex design 8.7](codex-design.md#87-usage-limits)) | none |
 | `warnings.dismissed` | state file | `extension.ts` | "Don't show again" on an environment warning | none |
 | `panel.activeTab` | `globalState` | `accountsPanel.ts` | the frontend's `setTab` message | none |
@@ -82,12 +83,13 @@ The sidebar is a `WebviewView` (one view, `planswap.accounts`, holding a Claude 
 - The "Tools" section is always shown below the account list; Re-link is shown only while the page has a linked account, since it does nothing otherwise, and comes last so that its showing or hiding never moves the other buttons. The settings button names the product (Claude Settings / Codex Settings) because a bare "Settings" read as PlanSwap's own settings.
 - Tool buttons of one line share it equally, so their size does not depend on label length; a button never gets narrower than its label and wraps to its own line instead, because a cut-off label reads worse than an unequal line (Spanish "Actualizar CLI" at 240px).
 - The add-account form is created once and only shown or hidden, so list refreshes keep its typed text and focus.
+- The recommended account ([Features 2.4](features.md#24-recommended-account)) is a separate card above the list rather than a re-sorted list: the cards carry buttons, and positions that move with every usage check invite misclicks, while the first position keeps its "current account" meaning. The card appears only while the current account is at or below the sidebar warning threshold, so it coincides with the bars turning yellow and goes away with them; shown permanently it would almost always have something to say in a multi-account list and stop being a signal. Its Codex variant offers only a terminal, because applying a Codex selection restarts the editor's WSL server (or the whole editor on Windows), which is not the first thing someone whose limit just ran out wants. Exclusion marks are a separate state entry (`claude.recommendExcluded` / `codex.recommendExcluded`) rather than part of the alias store, since aliases are display-only.
 
 ### 5.2 Frontend/backend split and message protocol
 
 - The frontend (`src/webview/main.ts`) only renders and exchanges messages; business logic and validation are authoritative on the extension side, and frontend validation is only an immediate hint.
 - All messages are typed in `src/protocol.ts` (types only, shared by both sides). Every message except `ready` carries `mode`, and the host dispatches by it to the Claude or Codex handler.
-- When the extension receives `switch`/`terminal`/`remove`/`rename`/`share`/`unshare`, it first looks the directory up with `panel.resolve(mode, dir)` among the rows currently shown on that page and only accepts directories present in the list; `remove`, `rename`, `share` and `unshare` only act on rows with `kind === "named"`.
+- When the extension receives `switch`/`terminal`/`remove`/`rename`/`share`/`unshare`/`recommendExclude`, it first looks the directory up with `panel.resolve(mode, dir)` among the rows currently shown on that page and only accepts directories present in the list; `remove`, `rename`, `share` and `unshare` only act on rows with `kind === "named"`, `recommendExclude` on registered rows (not the external directory).
 
 ### 5.3 Content security policy
 

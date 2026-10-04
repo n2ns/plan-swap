@@ -5,6 +5,7 @@ import type { Memento } from 'vscode';
 import type { Account } from './paths';
 import { DEFAULT_NAME, defaultDir, samePath, scanAccountDirs } from './paths';
 import { labelFor, sameName, type LabelStore } from './labels';
+import type { RecommendExclusions } from './recommend';
 
 const STATE_KEY = 'accounts';
 // Accounts deleted but whose directories were kept; skipped by the auto scan
@@ -67,15 +68,18 @@ export class AccountStore {
   }
 
   /**
-   * Prunes named entries whose directory no longer exists (their alias is cleared through labels; they are not
-   * added to ignoredDirs), then registers scanned directories that are not ignored, not already registered by
+   * Prunes named entries whose directory no longer exists (their alias and recommendation mark are cleared through
+   * labels / exclusions; they are not added to ignoredDirs), then registers scanned directories that are not ignored, not already registered by
    * directory, and whose name does not match (case-insensitively) a remaining account's name or display name.
    * Saves only when something changed
    */
-  async syncWithDisk(labels?: LabelStore): Promise<void> {
+  async syncWithDisk(labels?: LabelStore, exclusions?: RecommendExclusions): Promise<void> {
     const stored = this.load();
     const pruned = stored.filter((a) => a.name !== DEFAULT_NAME && !fs.existsSync(a.dir));
-    for (const a of pruned) await labels?.remove(a.name);
+    for (const a of pruned) {
+      await labels?.remove(a.name);
+      await exclusions?.remove(a.name);
+    }
     const list = stored.filter((a) => !pruned.includes(a));
     const ignored = this.ignored();
     const taken = [DEFAULT_NAME, ...list.map((a) => a.name), ...(labels ? list.map((a) => labelFor(a.name, labels)) : [])];

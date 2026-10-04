@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { AccountStore } from '../src/accounts';
+import { RecommendExclusions } from '../src/recommend';
 import type { AccountsPanel } from '../src/accountsPanel';
 import { CLAUDE_SHARED_ENTRIES, ensureClaudeLinks, isSharedClaudeAccount } from '../src/claudeShare';
 import { CONFIRM_SWITCH_SETTING, registerCommands, shQuote, validateName } from '../src/commands';
@@ -134,6 +135,7 @@ describe('panel message handlers (Claude)', () => {
     store: AccountStore;
     labels: LabelStore;
     handle(msg: FromWebview): Promise<void>;
+    exclusions: RecommendExclusions;
     posted: ToWebview[];
     switchedTo: string | undefined;
     dispose(): void;
@@ -156,7 +158,9 @@ describe('panel message handlers (Claude)', () => {
       focusAdd() {},
     } as unknown as AccountsPanel;
     const statusBar = { update() {} } as unknown as StatusBar;
-    const disposables = registerCommands({ store, panel, statusBar, labels, tools: {}, procRoot: procRoot() });
+    const exclusions = new RecommendExclusions(memento, 'claude.recommendExcluded');
+    h.exclusions = exclusions;
+    const disposables = registerCommands({ store, panel, statusBar, labels, exclusions, tools: {}, procRoot: procRoot() });
     h.dispose = () => disposables.forEach((d) => d.dispose());
     return h;
   }
@@ -228,6 +232,28 @@ describe('panel message handlers (Claude)', () => {
       assert.deepEqual(info.mock.calls[0].arguments, [t('share.incomplete', {
         label: 'conflict', summary: t('share.r.conflicts', { list: 'projects' }),
       })]);
+    } finally {
+      h.dispose();
+    }
+  });
+
+  test('recommendExclude marks and unmarks a registered account, ignores unknown directories, and remove clears the mark', async (ctx) => {
+    const h = harness();
+    const dir = await add(h, 'a', false);
+    try {
+      await h.handle({ type: 'recommendExclude', mode: 'claude', dir, excluded: true });
+      assert.equal(h.exclusions.has('a'), true);
+      await h.handle({ type: 'recommendExclude', mode: 'claude', dir, excluded: false });
+      assert.equal(h.exclusions.has('a'), false);
+      // A non-boolean value counts as true
+      await h.handle({ type: 'recommendExclude', mode: 'claude', dir, excluded: 'yes' as unknown as boolean });
+      assert.equal(h.exclusions.has('a'), true);
+      await h.handle({ type: 'recommendExclude', mode: 'claude', dir: path.join(home, '.claude-unknown'), excluded: false });
+      assert.equal(h.exclusions.has('a'), true, 'an unresolved directory changes nothing');
+      ctx.mock.method(window, 'showWarningMessage', async () => undefined);
+      await h.handle({ type: 'remove', mode: 'claude', dir });
+      assert.equal(h.store.find('a'), undefined);
+      assert.equal(h.exclusions.has('a'), false, 'the mark goes with the account');
     } finally {
       h.dispose();
     }

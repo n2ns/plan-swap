@@ -60,6 +60,7 @@
   "config.codexUsageTimeoutSeconds.description": "单次查询 Codex 账号用量额度允许运行的最长时间，超时后结束查询并报告超时（秒，5–120）。自动查询和手动刷新都适用。",
   "config.sidebarWarningThreshold.description": "侧边栏中用量额度的剩余百分比小于或等于此值时，进度条显示警告色（0–100）。",
   "config.sidebarErrorThreshold.description": "侧边栏中用量额度的剩余百分比小于或等于此值时，进度条显示错误色（0–100）。优先于警告阈值。",
+  "config.sidebarRecommendation.description": "当前账号最低的通用用量额度剩余不超过侧边栏警告阈值时，在侧边栏推荐另一个账号：已登录且剩余最多的账号，标记为不参与推荐的账号除外。关闭后不再显示推荐卡片和各账号的推荐按钮。",
   "config.statusBarEnabled.description": "在状态栏中显示 PlanSwap 用量项。",
   "config.statusBarProducts.description": "状态栏项包含哪些产品。未选中的产品不出现在其文字、悬停提示和背景色中；所选产品都未配置时隐藏该项。",
   "config.statusBarProducts.both": "Claude 和 Codex",

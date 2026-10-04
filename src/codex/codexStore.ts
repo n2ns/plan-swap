@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import type { Memento } from 'vscode';
 import { samePath } from '../paths';
 import { labelFor, sameName, type LabelStore } from '../labels';
+import type { RecommendExclusions } from '../recommend';
 import type { CodexAccount } from './codexPaths';
 import { CODEX_DEFAULT_NAME, codexDefaultDir, scanCodexDirs } from './codexPaths';
 
@@ -68,14 +69,19 @@ export class CodexAccountStore {
     await this.state.update(IGNORED_KEY, this.ignored().filter((d) => !samePath(d, dir)));
   }
 
-  // Prunes named entries whose directory no longer exists (alias cleared, not added to the ignore list), then
+  // Prunes named entries whose directory no longer exists (alias and recommendation mark cleared, not added to the
+  // ignore list), then
   // registers scanned directories (scanCodexDirs) that are neither ignored nor registered; a scanned name equal
   // (sameName, case-insensitive) to 'default', a remaining account's name or, with labels (callers pass the Codex
   // LabelStore), its display name is skipped until that alias changes. Saves only when something changed
-  async syncWithDisk(labels?: LabelStore): Promise<void> {
+  async syncWithDisk(labels?: LabelStore, exclusions?: RecommendExclusions): Promise<void> {
     const stored = this.load();
     const list = stored.filter((a) => fs.existsSync(a.dir));
-    for (const a of stored) if (!list.includes(a)) await labels?.remove(a.name);
+    for (const a of stored) {
+      if (list.includes(a)) continue;
+      await labels?.remove(a.name);
+      await exclusions?.remove(a.name);
+    }
     const ignored = this.ignored();
     const taken = [CODEX_DEFAULT_NAME, ...list.map((a) => a.name)];
     if (labels) taken.push(...list.map((a) => labelFor(a.name, labels)));

@@ -179,6 +179,12 @@ De forma predeterminada, PlanSwap consulta automáticamente todas las cuentas co
 
 Las demás filas muestran el resultado de su última consulta. Los valores desaparecen tras su hora de restablecimiento o pasadas 24 horas, y se ocultan si la cuenta ha vuelto a iniciar sesión desde entonces.
 
+### Cuenta recomendada
+
+Cuando el límite general más bajo de la cuenta actual llega al nivel amarillo, una tarjeta verde encima de la lista recomienda otra cuenta con sesión iniciada de la misma pestaña: la que más tiene en su límite más bajo, siempre que le quede más que a la cuenta actual y ninguno de sus límites esté agotado. La tarjeta muestra los límites de esa cuenta y cuánto hace que se consultaron, con los botones **Cambiar** (Claude; sigue la confirmación habitual) y **Terminal**. En la pestaña Codex solo se ofrece **Terminal**, porque aplicar una cuenta de Codex reinicia el servidor del editor. Los límites por modelo no se comparan, y la tarjeta nunca consulta nada por sí misma: sus cifras son tan recientes como la última consulta de esa cuenta.
+
+Para dejar una cuenta fuera de las recomendaciones, por ejemplo una cuenta de trabajo, pulsa el icono de bombilla en su tarjeta; púlsalo de nuevo para incluirla. Desactiva `planswap.sidebar.showRecommendation` en los [ajustes](#cambiar-el-idioma-y-los-ajustes-de-visualización) para ocultar la tarjeta y los iconos de bombilla.
+
 ### Barra de estado
 
 La barra de estado muestra el límite corto de cada producto, por ejemplo `Claude 97% · Codex 82%`: lo que queda, o lo que se ha usado cuando `planswap.usageDisplay` está en `used`. Su fondo cambia al color de advertencia del tema cuando algún límite general, incluidos los más largos, está al 30 % o menos, y al color de error al 10 % o menos. Puedes cambiar estos umbrales, mostrar un solo producto, mover el elemento a la izquierda u ocultarlo ([Cambiar el idioma y los ajustes de visualización](#cambiar-el-idioma-y-los-ajustes-de-visualización)).
@@ -247,6 +253,7 @@ Haz clic en el icono de ajustes de la barra de título del panel, o ejecuta **Pl
 | `planswap.sidebar.showModelLimits` | `false` | Añadir a las tarjetas los límites de Claude por modelo. |
 | `planswap.sidebar.warningThreshold` | `30` | Las barras de las tarjetas usan el color de advertencia con este porcentaje restante o menos, 0–100. |
 | `planswap.sidebar.errorThreshold` | `10` | Las barras de las tarjetas usan el color de error con este porcentaje restante o menos, 0–100. Tiene prioridad sobre el color de advertencia. |
+| `planswap.sidebar.showRecommendation` | `true` | Mostrar la tarjeta de [cuenta recomendada](#cuenta-recomendada) y los iconos de bombilla en las tarjetas. |
 | `planswap.statusBar.enabled` | `true` | Mostrar el elemento de PlanSwap en la barra de estado. |
 | `planswap.statusBar.products` | `both` | Productos del elemento de la barra de estado: `both`, `claude` o `codex`. |
 | `planswap.statusBar.warningThreshold` | `30` | Color de advertencia con este porcentaje restante o menos, 0–100. |

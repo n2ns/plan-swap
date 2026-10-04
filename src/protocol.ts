@@ -31,8 +31,11 @@ export interface AccountView {
   // Named rows only: true = shared with the default account (links), false = independent; undefined for default / external
   shared?: boolean;
   // A historical observation, never a live quota or a prediction after a reset. Codex: the last query result; Claude:
-  // the usage cache in the account's own info file. scope names a model-specific limit (e.g. "Fable"), Claude only
-  usage?: { windows: Array<{ usedPercent: number; windowMinutes?: number; resetsAt?: number; scope?: string }>; checkedAt: number };
+  // the usage cache in the account's own info file. scope names a model-specific limit (e.g. "Fable"), Claude only;
+  // limitReached: the service reported the limit as reached (Codex only; the windows may still be below 100%)
+  usage?: { windows: Array<{ usedPercent: number; windowMinutes?: number; resetsAt?: number; scope?: string }>; checkedAt: number; limitReached?: boolean };
+  // Registered rows only: true when the user excluded the account from recommendations (src/recommend.ts)
+  recommendExcluded?: boolean;
 }
 
 // Editor connection context from vscode.env.remoteName: undefined → local (including WSLg desktop), 'wsl' → wsl,
@@ -57,6 +60,11 @@ export interface TabState {
   dirPrefix?: string;
   // Settings planswap.sidebar.showEmail: false hides the email line of every row (the host then sends no email)
   hideEmail?: boolean;
+  // Directory of the account the host recommends while the current one runs low (recommend in src/recommend.ts); the
+  // page shows it in a card above the list. Absent: nothing to recommend, or recommendations are off
+  recommended?: string;
+  // Setting planswap.sidebar.showRecommendation off: no card and no per-row exclude buttons
+  hideRecommendation?: boolean;
 }
 
 export interface PanelState {
@@ -101,6 +109,9 @@ export type FromWebview =
   | { type: 'unshare'; mode: PanelMode; dir: string }
   // Only sent for named rows; the host ignores the default and external rows
   | { type: 'rename'; mode: PanelMode; dir: string; label: string }
+  // Row button: exclude the registered account from recommendations (excluded true) or include it again; the host
+  // ignores the external row and treats a non-boolean value as true
+  | { type: 'recommendExclude'; mode: PanelMode; dir: string; excluded: boolean }
   // reload / dismissBanner: the Codex host ignores them
   | { type: 'reload'; mode: PanelMode }
   | { type: 'dismissBanner'; mode: PanelMode }

@@ -2,10 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- When the current account's usage runs low (its bar turns yellow), a card above the account list recommends the signed-in account with the most left, showing its limits and how long ago they were checked, with **Switch** (Claude) and **Terminal** buttons. Click the lightbulb on an account card to keep that account out of recommendations; `planswap.sidebar.showRecommendation` turns the card off.
+
 ### Changed
 
-- Automatic Codex usage checks of the effective account now count an observation made by another window within the refresh interval as a check and show it at once, instead of each window querying on its own.
-- A Codex token refresh (by Codex itself or by another window's check) no longer makes every open window query the usage limits immediately; the shown values stay and the next timed check decides. A changed `auth.json` after a failed check, such as a re-login after an expired sign-in, is still checked at once.
+- With several windows open, Codex usage is checked once per interval instead of once per window: a window shows the result another window just got instead of running its own check.
+- A Codex token refresh no longer triggers an immediate usage check in every open window; the shown values stay until the next scheduled check. A re-login after an expired sign-in is still checked right away.
 
 ## [0.3.1] - 2026-10-03
 
