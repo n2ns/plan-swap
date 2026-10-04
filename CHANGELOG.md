@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.3.2] - 2026-10-04
 
 ### Added
 
@@ -9,12 +9,12 @@
 ### Fixed
 
 - The time until reset shown next to each usage limit now keeps counting down between checks instead of staying at the value from the last refresh.
-- With automatic Codex usage checks turned off, the status bar now shows the effective account's last observation (from another window or an earlier session) like the sidebar does, instead of only the product name.
+- When automatic Codex usage checks are off, the status bar now shows the Codex account's last known usage, as the sidebar does, instead of only the product name.
 
 ### Changed
 
 - With several windows open, Codex usage is checked once per interval instead of once per window: a window shows the result another window just got instead of running its own check.
-- A Codex token refresh no longer triggers an immediate usage check in every open window; the shown values stay until the next scheduled check. A re-login after an expired sign-in is still checked right away.
+- Codex usage is no longer re-checked in every open window each time Codex renews its sign-in in the background; the shown values stay until the next scheduled check. Signing in again after an expired sign-in is still checked right away.
 
 ## [0.3.1] - 2026-10-03
 
