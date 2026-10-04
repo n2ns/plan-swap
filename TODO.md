@@ -33,7 +33,6 @@ is still missing. Remove an item once it is done or decided.
   Windows (`codex.cmd` fallback, the binary bundled with the Codex extension when `codex` is not on PATH), including switches, editor restarts, reset/24-hour expiry and sign-in changes. Run
   [the usage checks](docs/manual-verification.md#usage-limits-sign-in-tip-and-duplicate-sign-ins); re-verify the
   `codex app-server` facts ([Codex research](docs/research/codex.md#facts)) after CLI upgrades.
-- **Recommended account card** ([Features 2.4](docs/features.md#24-recommended-account)) is verified in the preview only. Run the recommendation steps of the [Claude](docs/manual-verification.md#claude-usage-limits) and [Codex](docs/manual-verification.md#usage-limits-sign-in-tip-and-duplicate-sign-ins) usage checks.
 - **Status bar text, warning background and tooltip** are covered by unit tests only; a headless preview cannot render
   the status bar. Look at them in a real editor in light, dark and high-contrast themes and in every UI language
   ([Claude usage checks](docs/manual-verification.md#claude-usage-limits), step 8).

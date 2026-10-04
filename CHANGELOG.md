@@ -8,6 +8,7 @@
 
 ### Fixed
 
+- The time until reset shown next to each usage limit now keeps counting down between checks instead of staying at the value from the last refresh.
 - With automatic Codex usage checks turned off, the status bar now shows the effective account's last observation (from another window or an earlier session) like the sidebar does, instead of only the product name.
 
 ### Changed

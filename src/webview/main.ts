@@ -218,21 +218,31 @@ function relativeTime(epochSeconds: number): string {
     .join(durationUnitSeparator);
 }
 
-// "Updated 2 minutes ago" for an observation time (ms); under a minute reads "just now", from an hour on in hours.
-// The recommendation card's time text is refreshed every minute in place (refreshUpdatedAgo), since a state push with
-// unchanged content does not re-render
+// Texts that move with the clock (the card's "Updated 2 minutes ago", the windows' time until reset and the reset
+// sentence in the bars' screen reader value) are refreshed every minute in place, since a state push with unchanged
+// content does not re-render. The timer is restarted on every render, so the first tick comes a minute after the texts
+// were computed; elements carry their times in data attributes
 const UPDATED_AGO_CLASS = 'recommend-updated';
-let updatedAgoTimer: ReturnType<typeof setInterval> | undefined;
+let liveTimer: ReturnType<typeof setInterval> | undefined;
+function keepLive(): void {
+  clearInterval(liveTimer);
+  liveTimer = setInterval(refreshLiveTimes, 60_000);
+}
 function updatedAgoText(checkedAtMs: number): HTMLElement {
-  // Restarted on every card render, so the first tick comes a minute after the text was computed
-  clearInterval(updatedAgoTimer);
-  updatedAgoTimer = setInterval(refreshUpdatedAgo, 60_000);
+  keepLive();
   return h('span', { class: UPDATED_AGO_CLASS, 'data-checked-at': String(checkedAtMs) }, updatedAgo(checkedAtMs));
 }
-function refreshUpdatedAgo(): void {
+function resetSentence(resetsAt: number, date: string): string {
+  return t('usage.resetsIn', { time: relativeTime(resetsAt), date });
+}
+function refreshLiveTimes(): void {
   for (const el of document.querySelectorAll<HTMLElement>(`.${UPDATED_AGO_CLASS}`)) {
     const checkedAt = Number(el.dataset.checkedAt);
     if (Number.isFinite(checkedAt)) el.textContent = updatedAgo(checkedAt);
+  }
+  for (const el of document.querySelectorAll<HTMLElement>('.usage-reset-time[data-resets-at]')) el.textContent = relativeTime(Number(el.dataset.resetsAt));
+  for (const el of document.querySelectorAll<HTMLElement>('.usage-track[data-resets-at]')) {
+    el.setAttribute('aria-valuetext', `${el.dataset.valuetextPrefix ?? ''}${resetSentence(Number(el.dataset.resetsAt), el.dataset.resetDate ?? '')}`);
   }
 }
 function updatedAgo(checkedAtMs: number): string {
@@ -266,12 +276,14 @@ function usageWindow(w: UsageWindowView, display: UsageDisplay): HTMLElement {
   // Two lines per window: the duration with the time until the reset (clock icon + short duration) at the right, then
   // the bar with the shown percentage at its right. Only the bar has a tooltip, saying whether its length is what is
   // left or what is used; the full reset sentence and date are part of the bar's screen reader value
-  const resetText = w.resetsAt !== undefined && t('usage.resetsIn', {
-    time: relativeTime(w.resetsAt),
-    date: new Date(w.resetsAt * 1000).toLocaleString(intlLocale(), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }),
-  });
+  const resetDate = w.resetsAt !== undefined ? new Date(w.resetsAt * 1000).toLocaleString(intlLocale(), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }) : undefined;
+  const resetText = w.resetsAt !== undefined && resetSentence(w.resetsAt, resetDate!);
+  const resetsAt = w.resetsAt !== undefined ? String(w.resetsAt) : undefined;
+  if (resetsAt) keepLive();
   const reset = resetText && h('span', { class: 'usage-reset', 'aria-hidden': 'true' },
-    h('vscode-icon', { name: 'clock', size: '12' }), h('span', { class: 'usage-reset-time' }, relativeTime(w.resetsAt!)));
+    h('vscode-icon', { name: 'clock', size: '12' }), h('span', { class: 'usage-reset-time', 'data-resets-at': resetsAt }, relativeTime(w.resetsAt!)));
+  // The static part of the screen reader value, kept so the reset sentence can be refreshed in place
+  const valuetextPrefix = [label, exhausted && t('usage.exhausted')].filter(Boolean).map((p) => `${p}, `).join('');
   return h('div', { class: 'usage-window', 'data-level': level },
     h('div', { class: 'usage-labels' }, h('span', { class: 'usage-duration' }, duration), reset),
     h('div', { class: 'usage-bar' },
@@ -279,7 +291,8 @@ function usageWindow(w: UsageWindowView, display: UsageDisplay): HTMLElement {
         class: 'usage-track', 'data-level': level, role: 'progressbar', 'aria-label': duration,
         title: t(display === 'used' ? 'usage.barTitleUsed' : 'usage.barTitle', { remaining, used }),
         'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(shown),
-        'aria-valuetext': [label, exhausted && t('usage.exhausted'), resetText].filter(Boolean).join(', '),
+        'aria-valuetext': resetText ? `${valuetextPrefix}${resetText}` : valuetextPrefix.slice(0, -2),
+        'data-resets-at': resetsAt, 'data-valuetext-prefix': resetsAt ? valuetextPrefix : undefined, 'data-reset-date': resetDate,
       }, h('div', { class: 'usage-fill', style: `width: ${shown}%` })),
       h('span', { class: 'usage-pct', 'aria-hidden': 'true' }, `${shown}%`),
     ),

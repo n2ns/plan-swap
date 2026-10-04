@@ -707,6 +707,30 @@ async function updatedAgoTicks() {
   await page.clock.runFor(9 * 60_000);
   assert.equal(await time.textContent(), 'Updated 10 minutes ago');
   results.interactions.push('recommendation observation time ticks every minute without a state push');
+
+  // The windows' time until reset and the bars' screen reader reset sentence tick too (no state push, no re-render)
+  await page.evaluate(() => {
+    const state = structuredClone(window.preview.state());
+    const work = state.claude.accounts.find((a) => a.dir === '/fixture/.claude-work');
+    work.usage.windows[0].resetsAt = Math.floor(Date.now() / 1000) + 90 * 60;
+    window.preview.post({ type: 'state', state });
+  });
+  const resetTime = page.locator(`${row('claude', 'work')} .usage-window`).first().locator('.usage-reset-time');
+  const track = page.locator(`${row('claude', 'work')} .usage-window`).first().locator('.usage-track');
+  const relative = (seconds) => page.evaluate(([shortReset, s]) => eval(shortReset)(s), [SHORT_RESET, seconds]);
+  const resetsAt = Number(await track.getAttribute('data-resets-at'));
+  const beforeText = await resetTime.textContent();
+  assert.equal(beforeText, await relative(resetsAt));
+  assert.ok((await track.getAttribute('aria-valuetext')).includes(beforeText));
+  const marker = await page.evaluate(() => { document.querySelector('#panel-claude .row-usage').dataset.marker = 'kept'; return 'kept'; });
+  await page.clock.runFor(60_000);
+  const after = await resetTime.textContent();
+  assert.equal(after, await relative(resetsAt), 'the reset time ticks without a state push');
+  assert.notEqual(after, beforeText, 'a minute later the text differs');
+  assert.ok((await track.getAttribute('aria-valuetext')).includes(after), 'the screen reader reset sentence ticks too');
+  assert.ok((await track.getAttribute('aria-valuetext')).startsWith('58% remaining, '), 'the static part of the value stays');
+  assert.equal(await page.evaluate(() => document.querySelector('#panel-claude .row-usage').dataset.marker), marker, 'the DOM was refreshed in place, not rebuilt');
+  results.interactions.push('window reset times and screen reader reset sentences tick every minute in place');
 }
 
 async function restartControls(locale, width) {
