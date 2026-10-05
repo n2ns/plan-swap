@@ -58,7 +58,7 @@ const errText = (err: unknown): string => (err instanceof Error ? err.message : 
 
 // The user guide on GitHub in the UI language (LOCALE_INFO userGuide); English is the source and has no suffix
 function userGuideUrl(): string {
-  return `https://github.com/n2ns/planswap/blob/main/docs/${LOCALE_INFO[getLocale()].userGuide}`;
+  return `https://github.com/n2ns/plan-swap/blob/main/docs/${LOCALE_INFO[getLocale()].userGuide}`;
 }
 
 /**
@@ -81,7 +81,7 @@ export async function runTool(mode: PanelMode, tool: ToolId, deps: ToolDeps): Pr
       await vscode.env.openExternal(vscode.Uri.parse(userGuideUrl()));
       return;
     case 'openStar':
-      await vscode.env.openExternal(vscode.Uri.parse('https://github.com/n2ns/planswap'));
+      await vscode.env.openExternal(vscode.Uri.parse('https://github.com/n2ns/plan-swap'));
       return;
     case 'openGlobalMd':
       await openGlobalMd(mode);

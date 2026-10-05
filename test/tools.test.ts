@@ -65,7 +65,7 @@ describe('user guide button', () => {
       for (const [locale, file] of Object.entries(expected) as Array<[keyof typeof expected, string]>) {
         setLocale(locale);
         await runTool('claude', 'openHelp', {});
-        assert.equal(String(open.mock.calls.at(-1)?.arguments[0]), `https://github.com/n2ns/planswap/blob/main/docs/${file}`, locale);
+        assert.equal(String(open.mock.calls.at(-1)?.arguments[0]), `https://github.com/n2ns/plan-swap/blob/main/docs/${file}`, locale);
       }
     } finally { setLocale('en'); }
   });

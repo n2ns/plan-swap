@@ -9,12 +9,12 @@
   "icon": "resources/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/n2ns/planswap.git"
+    "url": "https://github.com/n2ns/plan-swap.git"
   },
   "bugs": {
-    "url": "https://github.com/n2ns/planswap/issues"
+    "url": "https://github.com/n2ns/plan-swap/issues"
   },
-  "homepage": "https://github.com/n2ns/planswap#readme",
+  "homepage": "https://github.com/n2ns/plan-swap#readme",
   "engines": {
     "vscode": "^1.107.0"
   },

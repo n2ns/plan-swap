@@ -9,7 +9,7 @@ Switch between the Claude Code and Codex subscription accounts you own (Claude P
 [![Version](https://img.shields.io/visual-studio-marketplace/v/n2ns.planswap?style=flat&label=version)](https://marketplace.visualstudio.com/items?itemName=n2ns.planswap)
 [![Install from VS Marketplace](https://img.shields.io/badge/VS_Marketplace-Install-007ACC?style=flat)](https://marketplace.visualstudio.com/items?itemName=n2ns.planswap)
 [![Open VSX downloads](https://img.shields.io/open-vsx/dt/n2ns/planswap?style=flat&label=Open%20VSX%20downloads&cacheSeconds=86400)](https://open-vsx.org/extension/n2ns/planswap)
-[![CI](https://img.shields.io/github/actions/workflow/status/n2ns/planswap/test.yml?branch=main&style=flat&label=CI)](https://github.com/n2ns/planswap/actions/workflows/test.yml)
+[![CI](https://img.shields.io/github/actions/workflow/status/n2ns/plan-swap/test.yml?branch=main&style=flat&label=CI)](https://github.com/n2ns/plan-swap/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat)](LICENSE)
 
 ![PlanSwap concept illustration showing separate Claude Code and Codex account switching panels](resources/planswap-banner.webp)
