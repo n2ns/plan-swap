@@ -35,7 +35,7 @@ Every setting is listed in the [user guide](docs/user-guide.md#change-language-a
 
 - A VS Code 1.107+ compatible editor: VS Code, Antigravity IDE or VSCodium, in a WSL remote window, on native Windows, on a local Linux desktop or in another remote window.
 - The official Claude Code and/or Codex extension installed where the window runs.
-- The `claude` command on the PATH there, for sign-in and Claude usage limits; the `codex` command for Codex sign-in.
+- The `claude` and/or `codex` command on the PATH there for terminal sign-in. Usage checks can also use the CLI bundled with the corresponding official extension when the command is unavailable.
 - For Codex switching outside native Windows: Bash as the login shell.
 
 ## Supported editors

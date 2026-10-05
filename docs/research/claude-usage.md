@@ -1,6 +1,6 @@
 # Claude usage limits: research record
 
-Checked 2026-09-30 to 2026-10-02. Dated upstream evidence behind the CLI and cache route; PlanSwap's behavior is owned by [Claude design 6.9](../design.md#69-claude-usage-limits). The status-line route was examined first and not pursued. This is not evidence of real-account acceptance.
+Checked 2026-09-30 to 2026-10-05, with dates and versions recorded per section. Dated upstream evidence behind the CLI and cache route; PlanSwap's behavior is owned by [Claude design 6.9](../design.md#69-claude-usage-limits). The status-line route was examined first and not pursued. This is not evidence of real-account acceptance.
 
 ## Supported upstream data
 
@@ -61,3 +61,10 @@ Checked on 2026-10-01 against the default account. Each plain `claude -p "/usage
 ## Decision
 
 Implemented via the CLI and cache route ([Claude design 6.9](../design.md#69-claude-usage-limits)). The status-line route was not pursued: graphical-chat invocation, account attribution and an installation that preserves default settings were never established together. If it is reopened, the [settings precedence documentation](https://code.claude.com/docs/en/settings#settings-precedence) permits a disposable workspace's `.claude/settings.local.json` to hold the collector without touching default settings (managed or higher-priority settings may override it); the user must first verify there that graphical chat invokes it and that attribution is correct.
+
+## Extension-bundled CLI
+
+Checked on 2026-10-05 with the locally installed Windows Claude Code extension 2.1.289. The [official VS Code documentation](https://code.claude.com/docs/en/vs-code#prerequisites) states that the extension bundles its own CLI for the chat panel; a standalone install is needed to run `claude` in the terminal.
+
+- **Source inspection:** the installed extension contains `resources/native-binary/claude.exe`. Its executable resolver also supports `resources/native-binaries/<platform>-<arch>/` and an x64 fallback on Windows arm64. These internal paths are observed implementation details, not a documented integration contract.
+- **Runtime check:** the bundled executable's `--version` reported 2.1.289 and `--help` completed successfully. No real-account usage query was run; this verifies executable discovery and startup, not quota refresh or account behavior.

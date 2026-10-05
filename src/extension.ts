@@ -12,7 +12,7 @@ import { ensureCodexLinks, isSharedCodexAccount } from './codex/codexShare';
 import { CLAUDE_REFRESH_ALL_USAGE_COMMAND, CLAUDE_REFRESH_USAGE_COMMAND, CODEX_REFRESH_ALL_USAGE_COMMAND, REFRESH_USAGE_COMMAND, StatusBar, claudeUsageFailureText, codexUsageFailureText } from './statusBar';
 import { registerCommands } from './commands';
 import { affectsSetting, currentDir, isExplicitConfigDir, settingEnv, settingEnvNames } from './claudeSettings';
-import { oneAtATime, queryClaudeUsage, queryEach, readClaudeUsage, readUsageFetchedAt, type ClaudeQueryResult } from './claudeUsage';
+import { findBundledClaude, oneAtATime, queryClaudeUsage, queryEach, readClaudeUsage, readUsageFetchedAt, type ClaudeQueryResult } from './claudeUsage';
 import { ClaudeUsageMonitor } from './claudeUsageMonitor';
 import { CodexAccountStore } from './codex/codexStore';
 import { codexPanelSource, codexRunsInWsl, registerCodexCommands, restartServerInteractive } from './codex/codexCommands';
@@ -31,7 +31,8 @@ import { IdentityWarnings, claudeIdentity, codexIdentity, type IdentitySource } 
 import { UsageCooldown } from './usageCooldown';
 import { OtherAccountChecks } from './usageOthers';
 
-// The Codex extension, whose bundled codex binary answers the usage query when the CLI is not on PATH
+// Official extensions whose bundled binaries answer usage queries when the CLI is not on PATH
+const CLAUDE_EXTENSION_ID = 'anthropic.claude-code';
 const CODEX_EXTENSION_ID = 'openai.chatgpt';
 // Re-render interval for usage values that expire, independent of the checks
 const USAGE_TICK_MS = 60_000;
@@ -198,7 +199,13 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   // One query, marking its cooldown when it starts; claudeQuery runs it in the queue
   const runClaudeQuery = (dir: string, signal?: AbortSignal) => {
     claudeCooldown.mark(dir);
-    return queryClaudeUsage(dir, isExplicitConfigDir(dir), { env: settingEnv(), signal, timeoutMs: usageTimeoutMs('claude') });
+    return queryClaudeUsage(dir, isExplicitConfigDir(dir), {
+      env: settingEnv(), signal, timeoutMs: usageTimeoutMs('claude'),
+      fallback: () => {
+        const ext = vscode.extensions.getExtension(CLAUDE_EXTENSION_ID);
+        return ext && findBundledClaude(ext.extensionPath);
+      },
+    });
   };
   const claudeQuery = (dir: string, signal?: AbortSignal) => claudeQueue(() => runClaudeQuery(dir, signal));
   const claudeUsage = new ClaudeUsageMonitor(currentDir, (s) => {

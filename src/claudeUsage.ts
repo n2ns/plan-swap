@@ -20,7 +20,7 @@ export interface ClaudeUsage {
   checkedAt: number;
 }
 
-/** cliMissing: no `claude` (nor, on Windows, `claude.cmd` on PATH); timeout: the whole run exceeded timeoutMs;
+/** cliMissing: no `claude`, Windows `claude.cmd`, or available bundled CLI; timeout: the whole run exceeded timeoutMs;
  *  notRefreshed: the CLI succeeded but the account's cache is older than the run start minus 2 minutes (e.g. offline,
  *  also when that cache is too old to show); noUsage: no cache attributable to the signed-in account after the run;
  *  failed: error result, unparsable output, non-zero exit without output, output over 1 MiB, spawn error or cancel. */
@@ -40,6 +40,8 @@ export type ClaudeUsageSpawn = (command: string, args: string[], options: childP
 
 export interface ClaudeQueryOptions {
   spawn?: ClaudeUsageSpawn;
+  /** Look up the official extension's binary only when the PATH commands are missing. */
+  fallback?: () => string | undefined;
   /** Variables of the Claude Code setting (settingEnv) */
   env?: Record<string, string>;
   /** Ends the started child and settles as `failed` with detail 'cancelled' */
@@ -165,6 +167,25 @@ function taskkillTree(pid: number): void {
   childProcess.execFile('taskkill', ['/T', '/F', '/PID', String(pid)], { windowsHide: true }, () => undefined);
 }
 
+/** The official extension's native binary, using its platform-specific layout before its single-platform layout.
+ * Windows ARM64 also supports the extension's x64 fallback. Only this extension host's installation is searched. */
+export function findBundledClaude(extensionPath: string, platform: NodeJS.Platform = process.platform, arch: string = process.arch): string | undefined {
+  if (platform !== 'win32' && platform !== 'linux') return undefined;
+  const name = platform === 'win32' ? 'claude.exe' : 'claude';
+  const candidates = [path.join(extensionPath, 'resources', 'native-binaries', `${platform}-${arch}`, name)];
+  if (platform === 'win32' && arch === 'arm64') {
+    candidates.push(path.join(extensionPath, 'resources', 'native-binaries', 'win32-x64', name));
+  }
+  candidates.push(path.join(extensionPath, 'resources', 'native-binary', name));
+  return candidates.find((file) => {
+    try {
+      return fs.statSync(file).isFile();
+    } catch {
+      return false;
+    }
+  });
+}
+
 // Whether a file of that name exists in a PATH directory (Windows fallback only)
 function onPath(file: string): boolean {
   const dirs = (process.env.PATH ?? '').split(path.delimiter).map((d) => d.replace(/^"(.*)"$/, '$1')).filter(Boolean);
@@ -237,10 +258,11 @@ type Attempt = { kind: 'done'; result: ClaudeQueryResult } | { kind: 'enoent' };
 /**
  * Runs `claude` with ARGS for the account (a local command: no prompt is sent), env usageEnv(dir, explicit,
  * process.env, options.env), cwd the home directory, hidden window, stdin and stderr ignored. On ENOENT on Windows,
- * when a claude.cmd is on PATH, retries once through the shell as a fixed command line. The whole run (both attempts)
- * is limited to timeoutMs; the child it started is the only process ever signalled, and only while still running (the
- * shell fallback's tree through killTree). An already aborted signal ends the child right after it starts. Stdout is
- * limited to 1 MiB and must be a JSON result: is_error true or a subtype other than 'success' → failed with the trimmed
+ * when a claude.cmd is on PATH, retries through the shell as a fixed command line. If the PATH commands are missing,
+ * tries options.fallback's binary directly without a shell. All attempts share timeoutMs and the abort signal;
+ * cancellation or an exhausted deadline starts no further child. Only a child it started and still running is ever
+ * signalled (the shell fallback's tree through killTree). Stdout is limited to 1 MiB and must be a JSON result:
+ * is_error true or a subtype other than 'success' → failed with the trimmed
  * result text (200 characters) as detail. After a successful run it checks that the account's own usage cache was
  * fetched during this run (see ClaudeUsageFailure).
  */
@@ -256,11 +278,19 @@ export async function queryClaudeUsage(dir: string, explicit: boolean, options: 
     windowsHide: true,
     stdio: ['ignore', 'pipe', 'ignore'],
   };
-  const run = (command: string, extra: childProcess.SpawnOptions = {}): Promise<Attempt> =>
-    attempt(spawn, command, { ...base, ...extra }, platform, Math.max(0, startedAt + timeoutMs - now()), options);
+  const run = (command: string, extra: childProcess.SpawnOptions = {}): Promise<Attempt> => {
+    if (options.signal?.aborted) return Promise.resolve({ kind: 'done', result: { ok: false, reason: 'failed', detail: 'cancelled' } });
+    const remaining = startedAt + timeoutMs - now();
+    if (remaining <= 0) return Promise.resolve({ kind: 'done', result: { ok: false, reason: 'timeout' } });
+    return attempt(spawn, command, { ...base, ...extra }, platform, remaining, options);
+  };
   let a = await run('claude');
   // npm installs a claude.cmd shim, which spawn without a shell can neither find nor start; the command line is a fixed literal
   if (a.kind === 'enoent' && platform === 'win32' && onPath('claude.cmd')) a = await run('claude.cmd', { shell: true });
+  if (a.kind === 'enoent') {
+    const bundled = options.fallback?.();
+    if (bundled) a = await run(bundled);
+  }
   if (a.kind === 'enoent') return { ok: false, reason: 'cliMissing' };
   if (!a.result.ok) return a.result;
   const own = ownCache(readInfo(dir, explicit));

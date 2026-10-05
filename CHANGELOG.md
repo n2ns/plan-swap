@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- Claude usage checks now fall back to the official Claude Code extension's bundled CLI when `claude` is not on PATH, so a separate CLI install is no longer required for usage refreshes.
+
 ## [0.3.3] - 2026-10-05
 
 ### Changed

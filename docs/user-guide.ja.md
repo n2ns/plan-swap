@@ -27,7 +27,7 @@ PlanSwap を使うと、複数の Claude Code アカウントと Codex アカウ
 
 - VS Code 1.107 以降と互換性のあるエディター（VS Code、Antigravity IDE、VSCodium）。PlanSwap は WSL のリモートウィンドウ、ネイティブ Windows、ローカルの Linux デスクトップ、その他のリモートウィンドウで動作します。macOS には対応していません。
 - そのウィンドウが動作する環境に、PlanSwap と公式の Claude Code 拡張機能または Codex 拡張機能（あるいは両方）がインストールされていること。
-- ターミナルからサインインし、Claude の使用量の上限を確認するために、その環境の PATH 上に `claude` コマンドがあること。ターミナルから Codex にサインインするには `codex` コマンドが必要です。Codex 拡張機能がインストールされていれば、`codex` コマンドがなくても Codex の使用量を確認できます。
+- ターミナルからサインインするには、その環境の PATH 上に `claude` または `codex` コマンドが必要です。コマンドが利用できない場合でも、使用量の確認には対応する公式拡張機能に同梱された CLI を利用できます。
 - ネイティブ Windows 以外で Codex を切り替える場合：ログインシェルが Bash であること。
 
 セットアップ方法と各エディターの検証状況については、[インストール手順](../README.md#install)と[対応エディター](../README.md#supported-editors)を参照してください。

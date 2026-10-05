@@ -27,7 +27,7 @@ PlanSwap 讓你同時保持多個 Claude Code 和 Codex 帳號的登入狀態，
 
 - 相容 VS Code 1.107 以上版本的編輯器（VS Code、Antigravity IDE 或 VSCodium）。PlanSwap 可在 WSL 遠端視窗、原生 Windows、本機 Linux 桌面或其他遠端視窗中執行。不支援 macOS。
 - 在該視窗執行的環境中安裝 PlanSwap，以及官方 Claude Code 和/或 Codex 擴充功能。
-- 該環境的 PATH 中有 `claude` 命令，用於在終端機登入和查詢 Claude 用量額度；有 `codex` 命令，用於在終端機登入 Codex。安裝了 Codex 擴充功能時，即使沒有該命令也能查詢 Codex 用量額度。
+- 該環境的 PATH 中有 `claude` 和／或 `codex` 命令，用於在終端機登入。查詢用量額度時，如果該命令無法使用，也可以使用對應官方擴充功能內建的 CLI。
 - 在原生 Windows 以外的環境中切換 Codex：登入 shell 必須是 Bash。
 
 安裝步驟以及各編輯器的測試程度，請參閱[安裝說明](../README.md#install)和[支援的編輯器](../README.md#supported-editors)。

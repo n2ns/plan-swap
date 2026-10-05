@@ -27,7 +27,7 @@ You need:
 
 - A VS Code 1.107+ compatible editor (VS Code, Antigravity IDE or VSCodium). PlanSwap runs in a WSL remote window, on native Windows, on a local Linux desktop or in another remote window. macOS is not supported.
 - PlanSwap and the official Claude Code and/or Codex extension installed where that window runs.
-- The `claude` command on the PATH there, to sign in from the terminal and to check Claude usage limits. The `codex` command, to sign in to Codex from the terminal. Codex usage checks also work without it when the Codex extension is installed.
+- The `claude` and/or `codex` command on the PATH there to sign in from the terminal. Usage checks can also use the CLI bundled with the corresponding official extension when the command is unavailable.
 - For Codex switching outside native Windows: Bash as your login shell.
 
 See the [installation instructions](../README.md#install) and [supported editors](../README.md#supported-editors) for setup and how well each editor has been tested.

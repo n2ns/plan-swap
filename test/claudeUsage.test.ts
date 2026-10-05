@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { PassThrough } from 'node:stream';
 import type { SpawnOptions } from 'node:child_process';
 import {
-  CLAUDE_USAGE_MAX_AGE_MS, oneAtATime, parseUsageCache, queryClaudeUsage, queryEach, readClaudeUsage, readUsageFetchedAt, usageEnv,
+  CLAUDE_USAGE_MAX_AGE_MS, findBundledClaude, oneAtATime, parseUsageCache, queryClaudeUsage, queryEach, readClaudeUsage, readUsageFetchedAt, usageEnv,
   type ClaudeUsageChild, type ClaudeUsageSpawn,
 } from '../src/claudeUsage';
 import { ClaudeUsageMonitor, type ClaudeUsageState } from '../src/claudeUsageMonitor';
@@ -241,7 +241,8 @@ test('queryClaudeUsage falls back to claude.cmd through the shell on Windows and
     const killed: number[] = [];
     const r = await withEnv({ PATH: bin }, () => queryClaudeUsage(path.join(tmp.home, '.claude-work'), true,
       // The deadline leaves a slow CI runner time to report ENOENT for claude and start claude.cmd before it expires
-      { spawn, platform: 'win32', timeoutMs: 300, killTree: (pid) => killed.push(pid) }));
+      { spawn, platform: 'win32', timeoutMs: 300, killTree: (pid) => killed.push(pid),
+        fallback: () => assert.fail('a running shim must not fall back on timeout') }));
     assert.deepEqual(r, { ok: false, reason: 'timeout' });
     assert.equal(runs.length, 2);
     assert.equal(runs[1].command, 'claude.cmd -p /usage --output-format json --no-session-persistence --setting-sources user');
@@ -249,6 +250,186 @@ test('queryClaudeUsage falls back to claude.cmd through the shell on Windows and
     assert.equal(runs[1].options.shell, true);
     assert.deepEqual(killed, [4242], 'the tree of the started cmd.exe is ended');
     assert.equal(runs[1].child.killed, false);
+  } finally { tmp.restore(); }
+});
+
+test('queryClaudeUsage uses a bundled executable without a shell and preserves each account environment', async () => {
+  const tmp = makeTempHome('claude-usage-bundled');
+  try {
+    const bundled = path.join(tmp.home, 'Claude Extension', 'claude.exe');
+    for (const explicit of [false, true]) {
+      const dir = path.join(tmp.home, explicit ? '.claude-work' : '.claude');
+      fs.mkdirSync(dir);
+      const info = path.join(explicit ? dir : tmp.home, '.claude.json');
+      let discovered = 0;
+      const f = fakeSpawn((child) => {
+        if (f.runs.length === 1) child.emit('error', Object.assign(new Error('missing'), { code: 'ENOENT' }));
+        else {
+          fs.writeFileSync(info, JSON.stringify(cache({ fetchedAtMs: NOW })));
+          answer(child, SUCCESS);
+        }
+      });
+      const result = await withEnv({ PATH: tmp.home }, () => queryClaudeUsage(dir, explicit, {
+        spawn: f.spawn, platform: 'win32', now: () => NOW,
+        env: { ANTHROPIC_API_KEY: '', HTTPS_PROXY: 'http://proxy' },
+        fallback: () => { discovered++; assert.equal(f.runs.length, 1); return bundled; },
+      }));
+      assert.deepEqual(result, { ok: true });
+      assert.equal(discovered, 1);
+      assert.deepEqual(f.runs.map((r) => r.command), ['claude', bundled]);
+      const run = f.runs[1];
+      assert.equal(Boolean(run.options.shell), false, 'a path with spaces is passed directly to spawn');
+      assert.deepEqual(run.args, ['-p', '/usage', '--output-format', 'json', '--no-session-persistence', '--setting-sources', 'user']);
+      assert.deepEqual(run.options.env, f.runs[0].options.env);
+      assert.equal(run.options.env?.CLAUDE_CONFIG_DIR, explicit ? dir : undefined);
+      assert.equal(run.options.env?.ANTHROPIC_API_KEY, '');
+      assert.equal(run.options.env?.HTTPS_PROXY, 'http://proxy');
+      assert.equal(run.options.cwd, tmp.home);
+      assert.equal(run.options.windowsHide, true);
+      assert.deepEqual(run.options.stdio, ['ignore', 'pipe', 'ignore']);
+    }
+  } finally { tmp.restore(); }
+});
+
+test('queryClaudeUsage tries the Windows shim before its bundled fallback and stops when all are missing', async () => {
+  const tmp = makeTempHome('claude-usage-fallback-order');
+  try {
+    fs.writeFileSync(path.join(tmp.home, 'claude.cmd'), '');
+    const bundled = path.join(tmp.home, 'extension', 'claude.exe');
+    for (const target of [bundled, undefined]) {
+      let discovered = 0;
+      const f = fakeSpawn((child) => child.emit('error', Object.assign(new Error('missing'), { code: 'ENOENT' })));
+      const result = await withEnv({ PATH: tmp.home }, () => queryClaudeUsage(tmp.home, true, {
+        spawn: f.spawn, platform: 'win32',
+        fallback: () => { discovered++; assert.equal(f.runs.length, 2); return target; },
+      }));
+      assert.deepEqual(result, { ok: false, reason: 'cliMissing' });
+      assert.equal(discovered, 1);
+      assert.equal(f.runs[0].command, 'claude');
+      assert.match(f.runs[1].command, /^claude\.cmd -p \/usage /);
+      assert.equal(f.runs[1].options.shell, true);
+      assert.equal(f.runs.length, target ? 3 : 2);
+      if (target) {
+        assert.equal(f.runs[2].command, target);
+        assert.equal(Boolean(f.runs[2].options.shell), false);
+      }
+    }
+  } finally { tmp.restore(); }
+});
+
+test('queryClaudeUsage never discovers a fallback after success, CLI errors, cache failures or timeout', async () => {
+  const tmp = makeTempHome('claude-usage-no-fallback');
+  try {
+    const dir = path.join(tmp.home, '.claude-work');
+    fs.mkdirSync(dir);
+    const file = path.join(dir, '.claude.json');
+    for (const scenario of ['success', 'authentication', 'spawn-error', 'stale', 'wrong-account', 'timeout'] as const) {
+      fs.writeFileSync(file, JSON.stringify(cache({ fetchedAtMs: scenario === 'stale' ? NOW - HOUR : NOW }, scenario === 'wrong-account' ? 'acct-2' : 'acct-1')));
+      const f = fakeSpawn((child) => {
+        if (scenario === 'timeout') return;
+        if (scenario === 'spawn-error') child.emit('error', Object.assign(new Error('denied'), { code: 'EACCES' }));
+        else answer(child, scenario === 'authentication' ? { ...SUCCESS, is_error: true, result: 'Not logged in' } : SUCCESS);
+      });
+      const result = await queryClaudeUsage(dir, true, {
+        spawn: f.spawn, platform: 'win32', now: () => NOW, timeoutMs: scenario === 'timeout' ? 20 : 1000,
+        fallback: () => assert.fail(`must not discover fallback after ${scenario}`),
+      });
+      const reason = scenario === 'authentication' || scenario === 'spawn-error' ? 'failed'
+        : scenario === 'stale' ? 'notRefreshed' : scenario === 'wrong-account' ? 'noUsage' : scenario;
+      assert.equal(result.ok ? 'success' : result.reason, reason);
+      assert.equal(f.runs.length, 1);
+    }
+  } finally { tmp.restore(); }
+});
+
+test('queryClaudeUsage does not start a fallback after cancellation or an exhausted total deadline', async () => {
+  const tmp = makeTempHome('claude-usage-fallback-boundary');
+  try {
+    for (const scenario of ['cancelled', 'timeout'] as const) {
+      const abort = new AbortController();
+      let now = NOW;
+      const f = fakeSpawn((child) => {
+        child.emit('error', Object.assign(new Error('missing'), { code: 'ENOENT' }));
+        if (scenario === 'cancelled') abort.abort();
+        else now += 1000;
+      });
+      const result = await queryClaudeUsage(tmp.home, true, {
+        spawn: f.spawn, platform: 'linux', signal: abort.signal, now: () => now, timeoutMs: 1000,
+        fallback: () => path.join(tmp.home, 'claude'),
+      });
+      assert.deepEqual(result, scenario === 'cancelled' ? { ok: false, reason: 'failed', detail: 'cancelled' } : { ok: false, reason: 'timeout' });
+      assert.equal(f.runs.length, 1);
+    }
+  } finally { tmp.restore(); }
+});
+
+test('queryClaudeUsage gives the bundled process only the time remaining in the whole query', async (t) => {
+  const tmp = makeTempHome('claude-usage-fallback-deadline');
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    let now = NOW;
+    const f = fakeSpawn((child) => {
+      if (f.runs.length === 1) {
+        now += 900;
+        child.emit('error', Object.assign(new Error('missing'), { code: 'ENOENT' }));
+      }
+    });
+    const pending = queryClaudeUsage(tmp.home, true, {
+      spawn: f.spawn, platform: 'linux', now: () => now, timeoutMs: 1000,
+      fallback: () => path.join(tmp.home, 'claude'),
+    });
+    await new Promise((r) => setImmediate(r));
+    assert.equal(f.runs.length, 2);
+    t.mock.timers.tick(99);
+    assert.equal(f.runs[1].child.killed, false);
+    t.mock.timers.tick(1);
+    assert.equal(f.runs[1].child.killed, true);
+    assert.deepEqual(await pending, { ok: false, reason: 'timeout' });
+  } finally { t.mock.timers.reset(); tmp.restore(); }
+});
+
+test('queryClaudeUsage cancels the running bundled child without starting another process', async () => {
+  const tmp = makeTempHome('claude-usage-bundled-abort');
+  try {
+    const abort = new AbortController();
+    const f = fakeSpawn((child) => {
+      if (f.runs.length === 1) child.emit('error', Object.assign(new Error('missing'), { code: 'ENOENT' }));
+      else abort.abort();
+    });
+    const result = await queryClaudeUsage(tmp.home, true, {
+      spawn: f.spawn, platform: 'linux', signal: abort.signal,
+      fallback: () => path.join(tmp.home, 'claude'),
+    });
+    assert.deepEqual(result, { ok: false, reason: 'failed', detail: 'cancelled' });
+    assert.equal(f.runs.length, 2);
+    assert.equal(f.runs[1].child.killed, true);
+  } finally { tmp.restore(); }
+});
+
+test('findBundledClaude finds only files in supported layouts, preferring the current architecture', () => {
+  const tmp = makeTempHome('claude-bundled-layouts');
+  try {
+    for (const platform of ['linux', 'win32'] as const) {
+      const extension = path.join(tmp.home, platform);
+      const name = platform === 'win32' ? 'claude.exe' : 'claude';
+      const legacy = path.join(extension, 'resources', 'native-binary', name);
+      const x64 = path.join(extension, 'resources', 'native-binaries', `${platform}-x64`, name);
+      const arm64 = path.join(extension, 'resources', 'native-binaries', `${platform}-arm64`, name);
+      assert.equal(findBundledClaude(extension, platform, 'x64'), undefined);
+      fs.mkdirSync(path.dirname(legacy), { recursive: true });
+      fs.writeFileSync(legacy, '');
+      assert.equal(findBundledClaude(extension, platform, 'arm64'), legacy);
+      fs.mkdirSync(path.dirname(x64), { recursive: true });
+      fs.writeFileSync(x64, '');
+      assert.equal(findBundledClaude(extension, platform, 'x64'), x64);
+      assert.equal(findBundledClaude(extension, platform, 'arm64'), platform === 'win32' ? x64 : legacy);
+      fs.mkdirSync(arm64, { recursive: true });
+      assert.equal(findBundledClaude(extension, platform, 'arm64'), platform === 'win32' ? x64 : legacy, 'a directory is not an executable');
+      fs.rmdirSync(arm64);
+      fs.writeFileSync(arm64, '');
+      assert.equal(findBundledClaude(extension, platform, 'arm64'), arm64);
+      assert.equal(findBundledClaude(extension, 'darwin', 'arm64'), undefined);
+    }
   } finally { tmp.restore(); }
 });
 
