@@ -1,6 +1,6 @@
 {
   "displayName": "PlanSwap: Claude Code & Codex Account Switcher",
-  "description": "Switch between your Claude Code and Codex subscription plans (Pro, Max, Plus…) from the sidebar. WSL/Linux and Windows.",
+  "description": "See what is left on your Claude Code and Codex subscription accounts (Pro, Max, Plus…), get told which one to use when one runs low, and switch from the sidebar. WSL/Linux and Windows.",
   "command.switchAccount": "Switch Account",
   "category.claude": "Claude Account",
   "command.addAccount": "Add Account (Focus Sidebar Input)",

@@ -1,6 +1,6 @@
 {
   "displayName": "PlanSwap: Claude Code・Codex アカウント切り替え",
-  "description": "サイドバーから Claude Code と Codex のアカウント（Pro、Max、Plus など）を切り替え。WSL/Linux と Windows に対応。",
+  "description": "サイドバーで Claude Code と Codex のアカウント（Pro、Max、Plus など）の使用量の上限の残りを確認し、残りが少なくなったら切り替え先を提案、ワンクリックで切り替え。WSL/Linux と Windows に対応。",
   "command.switchAccount": "アカウントを切り替え",
   "category.claude": "Claude アカウント",
   "command.addAccount": "アカウントを追加（サイドバーの入力欄へ移動）",

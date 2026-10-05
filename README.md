@@ -4,7 +4,7 @@
 
 # PlanSwap: Claude Code & Codex Account Switcher
 
-Switch between the Claude Code and Codex subscription accounts you own (Claude Pro / Max, ChatGPT Plus / Pro…) from a VS Code sidebar, without signing out and back in. Built for VS Code WSL remote windows and native Windows; local Linux desktops and other remote windows work too. macOS is not supported.
+See how much is left on each Claude Code and Codex subscription account you own (Claude Pro / Max, ChatGPT Plus / Pro…), get told which one to use when the current one runs low, and switch with one click from a VS Code sidebar, without signing out and back in. Built for VS Code WSL remote windows and native Windows; local Linux desktops and other remote windows work too. macOS is not supported.
 
 [![Version](https://img.shields.io/visual-studio-marketplace/v/n2ns.planswap?style=flat&label=version)](https://marketplace.visualstudio.com/items?itemName=n2ns.planswap)
 [![Install from VS Marketplace](https://img.shields.io/badge/VS_Marketplace-Install-007ACC?style=flat)](https://marketplace.visualstudio.com/items?itemName=n2ns.planswap)
@@ -21,11 +21,22 @@ Switch between the Claude Code and Codex subscription accounts you own (Claude P
   <img src="resources/planswap-sidebar-codex.png" alt="PlanSwap sidebar, Codex tab: three accounts with usage limit bars and the Tools section" width="300">
 </p>
 
+### See what is left
+
+- **Usage limits on every card**: what is left (or used) of each limit and when it resets, checked automatically or on demand.
+- **Status bar summary**: `Claude 97% · Codex 82%`, turning yellow or red when a limit runs low.
+
+### Know when to switch
+
+- **Recommended account**: when the current account runs low, a card above the list names the signed-in account with the most left, with its limits and how long ago they were checked.
+- **Switch or open a terminal**: switch to it from the card, or open a terminal running the CLI as that account without switching.
+- **Your choice of candidates**: keep an account, such as a work account, out of the recommendations.
+
+### Manage your accounts
+
 - **One sidebar, two tabs**: Claude and Codex accounts side by side, each with its email and plan.
 - **Stay signed in everywhere**: sign in once per account, then switch with one click.
 - **Linked or independent accounts**: share the default account's setup and history, or keep them separate.
-- **Usage limits on every card**: what is left (or used) of each limit and when it resets, checked automatically or on demand.
-- **Status bar summary**: `Claude 97% · Codex 82%`, turning yellow or red when a limit runs low.
 - **Tools**: open your rules file and the official extension's settings, update the CLI, re-link accounts.
 - **Five languages**: English, Simplified Chinese, Traditional Chinese, Spanish and Japanese.
 
