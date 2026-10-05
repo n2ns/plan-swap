@@ -96,6 +96,11 @@ function toolbarButton(icon: string, label: string, fn: (e: MouseEvent) => void)
   return onClick(h('vscode-toolbar-button', { icon, label, title: label, class: 'icon-btn' }), fn);
 }
 
+// Banner title with its icon on the same line, so the text and actions below get the card's full width
+function bannerTitle(icon: string, text: string): HTMLElement {
+  return h('div', { class: 'banner-title' }, h('vscode-icon', { name: icon, class: 'banner-icon' }), h('span', { class: 'banner-title-text' }, text));
+}
+
 /**
  * Focuses a control. A freshly created vscode-elements component is not focusable until its first async render
  * (vscode-button reflects its tabindex then); vscode-toolbar-button is never focusable itself, only its inner button
@@ -662,11 +667,10 @@ class Page {
     return h(
       'div',
       { class: 'banner', role: 'status' },
-      h('vscode-icon', { name: 'info', class: 'banner-icon' }),
       h(
         'div',
         { class: 'banner-body' },
-        h('div', { class: 'banner-title' }, t(local ? 'pending.titleLocal' : 'pending.title', { name: this.tab.pendingDir })),
+        bannerTitle('info', t(local ? 'pending.titleLocal' : 'pending.title', { name: this.tab.pendingDir })),
         h('div', { class: 'banner-text' }, t(text)),
       ),
     );
@@ -678,11 +682,10 @@ class Page {
     return h(
       'div',
       { class: 'banner', role: 'status' },
-      h('vscode-icon', { name: 'info', class: 'banner-icon' }),
       h(
         'div',
         { class: 'banner-body' },
-        h('div', { class: 'banner-title' }, t('banner.title', { name: this.tab.switchedTo })),
+        bannerTitle('info', t('banner.title', { name: this.tab.switchedTo })),
         h('div', { class: 'banner-text' }, t('banner.text')),
         h(
           'div',
@@ -719,11 +722,10 @@ class Page {
     return h(
       'div',
       { class: 'banner recommend', role: 'region', 'aria-label': t('recommend.title', { name: a.label }) },
-      h('vscode-icon', { name: 'lightbulb', class: 'banner-icon' }),
       h(
         'div',
         { class: 'banner-body' },
-        h('div', { class: 'banner-title' }, t('recommend.title', { name: a.label })),
+        bannerTitle('lightbulb', t('recommend.title', { name: a.label })),
         h('div', { class: 'banner-text recommend-text' }, ...windows.flatMap((w) => [w, ' · ']), a.usage && updatedAgoText(a.usage.checkedAt)),
         actions,
       ),

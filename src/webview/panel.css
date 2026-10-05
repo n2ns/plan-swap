@@ -138,10 +138,12 @@ body {
   width: 3px;
   background: var(--banner-color);
 }
-.banner-icon { flex: none; color: var(--banner-color); margin-top: 2px; }
 
 .banner-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.banner-title { font-weight: 600; overflow-wrap: anywhere; }
+/* Icon and title share one line; the text and actions below use the full card width */
+.banner-title { display: flex; align-items: flex-start; gap: 6px; font-weight: 600; }
+.banner-icon { flex: none; color: var(--banner-color); margin-top: 1px; }
+.banner-title-text { min-width: 0; overflow-wrap: anywhere; }
 .banner-text { color: var(--muted); font-size: max(11px, 0.9em); overflow-wrap: anywhere; }
 /* Usage summary of the recommended account: one readable line, wrapping at the separators */
 .banner-text.recommend-text { color: var(--secondary); }

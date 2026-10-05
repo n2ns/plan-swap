@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- The icon of the recommendation card and the reload / pending-restart banners now sits on the title line instead of in a column of its own, so the text and buttons get the card's full width and the **Switch** / **Terminal** buttons no longer wrap in narrow sidebars.
+
 ## [0.3.2] - 2026-10-04
 
 ### Added
