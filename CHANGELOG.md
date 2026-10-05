@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- When a longer limit such as the 7-day one is the one running low, the status bar now shows that limit with its length, `Claude 2% (7d)`, instead of the healthy 5-hour figure next to a warning or error background.
+
 ### Fixed
 
 - The icon of the recommendation card and the reload / pending-restart banners now sits on the title line instead of in a column of its own, so the text and buttons get the card's full width and the **Switch** / **Terminal** buttons no longer wrap in narrow sidebars.

@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import {
   StatusBar,
   backgroundIdFor, statusBarSettings, codexUsageFailureText, codexUsageParts, escapeHtml, liveCodexUsage, relativeReset, remainingOf, shortWindow,
-  refreshLink, statusAccessibilityLabel, statusText, usageBar, usageTable, windowRow,
+  refreshLink, statusAccessibilityLabel, statusText, usageBar, usageTable, windowRow, lowestWindow, productPart,
 } from '../src/statusBar';
 import { AccountStore } from '../src/accounts';
 import { CodexAccountStore } from '../src/codex/codexStore';
@@ -179,11 +179,44 @@ describe('pure helpers', () => {
     }
   });
 
-  test('statusText and the screen reader label carry product names and the short window only', () => {
+  test('lowestWindow picks the general window with the least left, the shorter one on a tie', () => {
+    assert.equal(lowestWindow<ClaudeUsageWindow>([]), undefined);
+    assert.equal(lowestWindow([{ windowMinutes: 300, usedPercent: 4 }, { windowMinutes: 10080, usedPercent: 98 }])?.windowMinutes, 10080);
+    assert.equal(lowestWindow([{ windowMinutes: 300, usedPercent: 92 }, { windowMinutes: 10080, usedPercent: 40 }])?.windowMinutes, 300);
+    assert.equal(lowestWindow([{ windowMinutes: 10080, usedPercent: 50 }, { windowMinutes: 300, usedPercent: 50 }])?.windowMinutes, 300, 'tie: the shorter window');
+    assert.equal(lowestWindow([{ windowMinutes: 45, scope: 'Fable', usedPercent: 99 }, { windowMinutes: 10080, usedPercent: 1 }])?.windowMinutes, 10080, 'model windows never count');
+    assert.equal(lowestWindow([{ windowMinutes: 45, scope: 'Fable', usedPercent: 99 }]), undefined);
+  });
+
+  test('productPart states the short window until a longer one is lowest and low enough to color the item', () => {
+    const w = (used5h: number, used7d: number) => [{ windowMinutes: 300, usedPercent: used5h }, { windowMinutes: 10080, usedPercent: used7d }];
+    const t = (warningThreshold: number, errorThreshold = 10) => ({ warningThreshold, errorThreshold });
+    assert.deepEqual(productPart('Claude', undefined, 'remaining', t(30)), { product: 'Claude' });
+    assert.deepEqual(productPart('Claude', [], 'remaining', t(30)), { product: 'Claude' });
+    assert.deepEqual(productPart('Claude', w(4, 40), 'remaining', t(30)), { product: 'Claude', percent: 96, window: undefined }, 'a lower but healthy 7d window stays implied');
+    assert.deepEqual(productPart('Claude', w(4, 70), 'remaining', t(30)), { product: 'Claude', percent: 30, window: '7d' }, 'at the threshold');
+    assert.deepEqual(productPart('Claude', w(4, 98), 'remaining', t(30)), { product: 'Claude', percent: 2, window: '7d' });
+    assert.deepEqual(productPart('Claude', w(4, 98), 'used', t(30)), { product: 'Claude', percent: 98, window: '7d' });
+    assert.deepEqual(productPart('Claude', w(92, 98), 'remaining', t(30)), { product: 'Claude', percent: 2, window: '7d' }, 'both low: the lowest');
+    assert.deepEqual(productPart('Claude', w(95, 90), 'remaining', t(30)), { product: 'Claude', percent: 5, window: undefined }, 'the 5h window lowest: no label');
+    assert.deepEqual(productPart('Codex', [{ usedPercent: 10 }, { usedPercent: 95 }], 'remaining', t(30)), { product: 'Codex', percent: 90, window: undefined }, 'without durations the first window, never a label');
+    assert.deepEqual(productPart('Claude', w(4, 92), 'remaining', t(5, 10)), { product: 'Claude', percent: 8, window: '7d' }, 'an error threshold above the warning one colors the item, so the text follows');
+    assert.deepEqual(productPart('Claude', w(4, 88), 'remaining', t(5, 10)), { product: 'Claude', percent: 96, window: undefined }, 'above both thresholds: no color, short window');
+  });
+
+  test('statusText and the screen reader label carry product names, the percentage and the duration of a low longer window', () => {
     assert.equal(statusText([{ product: 'Claude', percent: 97 }, { product: 'Codex', percent: 82 }]), 'Claude 97% · Codex 82%');
     assert.equal(statusText([{ product: 'Claude' }, { product: 'Codex', percent: 0 }]), 'Claude · Codex 0%');
+    assert.equal(statusText([{ product: 'Claude', percent: 2, window: '7d' }, { product: 'Codex', percent: 60 }]), 'Claude 2% (7d) · Codex 60%');
     assert.equal(statusAccessibilityLabel([{ product: 'Claude', percent: 97 }, { product: 'Codex' }]), 'PlanSwap: Claude 97% left, Codex');
+    assert.equal(statusAccessibilityLabel([{ product: 'Claude', percent: 2, window: '7d' }, { product: 'Codex' }]), 'PlanSwap: Claude 7d 2% left, Codex');
     assert.equal(statusAccessibilityLabel([{ product: 'Claude', percent: 3 }, { product: 'Codex' }], 'used'), 'PlanSwap: Claude 3% used, Codex');
+    setLocale('zh-cn');
+    try {
+      assert.equal(statusText([{ product: 'Claude', percent: 2, window: '7 天' }]), 'Claude 2%（7 天）');
+    } finally {
+      setLocale('en');
+    }
   });
 
   test('escapeHtml neutralizes tags, links, emphasis, icons, table pipes and line breaks', () => {
@@ -453,13 +486,13 @@ describe('both products in the status bar', LINUX_ONLY, () => {
     } finally { bar.dispose(); resetConfig(); }
   });
 
-  test('5h healthy but 7d used up: the text shows the 5h number, the background is the error color and the row carries the warning', () => {
+  test('5h healthy but 7d used up: the text states the 7d window with its duration, the background is the error color and the row carries the warning', () => {
     writeClaude([session(3), weekly(100)]);
     const { bar, item } = make();
     try {
       bar.setClaudeUsage({ checking: false });
       bar.setCodexUsage(codexOk(18, 50));
-      assert.equal(item.text, '$(dashboard) Claude 97% · Codex 82%');
+      assert.equal(item.text, '$(dashboard) Claude 0% (7d) · Codex 82%');
       assert.equal(color(item), 'statusBarItem.errorBackground');
       const tip = tooltipText(item.tooltip);
       assert.match(tip, /\| 7d \| ░░░░░░░░░░ \| 0% \$\(warning\) Used up \| \$\(clock\) 3d \|/);
@@ -505,7 +538,7 @@ describe('both products in the status bar', LINUX_ONLY, () => {
       assert.equal(color(item), undefined, 'the hidden Codex window does not color the item');
       setConfig('planswap', 'statusBar.products', 'codex');
       bar.update();
-      assert.equal(item.text, '$(dashboard) Codex 82%');
+      assert.equal(item.text, '$(dashboard) Codex 5% (7d)');
       assert.ok(!tooltipText(item.tooltip).includes('me@example.com'));
       assert.equal(color(item), 'statusBarItem.errorBackground');
     } finally { bar.dispose(); resetConfig(); }

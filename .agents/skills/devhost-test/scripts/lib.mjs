@@ -10,7 +10,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
-const PORT = 9333;
+const PORT = 9555;
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Editor settings every run starts from; the project config adds its own

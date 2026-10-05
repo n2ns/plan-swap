@@ -82,17 +82,48 @@ export function usageBar(percent: number): string {
   return '█'.repeat(filled) + '░'.repeat(BAR_CELLS - filled);
 }
 
+type GeneralWindow = { usedPercent: number; windowMinutes?: number; scope?: string };
+
 /**
- * The window the status bar text states: among the general (not model-specific) windows the one with the shortest
- * duration (normally the 5-hour window); without durations, the first general window.
+ * Among the general (not model-specific) windows the one with the shortest duration (normally the 5-hour window);
+ * without durations, the first general window. Its duration is implied in the status bar text.
  */
-export function shortWindow<W extends { usedPercent: number; windowMinutes?: number; scope?: string }>(windows: readonly W[]): W | undefined {
+export function shortWindow<W extends GeneralWindow>(windows: readonly W[]): W | undefined {
   const general = windows.filter((w) => !w.scope);
   let best: W | undefined;
   for (const w of general) {
     if (w.windowMinutes !== undefined && (best === undefined || w.windowMinutes < best.windowMinutes!)) best = w;
   }
   return best ?? general[0];
+}
+
+/**
+ * The general window with the least left, the one that stops the user first and the one the background color follows;
+ * on a tie the shorter one.
+ */
+export function lowestWindow<W extends GeneralWindow>(windows: readonly W[]): W | undefined {
+  let best: W | undefined;
+  for (const w of windows) {
+    if (w.scope) continue;
+    if (best === undefined || remainingOf(w) < remainingOf(best) ||
+      (remainingOf(w) === remainingOf(best) && (w.windowMinutes ?? Infinity) < (best.windowMinutes ?? Infinity))) best = w;
+  }
+  return best;
+}
+
+/**
+ * A product's status bar part: the shown percentage (shownPercent) of its short window, or of a longer window once
+ * that one has the least left and is low enough to color the item (at or below the higher of the two thresholds, since
+ * neither is required to be above the other): the number then agrees with the color and carries the window's
+ * duration, "2% (7d)", since it recovers days later. No percentage without windows.
+ */
+export function productPart(product: string, windows: readonly GeneralWindow[] | undefined, display: UsageDisplay, thresholds: Pick<StatusBarSettings, 'warningThreshold' | 'errorThreshold'>): Product {
+  const short = windows ? shortWindow(windows) : undefined;
+  if (!short) return { product };
+  const lowest = lowestWindow(windows!)!;
+  const colored = remainingOf(lowest) <= Math.max(thresholds.warningThreshold, thresholds.errorThreshold);
+  const w = lowest !== short && lowest.windowMinutes !== undefined && colored ? lowest : short;
+  return { product, percent: shownPercent(w, display), window: w === short ? undefined : formatDuration(w.windowMinutes!) };
 }
 
 export interface StatusBarSettings {
@@ -157,15 +188,17 @@ export function relativeReset(epochSeconds: number, now: number = Date.now()): s
     .join(durationUnitSeparator);
 }
 
-/** Status bar text ("Claude 97% · Codex 82%"): product names with the shown percentage (shownPercent) of their short window when known. */
-export function statusText(parts: ReadonlyArray<{ product: string; percent?: number }>): string {
-  return parts.map((p) => p.percent === undefined ? p.product : t('status.textUsage', { product: p.product, percent: p.percent })).join(' · ');
+/** Status bar text ("Claude 97% · Codex 82%", "Claude 2% (7d)" when a longer window is the low one): the products' parts (productPart). */
+export function statusText(parts: ReadonlyArray<Product>): string {
+  return parts.map((p) => p.percent === undefined ? p.product
+    : p.window === undefined ? t('status.textUsage', { product: p.product, percent: p.percent })
+      : t('status.textUsageWindow', { product: p.product, percent: p.percent, window: p.window })).join(' · ');
 }
 
-/** Screen reader label of the status bar item ("PlanSwap: Claude 97% left, Codex", or "3% used" when showing what is used). */
-export function statusAccessibilityLabel(parts: ReadonlyArray<{ product: string; percent?: number }>, display: UsageDisplay = 'remaining'): string {
+/** Screen reader label of the status bar item ("PlanSwap: Claude 97% left, Codex", "Claude 7d 2% left", or "3% used" when showing what is used). */
+export function statusAccessibilityLabel(parts: ReadonlyArray<Product>, display: UsageDisplay = 'remaining'): string {
   const key = display === 'used' ? 'status.usedShort' : 'status.remainingShort';
-  const items = parts.map((p) => p.percent === undefined ? p.product : `${p.product} ${t(key, { percent: p.percent })}`);
+  const items = parts.map((p) => p.percent === undefined ? p.product : `${p.product} ${p.window === undefined ? '' : `${p.window} `}${t(key, { percent: p.percent })}`);
   return `PlanSwap: ${items.join(', ')}`;
 }
 
@@ -312,7 +345,8 @@ interface Block {
   usage: UsageParts;
 }
 
-interface Product { product: string; percent?: number }
+/** One product of the status bar text: name, the shown percentage and, when it is not the short window's, that window's duration. */
+export interface Product { product: string; percent?: number; window?: string }
 interface Candidate { remaining: number; product: string; window: string }
 
 // The lowest remaining percentage among the general windows (model-specific ones never count)
@@ -335,8 +369,8 @@ function candidatesOf(product: string, windows: ReadonlyArray<UsageWindow | Clau
  * findSameDir, so another spelling of a folder keeps its registered label. Codex identity comes from effectiveDir(),
  * never from the pending selection.
  *
- * Text: `$(dashboard)` + statusText; a product's percentage is the short window of the Claude cache (subscription
- * sign-in only; readClaudeUsage yields nothing for a cache attributed to another sign-in) or of the live Codex result
+ * Text: `$(dashboard)` + statusText; a product's part (productPart) comes from the Claude cache (subscription
+ * sign-in only; readClaudeUsage yields nothing for a cache attributed to another sign-in) or from the live Codex result
  * (signed in, not API key, not codexRunsInWsl()). The background follows the lowest remaining percentage over the
  * general windows of both products (never model-specific ones).
  *
@@ -402,8 +436,7 @@ export class StatusBar implements vscode.Disposable {
       // Usage limits exist only for a subscription sign-in (oauthAccount); signed-out accounts show none
       const showUsage = info.identity !== undefined;
       const usage = showUsage ? readClaudeUsage(dir, explicit) : undefined;
-      const short = usage ? shortWindow(usage.windows) : undefined;
-      products.push({ product: 'Claude', percent: short ? shownPercent(short, display) : undefined });
+      products.push(productPart('Claude', usage?.windows, display, settings));
       if (usage) candidates.push(...candidatesOf('Claude', usage.windows));
       blocks.push({
         identity: info.email ?? (info.loggedIn ? label : t('common.notLoggedIn')),
@@ -432,17 +465,16 @@ export class StatusBar implements vscode.Disposable {
       const inWsl = codexRunsInWsl();
       const showUsage = !inWsl && !apiKey && info.loggedIn;
       if (inWsl) usage.notes.push(italic(t('status.codexRunsInWsl')));
-      let percent: number | undefined;
+      let part: Product = { product: 'Codex' };
       if (showUsage) {
         const shown = codexUsageParts(this.codexUsage, now, display);
         usage.rows.push(...shown.rows);
         usage.notes.push(...shown.notes);
         const windows = codexWindows(this.codexUsage, now);
-        const short = windows ? shortWindow(windows) : undefined;
-        percent = short ? shownPercent(short, display) : undefined;
+        part = productPart('Codex', windows, display, settings);
         if (windows) candidates.push(...candidatesOf('Codex', windows));
       }
-      products.push({ product: 'Codex', percent });
+      products.push(part);
       blocks.push({
         identity: apiKey ? 'API key' : info.email ?? (info.loggedIn ? label : t('common.notLoggedIn')),
         plan: apiKey ? undefined : info.plan,
@@ -450,7 +482,7 @@ export class StatusBar implements vscode.Disposable {
         usage,
       });
     }
-    // The color follows the window that runs out first, whichever it is; the text shows the short window only
+    // The color follows the window that runs out first over both products; a product's text states that window once it is low
     let lowest: Candidate | undefined;
     for (const c of candidates) if (!lowest || c.remaining < lowest.remaining) lowest = c;
     const background = backgroundIdFor(lowest?.remaining, settings);
