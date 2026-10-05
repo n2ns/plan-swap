@@ -336,6 +336,20 @@ describe('isSharedCodexAccount', SHARING, () => {
     fs.symlinkSync(path.join(home, 'other'), path.join(c, 'sessions'));
     assert.equal(isSharedCodexAccount(c), false);
   });
+
+  test('a shared account stays shared while the default sessions folder is missing, and the refresh recreates it', () => {
+    const acc = newAccount('dangling');
+    ensureCodexLinks(acc);
+    fs.rmSync(path.join(def, 'sessions'), { recursive: true });
+    assert.equal(fs.existsSync(path.join(acc, 'sessions')), false, 'the link dangles');
+    assert.equal(isSharedCodexAccount(acc), true);
+    const other = newAccount('elsewhere');
+    fs.symlinkSync(path.join(home, 'gone'), path.join(other, 'sessions'));
+    assert.equal(isSharedCodexAccount(other), false);
+    ensureCodexLinks(acc);
+    assert.ok(fs.statSync(path.join(def, 'sessions')).isDirectory());
+    assert.equal(isSharedCodexAccount(acc), true);
+  });
 });
 
 // Fake /proc: <root>/<pid>/exe (link) and <root>/<pid>/environ

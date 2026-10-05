@@ -1036,11 +1036,9 @@ export function makeClaudeIndependent(fromJson: string, dir: string): { removed:
   return { removed, copied };
 }
 
-/** Shared iff <dir>/projects is a symlink resolving to the default dir's projects. The default dir → false. */
+/** Shared iff <dir>/projects is a symlink to the default dir's projects: resolving to it, or spelled as it while the
+ *  default folder is missing (deleted to reclaim space; the next link refresh recreates it). The default dir → false. */
 export function isSharedClaudeAccount(dir: string): boolean {
   if (isDefault(dir)) return false;
-  const link = path.join(path.resolve(dir), 'projects');
-  if (!lstatOrUndefined(link)?.isSymbolicLink()) return false;
-  const target = path.join(defaultDir(), 'projects');
-  return fs.existsSync(link) && fs.existsSync(target) && sameRealPath(link, target);
+  return linksTo(path.join(path.resolve(dir), 'projects'), path.join(defaultDir(), 'projects'));
 }

@@ -120,13 +120,13 @@ function isRealFolder(acc: string, rel: string): boolean {
   return true;
 }
 
-/** Shared iff <dir>/sessions is a symlink resolving to the default dir's sessions. The default dir → false. */
+/** Shared iff <dir>/sessions is a symlink to the default dir's sessions: resolving to it, or spelled as it while the
+ *  default folder is missing. The default dir → false. */
 export function isSharedCodexAccount(dir: string): boolean {
   if (isDefault(dir)) return false;
-  const link = path.join(path.resolve(dir), MARKER);
-  if (!lstatOrUndefined(link)?.isSymbolicLink()) return false;
-  const target = path.join(codexDefaultDir(), MARKER);
-  return fs.existsSync(link) && fs.existsSync(target) && sameRealPath(link, target);
+  // Resolving to the default entry, or spelled as it while that entry is missing (deleted by the user; the next link
+  // refresh recreates it): a dangling marker must not turn the account independent
+  return linksTo(path.join(path.resolve(dir), MARKER), path.join(codexDefaultDir(), MARKER));
 }
 
 /** Creates/repairs every link of a shared account (idempotent). Never touches the default dir's existing content;

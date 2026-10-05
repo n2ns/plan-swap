@@ -284,6 +284,23 @@ describe('isSharedClaudeAccount', SHARING, () => {
     fs.symlinkSync(path.join(home, 'other'), path.join(c, 'projects'));
     assert.equal(isSharedClaudeAccount(c), false);
   });
+
+  test('a shared account stays shared while the default projects folder is missing, and the refresh recreates it', () => {
+    const acc = accountDir('dangling');
+    fs.mkdirSync(acc);
+    ensureClaudeLinks(acc);
+    fs.rmSync(path.join(def, 'projects'), { recursive: true });
+    assert.equal(fs.existsSync(path.join(acc, 'projects')), false, 'the link dangles');
+    assert.equal(isSharedClaudeAccount(acc), true);
+    // A dangling link to somewhere else is still not shared
+    const other = accountDir('elsewhere');
+    fs.mkdirSync(other);
+    fs.symlinkSync(path.join(home, 'gone'), path.join(other, 'projects'));
+    assert.equal(isSharedClaudeAccount(other), false);
+    ensureClaudeLinks(acc);
+    assert.ok(fs.statSync(path.join(def, 'projects')).isDirectory());
+    assert.equal(isSharedClaudeAccount(acc), true);
+  });
 });
 
 describe('mirrorClaudeJson', () => {
