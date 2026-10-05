@@ -129,12 +129,18 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   const store = new AccountStore(state);
   const claudeLabels = new LabelStore(state, 'claude.labels');
   const claudeExclusions = new RecommendExclusions(state, 'claude.recommendExcluded');
-  // An existing state file that cannot be read makes every write fail (FileMemento never rewrites it from an empty
-  // state); say which file and why, and activate with what can be read instead of failing activation silently
+  // An existing state file that cannot be read or is not a JSON object makes every write fail (FileMemento never
+  // rewrites it from an empty state) and reads as empty: say which file and why at once, whether or not anything
+  // needs writing, and activate with what can be read instead of failing activation
+  const stateError = state.readError();
+  if (stateError) void vscode.window.showErrorMessage(t('ext.stateUnreadable', { file: STATE_JSON(), error: stateError.message }));
   try {
     await store.syncWithDisk(claudeLabels, claudeExclusions);
   } catch (err) {
-    void vscode.window.showErrorMessage(t('ext.stateUnreadable', { file: STATE_JSON(), error: err instanceof Error ? err.message : String(err) }));
+    const error = err instanceof Error ? err.message : String(err);
+    console.error('[planswap] Claude account sync failed:', err);
+    // The rejected write of an unusable state file repeats the error already reported; anything else is shown
+    if (error !== stateError?.message) void vscode.window.showErrorMessage(t('ext.syncFailed', { error }));
   }
   const codexLabels = new LabelStore(state, 'codex.labels');
   const codexExclusions = new RecommendExclusions(state, 'codex.recommendExcluded');
@@ -153,7 +159,15 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   }
   try {
     const codexStore = new CodexAccountStore(state);
-    await codexStore.syncWithDisk(codexLabels, codexExclusions);
+    try {
+      await codexStore.syncWithDisk(codexLabels, codexExclusions);
+    } catch (err) {
+      // An unusable state file was reported above and only blocks registering: Codex works with what can be read.
+      // Any other error fails Codex initialization, as it does with a usable state file
+      const error = err instanceof Error ? err.message : String(err);
+      if (!stateError || error !== stateError.message) throw err;
+      console.error('[planswap] Codex account sync failed:', err);
+    }
     codexSource = codexPanelSource(codexStore, codexLabels, usageHistory, codexExclusions);
     codex = { store: codexStore, labels: codexLabels, exclusions: codexExclusions };
   } catch (err) {
@@ -587,7 +601,13 @@ export async function showEnvironmentWarnings(
     if (dismissed().includes(id)) return;
     const never = t('common.dontShowAgain');
     shown.push(vscode.window.showWarningMessage(message, never).then(async (picked) => {
-      if (picked === never) await state.update(DISMISSED_KEY, [...new Set([...dismissed(), id])]);
+      if (picked !== never) return;
+      try {
+        await state.update(DISMISSED_KEY, [...new Set([...dismissed(), id])]);
+      } catch (err) {
+        // The state file cannot be saved: say so instead of ignoring the click
+        void vscode.window.showErrorMessage(t('ext.stateSaveFailed', { file: STATE_JSON(), error: err instanceof Error ? err.message : String(err) }));
+      }
     }));
   };
   const overrides = claudeCredentialOverrides(env, setting);

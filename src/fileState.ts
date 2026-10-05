@@ -19,8 +19,9 @@ type State = Record<string, unknown>;
 export class FileMemento implements Memento {
   constructor(private readonly file: string = STATE_JSON()) {}
 
-  /** Tolerates a missing, half-written or non-object file (treated as empty); any other read error (permissions, a
-   *  locked file, a directory at the path, I/O) is thrown, so an update never rewrites the file from an empty state */
+  /** A missing or empty file is an empty state; any other read error (permissions, a locked file, a directory at the
+   *  path, I/O) and content that is not a JSON object (a syntax error left by a hand edit) is thrown, so an update never
+   *  rewrites the file from an empty state. PlanSwap's own writes are atomic and never leave a half-written file */
   private readOrThrow(): State {
     let text: string;
     try {
@@ -29,17 +30,25 @@ export class FileMemento implements Memento {
       if ((e as NodeJS.ErrnoException).code === 'ENOENT') return {};
       throw e;
     }
+    // A byte order mark (the file edited in Notepad or Windows PowerShell 5.1) would otherwise fail to parse
+    const body = stripBom(text);
+    if (body.trim() === '') return {};
+    const parsed: unknown = JSON.parse(body);
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('not a JSON object');
+    return parsed as State;
+  }
+
+  /** Why the existing file cannot be used (read error or not a JSON object), or undefined; activation reports it */
+  readError(): Error | undefined {
     try {
-      // A byte order mark (the file edited in Notepad or Windows PowerShell 5.1) would otherwise read as empty, and the
-      // next update would drop every account
-      const parsed: unknown = JSON.parse(stripBom(text));
-      return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as State) : {};
-    } catch {
-      return {};
+      this.readOrThrow();
+      return undefined;
+    } catch (e) {
+      return e instanceof Error ? e : new Error(String(e));
     }
   }
 
-  /** Reads never throw: an unreadable file reads as empty */
+  /** Reads never throw: an unreadable or invalid file reads as empty */
   private read(): State {
     try {
       return this.readOrThrow();
@@ -61,7 +70,8 @@ export class FileMemento implements Memento {
   }
 
   /** undefined deletes the key; re-reads the file, then rewrites the whole object atomically (pretty JSON; temp file
-   *  0600 + rename, directory 0700). Rejects without writing when the file exists but cannot be read */
+   *  0600 + rename, directory 0700). Rejects without writing when the file exists but cannot be read or is not a JSON
+   *  object */
   async update(key: string, value: unknown): Promise<void> {
     const entries = Object.entries(this.readOrThrow()).filter(([k]) => k !== key);
     if (value !== undefined) entries.push([key, value]);

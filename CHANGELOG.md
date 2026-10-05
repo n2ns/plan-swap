@@ -5,7 +5,7 @@
 ### Fixed
 
 - Deleting the default account's `projects` folder (Claude) or `sessions` folder (Codex) no longer makes every linked account appear independent: the dangling link still counts as linked, and the next link refresh recreates the folder.
-- A state file that exists but cannot be read (permissions, a lock, an I/O error) no longer gets rewritten with a single key by the next change, which used to drop every registered account, alias and usage observation; the change now fails with the read error instead. A missing or half-written file still reads as empty.
+- A state file that exists but cannot be read (permissions, a lock, an I/O error) no longer gets rewritten with a single key by the next change, which used to drop every registered account, alias and usage observation; the change now fails with the read error instead, and the editor reports the file and the error when it starts. A state file left with a syntax error by a hand edit is treated the same way instead of being replaced; a missing or empty file still reads as empty.
 
 ### Changed
 

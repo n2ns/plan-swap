@@ -16,6 +16,7 @@ import { STATE_FILE, installRcBlocks, writeSelectedDir } from '../src/codex/code
 import { CodexAccountStore } from '../src/codex/codexStore';
 import { hasControlChars, registerCommands } from '../src/commands';
 import { showEnvironmentWarnings } from '../src/extension';
+import { STATE_JSON } from '../src/fileState';
 import { setLocale, t } from '../src/i18n';
 import { LabelStore } from '../src/labels';
 import { accountDir, type Account } from '../src/paths';
@@ -691,6 +692,15 @@ describe('environment warnings', () => {
     await showEnvironmentWarnings(state, e2, home, noSetting);
     assert.equal(warnings.mock.callCount(), 4);
     assert.deepEqual(state.get('warnings.dismissed'), ['claudeEnv:ANTHROPIC_API_KEY', 'pathSpaces:CODEX_HOME']);
+  });
+
+  test('"Don\'t Show Again" that cannot be saved reports the state file instead of failing silently', async (ctx) => {
+    const state = new MemoryMemento();
+    ctx.mock.method(state, 'update', async () => { throw new Error('EACCES: permission denied'); });
+    ctx.mock.method(window, 'showWarningMessage', async () => t('common.dontShowAgain'));
+    const errors = ctx.mock.method(window, 'showErrorMessage', async () => undefined);
+    await showEnvironmentWarnings(state, env({ ANTHROPIC_API_KEY: 'x' }), home, noSetting);
+    assert.deepEqual(errors.mock.calls.map((c) => c.arguments[0]), [t('ext.stateSaveFailed', { file: STATE_JSON(), error: 'EACCES: permission denied' })]);
   });
 
   test('nothing to warn about shows nothing', async (ctx) => {

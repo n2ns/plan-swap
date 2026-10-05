@@ -51,16 +51,24 @@ describe('FileMemento', () => {
     assert.equal(m.get('k'), undefined);
     assert.deepEqual(m.keys(), []);
   });
-  test('invalid or non-object content is treated as empty and overwritten on update', async () => {
+  test('invalid or non-object content reads as empty, is reported, and is never overwritten by an update', async () => {
     const file = path.join(tmp.home, '.config', 'planswap', 'd.json');
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, '{ not json');
     const m = fresh('d.json');
-    assert.equal(m.get('k'), undefined);
-    fs.writeFileSync(file, '[1,2]');
-    assert.equal(m.get('0'), undefined);
+    // A hand edit that left a trailing comma: the accounts must survive the next update
+    for (const content of ['{ "accounts": [{ "name": "work", "dir": "/x" }],\n', '[1,2]', 'null']) {
+      fs.writeFileSync(file, content);
+      assert.equal(m.get('accounts'), undefined, content);
+      assert.ok(m.readError(), content);
+      await assert.rejects(m.update('k', 'v'));
+      assert.equal(read(file), content, 'left as it was');
+    }
+    // An empty file holds nothing to lose: it is an empty state and can be written
+    fs.writeFileSync(file, '');
+    assert.equal(m.readError(), undefined);
     await m.update('k', 'v');
     assert.deepEqual(JSON.parse(read(file)), { k: 'v' });
+    assert.equal(m.readError(), undefined);
   });
   test('a file that exists but cannot be read makes update reject and leaves the file alone', async () => {
     // A directory at the path: readFileSync fails with EISDIR on every platform
@@ -68,6 +76,7 @@ describe('FileMemento', () => {
     fs.mkdirSync(dirAtPath, { recursive: true });
     const m = fresh('unreadable-dir.json');
     assert.equal(m.get('k'), undefined, 'reads still tolerate the error');
+    assert.equal((m.readError() as NodeJS.ErrnoException | undefined)?.code, 'EISDIR', 'activation can report it');
     await assert.rejects(m.update('k', 'v'), (e: NodeJS.ErrnoException) => e.code === 'EISDIR');
     assert.ok(fs.statSync(dirAtPath).isDirectory(), 'nothing was written over the path');
     assert.deepEqual(fs.readdirSync(path.dirname(dirAtPath)).filter((n) => n.startsWith('.state.')), [], 'no temp file left behind');
@@ -76,6 +85,7 @@ describe('FileMemento', () => {
       const file = path.join(tmp.home, '.config', 'planswap', 'unreadable-perm.json');
       fs.writeFileSync(file, JSON.stringify({ accounts: [{ name: 'work', dir: '/x' }] }));
       fs.chmodSync(file, 0o000);
+      assert.equal((fresh('unreadable-perm.json').readError() as NodeJS.ErrnoException | undefined)?.code, 'EACCES');
       try {
         await assert.rejects(fresh('unreadable-perm.json').update('k', 'v'), (e: NodeJS.ErrnoException) => e.code === 'EACCES');
       } finally {
