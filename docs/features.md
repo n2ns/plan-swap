@@ -71,6 +71,8 @@ Rows of signed-in ChatGPT accounts show each last-observed window (duration, tim
 
 Usage checks try `claude` on PATH first (`claude.cmd` also on Windows), then the official Claude Code extension's bundled CLI if no command is found. Terminal sign-in still requires `claude` on PATH.
 
+A refresh succeeds only when the CLI's structured usage report is valid and the account's official cache supports the result. A recent official cache hit counts as success even when its values and fetch time stay unchanged. Missing or unavailable report data causes a failed refresh, even if recent historical values remain visible; it neither triggers a second executable query nor implies an outdated CLI. A valid empty result shows no quota bars, including when old cache fields remain. Signing in as another account during the query prevents that query from succeeding.
+
 Only subscription sign-ins have usage limits; other accounts show and start nothing. The status bar shows the current account's general windows (section 3). Every registered signed-in row shows what Claude Code last cached in that account's own `.claude.json`, with model-specific windows only under `planswap.sidebar.showModelLimits`; nothing shows when the cache is missing, older than 24 hours or from another sign-in. Automatic checks run in the focused window: the current account once both its cache (from any window or terminal) and this window's last attempt are older than the interval, then the other registered signed-in accounts under the same condition unless `planswap.usageAutoRefreshCurrentOnly` is on (section 2); a switch or sign-in checks the current account at once under the same condition ([Claude design 6.9](design.md#69-claude-usage-limits)).
 
 ### Usage refresh buttons

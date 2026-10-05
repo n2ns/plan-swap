@@ -36,8 +36,9 @@ is still missing. Remove an item once it is done or decided.
 - **Status bar text, warning background and tooltip** are covered by unit tests only; a headless preview cannot render
   the status bar. Look at them in a real editor in light, dark and high-contrast themes and in every UI language
   ([Claude usage checks](docs/manual-verification.md#claude-usage-limits), step 8).
-- **Claude usage limits** ([Claude design 6.9](docs/design.md#69-claude-usage-limits)) are verified only for the
-  signed-in default account. Run [the Claude usage checks](docs/manual-verification.md#claude-usage-limits). Not covered
+- **Claude usage limits** ([Claude design 6.9](docs/design.md#69-claude-usage-limits)) still need real-editor acceptance;
+  module-level checks passed for Windows default and WSL default/named accounts ([verification scope](docs/research/claude-usage.md#implementation-verification)).
+  Run [the Claude usage checks](docs/manual-verification.md#claude-usage-limits). Not covered
   by a step there: API-key sign-ins, a non-English locale and time zone (expired sign-ins: step 9, "Failing account"). The endpoint's own rate limits stay
   unobserved ([research](docs/research/claude-usage.md#rate-limiting)).
 

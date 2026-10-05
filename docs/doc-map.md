@@ -20,6 +20,7 @@ Which document owns which kind of information, and the rules for keeping them. R
 | [Branding candidates](branding/candidates/) | Image-generation prompts and candidate design records. |
 | [Feature feasibility research](research/feature-feasibility.md) | Dated official-interface evidence and verification limits for proposed account workflow improvements. |
 | [Feature expansion proposal](plans/feature-expansion.md) | Proposed delivery order, scope, acceptance criteria, and research gates (not implemented behavior or release commitments). |
+| [Claude usage refresh validation proposal](plans/claude-usage-report-validation.md) | Planned shared platform flow, structured-report validation, official-cache integration and acceptance criteria (not implemented behavior or verification results). |
 
 ## Rules
 

@@ -153,53 +153,257 @@ function answer(child: FakeChild, output: unknown, code = 0): void {
 }
 
 const SUCCESS = { type: 'result', subtype: 'success', is_error: false, local_command: 'usage', result: 'Current session: 42% used' };
+const LIMITS = [{ kind: 'session', percent: 42, resets_at: iso(NOW + 2 * HOUR) }];
+const usageOutput = (limits: unknown = LIMITS): unknown[] => [
+  { type: 'system', subtype: 'init' },
+  { type: 'assistant', usage_report: { rate_limits: { limits } } },
+  SUCCESS,
+];
 
-test('queryClaudeUsage runs the local /usage command for the account and accepts a cache fetched during the run', LINUX_ONLY, async () => {
+test('structured refresh accepts an official recent cache hit without advancing its timestamp', async () => {
+  const tmp = makeTempHome('claude-report-cache-hit');
+  try {
+    fs.writeFileSync(path.join(tmp.home, '.claude.json'), JSON.stringify(cache()));
+    const f = fakeSpawn((child) => answer(child, usageOutput()));
+    assert.deepEqual(await queryClaudeUsage(tmp.home, true, { spawn: f.spawn, now: () => NOW }), { ok: true });
+    assert.equal(readClaudeUsage(tmp.home, true, NOW)?.checkedAt, NOW - 60_000);
+    assert.equal(f.runs.length, 1);
+  } finally { tmp.restore(); }
+});
+
+test('structured refresh rejects unavailable rows even when the owned cache is only 80 seconds old', async () => {
+  const tmp = makeTempHome('claude-report-unavailable');
+  try {
+    fs.writeFileSync(path.join(tmp.home, '.claude.json'), JSON.stringify(cache({ fetchedAtMs: NOW - 80_000 })));
+    const f = fakeSpawn((child) => answer(child, usageOutput(null)));
+    assert.deepEqual(await queryClaudeUsage(tmp.home, true, { spawn: f.spawn, now: () => NOW }), { ok: false, reason: 'noUsage' });
+    assert.equal(readClaudeUsage(tmp.home, true, NOW)?.checkedAt, NOW - 80_000);
+  } finally { tmp.restore(); }
+});
+
+test('structured refresh rejects missing reports despite a successful result and recent cache', async () => {
+  const tmp = makeTempHome('claude-report-missing');
+  try {
+    fs.writeFileSync(path.join(tmp.home, '.claude.json'), JSON.stringify(cache()));
+    for (const output of [SUCCESS, [SUCCESS]]) {
+      const f = fakeSpawn((child) => answer(child, output));
+      assert.deepEqual(await queryClaudeUsage(tmp.home, true, { spawn: f.spawn, now: () => NOW,
+        fallback: () => assert.fail('report absence must not retry another executable') }), { ok: false, reason: 'noUsage' });
+      assert.equal(f.runs.length, 1);
+    }
+  } finally { tmp.restore(); }
+});
+
+test('structured refresh accepts an empty cache without reviving old quota fields', async () => {
+  const tmp = makeTempHome('claude-report-empty');
+  try {
+    const data = cache();
+    (data.cachedUsageUtilization as { utilization: Record<string, unknown> }).utilization.limits = [];
+    fs.writeFileSync(path.join(tmp.home, '.claude.json'), JSON.stringify(data));
+    assert.equal(readClaudeUsage(tmp.home, true, NOW), undefined);
+    const f = fakeSpawn((child) => answer(child, usageOutput([])));
+    assert.deepEqual(await queryClaudeUsage(tmp.home, true, { spawn: f.spawn, now: () => NOW }), { ok: true });
+    assert.equal(readClaudeUsage(tmp.home, true, NOW), undefined);
+  } finally { tmp.restore(); }
+});
+
+test('explicit empty, null and malformed cache limits never revive older quota fields', () => {
+  for (const limits of [[], null, {}, 'invalid']) {
+    const data = cache();
+    (data.cachedUsageUtilization as { utilization: Record<string, unknown> }).utilization.limits = limits;
+    assert.equal(parseUsageCache(data, NOW), undefined);
+  }
+});
+
+test('structured refresh distinguishes missing and null data from malformed reports', async () => {
+  const tmp = makeTempHome('claude-report-shapes');
+  try {
+    fs.writeFileSync(path.join(tmp.home, '.claude.json'), JSON.stringify(cache()));
+    const cases: [unknown, string][] = [
+      [{}, 'noUsage'], [{ rate_limits: null }, 'noUsage'],
+      [{ rate_limits: {} }, 'noUsage'], [{ rate_limits: { limits: null } }, 'noUsage'],
+      [null, 'failed'], [[], 'failed'], [{ rate_limits: [] }, 'failed'],
+      [{ rate_limits: { limits: {} } }, 'failed'],
+    ];
+    for (const [report, reason] of cases) {
+      const f = fakeSpawn((child) => answer(child, [{ type: 'assistant', usage_report: report }, SUCCESS]));
+      assert.deepEqual(await queryClaudeUsage(tmp.home, true, { spawn: f.spawn, now: () => NOW }), { ok: false, reason });
+    }
+  } finally { tmp.restore(); }
+});
+
+test('structured refresh validates used row fields while accepting unknown kinds and unrelated metadata', async () => {
+  const tmp = makeTempHome('claude-report-rows');
+  try {
+    fs.writeFileSync(path.join(tmp.home, '.claude.json'), JSON.stringify(cache()));
+    for (const row of [null, {}, { ...LIMITS[0], percent: '42' }, { ...LIMITS[0], percent: Infinity },
+      { ...LIMITS[0], kind: null }, { ...LIMITS[0], resets_at: 'not a timestamp' }, { ...LIMITS[0], resets_at: 0 }]) {
+      const f = fakeSpawn((child) => answer(child, usageOutput([row])));
+      assert.deepEqual(await queryClaudeUsage(tmp.home, true, { spawn: f.spawn, now: () => NOW }), { ok: false, reason: 'failed' });
+    }
+    const f = fakeSpawn((child) => answer(child, [
+      { type: 'system', future_field: 'ignored' },
+      { type: 'assistant', usage_report: { session: 'unused', rate_limits: { limits: [
+        { kind: 'future_meter', percent: 42, resets_at: null, scope: 'unused', severity: {}, extra: true },
+      ] } } }, SUCCESS,
+    ]));
+    assert.deepEqual(await queryClaudeUsage(tmp.home, true, { spawn: f.spawn, now: () => NOW }), { ok: true });
+    assert.equal(readClaudeUsage(tmp.home, true, NOW)?.windows[0].windowMinutes, 300, 'report metadata never replaces cache display data');
+  } finally { tmp.restore(); }
+});
+
+test('structured refresh requires one report and a terminal successful local usage result', async () => {
+  const tmp = makeTempHome('claude-report-protocol');
+  try {
+    fs.writeFileSync(path.join(tmp.home, '.claude.json'), JSON.stringify(cache()));
+    const report = usageOutput()[1];
+    for (const output of [[], [report], [report, report, SUCCESS], [report, SUCCESS, SUCCESS],
+      [report, SUCCESS, { type: 'system' }], [null, report, SUCCESS],
+      [report, { ...SUCCESS, type: 'assistant' }], [report, { ...SUCCESS, local_command: 'context' }],
+      [report, { ...SUCCESS, local_command: undefined }], [report, { ...SUCCESS, is_error: true }],
+      [report, { ...SUCCESS, is_error: undefined }], [report, { ...SUCCESS, subtype: 'error' }],
+      'private raw output', '[{"type":', '{}']) {
+      const f = fakeSpawn((child) => answer(child, output));
+      assert.deepEqual(await queryClaudeUsage(tmp.home, true, { spawn: f.spawn, now: () => NOW }), { ok: false, reason: 'failed' });
+    }
+    const misplaced = fakeSpawn((child) => answer(child, [{ ...SUCCESS, usage_report: { rate_limits: { limits: LIMITS } } }]));
+    assert.deepEqual(await queryClaudeUsage(tmp.home, true, { spawn: misplaced.spawn, now: () => NOW }), { ok: false, reason: 'noUsage' });
+  } finally { tmp.restore(); }
+});
+
+test('structured refresh rejects abnormal exit even with a valid report and result', async () => {
+  const tmp = makeTempHome('claude-report-exit');
+  try {
+    fs.writeFileSync(path.join(tmp.home, '.claude.json'), JSON.stringify(cache()));
+    for (const signal of [null, 'SIGTERM'] as const) {
+      const f = fakeSpawn((child) => {
+        if (!signal) answer(child, usageOutput(), 1);
+        else {
+          child.stdout.end(JSON.stringify(usageOutput()));
+          child.signalCode = signal;
+          child.emit('exit', null, signal);
+        }
+      });
+      assert.deepEqual(await queryClaudeUsage(tmp.home, true, { spawn: f.spawn, now: () => NOW }),
+        { ok: false, reason: 'failed', detail: signal ?? '1' });
+    }
+  } finally { tmp.restore(); }
+});
+
+test('structured refresh waits for late stdout, decodes split UTF-8 and enforces a byte limit', async () => {
+  const tmp = makeTempHome('claude-report-stream');
+  try {
+    fs.writeFileSync(path.join(tmp.home, '.claude.json'), JSON.stringify(cache()));
+    const output = usageOutput([{ ...LIMITS[0], kind: 'future_限额' }]);
+    const bytes = Buffer.from(JSON.stringify(output));
+    const split = bytes.indexOf(Buffer.from('限')) + 1;
+    const late = fakeSpawn((child) => {
+      child.stdout.write(bytes.subarray(0, split));
+      child.exitCode = 0;
+      child.emit('exit', 0, null);
+      setImmediate(() => child.stdout.end(bytes.subarray(split)));
+    });
+    assert.deepEqual(await queryClaudeUsage(tmp.home, true, { spawn: late.spawn, now: () => NOW }), { ok: true });
+    const large = fakeSpawn((child) => child.stdout.write(JSON.stringify([
+      { type: 'system', text: '限'.repeat(350_000) }, ...usageOutput(),
+    ])));
+    assert.deepEqual(await queryClaudeUsage(tmp.home, true, { spawn: large.spawn, now: () => NOW }),
+      { ok: false, reason: 'failed', detail: 'output too long' });
+    assert.equal(large.runs[0].child.killed, true);
+  } finally { tmp.restore(); }
+});
+
+test('structured refresh rejects changed or missing account and organization identity', async () => {
+  const tmp = makeTempHome('claude-report-identity');
+  try {
+    const file = path.join(tmp.home, '.claude.json');
+    for (const scenario of ['account', 'organization', 'signed-out', 'initially-missing'] as const) {
+      fs.writeFileSync(file, JSON.stringify(scenario === 'initially-missing' ? {} : cache()));
+      const f = fakeSpawn((child) => {
+        const next = cache();
+        if (scenario === 'account') {
+          (next.oauthAccount as Record<string, unknown>).accountUuid = 'acct-2';
+          (next.cachedUsageUtilization as Record<string, unknown>).accountUuid = 'acct-2';
+        } else if (scenario === 'organization') (next.oauthAccount as Record<string, unknown>).organizationUuid = 'org-2';
+        else if (scenario === 'signed-out') delete next.oauthAccount;
+        fs.writeFileSync(file, JSON.stringify(next));
+        answer(child, usageOutput());
+      });
+      assert.deepEqual(await queryClaudeUsage(tmp.home, true, { spawn: f.spawn, now: () => NOW }), { ok: false, reason: 'noUsage' });
+    }
+  } finally { tmp.restore(); }
+});
+
+test('structured refresh requires owned displayable cache data and consistent empty results', async () => {
+  const tmp = makeTempHome('claude-report-cache');
+  try {
+    const file = path.join(tmp.home, '.claude.json');
+    const cases: [Record<string, unknown>, unknown, string][] = [
+      [cache({ accountUuid: 'acct-2' }), LIMITS, 'noUsage'],
+      [cache({ fetchedAtMs: NOW + 120_001 }), LIMITS, 'notRefreshed'],
+      [cache({ fetchedAtMs: NOW - 120_001 }), LIMITS, 'notRefreshed'],
+      [cache({ utilization: undefined }), LIMITS, 'noUsage'],
+      [cache({ utilization: { limits: null } }), LIMITS, 'noUsage'],
+      [cache({ utilization: { limits: [] } }), LIMITS, 'noUsage'],
+      [cache({ utilization: { limits: [{ ...LIMITS[0], resets_at: iso(NOW - 1) }] } }), LIMITS, 'noUsage'],
+      [cache(), [], 'noUsage'],
+      [cache({ utilization: {} }), [], 'noUsage'],
+    ];
+    for (const [data, limits, reason] of cases) {
+      fs.writeFileSync(file, JSON.stringify(data));
+      const f = fakeSpawn((child) => answer(child, usageOutput(limits)));
+      assert.deepEqual(await queryClaudeUsage(tmp.home, true, { spawn: f.spawn, now: () => NOW }), { ok: false, reason });
+    }
+  } finally { tmp.restore(); }
+});
+
+test('queryClaudeUsage runs the local /usage command for the account and accepts a cache fetched during the run', async () => {
   const tmp = makeTempHome('claude-usage-query');
   try {
     const dir = path.join(tmp.home, '.claude-work');
     fs.mkdirSync(dir);
+    fs.writeFileSync(path.join(dir, '.claude.json'), JSON.stringify(cache()));
     const f = fakeSpawn((child) => {
       fs.writeFileSync(path.join(dir, '.claude.json'), JSON.stringify(cache({ fetchedAtMs: NOW })));
-      answer(child, SUCCESS);
+      answer(child, usageOutput());
     });
     assert.deepEqual(await queryClaudeUsage(dir, true, { spawn: f.spawn, now: () => NOW }), { ok: true });
     assert.equal(f.runs.length, 1);
     assert.equal(f.runs[0].command, 'claude');
-    assert.deepEqual(f.runs[0].args, ['-p', '/usage', '--output-format', 'json', '--no-session-persistence', '--setting-sources', 'user']);
+    assert.deepEqual(f.runs[0].args, ['-p', '/usage', '--output-format', 'json', '--verbose', '--no-session-persistence', '--setting-sources', 'user']);
     assert.equal(f.runs[0].options.env?.CLAUDE_CONFIG_DIR, dir);
     assert.deepEqual(f.runs[0].options.stdio, ['ignore', 'pipe', 'ignore']);
     assert.equal(f.runs[0].child.killed, false);
   } finally { tmp.restore(); }
 });
 
-test('queryClaudeUsage reports a cache that was not fetched during the run, a missing cache and CLI errors', LINUX_ONLY, async () => {
+test('queryClaudeUsage reports stale or missing caches and CLI errors without exposing raw output', async () => {
   const tmp = makeTempHome('claude-usage-fail');
   try {
     const dir = path.join(tmp.home, '.claude-work');
     fs.mkdirSync(dir);
     const file = path.join(dir, '.claude.json');
-    // Offline: the CLI prints its old cache without an error
+    // A valid report does not make a stale display cache usable.
     fs.writeFileSync(file, JSON.stringify(cache({ fetchedAtMs: NOW - 10 * 60_000 })));
-    const stale = fakeSpawn((child) => answer(child, SUCCESS));
+    const stale = fakeSpawn((child) => answer(child, usageOutput()));
     assert.deepEqual(await queryClaudeUsage(dir, true, { spawn: stale.spawn, now: () => NOW }), { ok: false, reason: 'notRefreshed' });
 
     // Offline with a cache too old to show: still reported as not refreshed
     fs.writeFileSync(file, JSON.stringify(cache({ fetchedAtMs: NOW - 2 * CLAUDE_USAGE_MAX_AGE_MS })));
-    const old = fakeSpawn((child) => answer(child, SUCCESS));
+    const old = fakeSpawn((child) => answer(child, usageOutput()));
     assert.deepEqual(await queryClaudeUsage(dir, true, { spawn: old.spawn, now: () => NOW }), { ok: false, reason: 'notRefreshed' });
 
     fs.writeFileSync(file, JSON.stringify({ oauthAccount: { accountUuid: 'acct-1' } }));
-    const none = fakeSpawn((child) => answer(child, SUCCESS));
+    const none = fakeSpawn((child) => answer(child, usageOutput()));
     assert.deepEqual(await queryClaudeUsage(dir, true, { spawn: none.spawn, now: () => NOW }), { ok: false, reason: 'noUsage' });
 
     const err = fakeSpawn((child) => answer(child, { type: 'result', subtype: 'success', is_error: true, result: 'Not logged in' }, 1));
-    assert.deepEqual(await queryClaudeUsage(dir, true, { spawn: err.spawn, now: () => NOW }), { ok: false, reason: 'failed', detail: 'Not logged in' });
+    assert.deepEqual(await queryClaudeUsage(dir, true, { spawn: err.spawn, now: () => NOW }), { ok: false, reason: 'failed', detail: '1' });
 
     const garbage = fakeSpawn((child) => answer(child, 'x'.repeat(500)));
     const g = await queryClaudeUsage(dir, true, { spawn: garbage.spawn, now: () => NOW });
     assert.equal(g.ok, false);
-    assert.ok(!g.ok && g.reason === 'failed' && (g.detail?.length ?? 0) <= 200, 'output is truncated');
+    assert.deepEqual(g, { ok: false, reason: 'failed' }, 'raw output is never returned');
 
     const silent = fakeSpawn((child) => answer(child, '', 3));
     assert.deepEqual(await queryClaudeUsage(dir, true, { spawn: silent.spawn, now: () => NOW }), { ok: false, reason: 'failed', detail: '3' });
@@ -245,7 +449,7 @@ test('queryClaudeUsage falls back to claude.cmd through the shell on Windows and
         fallback: () => assert.fail('a running shim must not fall back on timeout') }));
     assert.deepEqual(r, { ok: false, reason: 'timeout' });
     assert.equal(runs.length, 2);
-    assert.equal(runs[1].command, 'claude.cmd -p /usage --output-format json --no-session-persistence --setting-sources user');
+    assert.equal(runs[1].command, 'claude.cmd -p /usage --output-format json --verbose --no-session-persistence --setting-sources user');
     assert.deepEqual(runs[1].args, []);
     assert.equal(runs[1].options.shell, true);
     assert.deepEqual(killed, [4242], 'the tree of the started cmd.exe is ended');
@@ -261,12 +465,13 @@ test('queryClaudeUsage uses a bundled executable without a shell and preserves e
       const dir = path.join(tmp.home, explicit ? '.claude-work' : '.claude');
       fs.mkdirSync(dir);
       const info = path.join(explicit ? dir : tmp.home, '.claude.json');
+      fs.writeFileSync(info, JSON.stringify(cache()));
       let discovered = 0;
       const f = fakeSpawn((child) => {
         if (f.runs.length === 1) child.emit('error', Object.assign(new Error('missing'), { code: 'ENOENT' }));
         else {
           fs.writeFileSync(info, JSON.stringify(cache({ fetchedAtMs: NOW })));
-          answer(child, SUCCESS);
+          answer(child, usageOutput());
         }
       });
       const result = await withEnv({ PATH: tmp.home }, () => queryClaudeUsage(dir, explicit, {
@@ -279,7 +484,7 @@ test('queryClaudeUsage uses a bundled executable without a shell and preserves e
       assert.deepEqual(f.runs.map((r) => r.command), ['claude', bundled]);
       const run = f.runs[1];
       assert.equal(Boolean(run.options.shell), false, 'a path with spaces is passed directly to spawn');
-      assert.deepEqual(run.args, ['-p', '/usage', '--output-format', 'json', '--no-session-persistence', '--setting-sources', 'user']);
+      assert.deepEqual(run.args, ['-p', '/usage', '--output-format', 'json', '--verbose', '--no-session-persistence', '--setting-sources', 'user']);
       assert.deepEqual(run.options.env, f.runs[0].options.env);
       assert.equal(run.options.env?.CLAUDE_CONFIG_DIR, explicit ? dir : undefined);
       assert.equal(run.options.env?.ANTHROPIC_API_KEY, '');
@@ -328,7 +533,7 @@ test('queryClaudeUsage never discovers a fallback after success, CLI errors, cac
       const f = fakeSpawn((child) => {
         if (scenario === 'timeout') return;
         if (scenario === 'spawn-error') child.emit('error', Object.assign(new Error('denied'), { code: 'EACCES' }));
-        else answer(child, scenario === 'authentication' ? { ...SUCCESS, is_error: true, result: 'Not logged in' } : SUCCESS);
+        else answer(child, scenario === 'authentication' ? { ...SUCCESS, is_error: true, result: 'Not logged in' } : usageOutput());
       });
       const result = await queryClaudeUsage(dir, true, {
         spawn: f.spawn, platform: 'win32', now: () => NOW, timeoutMs: scenario === 'timeout' ? 20 : 1000,

@@ -1,6 +1,7 @@
 // Usage limits of a Claude account. PlanSwap never reads .credentials.json: it runs the official CLI's local `/usage`
 // command with the account's directory, so Claude Code refreshes the usage cache (cachedUsageUtilization) in that
-// account's own info file with its own credentials, and the values are read from that cache. No vscode import.
+// account's own info file with its own credentials. Its structured report validates the query; displayed values and
+// fetch times still come from that cache. No vscode import.
 // Design and rationale: docs/design.md 6.9. Raw CLI output is never logged or returned.
 import * as childProcess from 'node:child_process';
 import type { EventEmitter } from 'node:events';
@@ -21,9 +22,9 @@ export interface ClaudeUsage {
 }
 
 /** cliMissing: no `claude`, Windows `claude.cmd`, or available bundled CLI; timeout: the whole run exceeded timeoutMs;
- *  notRefreshed: the CLI succeeded but the account's cache is older than the run start minus 2 minutes (e.g. offline,
- *  also when that cache is too old to show); noUsage: no cache attributable to the signed-in account after the run;
- *  failed: error result, unparsable output, non-zero exit without output, output over 1 MiB, spawn error or cancel. */
+ *  notRefreshed: valid report but the cache predates the run by more than 2 minutes or is too far in the future;
+ *  noUsage: unavailable report, changed/missing identity, or no attributable cache supporting the report's empty state;
+ *  failed: invalid report/result, unparsable output, abnormal exit, output over 1 MiB, spawn error or cancel. */
 export type ClaudeUsageFailure = 'cliMissing' | 'timeout' | 'notRefreshed' | 'noUsage' | 'failed';
 export type ClaudeQueryResult = { ok: true } | { ok: false; reason: ClaudeUsageFailure; detail?: string };
 
@@ -60,7 +61,7 @@ export const CLAUDE_USAGE_MAX_AGE_MS = 24 * 60 * 60_000;
 // Claude Code answers /usage from its cache for about a minute after a fetch; a fetch this recent counts as refreshed
 const REFRESH_TOLERANCE_MS = 2 * 60_000;
 // Only user settings are loaded (no project settings of the working directory), and the run leaves no session transcript
-const ARGS = ['-p', '/usage', '--output-format', 'json', '--no-session-persistence', '--setting-sources', 'user'];
+const ARGS = ['-p', '/usage', '--output-format', 'json', '--verbose', '--no-session-persistence', '--setting-sources', 'user'];
 const DETAIL_MAX = 200;
 const MAX_OUTPUT = 1024 * 1024;
 const SESSION_MINUTES = 300;
@@ -92,7 +93,8 @@ function window(percent: unknown, minutes: number | undefined, resets: unknown, 
 // are the older fields, used when limits is missing
 function windowsOf(u: Record<string, unknown>): ClaudeUsageWindow[] {
   const out: ClaudeUsageWindow[] = [];
-  if (Array.isArray(u.limits) && u.limits.length) {
+  if (Object.hasOwn(u, 'limits')) {
+    if (!Array.isArray(u.limits)) return out;
     for (const l of u.limits) {
       if (!isPlainObject(l)) continue;
       const kind = typeof l.kind === 'string' ? l.kind : '';
@@ -129,7 +131,7 @@ function ownCache(data: unknown): { cache: Record<string, unknown>; checkedAt: n
  * belong to the signed-in account (cachedUsageUtilization.accountUuid equals a non-empty oauthAccount.accountUuid),
  * be younger than CLAUDE_USAGE_MAX_AGE_MS and not more than 2 minutes in the future. Windows come from
  * utilization.limits[] (kind session → 300 min, weekly* → 10080, otherwise none; scope.model.display_name → scope) or,
- * when limits is missing or empty, five_hour / seven_day; an entry without a finite percentage is skipped and windows
+ * when limits is absent, five_hour / seven_day; an entry without a finite percentage is skipped and windows
  * past their reset time are dropped. No window left → undefined, never a 0% window.
  */
 export function parseUsageCache(data: unknown, now: number): ClaudeUsage | undefined {
@@ -253,7 +255,16 @@ export async function queryEach<R = ClaudeQueryResult>(
   return out;
 }
 
-type Attempt = { kind: 'done'; result: ClaudeQueryResult } | { kind: 'enoent' };
+type QueryOutcome = { ok: true; empty: boolean } | Extract<ClaudeQueryResult, { ok: false }>;
+type Attempt = { kind: 'done'; result: QueryOutcome } | { kind: 'enoent' };
+
+// Used only within one query; neither the identity nor the verbose report leaves this module.
+function queryIdentity(data: unknown): string | undefined {
+  if (!isPlainObject(data) || !isPlainObject(data.oauthAccount)) return undefined;
+  const { accountUuid, organizationUuid } = data.oauthAccount;
+  if (typeof accountUuid !== 'string' || !accountUuid || typeof organizationUuid !== 'string' || !organizationUuid) return undefined;
+  return JSON.stringify([accountUuid, organizationUuid]);
+}
 
 /**
  * Runs `claude` with ARGS for the account (a local command: no prompt is sent), env usageEnv(dir, explicit,
@@ -261,10 +272,11 @@ type Attempt = { kind: 'done'; result: ClaudeQueryResult } | { kind: 'enoent' };
  * when a claude.cmd is on PATH, retries through the shell as a fixed command line. If the PATH commands are missing,
  * tries options.fallback's binary directly without a shell. All attempts share timeoutMs and the abort signal;
  * cancellation or an exhausted deadline starts no further child. Only a child it started and still running is ever
- * signalled (the shell fallback's tree through killTree). Stdout is limited to 1 MiB and must be a JSON result:
- * is_error true or a subtype other than 'success' → failed with the trimmed
- * result text (200 characters) as detail. After a successful run it checks that the account's own usage cache was
- * fetched during this run (see ClaudeUsageFailure).
+ * signalled (the shell fallback's tree through killTree). Stdout is limited to 1 MiB of bytes. A normal exit and a
+ * terminal successful local `usage` result must accompany one valid assistant usage report. Missing/null limits
+ * are unavailable; [] is valid empty data. No version probing or cache-only downgrade. Raw output is never returned.
+ * Success also requires stable account/organization identity and an owned, recent cache with matching emptiness.
+ * Recent official cache hits need not advance fetchedAtMs (see ClaudeUsageFailure).
  */
 export async function queryClaudeUsage(dir: string, explicit: boolean, options: ClaudeQueryOptions = {}): Promise<ClaudeQueryResult> {
   const spawn: ClaudeUsageSpawn = options.spawn ?? ((c, a, o) => childProcess.spawn(c, a, o));
@@ -272,6 +284,7 @@ export async function queryClaudeUsage(dir: string, explicit: boolean, options: 
   const now = options.now ?? Date.now;
   const timeoutMs = options.timeoutMs ?? 30000;
   const startedAt = now();
+  const identity = queryIdentity(readInfo(dir, explicit));
   const base: childProcess.SpawnOptions = {
     env: usageEnv(dir, explicit, process.env, options.env),
     cwd: os.homedir(),
@@ -293,25 +306,53 @@ export async function queryClaudeUsage(dir: string, explicit: boolean, options: 
   }
   if (a.kind === 'enoent') return { ok: false, reason: 'cliMissing' };
   if (!a.result.ok) return a.result;
-  const own = ownCache(readInfo(dir, explicit));
+  const info = readInfo(dir, explicit);
+  if (!identity || queryIdentity(info) !== identity) return { ok: false, reason: 'noUsage' };
+  const own = ownCache(info);
   if (!own) return { ok: false, reason: 'noUsage' };
-  // The CLI answers from its old cache without an error when the fetch fails (e.g. offline)
-  return own.checkedAt >= startedAt - REFRESH_TOLERANCE_MS ? { ok: true } : { ok: false, reason: 'notRefreshed' };
+  const completedAt = now();
+  if (own.checkedAt < startedAt - REFRESH_TOLERANCE_MS || own.checkedAt > completedAt + REFRESH_TOLERANCE_MS) {
+    return { ok: false, reason: 'notRefreshed' };
+  }
+  const utilization = own.cache.utilization;
+  if (!isPlainObject(utilization)) return { ok: false, reason: 'noUsage' };
+  const emptyCache = Array.isArray(utilization.limits) && utilization.limits.length === 0;
+  if (a.result.empty ? !emptyCache : !parseUsageCache(info, completedAt)) return { ok: false, reason: 'noUsage' };
+  return { ok: true };
 }
 
-// The JSON result of the print-mode run; its text is never returned except as a short error detail
-function outcome(stdout: string): ClaudeQueryResult {
+// Inspect only fields needed for quota validation; unrelated experimental report fields are ignored.
+function outcome(stdout: string): QueryOutcome {
   let data: unknown;
   try {
     data = JSON.parse(stdout);
   } catch {
-    return { ok: false, reason: 'failed', detail: truncate(stdout.trim()) || undefined };
+    return { ok: false, reason: 'failed' };
   }
-  if (!isPlainObject(data)) return { ok: false, reason: 'failed' };
-  if (data.is_error === true || data.subtype !== 'success') {
-    return { ok: false, reason: 'failed', detail: typeof data.result === 'string' && data.result.trim() ? truncate(data.result.trim()) : undefined };
+  const messages = Array.isArray(data) ? data : [data];
+  const terminal = messages.at(-1);
+  if (!isPlainObject(terminal) || terminal.type !== 'result' || terminal.is_error !== false
+    || terminal.subtype !== 'success' || terminal.local_command !== 'usage') return { ok: false, reason: 'failed' };
+  let report: unknown;
+  let reports = 0;
+  for (const message of messages.slice(0, -1)) {
+    if (!isPlainObject(message) || message.type === 'result') return { ok: false, reason: 'failed' };
+    if (message.type === 'assistant' && Object.hasOwn(message, 'usage_report')) {
+      report = message.usage_report;
+      reports++;
+    }
   }
-  return { ok: true };
+  if (reports === 0) return { ok: false, reason: 'noUsage' };
+  if (reports !== 1 || !isPlainObject(report)) return { ok: false, reason: 'failed' };
+  const rates = report.rate_limits;
+  if (rates === undefined || rates === null) return { ok: false, reason: 'noUsage' };
+  if (!isPlainObject(rates)) return { ok: false, reason: 'failed' };
+  const limits = rates.limits;
+  if (limits === undefined || limits === null) return { ok: false, reason: 'noUsage' };
+  if (!Array.isArray(limits) || !limits.every((row) => isPlainObject(row)
+    && typeof row.kind === 'string' && typeof row.percent === 'number' && Number.isFinite(row.percent)
+    && (row.resets_at === null || resetSeconds(row.resets_at) !== undefined))) return { ok: false, reason: 'failed' };
+  return { ok: true, empty: limits.length === 0 };
 }
 
 function attempt(
@@ -329,6 +370,7 @@ function attempt(
     }
     let settled = false;
     let out = '';
+    let outputBytes = 0;
     const stdout = child.stdout;
 
     const finish = (a: Attempt): void => {
@@ -348,8 +390,9 @@ function attempt(
       resolve(a);
     };
     const onData = (chunk: string): void => {
-      out += chunk;
-      if (out.length > MAX_OUTPUT) finish({ kind: 'done', result: { ok: false, reason: 'failed', detail: 'output too long' } });
+      outputBytes += Buffer.byteLength(chunk, 'utf8');
+      if (outputBytes > MAX_OUTPUT) finish({ kind: 'done', result: { ok: false, reason: 'failed', detail: 'output too long' } });
+      else out += chunk;
     };
     const onError = (e: NodeJS.ErrnoException): void => {
       finish(e.code === 'ENOENT' ? { kind: 'enoent' } : { kind: 'done', result: { ok: false, reason: 'failed', detail: truncate(e.message) } });
@@ -357,7 +400,7 @@ function attempt(
     // 'exit' can arrive before the last stdout chunk; 'close' would wait for every stdio stream, so read what is left first
     const onExit = (code: number | null, signal: NodeJS.Signals | null): void => {
       const done = (): void => {
-        if (code !== 0 && !out.trim()) finish({ kind: 'done', result: { ok: false, reason: 'failed', detail: String(code ?? signal) } });
+        if (code !== 0 || signal !== null) finish({ kind: 'done', result: { ok: false, reason: 'failed', detail: String(code ?? signal) } });
         else finish({ kind: 'done', result: outcome(out) });
       };
       if (stdout && !stdout.readableEnded) stdout.once('end', done);
