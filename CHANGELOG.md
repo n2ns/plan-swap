@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- A state file that exists but cannot be read (permissions, a lock, an I/O error) no longer gets rewritten with a single key by the next change, which used to drop every registered account, alias and usage observation; the change now fails with the read error instead. A missing or half-written file still reads as empty.
+
 ### Changed
 
 - The recommendation card on the Codex tab now has a **Switch** button like the Claude one; it selects the recommended account the same way the account card's button does, with the usual restart afterwards.

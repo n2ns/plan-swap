@@ -5,7 +5,7 @@ import { AccountStore } from './accounts';
 import { claudeCredentialOverrides, oneDriveHome, pathVarsWithSpaces } from './environmentWarnings';
 import { AccountsPanel, VIEW_ID, claudePanelSource, type PanelSource } from './accountsPanel';
 import { LabelStore, labelFor } from './labels';
-import { FileMemento } from './fileState';
+import { FileMemento, STATE_JSON } from './fileState';
 import { RecommendExclusions } from './recommend';
 import { readAccountInfo, samePath, setClaudeSettingEnv } from './paths';
 import { ensureCodexLinks, isSharedCodexAccount } from './codex/codexShare';
@@ -129,7 +129,13 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   const store = new AccountStore(state);
   const claudeLabels = new LabelStore(state, 'claude.labels');
   const claudeExclusions = new RecommendExclusions(state, 'claude.recommendExcluded');
-  await store.syncWithDisk(claudeLabels, claudeExclusions);
+  // An existing state file that cannot be read makes every write fail (FileMemento never rewrites it from an empty
+  // state); say which file and why, and activate with what can be read instead of failing activation silently
+  try {
+    await store.syncWithDisk(claudeLabels, claudeExclusions);
+  } catch (err) {
+    void vscode.window.showErrorMessage(t('ext.stateUnreadable', { file: STATE_JSON(), error: err instanceof Error ? err.message : String(err) }));
+  }
   const codexLabels = new LabelStore(state, 'codex.labels');
   const codexExclusions = new RecommendExclusions(state, 'codex.recommendExcluded');
   const usageHistory = new CodexUsageHistory(state);

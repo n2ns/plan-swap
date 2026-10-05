@@ -62,6 +62,29 @@ describe('FileMemento', () => {
     await m.update('k', 'v');
     assert.deepEqual(JSON.parse(read(file)), { k: 'v' });
   });
+  test('a file that exists but cannot be read makes update reject and leaves the file alone', async () => {
+    // A directory at the path: readFileSync fails with EISDIR on every platform
+    const dirAtPath = path.join(tmp.home, '.config', 'planswap', 'unreadable-dir.json');
+    fs.mkdirSync(dirAtPath, { recursive: true });
+    const m = fresh('unreadable-dir.json');
+    assert.equal(m.get('k'), undefined, 'reads still tolerate the error');
+    await assert.rejects(m.update('k', 'v'), (e: NodeJS.ErrnoException) => e.code === 'EISDIR');
+    assert.ok(fs.statSync(dirAtPath).isDirectory(), 'nothing was written over the path');
+    assert.deepEqual(fs.readdirSync(path.dirname(dirAtPath)).filter((n) => n.startsWith('.state.')), [], 'no temp file left behind');
+    // Permission denied (not meaningful for root or on Windows)
+    if (process.platform !== 'win32' && process.getuid?.() !== 0) {
+      const file = path.join(tmp.home, '.config', 'planswap', 'unreadable-perm.json');
+      fs.writeFileSync(file, JSON.stringify({ accounts: [{ name: 'work', dir: '/x' }] }));
+      fs.chmodSync(file, 0o000);
+      try {
+        await assert.rejects(fresh('unreadable-perm.json').update('k', 'v'), (e: NodeJS.ErrnoException) => e.code === 'EACCES');
+      } finally {
+        fs.chmodSync(file, 0o600);
+      }
+      assert.deepEqual(JSON.parse(read(file)), { accounts: [{ name: 'work', dir: '/x' }] }, 'the accounts survived');
+    }
+  });
+
   test('update merges into the file as it is on disk, so keys written by another process meanwhile are kept', async () => {
     const m = fresh('i.json');
     await m.update('accounts', [{ name: 'x', dir: '/tmp/x' }]);

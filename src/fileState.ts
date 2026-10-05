@@ -19,13 +19,30 @@ type State = Record<string, unknown>;
 export class FileMemento implements Memento {
   constructor(private readonly file: string = STATE_JSON()) {}
 
-  /** Tolerates a missing, half-written or non-object file (treated as empty) */
-  private read(): State {
+  /** Tolerates a missing, half-written or non-object file (treated as empty); any other read error (permissions, a
+   *  locked file, a directory at the path, I/O) is thrown, so an update never rewrites the file from an empty state */
+  private readOrThrow(): State {
+    let text: string;
+    try {
+      text = fs.readFileSync(this.file, 'utf8');
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === 'ENOENT') return {};
+      throw e;
+    }
     try {
       // A byte order mark (the file edited in Notepad or Windows PowerShell 5.1) would otherwise read as empty, and the
       // next update would drop every account
-      const parsed: unknown = JSON.parse(stripBom(fs.readFileSync(this.file, 'utf8')));
+      const parsed: unknown = JSON.parse(stripBom(text));
       return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as State) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  /** Reads never throw: an unreadable file reads as empty */
+  private read(): State {
+    try {
+      return this.readOrThrow();
     } catch {
       return {};
     }
@@ -44,9 +61,9 @@ export class FileMemento implements Memento {
   }
 
   /** undefined deletes the key; re-reads the file, then rewrites the whole object atomically (pretty JSON; temp file
-   *  0600 + rename, directory 0700) */
+   *  0600 + rename, directory 0700). Rejects without writing when the file exists but cannot be read */
   async update(key: string, value: unknown): Promise<void> {
-    const entries = Object.entries(this.read()).filter(([k]) => k !== key);
+    const entries = Object.entries(this.readOrThrow()).filter(([k]) => k !== key);
     if (value !== undefined) entries.push([key, value]);
     this.write(Object.fromEntries(entries));
   }
