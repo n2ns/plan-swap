@@ -39,6 +39,9 @@ Read the relevant sections before changing their behavior or contracts; a task d
 | Dependencies, building, packaging or editor troubleshooting | [Development](docs/development.md). |
 | Frontend verification or real-account acceptance | [Manual verification](docs/manual-verification.md); [TODO](TODO.md) for pending work. |
 | Sidebar checks in a real editor with fake accounts | The `devhost-test` skill ([SKILL.md](.agents/skills/devhost-test/SKILL.md)). |
+| Layout check of a frontend change at every width and locale | The `preview-verify` skill ([SKILL.md](.agents/skills/preview-verify/SKILL.md)). |
+| Adding or changing a user-visible string | The `add-string` skill ([SKILL.md](.agents/skills/add-string/SKILL.md)). |
+| Releasing a version | The `release` skill ([SKILL.md](.agents/skills/release/SKILL.md)); the tag push needs explicit authorization. |
 | Upgrading official clients or editor integration | The numbered facts in [Claude Code research](docs/research/claude-code.md#facts) / [Codex research](docs/research/codex.md#facts) (Windows: [Windows research](docs/research/windows.md)); re-verify the affected facts. |
 
 ## Test and release safety

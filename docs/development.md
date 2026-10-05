@@ -85,6 +85,8 @@ These checks use synthetic theme colors and a fake host. They verify layout and 
 
 ### Release
 
+The `release` skill (`.agents/skills/release/`) walks through the steps below; the `add-string` skill (`.agents/skills/add-string/`) lists what a new or changed user-visible string touches.
+
 - At the version bump, `## [Unreleased]` in `CHANGELOG.md` is renamed to `## [x.y.z] - <date>`. `test/changelog.test.ts` compares every section in the newest `v*` tag's `CHANGELOG.md` with the current file; it is skipped without git or tags (e.g. a shallow CI checkout).
 - `npm run package` (`vsce package`) produces the `.vsix`; `.vscodeignore` excludes sources, tests, scripts, docs and sourcemaps, and keeps `package.nls*.json`. The user installs it with "Extensions: Install from VSIX..." in a WSL window or a local Windows window.
 
