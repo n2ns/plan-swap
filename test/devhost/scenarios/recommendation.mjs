@@ -51,10 +51,10 @@ export async function run(ctx) {
   writeSettings();
   await sleep(1000);
 
-  // Codex: effective default 15% left → Work, Terminal only; Team (limit reached) never
+  // Codex: effective default 15% left → Work with Switch + Terminal; Team (limit reached) never
   await sb.tab(ctx, 'codex');
   d = await sb.waitFor(ctx, (x) => x.mode === 'codex' && !!x.card);
-  await step('codex card recommends Work with Terminal only', d.card?.title === 'Recommended: work' && JSON.stringify(d.card?.buttons) === JSON.stringify(['terminal:Terminal']) && /80% remaining · 7-day limit 60% remaining/.test(d.card?.text ?? ''), d.card);
+  await step('codex card recommends Work with Switch + Terminal', d.card?.title === 'Recommended: work' && JSON.stringify(d.card?.buttons) === JSON.stringify(['switch:Switch', 'terminal:Terminal']) && /80% remaining · 7-day limit 60% remaining/.test(d.card?.text ?? ''), d.card);
   await step('codex rows: default effective, three rows', d.rows.length === 3 && d.rows[0].dir === dirs.codexDefault && d.rows[0].current, short(d.rows));
   await sb.shot(ctx, '07-codex-dark.png');
   await sb.rowAction(ctx, dirs.codexWork, 'recommendExclude');

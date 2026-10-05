@@ -698,9 +698,9 @@ class Page {
   }
 
   // Recommendation card (the host decides, recommend in src/recommend.ts): the account's general windows as the row
-  // shows them (the display settings may hide some), when it was observed, and the actions. Codex gets no Switch
-  // here: applying a Codex selection restarts the editor's server, which is not what someone whose limit just ran out
-  // wants first. The card carries no data-dir: focus restore must not take it for the recommended account's row
+  // shows them (the display settings may hide some), when it was observed, and the actions Switch (the same message
+  // as the row's button, so Codex gets its usual selection and restart flow) and Terminal. The card carries no
+  // data-dir: focus restore must not take it for the recommended account's row
   private renderRecommendation(): HTMLElement | null {
     const a = this.tab.recommended !== undefined && !this.tab.hideRecommendation ? this.tab.accounts.find((x) => x.dir === this.tab.recommended) : undefined;
     if (!a) return null;
@@ -711,14 +711,13 @@ class Page {
       return `${windowDuration(w)} ${t(display === 'used' ? 'usage.used' : 'usage.remaining', { percent })}`;
     });
     const actions = h('div', { class: 'banner-actions' });
-    if (this.mode === 'claude') {
-      actions.append(onClick(h('vscode-button', { icon: 'arrow-swap', 'data-action': 'switch' }, t('recommend.switch')), (e) => {
-        if (e.detail > 1) return;
-        this.lastSwitchAt = Date.now();
-        this.send({ type: 'switch', dir: a.dir });
-      }));
-    }
-    actions.append(onClick(h('vscode-button', { secondary: true, icon: 'terminal', 'data-action': 'terminal' }, t('recommend.terminal')), () => this.send({ type: 'terminal', dir: a.dir })));
+    // Each button carries a tooltip saying what it does with the recommended account (switch vs. a terminal without switching)
+    actions.append(onClick(h('vscode-button', { icon: 'arrow-swap', 'data-action': 'switch', title: t(`${this.mode}.recommendSwitchTitle`, { name: a.label }) }, t('recommend.switch')), (e) => {
+      if (e.detail > 1) return;
+      this.lastSwitchAt = Date.now();
+      this.send({ type: 'switch', dir: a.dir });
+    }));
+    actions.append(onClick(h('vscode-button', { secondary: true, icon: 'terminal', 'data-action': 'terminal', title: t(`${this.mode}.recommendTerminalTitle`, { name: a.label }) }, t('recommend.terminal')), () => this.send({ type: 'terminal', dir: a.dir })));
     return h(
       'div',
       { class: 'banner recommend', role: 'region', 'aria-label': t('recommend.title', { name: a.label }) },

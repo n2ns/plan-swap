@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- The recommendation card on the Codex tab now has a **Switch** button like the Claude one; it selects the recommended account the same way the account card's button does, with the usual restart afterwards.
+- The recommendation card's **Switch** and **Terminal** buttons now have tooltips saying what each does with the recommended account.
+
 ## [0.3.4] - 2026-10-05
 
 ### Fixed

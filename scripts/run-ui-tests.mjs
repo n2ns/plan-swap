@@ -602,9 +602,7 @@ async function recommendation(locale, width) {
     assert.equal(parts[1], `${durations[locale][1]} ${remaining[locale](46)}`, `7-day part at ${where}`);
     assert.equal(parts[2], updatedNow[locale], `observation time at ${where}`);
     assert.ok(!data.text.includes('Fable'), `model-specific windows stay out of the card at ${where}`);
-    const expected = mode === 'claude'
-      ? [{ action: 'switch', icon: 'arrow-swap', label: recommendSwitch[locale], secondary: false }, { action: 'terminal', icon: 'terminal', label: recommendTerminal[locale], secondary: true }]
-      : [{ action: 'terminal', icon: 'terminal', label: recommendTerminal[locale], secondary: true }];
+    const expected = [{ action: 'switch', icon: 'arrow-swap', label: recommendSwitch[locale], secondary: false }, { action: 'terminal', icon: 'terminal', label: recommendTerminal[locale], secondary: true }];
     assert.deepEqual(data.buttons.map(({ action, icon, label, secondary }) => ({ action, icon, label, secondary })), expected, `card buttons at ${where}`);
     for (const b of data.buttons) {
       assert.equal(b.inside, true, `${b.action} button outside the card at ${where}`);
