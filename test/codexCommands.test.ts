@@ -646,10 +646,32 @@ describe('panel message handlers', () => {
       await h.handle({ type: 'add', mode: 'codex', name: a.name, shared: true });
       assert.ok(h.store.find(a.name));
       assert.equal(isSharedCodexAccount(a.dir), false);
-      assert.match(String(warnings.mock.calls[0].arguments[0]), /^Account kept-unlinked was added\. Linking reported: /);
+      assert.match(String(warnings.mock.calls[0].arguments[0]), /^Account kept-unlinked was added but is not linked to the default account: /);
       assert.match(String(warnings.mock.calls[0].arguments[0]), /sessions/);
     } finally {
       h.dispose();
+    }
+  });
+
+  test('adding a linked account whose config.toml is refused says it was added and explains the refusal', LINUX_ONLY, async (ctx) => {
+    const a = named('refused-config');
+    const cfg = path.join(fxHome, '.codex', 'config.toml');
+    const before = fs.existsSync(cfg) ? read(cfg) : undefined;
+    fs.mkdirSync(path.dirname(cfg), { recursive: true });
+    fs.writeFileSync(cfg, 'forced_login_method = "chatgpt"\n');
+    const h = await harness();
+    const warnings = modal(ctx, () => undefined);
+    try {
+      await h.handle({ type: 'add', mode: 'codex', name: a.name, shared: true });
+      assert.equal(isSharedCodexAccount(a.dir), true);
+      assert.equal(String(warnings.mock.calls[0].arguments[0]), t('share.addNotes', {
+        name: a.name,
+        notes: t('share.r.configSignsOut', { key: 'forced_login_method' }),
+      }));
+    } finally {
+      h.dispose();
+      if (before === undefined) fs.rmSync(cfg);
+      else fs.writeFileSync(cfg, before);
     }
   });
 

@@ -211,7 +211,7 @@ describe('panel message handlers (Claude)', () => {
       await h.handle({ type: 'add', mode: 'claude', name: 'kept', shared: true });
       assert.ok(h.store.find('kept'));
       assert.equal(isSharedClaudeAccount(dir), false);
-      assert.match(String(warning.mock.calls[0].arguments[0]), /^Account kept was added\. Linking reported: /);
+      assert.match(String(warning.mock.calls[0].arguments[0]), /^Account kept was added but is not linked to the default account: /);
       assert.match(String(warning.mock.calls[0].arguments[0]), /projects/);
     } finally {
       h.dispose();

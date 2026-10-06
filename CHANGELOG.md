@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- A linked Codex account now gets the default `config.toml` unless it sets `forced_login_method`, `forced_chatgpt_workspace_id` or `sqlite_home`. Settings such as `mcp_oauth_credentials_store`, `cli_auth_credentials_store`, `model_provider`, `profile`, `[model_providers]`, `[profiles]` or the base URLs were mistaken for identity settings, so the account was left without any configuration; credentials stay separate per account either way. A new independent account likewise gets its copy of `config.toml` unless one of those three settings is set; `model_provider`, `log_dir` and `[model_providers]` no longer prevent the copy.
+- When a linked account is added, the notification now says whether it was linked to the default account, and a `config.toml` that is not linked is explained: which setting caused it, what that setting would do, and that the account runs with Codex's built-in settings until the setting is removed and the account is re-linked.
 - The Codex tab no longer recommends another account while a selected account waits for the server restart; the card used to suggest the next-best account, and its **Switch** button could replace a better selection.
 
 ## [0.3.5] - 2026-10-06

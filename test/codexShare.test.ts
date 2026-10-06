@@ -8,6 +8,7 @@ import {
   isSharedCodexAccount, makeCodexIndependent, migrateCodexToShared,
 } from '../src/codex/codexShare';
 import { codexAccountDir, deleteCodexDir } from '../src/codex/codexPaths';
+import { describeShareReport } from '../src/shareReport';
 import { sameRealPath } from '../src/paths';
 import { assertTempHome, makeTempHome, assertMode, LINUX_ONLY, onWindows, SHARING, read, snapshot, type TempHome } from './helpers';
 
@@ -182,7 +183,7 @@ describe('ensureCodexLinks', SHARING, () => {
     assert.equal(read(path.join(b, '.tmp')), 'file');
   });
 
-  test('config.toml is refused for every identity key, table and unreadable default', () => {
+  test('config.toml is refused for every identity key and an unreadable default', () => {
     const acc = newAccount('a');
     const cfg = path.join(def, 'config.toml');
     const refused = (text: string): boolean => {
@@ -195,20 +196,30 @@ describe('ensureCodexLinks', SHARING, () => {
       assert.ok(refused(`model = "gpt"\n${key} = "x"\n`), key);
       assert.ok(!exists(path.join(acc, 'config.toml')), key);
     }
-    assert.ok(refused('[model_providers.corp]\nbase_url = "x"\n'));
-    assert.ok(refused('[profiles.work]\nmodel = "x"\n'));
-    assert.ok(refused('profiles.work.model = "x"\n'));
-    assert.ok(refused('model_providers = { corp = { base_url = "x" } }\n'));
-    assert.ok(refused("'model_provider' = \"x\"\n"));
+    write(cfg, 'sqlite_home = "/srv/codex"\n');
+    assert.equal(ensureCodexLinks(acc).refusedNotes?.['config.toml'], t('share.r.configSqliteHome'));
+    assert.ok(refused("'forced_login_method' = \"x\"\n"));
+    assert.ok(refused('forced_chatgpt_workspace_id = ["a", "b"]\n'));
     for (const key of ['forced_login_method', 'forced_chatgpt_workspace_id']) {
       assert.ok(refused(`instructions = """\nPrint \\""" as an example:\n[example]\n"""\n${key} = "x"\n`));
       assert.ok(!exists(path.join(acc, 'config.toml')), key);
     }
+    // Provider and profile settings and the credential stores only choose how Codex runs: shareable
+    for (const text of [
+      'model_provider = "corp"\n[model_providers.corp]\nbase_url = "x"\n',
+      'profile = "work"\n[profiles.work]\nmodel = "x"\n',
+      'cli_auth_credentials_store = "file"\nmcp_oauth_credentials_store = "file"\n',
+      'chatgpt_base_url = "x"\nopenai_base_url = "x"\nlog_dir = "/tmp/x"\noss_provider = "ollama"\n',
+    ]) {
+      assert.ok(!refused(text), text);
+      assert.ok(isLinkTo(path.join(acc, 'config.toml'), cfg), text);
+      fs.unlinkSync(path.join(acc, 'config.toml'));
+    }
     // Not top-level / inside a multi-line value: shareable
-    assert.ok(!refused('[tui]\nprofile = "x"\n'));
+    assert.ok(!refused('[tui]\nsqlite_home = "x"\n'));
     assert.ok(isLinkTo(path.join(acc, 'config.toml'), cfg));
     fs.unlinkSync(path.join(acc, 'config.toml'));
-    assert.ok(!refused('notify = [\n  "profile = 1",\n]\ninstructions = """\nmodel_provider = "x"\n"""\n'));
+    assert.ok(!refused('notify = [\n  "sqlite_home = 1",\n]\ninstructions = """\nforced_login_method = "x"\n"""\n'));
 
     // Unreadable as text (a folder)
     fs.rmSync(cfg);
@@ -216,6 +227,7 @@ describe('ensureCodexLinks', SHARING, () => {
     fs.mkdirSync(cfg);
     const r = ensureCodexLinks(acc);
     assert.ok(r.refused.includes('config.toml'));
+    assert.equal(r.refusedNotes?.['config.toml'], t('share.r.configUnreadable'));
     assert.ok(!exists(path.join(acc, 'config.toml')));
   });
 
@@ -225,15 +237,20 @@ describe('ensureCodexLinks', SHARING, () => {
     write(cfg, 'model = "gpt"\n');
     ensureCodexLinks(acc);
     assert.ok(isLinkTo(path.join(acc, 'config.toml'), cfg));
-    write(cfg, 'model = "gpt"\nmodel_provider = "corp"\n');
+    write(cfg, 'model = "gpt"\nforced_login_method = "chatgpt"\n');
     const r = ensureCodexLinks(acc);
     assert.deepEqual(r.refused, ['config.toml']);
     assert.ok(!exists(path.join(acc, 'config.toml')), 'the link is removed, no copy is made');
-    assert.equal(read(cfg), 'model = "gpt"\nmodel_provider = "corp"\n');
+    assert.equal(read(cfg), 'model = "gpt"\nforced_login_method = "chatgpt"\n');
+    // The account is left without config.toml: the notice names the key and what it does
+    assert.deepEqual(r.refusedNotes, { 'config.toml': t('share.r.configSignsOut', { key: 'forced_login_method' }) });
+    assert.equal(describeShareReport(r), t('share.r.configSignsOut', { key: 'forced_login_method' }));
     assert.ok(isLinkTo(path.join(acc, 'AGENTS.md'), path.join(def, 'AGENTS.md')));
     // A real file or a link elsewhere in the account is not touched
     write(path.join(acc, 'config.toml'), 'model = "own"\n');
-    assert.deepEqual(ensureCodexLinks(acc).refused, ['config.toml']);
+    const own = ensureCodexLinks(acc);
+    assert.deepEqual(own.refused, ['config.toml']);
+    assert.equal(own.refusedNotes, undefined, 'an account with its own config.toml gets the plain refusal');
     assert.equal(read(path.join(acc, 'config.toml')), 'model = "own"\n');
   });
 
@@ -449,11 +466,11 @@ describe('migrateCodexToShared', SHARING, () => {
 
   test('an account config.toml with identity keys is never moved into a default that lacks one', () => {
     const acc = newAccount('keyed');
-    write(path.join(acc, 'config.toml'), 'model_provider = "x"\n');
+    write(path.join(acc, 'config.toml'), 'forced_chatgpt_workspace_id = "x"\n');
     migrateCodexToShared(acc, 'keyed', fakeProc({}));
-    assert.equal(read(path.join(acc, 'config.toml')), 'model_provider = "x"\n');
+    assert.equal(read(path.join(acc, 'config.toml')), 'forced_chatgpt_workspace_id = "x"\n');
     assert.ok(!fs.lstatSync(path.join(acc, 'config.toml')).isSymbolicLink());
-    assert.ok(!read(path.join(def, 'config.toml')).includes('model_provider'));
+    assert.ok(!read(path.join(def, 'config.toml')).includes('forced_chatgpt_workspace_id'));
   });
 
   test('merges into the default dir, keeps identity and untouched entries, ends shared', () => {
@@ -565,7 +582,7 @@ describe('migrateCodexToShared', SHARING, () => {
   });
 
   test('config.toml stays when the default config cannot be shared; missing history created 0600', () => {
-    write(path.join(def, 'config.toml'), 'model_provider = "corp"\n');
+    write(path.join(def, 'config.toml'), 'sqlite_home = "/srv/codex"\n');
     const acc = codexAccountDir('a');
     write(path.join(acc, 'config.toml'), 'model = "a"\n');
     write(path.join(acc, 'history.jsonl'), '{"a":1}');
@@ -656,12 +673,12 @@ describe('copyCodexIndependent', SHARING, () => {
   });
 
   test('identity keys keep config.toml out (skipped with a reason)', () => {
-    write(path.join(def, 'config.toml'), 'model_provider = "corp"\n');
+    write(path.join(def, 'config.toml'), 'forced_chatgpt_workspace_id = "corp"\n');
     const acc = codexAccountDir('a');
     const r = copyCodexIndependent(acc);
     assert.deepEqual(r.copied, []);
     assert.equal(r.skipped.length, 1);
-    assert.match(r.skipped[0].reason, /model_provider/);
+    assert.match(r.skipped[0].reason, /forced_chatgpt_workspace_id/);
     assert.ok(!exists(path.join(acc, 'config.toml')));
     assertMode(acc, '700');
   });

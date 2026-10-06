@@ -528,7 +528,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       if (shared) {
         // The folder may already exist (kept from an earlier removal, its terminal possibly still open)
         const notes = describeShareReport(ensureCodexLinks(account.dir, { ...linkOptions, busy: linkBusy(account) }));
-        if (notes) void vscode.window.showWarningMessage(t('share.addNotes', { name, notes }));
+        if (notes) void vscode.window.showWarningMessage(t(isSharedCodexAccount(account.dir) ? 'share.addNotes' : 'share.addNotLinked', { name, notes }));
       } else {
         const result = copyCodexIndependent(account.dir);
         // "Source missing" / "target exists" are normal and not reported; only blocked or unreadable files are

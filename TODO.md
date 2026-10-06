@@ -27,8 +27,15 @@ is still missing. Remove an item once it is done or decided.
   account). Verify plugins still install and load in a shared account.
 - **Codex memories stay per account** ([Codex research, fact 17](docs/research/codex.md#facts)). Revisit
   if Codex adds a memory location option.
-- **Refusal reasons are not specific.** When `settings.json` / `config.toml` is not shared for safety, the report only
-  names the file, not the identity key that caused it.
+- **Is `sqlite_home` in the default `config.toml` really unsafe to share?** It is still on the `config.toml` refusal
+  list ([Codex design 8.6](docs/codex-design.md#86-shared-and-independent-accounts)) because, read from the source only
+  ([fact 27](docs/research/codex.md#facts)), every linked account would then use one `memories_1.sqlite` (and
+  `logs_2.sqlite`) while each keeps its own `memories/` folder (fact 17). Not checked at runtime. Run Codex in temporary
+  `CODEX_HOME`s with test accounts (never real ones) sharing one `sqlite_home`, and see whether memories stay consistent
+  and Codex reports errors; then keep the refusal or drop `sqlite_home` from `CODEX_IDENTITY_CONFIG_KEYS`. A refusal
+  leaves the account without any `config.toml`, so a needless one is costly.
+- **Claude refusal reasons are not specific.** When `settings.json` is not shared for safety, the report only names
+  the file, not the identity key that caused it (Codex `config.toml` refusals name the key since `refusedNotes`).
 - **Codex usage limits** (per-account observations and the status bar) are not yet accepted with real accounts, on WSL or
   Windows (`codex.cmd` fallback, the binary bundled with the Codex extension when `codex` is not on PATH), including switches, editor restarts, reset/24-hour expiry and sign-in changes. Run
   [the usage checks](docs/manual-verification.md#usage-limits-sign-in-tip-and-duplicate-sign-ins); re-verify the

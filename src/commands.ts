@@ -202,7 +202,7 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
         // An existing folder that could not be linked stays independent: it only gains the default MCP servers
         mirrorClaudeJsonInto(defaultJson(), account.dir);
         const notes = describeShareReport(report);
-        if (notes) void vscode.window.showWarningMessage(t('share.addNotes', { name, notes }));
+        if (notes) void vscode.window.showWarningMessage(t(isSharedClaudeAccount(account.dir) ? 'share.addNotes' : 'share.addNotLinked', { name, notes }));
       } else {
         copyClaudeIndependent(defaultJson(), account.dir);
       }

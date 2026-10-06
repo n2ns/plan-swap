@@ -16,12 +16,12 @@ export interface CodexAccount { name: string; dir: string }
 
 // Seed files copied into an independent account (AGENTS.md and the rest are handled by codexShare.copyCodexIndependent)
 const SEED_FILES = ['config.toml'];
-// Top-level keys in the seed config that must not be carried into a new account dir; with BLOCKED_TABLE they are the
-// default `roots` of blockedConfigReason (codexShare passes its own, longer identity list)
-const BLOCKED_TOP_KEYS = ['forced_login_method', 'forced_chatgpt_workspace_id', 'sqlite_home', 'log_dir', 'model_provider'];
-// Table that must not be carried over in any form ([model_providers], [model_providers.x], dotted keys, inline tables)
-const BLOCKED_TABLE = 'model_providers';
-const BLOCKED_ROOTS = [...BLOCKED_TOP_KEYS, BLOCKED_TABLE];
+// Top-level keys that keep the default config.toml out of another account, copied (copyCodexSeed) or linked
+// (codexShare); the default `roots` of blockedConfigReason. The forced_* sign-in restrictions make Codex sign out every
+// account whose sign-in does not match them; sqlite_home would put every account's memories database in one place.
+// Other keys, provider and profile tables and the credential stores included, only choose how Codex runs, and
+// credentials stay per CODEX_HOME (Codex research fact 27).
+export const CODEX_IDENTITY_CONFIG_KEYS = ['forced_login_method', 'forced_chatgpt_workspace_id', 'sqlite_home'];
 const DAEMON_PID_FILES = ['daemon.pid', 'app-server.pid', 'daemon-updater.pid', 'app-server-updater.pid'];
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -229,10 +229,9 @@ function scanValue(s: string, st: ValueState): void {
  * lines are ignored; keys after any other table header are not top-level. Lines inside a multi-line value (array,
  * inline table, """ or ''' string) are skipped, so they are never read as keys or headers; basic-string escapes are
  * respected when finding the closing delimiter, literal strings have none.
- * roots: the blocked first segments; default BLOCKED_TOP_KEYS + BLOCKED_TABLE (seed copy). codexShare passes
- * CODEX_IDENTITY_CONFIG_KEYS + CODEX_IDENTITY_CONFIG_TABLES.
+ * roots: the blocked first segments; default CODEX_IDENTITY_CONFIG_KEYS (codexShare passes one at a time).
  */
-export function blockedConfigReason(text: string, roots: readonly string[] = BLOCKED_ROOTS): string | undefined {
+export function blockedConfigReason(text: string, roots: readonly string[] = CODEX_IDENTITY_CONFIG_KEYS): string | undefined {
   let topLevel = true;
   const st: ValueState = { depth: 0 };
   // A byte order mark would hide a blocked key on the first line

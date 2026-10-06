@@ -53,6 +53,7 @@ export interface ShareReport {
   created: string[];    // entries created empty in the default dir
   conflicts: string[];  // entries the account has as a real file/dir or a link elsewhere; left untouched
   refused: string[];    // entries refused for safety ('settings.json' when the default has identity keys or is not a readable JSON object)
+  refusedNotes?: Record<string, string>; // localized explanation per refused entry, shown instead of the plain refusal
   copied?: string[];    // config files copied once instead of linked (Windows without file-link privilege); they no longer follow the default
   noPrivilege?: string[]; // single-file entries that could not be linked because Windows refuses file symlinks (Developer Mode off); left independent
   busy?: string[];      // entries whose repair would move or unlink account files, skipped because the account is busy (own check or LinkOptions.busy)

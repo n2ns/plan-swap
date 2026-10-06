@@ -13,7 +13,7 @@ import {
   type MergeCtx, type MigrateReport, type ShareReport, copyTree, defaultFolder, emptyReport, freeName, linkEntry, recordLink, type LinkOptions,
   finalizeMerge, linksTo, lstatOrUndefined, mergeEntry, mergeLines, moveEntry, record, rememberMove, sameContent, unlinkChildLinks, unlinkIfLinksTo,
 } from '../claudeShare';
-import { blockedConfigReason, codexDaemonAlive, codexDefaultDir, copyCodexSeed } from './codexPaths';
+import { blockedConfigReason, CODEX_IDENTITY_CONFIG_KEYS, codexDaemonAlive, codexDefaultDir, copyCodexSeed } from './codexPaths';
 
 export type { MigrateReport, ShareReport };
 
@@ -42,14 +42,11 @@ export const CODEX_CHILD_SHARED_DIRS: ReadonlyArray<{ dir: string; excludes: rea
   { dir: 'skills', excludes: ['.system'] },
   { dir: 'plugins/cache', excludes: ['openai-curated-remote'] },
 ];
-// config.toml is not linked (reported in `refused`) when the default config is unreadable or blockedConfigReason finds
-// any of these top-level keys or tables. Re-evaluated on every link refresh: an existing account link to the default
-// config.toml is then removed (no copy is made); a regular file or a link elsewhere stays
-export const CODEX_IDENTITY_CONFIG_KEYS = [
-  'model_provider', 'forced_login_method', 'forced_chatgpt_workspace_id', 'sqlite_home', 'log_dir',
-  'cli_auth_credentials_store', 'mcp_oauth_credentials_store', 'chatgpt_base_url', 'openai_base_url', 'profile', 'oss_provider',
-];
-export const CODEX_IDENTITY_CONFIG_TABLES = ['model_providers', 'profiles'];
+// config.toml is not linked (reported in `refused`, explained in `refusedNotes` when the account is left without one)
+// when the default config is unreadable or blockedConfigReason finds one of CODEX_IDENTITY_CONFIG_KEYS. Re-evaluated on
+// every link refresh: an existing account link to the default config.toml is then removed (no copy is made); a regular
+// file or a link elsewhere stays.
+export { CODEX_IDENTITY_CONFIG_KEYS };
 
 const MARKER = 'sessions';
 // Files Codex may rewrite by rename (the link is replaced by a real file); repaired by merging lines back
@@ -69,15 +66,26 @@ function assertNotContainingDefault(dir: string): void {
   if (realPathInside(dir, def)) throw new Error(t('account.containsDefaultDir', { dir, default: def }));
 }
 
-// Whether the default config.toml can be shared: missing, or readable text without identity keys/tables
-function configShareable(file: string): boolean {
+// Why the default config.toml cannot be shared: 'unreadable', the first blocking key, or undefined (missing, or
+// readable text without a blocking key)
+function configRefusal(file: string): string | undefined {
   let text: string;
   try {
     text = fs.readFileSync(file, 'utf8');
   } catch (e) {
-    return (e as NodeJS.ErrnoException).code === 'ENOENT';
+    return (e as NodeJS.ErrnoException).code === 'ENOENT' ? undefined : 'unreadable';
   }
-  return blockedConfigReason(text, [...CODEX_IDENTITY_CONFIG_KEYS, ...CODEX_IDENTITY_CONFIG_TABLES]) === undefined;
+  return CODEX_IDENTITY_CONFIG_KEYS.find((key) => blockedConfigReason(text, [key]) !== undefined);
+}
+
+function configShareable(file: string): boolean {
+  return configRefusal(file) === undefined;
+}
+
+// Localized explanation of a config.toml refusal for an account left without config.toml
+function configRefusalNote(refusal: string): string {
+  if (refusal === 'unreadable') return t('share.r.configUnreadable');
+  return t(refusal === 'sqlite_home' ? 'share.r.configSqliteHome' : 'share.r.configSignsOut', { key: refusal });
 }
 
 // Creates a missing default entry empty; returns true when created
@@ -157,10 +165,12 @@ export function ensureCodexLinks(dir: string, options: LinkOptions = {}, procRoo
   for (const { name, kind } of CODEX_SHARED_ENTRIES) {
     const target = path.join(def, name);
     const link = path.join(acc, name);
-    if (name === 'config.toml' && !configShareable(target)) {
+    const refusal = name === 'config.toml' ? configRefusal(target) : undefined;
+    if (refusal) {
       // A link created while the default config was still shareable is removed; no copy is made
       if (linksTo(link, target)) fs.unlinkSync(link);
       report.refused.push(name);
+      if (!lstatOrUndefined(link)) (report.refusedNotes ??= {})[name] = configRefusalNote(refusal);
       continue;
     }
     // Windows: databases stay per account (see removeWindowsSqliteLink); a link left from before is removed
@@ -396,6 +406,7 @@ export function migrateCodexToShared(dir: string, accountName: string, procRoot 
   report.created.push(...links.created);
   report.conflicts.push(...links.conflicts);
   report.refused.push(...links.refused);
+  if (links.refusedNotes) report.refusedNotes = { ...links.refusedNotes };
   if (links.busy) report.busy = [...links.busy];
   if (links.copied) report.copied = [...links.copied];
   if (links.failed) report.failed = [...links.failed];

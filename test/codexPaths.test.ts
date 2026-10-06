@@ -4,7 +4,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { setLocale } from '../src/i18n';
 import {
-  checkCodexSafeToDelete, codexAccountDir, codexDaemonAlive, codexDefaultDir, codexLoggedIn, copyCodexSeed,
+  blockedConfigReason, checkCodexSafeToDelete, CODEX_IDENTITY_CONFIG_KEYS, codexAccountDir, codexDaemonAlive, codexDefaultDir,
+  codexLoggedIn, copyCodexSeed,
   decodeJwtPayload, deleteCodexDir, ensureCodexDir, formatCodexPlan, readCodexAccountInfo, scanCodexDirs,
 } from '../src/codex/codexPaths';
 import { assertTempHome, makeTempHome, assertMode, LINUX_ONLY, onWindows, read, type TempHome } from './helpers';
@@ -170,12 +171,12 @@ describe('copyCodexSeed', () => {
     assert.equal(read(path.join(dst, 'config.toml')), 'ORIG');
   });
   test('a byte order mark does not hide a blocked key on the first line', () => {
-    const { src, dst } = fresh('﻿model_provider = "x"\r\n', 'x');
+    const { src, dst } = fresh('﻿forced_login_method = "x"\r\n', 'x');
     const r = copyCodexSeed(src, dst);
     assert.deepEqual(r.copied, []);
-    assert.equal(r.skipped[0].reason, 'Contains top-level key model_provider; not copied');
+    assert.equal(r.skipped[0].reason, 'Contains top-level key forced_login_method; not copied');
   });
-  for (const key of ['forced_login_method', 'forced_chatgpt_workspace_id', 'sqlite_home', 'log_dir', 'model_provider']) {
+  for (const key of CODEX_IDENTITY_CONFIG_KEYS) {
     test(`blocks top-level key ${key} (with leading whitespace)`, () => {
       const { src, dst } = fresh(`model = "x"\n   ${key} = "v"\n`, 'x');
       const r = copyCodexSeed(src, dst);
@@ -186,12 +187,21 @@ describe('copyCodexSeed', () => {
       assert.ok(!fs.existsSync(path.join(dst, 'config.toml')));
     });
   }
-  test('blocks a [model_providers. section', () => {
-    const { src, dst } = fresh('model = "x"\n\n  [model_providers.mine]\nbase_url = "http://x"\n', 'x');
+  test('provider, profile, credential store, base URL and log settings are copied', () => {
+    const cfg = 'model_provider = "corp"\nprofile = "work"\nlog_dir = "/x"\ncli_auth_credentials_store = "file"\n'
+      + 'mcp_oauth_credentials_store = "file"\nchatgpt_base_url = "x"\nopenai_base_url = "x"\noss_provider = "ollama"\n'
+      + '[model_providers.corp]\nbase_url = "http://x"\n[profiles.work]\nmodel = "x"\n';
+    const { src, dst } = fresh(cfg, 'x');
+    assert.deepEqual(copyCodexSeed(src, dst), { copied: ['config.toml'], skipped: [] });
+    assert.equal(read(path.join(dst, 'config.toml')), cfg);
+  });
+  test('a blocked table header is reported as a section', () => {
+    const { src, dst } = fresh('model = "x"\n\n  [sqlite_home.x]\n', 'x');
     const r = copyCodexSeed(src, dst);
     assert.equal(r.skipped[0].file, 'config.toml');
-    assert.equal(r.skipped[0].reason, 'Contains a [model_providers.mine] section; not copied');
+    assert.equal(r.skipped[0].reason, 'Contains a [sqlite_home.x] section; not copied');
   });
+  const PARSER_ROOTS = ['model_provider', 'model_providers', 'log_dir', 'sqlite_home', 'forced_login_method'];
   for (const [label, cfg, reason] of [
     ['top-level dotted key', 'model = "x"\nmodel_providers.x.base_url = "http://x"\n', 'Contains top-level key model_providers'],
     ['spaced dotted key', ' model_providers . x . base_url="http://x"\n', 'Contains top-level key model_providers'],
@@ -213,31 +223,23 @@ describe('copyCodexSeed', () => {
     ['after an escaped backslash before the closing delimiter', 'p = """Escaped slash \\\\"""\nforced_login_method = "chatgpt"\n', 'Contains top-level key forced_login_method'],
     ['after a literal backslash before the closing delimiter', "p = '''Literal slash \\'''\nforced_login_method = 'chatgpt'\n", 'Contains top-level key forced_login_method'],
   ]) {
+    // The parser with roots that include a table, as a caller may pass
     test(`blocks ${label}`, () => {
-      const { src, dst } = fresh(cfg, 'x');
-      const r = copyCodexSeed(src, dst);
-      assert.deepEqual(r.copied, []);
-      assert.deepEqual(r.skipped, [{ file: 'config.toml', reason: `${reason}; not copied` }]);
-      assert.ok(!fs.existsSync(path.join(dst, 'config.toml')));
+      assert.equal(blockedConfigReason(cfg, PARSER_ROOTS), reason);
     });
   }
   test('forbidden names under other tables or as inner segments are not blocked', () => {
-    const a = fresh('[profiles.x]\nmodel_provider = "a"\nmodel_providers.y.base_url = "b"\n[profiles."model_providers"]\n', 'x');
-    assert.deepEqual(copyCodexSeed(a.src, a.dst).copied, ['config.toml']);
-    const b = fresh('profiles.model_provider = "a"\nprofiles = { x = { model_provider = "a" } }\n"model_providers_x" = 1\n', 'x');
-    assert.deepEqual(copyCodexSeed(b.src, b.dst).copied, ['config.toml']);
+    assert.equal(blockedConfigReason('[profiles.x]\nmodel_provider = "a"\nmodel_providers.y.base_url = "b"\n[profiles."model_providers"]\n', PARSER_ROOTS), undefined);
+    assert.equal(blockedConfigReason('profiles.model_provider = "a"\nprofiles = { x = { model_provider = "a" } }\n"model_providers_x" = 1\n', PARSER_ROOTS), undefined);
   });
   test('lines inside multi-line values are not read as keys or headers', () => {
-    const a = fresh("a = [\n  'model_provider = 1',\n]\nb = '''\n[model_providers.x]\n'''\nc = { d = [\n  1,\n] }\nmodel = \"y\"\n", 'x');
-    assert.deepEqual(copyCodexSeed(a.src, a.dst).copied, ['config.toml']);
+    assert.equal(blockedConfigReason("a = [\n  'model_provider = 1',\n]\nb = '''\n[model_providers.x]\n'''\nc = { d = [\n  1,\n] }\nmodel = \"y\"\n", PARSER_ROOTS), undefined);
     const b = fresh('p = """\nPrint \\""" as an example:\nforced_login_method = "chatgpt"\n"""\nmodel = "x"\n');
     assert.deepEqual(copyCodexSeed(b.src, b.dst).copied, ['config.toml']);
   });
   test('comment lines and key-name prefixes are not false positives', () => {
-    const a = fresh('# model_provider = "x"\n  # [model_providers.foo]\n#log_dir = "/x"\nmodel = "y"\n', 'x');
-    assert.deepEqual(copyCodexSeed(a.src, a.dst).copied, ['config.toml']);
-    const b = fresh('model_provider_x = 1\nlog_dir_extra = 2\n', 'x');
-    assert.deepEqual(copyCodexSeed(b.src, b.dst).copied, ['config.toml']);
+    assert.equal(blockedConfigReason('# model_provider = "x"\n  # [model_providers.foo]\n#log_dir = "/x"\nmodel = "y"\n', PARSER_ROOTS), undefined);
+    assert.equal(blockedConfigReason('model_provider_x = 1\nlog_dir_extra = 2\n', PARSER_ROOTS), undefined);
   });
 });
 
@@ -343,8 +345,8 @@ describe('codexPaths in zh-cn', () => {
     const src = fs.mkdtempSync(path.join(home, 'src-'));
     const dst = fs.mkdtempSync(path.join(home, 'dst-'));
     assert.deepEqual(copyCodexSeed(src, dst).skipped, [{ file: 'config.toml', reason: '源文件不存在' }]);
-    fs.writeFileSync(path.join(src, 'config.toml'), 'log_dir = "/x"\n');
-    assert.deepEqual(copyCodexSeed(src, dst).skipped, [{ file: 'config.toml', reason: '含顶层键 log_dir，不复制' }]);
+    fs.writeFileSync(path.join(src, 'config.toml'), 'sqlite_home = "/x"\n');
+    assert.deepEqual(copyCodexSeed(src, dst).skipped, [{ file: 'config.toml', reason: '含顶层键 sqlite_home，不复制' }]);
     assert.equal(checkCodexSafeToDelete('/tmp/.codex-x'), `目录不是用户主目录的直接子目录：${path.resolve('/tmp/.codex-x')}`);
   });
 });
