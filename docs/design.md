@@ -49,6 +49,7 @@ Everything PlanSwap persists, for both vendors:
 | `codex.labels` | state file | `labels.ts` | Codex rename; cleared on remove | `importOnce` |
 | `claude.recommendExcluded`, `codex.recommendExcluded` | state file | `recommend.ts` (`RecommendExclusions`) | the row's exclude toggle ([Features 2.3](features.md#23-all-accounts-list)); the name is cleared on remove and when `syncWithDisk` prunes the account | none |
 | `codex.usageHistory` | state file | `codex/codexUsageHistory.ts` | accepted Codex usage observation ([Codex design 8.7](codex-design.md#87-usage-limits)) | none |
+| `usage.lowNotified` | state file | `usageNotices.ts` (`LowUsageNotices`) | a low usage-limit notice ([Features 2](features.md#2-sidebar)); entries are pruned after their reset | none |
 | `warnings.dismissed` | state file | `extension.ts` | "Don't show again" on an environment warning | none |
 | `panel.activeTab` | `globalState` | `accountsPanel.ts` | the frontend's `setTab` message | none |
 | `legacy.languageMigrated` | `globalState` | `i18nVscode.ts` | after `migrateLegacyLanguage` succeeded (5.5) | — |

@@ -1,6 +1,7 @@
 // File-backed Memento at ~/.config/planswap/state.json, so the account lists, ignore lists and aliases follow the
 // WSL distribution (a workspace extension's globalState is stored on the Windows client and shared by every distro).
-// Besides STATE_KEYS the file holds warnings.dismissed (extension.ts) and codex.usageHistory (codexUsageHistory.ts).
+// Besides STATE_KEYS the file holds warnings.dismissed (extension.ts), codex.usageHistory (codexUsageHistory.ts) and
+// usage.lowNotified (usageNotices.ts).
 // No cross-process lock: update re-reads the file, but two hosts writing at the same moment can still lose one write.
 // Depends only on vscode's Memento type
 import * as fs from 'node:fs';

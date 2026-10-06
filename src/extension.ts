@@ -4,12 +4,12 @@ import * as path from 'node:path';
 import { AccountStore } from './accounts';
 import { claudeCredentialOverrides, oneDriveHome, pathVarsWithSpaces } from './environmentWarnings';
 import { AccountsPanel, VIEW_ID, claudePanelSource, type PanelSource } from './accountsPanel';
-import { LabelStore, labelFor } from './labels';
+import { EXTERNAL_NAME, LabelStore, labelFor } from './labels';
 import { FileMemento, STATE_JSON } from './fileState';
 import { RecommendExclusions } from './recommend';
-import { readAccountInfo, samePath, setClaudeSettingEnv } from './paths';
+import { findSameDir, readAccountInfo, samePath, setClaudeSettingEnv } from './paths';
 import { ensureCodexLinks, isSharedCodexAccount } from './codex/codexShare';
-import { CLAUDE_REFRESH_ALL_USAGE_COMMAND, CLAUDE_REFRESH_USAGE_COMMAND, CODEX_REFRESH_ALL_USAGE_COMMAND, REFRESH_USAGE_COMMAND, StatusBar, claudeUsageFailureText, codexUsageFailureText } from './statusBar';
+import { CLAUDE_REFRESH_ALL_USAGE_COMMAND, CLAUDE_REFRESH_USAGE_COMMAND, CODEX_REFRESH_ALL_USAGE_COMMAND, REFRESH_USAGE_COMMAND, StatusBar, claudeUsageFailureText, codexUsageFailureText, formatDuration, liveCodexUsage, relativeReset } from './statusBar';
 import { registerCommands } from './commands';
 import { affectsSetting, currentDir, isExplicitConfigDir, settingEnv, settingEnvNames } from './claudeSettings';
 import { findBundledClaude, oneAtATime, queryClaudeUsage, queryEach, readClaudeUsage, readUsageFetchedAt, type ClaudeQueryResult } from './claudeUsage';
@@ -30,6 +30,7 @@ import { readCodexAccountInfo } from './codex/codexPaths';
 import { IdentityWarnings, claudeIdentity, codexIdentity, type IdentitySource } from './identityWarnings';
 import { UsageCooldown } from './usageCooldown';
 import { OtherAccountChecks } from './usageOthers';
+import { LowUsageNotices, type NoticeProduct, type NoticeWindow } from './usageNotices';
 
 // Official extensions whose bundled binaries answer usage queries when the CLI is not on PATH
 const CLAUDE_EXTENSION_ID = 'anthropic.claude-code';
@@ -82,6 +83,15 @@ export function usageTimeoutMs(product: PanelMode): number {
   const seconds = vscode.workspace.getConfiguration('planswap').get<number>(`${product}.usageTimeoutSeconds`, range.default);
   const valid = typeof seconds === 'number' && Number.isFinite(seconds) ? seconds : range.default;
   return Math.min(range.max, Math.max(range.min, valid)) * 1000;
+}
+
+/** planswap.notifications.enabled / threshold: low usage-limit notices on or off, and the remaining percentage at or
+ *  below which they appear, clamped to the range the manifest declares (1–99, default 20). */
+function noticeSettings(): { enabled: boolean; threshold: number } {
+  const config = vscode.workspace.getConfiguration('planswap');
+  const value = config.get<number>('notifications.threshold', 20);
+  const valid = typeof value === 'number' && Number.isFinite(value) ? value : 20;
+  return { enabled: config.get<boolean>('notifications.enabled', true) !== false, threshold: Math.min(99, Math.max(1, valid)) };
 }
 
 interface CooldownSplit<T> { due: T[]; skipped: T[]; waitMs: number }
@@ -200,7 +210,10 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   const usage = codex
     ? new CodexUsageMonitor(effectiveDir, (s) => {
       statusBar.setCodexUsage(s);
-      if (!s.checking) panel.refresh();
+      if (!s.checking) {
+        panel.refresh();
+        checkLowUsage();
+      }
     }, {
       read: (dir) => codexQuery(dir),
       staleMs: () => usageSchedule('codex').staleMs,
@@ -228,9 +241,44 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     });
   };
   const claudeQuery = (dir: string, signal?: AbortSignal) => claudeQueue(() => runClaudeQuery(dir, signal));
+  // Low usage-limit notices of the current Claude and effective Codex account (usageNotices.ts), checked after every
+  // usage result, account-info change and automatic check tick. Only the focused window announces, so the windows
+  // reacting to the same file change do not all show the notice
+  const lowUsage = new LowUsageNotices(state);
+  const announceLowUsage = async (
+    product: NoticeProduct, dir: string, windows: readonly NoticeWindow[], limitReached: boolean, threshold: number,
+    accounts: ReadonlyArray<{ name: string; dir: string }>, labels: LabelStore,
+  ): Promise<void> => {
+    const low = await lowUsage.take(product, dir, windows, threshold, limitReached);
+    if (!low) return;
+    const account = accounts[findSameDir(accounts.map((a) => a.dir), dir)];
+    const open = t('usage.lowOpen');
+    const picked = await vscode.window.showWarningMessage(t('usage.low', {
+      product: product === 'claude' ? 'Claude' : 'Codex',
+      label: labelFor(account ? account.name : EXTERNAL_NAME, labels),
+      percent: low.remaining,
+      window: formatDuration(low.window.windowMinutes!),
+      reset: relativeReset(low.window.resetsAt!),
+    }), open);
+    if (picked === open) void vscode.commands.executeCommand('workbench.view.extension.planswap');
+  };
+  const checkLowUsage = (): void => {
+    const settings = noticeSettings();
+    if (!settings.enabled || !vscode.window.state.focused) return;
+    const dir = currentDir();
+    const explicit = isExplicitConfigDir(dir);
+    const claudeWindows = readAccountInfo(dir, explicit).identity !== undefined ? readClaudeUsage(dir, explicit)?.windows : undefined;
+    if (claudeWindows) void announceLowUsage('claude', dir, claudeWindows, false, settings.threshold, store.all(), claudeLabels);
+    const result = usage?.current().result;
+    const codexUsage = codex && result?.ok && !codexRunsInWsl() ? liveCodexUsage(result.usage) : undefined;
+    if (codex && codexUsage) void announceLowUsage('codex', effectiveDir(), codexUsage.windows, codexUsage.limitReached, settings.threshold, codex.store.all(), codexLabels);
+  };
   const claudeUsage = new ClaudeUsageMonitor(currentDir, (s) => {
     statusBar.setClaudeUsage(s);
-    if (!s.checking) panel.refresh();
+    if (!s.checking) {
+      panel.refresh();
+      checkLowUsage();
+    }
   }, {
     query: (dir) => claudeQuery(dir),
     eligible: (dir) => readAccountInfo(dir, isExplicitConfigDir(dir)).identity !== undefined,
@@ -439,6 +487,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   const checkUsage = (): void => {
     usageStarted = true;
     if (!vscode.window.state.focused) return;
+    checkLowUsage();
     if (usageSchedule('claude').auto) {
       void claudeUsage.refreshIfStale();
       if (!usageCurrentOnly()) void otherClaudeChecks.run(otherClaudeDirs());
@@ -522,6 +571,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
         }
       }
       identityWarnings.check();
+      checkLowUsage();
     }),
     { dispose: () => { clearTimeout(firstUsageCheck); clearInterval(usageTick); clearInterval(historyTick); } },
     vscode.window.onDidChangeWindowState((e) => {
@@ -559,6 +609,8 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
       // Automatic usage checks turned on or a shorter interval: check now when due
       if (['claude', 'codex'].some((p) => e.affectsConfiguration(`planswap.${p}.usageAutoRefresh`) || e.affectsConfiguration(`planswap.${p}.usageRefreshMinutes`))
         || e.affectsConfiguration('planswap.usageAutoRefreshCurrentOnly')) checkUsage();
+      // Notices turned on or a higher threshold: announce a window that is already low
+      if (e.affectsConfiguration('planswap.notifications')) checkLowUsage();
       // A new check interval replaces the timer at once
       if (e.affectsConfiguration('planswap.usageCheckIntervalSeconds')) {
         clearInterval(usageTick);

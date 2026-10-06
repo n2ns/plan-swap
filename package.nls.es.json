@@ -48,6 +48,8 @@
   "config.usageDisplay.used": "Lo que se ha usado",
   "config.usageAutoRefreshCurrentOnly.description": "Las consultas automáticas de uso (planswap.claude.usageAutoRefresh, planswap.codex.usageAutoRefresh) solo consultan la cuenta actual de Claude y la cuenta efectiva de Codex. Si está desactivado, también se consultan las demás cuentas registradas, de una en una y con el mismo intervalo. No afecta a las actualizaciones manuales.",
   "config.usageCheckIntervalSeconds.description": "Cada cuántos segundos las consultas automáticas de uso buscan cuentas cuyo intervalo de actualización (planswap.claude.usageRefreshMinutes, planswap.codex.usageRefreshMinutes) ya ha pasado (30–600). Solo se consultan las cuentas pendientes.",
+  "config.notificationsEnabled.description": "Muestra una notificación cuando un límite general (5 h, 7 días) de la cuenta actual de Claude o Codex baja al umbral de aviso, una vez por límite hasta que se restablece. Un límite agotado no genera aviso: Claude Code y Codex lo indican por sí mismos.",
+  "config.notificationsThreshold.description": "Porcentaje restante de un límite general igual o inferior al cual aparece la notificación (1–99).",
   "config.sidebarModelLimits.description": "Muestra los límites de uso de Claude por modelo en la barra lateral, directamente debajo de los límites generales.",
   "config.sidebarEmail.description": "Muestra el correo de cada cuenta en la barra lateral.",
   "config.sidebarFiveHour.description": "Muestra el límite de uso de 5 horas de cada cuenta en la barra lateral.",

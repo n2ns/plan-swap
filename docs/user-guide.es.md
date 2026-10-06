@@ -247,6 +247,8 @@ Haz clic en el icono de ajustes de la barra de título del panel, o ejecuta **Pl
 | `planswap.usageDisplay` | `remaining` | Las barras y los porcentajes de uso, en la barra lateral y la barra de estado, muestran lo que queda (`remaining`) o lo que se ha usado (`used`). Los colores siempre se basan en lo que queda. |
 | `planswap.usageAutoRefreshCurrentOnly` | `false` | Las consultas automáticas solo consultan las cuentas actuales de Claude y Codex. |
 | `planswap.usageCheckIntervalSeconds` | `120` | Segundos entre cada búsqueda de cuentas pendientes de una consulta automática, 30–600. Cada cuenta se sigue consultando según el intervalo de actualización de su producto. |
+| `planswap.notifications.enabled` | `true` | Avisa una vez cuando el Límite de 5 h o el Límite de 7 días de la cuenta actual de Claude o Codex baja al umbral siguiente. Un límite agotado no genera aviso: Claude Code y Codex lo indican por sí mismos. |
+| `planswap.notifications.threshold` | `20` | Porcentaje restante igual o inferior al cual aparece ese aviso, 1–99. |
 | `planswap.sidebar.showEmail` | `true` | Mostrar el correo de las cuentas en las tarjetas de la barra lateral. |
 | `planswap.sidebar.showFiveHourLimit` | `true` | Mostrar el límite de 5 horas en las tarjetas. |
 | `planswap.sidebar.showWeeklyLimit` | `true` | Mostrar el límite de 7 días en las tarjetas. |

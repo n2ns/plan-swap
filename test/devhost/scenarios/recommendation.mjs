@@ -67,7 +67,7 @@ export async function run(ctx) {
   // confirmation setting the switch goes through
   await sb.tab(ctx, 'claude');
   d = await sb.waitFor(ctx, (x) => x.mode === 'claude' && !!x.card);
-  await ctx.frame.locator('.banner.recommend [data-action="switch"]').click();
+  await ctx.frame.locator('#panel-claude .banner.recommend [data-action="switch"]').click();
   await sleep(1500);
   const notices = await notifications();
   await step('card Switch asks for confirmation (modal text quoted by the test-mode refusal)', notices.some((n) => n.includes('Switch the Claude account to work?')), notices[0]?.slice(0, 160));
@@ -75,7 +75,7 @@ export async function run(ctx) {
   await step('refused confirmation leaves the account unchanged', d.rows[0].dir === dirs.claudeDefault && d.rows[0].current && !!d.card);
   writeSettings({ 'planswap.claude.confirmSwitch': false });
   await sleep(3000);
-  await ctx.frame.locator('.banner.recommend [data-action="switch"]').click();
+  await ctx.frame.locator('#panel-claude .banner.recommend [data-action="switch"]').click();
   d = await sb.waitFor(ctx, (x) => !x.card && x.rows.find((r) => r.dir === dirs.claudeWork)?.current === true);
   const env = readSettings()['claudeCode.environmentVariables'];
   await step('card Switch (no confirmation): Work is current, no card, reload banner, setting written',

@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- A notification when the current Claude or Codex account's 5-hour or 7-day limit has 20% or less left, once per limit until it resets, with **Open PlanSwap**. Turn it off with `planswap.notifications.enabled` or change the percentage with `planswap.notifications.threshold`. A used-up limit gets no notification, since Claude Code and Codex already report it.
+
 ## [0.3.6] - 2026-10-06
 
 ### Fixed

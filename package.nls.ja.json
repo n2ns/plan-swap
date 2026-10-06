@@ -48,6 +48,8 @@
   "config.usageDisplay.used": "使用済みの量",
   "config.usageAutoRefreshCurrentOnly.description": "使用量の自動確認（planswap.claude.usageAutoRefresh、planswap.codex.usageAutoRefresh）で、Claude の現在のアカウントと Codex の現在有効なアカウントだけを確認します。オフの場合は、登録済みのほかのアカウントも同じ間隔で 1 つずつ確認します。手動の更新には影響しません。",
   "config.usageCheckIntervalSeconds.description": "使用量の自動確認で、更新間隔（planswap.claude.usageRefreshMinutes、planswap.codex.usageRefreshMinutes）を過ぎたアカウントがあるかを何秒ごとに調べるか（30–600）。期限が来たアカウントだけを確認します。",
+  "config.notificationsEnabled.description": "現在の Claude または Codex アカウントの一般的な上限（5 時間、7 日間）が通知のしきい値まで下がったときに一度だけ通知します。通知は上限ごとにリセットまで一度です。上限に達したときは通知しません。Claude Code と Codex が自分で知らせます。",
+  "config.notificationsThreshold.description": "一般的な上限の残りの割合がこの値以下になると通知します（1–99）。",
   "config.sidebarModelLimits.description": "サイドバーに Claude のモデル別使用量の上限を表示します。有効にすると、一般的な上限の下にそのまま表示されます。",
   "config.sidebarEmail.description": "サイドバーに各アカウントのメールアドレスを表示します。",
   "config.sidebarFiveHour.description": "サイドバーに各アカウントの 5 時間の使用量の上限を表示します。",

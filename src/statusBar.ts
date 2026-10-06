@@ -38,7 +38,7 @@ const CODEX_USAGE_FAILURE_MESSAGES: Partial<Record<UsageFailure, MessageKey>> = 
 };
 
 // 300 → 5h, 10080 → 7d; anything that is not a whole hour stays in minutes
-function formatDuration(minutes: number): string {
+export function formatDuration(minutes: number): string {
   if (minutes % 1440 === 0) return t('status.days', { n: minutes / 1440 });
   if (minutes % 60 === 0) return t('status.hours', { n: minutes / 60 });
   return t('status.minutes', { n: minutes });

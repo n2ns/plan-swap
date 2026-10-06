@@ -253,6 +253,22 @@
             "scope": "application",
             "description": "%config.usageCheckIntervalSeconds.description%",
             "order": 3
+          },
+          "planswap.notifications.enabled": {
+            "type": "boolean",
+            "default": true,
+            "scope": "application",
+            "description": "%config.notificationsEnabled.description%",
+            "order": 4
+          },
+          "planswap.notifications.threshold": {
+            "type": "number",
+            "default": 20,
+            "minimum": 1,
+            "maximum": 99,
+            "scope": "application",
+            "description": "%config.notificationsThreshold.description%",
+            "order": 5
           }
         }
       },

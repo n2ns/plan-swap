@@ -247,6 +247,8 @@ Click the settings icon in the panel title bar, or run **PlanSwap: Open PlanSwap
 | `planswap.usageDisplay` | `remaining` | Usage bars and percentages, in the sidebar and the status bar, show what is left (`remaining`) or what is used (`used`). Colors always follow what is left. |
 | `planswap.usageAutoRefreshCurrentOnly` | `false` | Automatic checks query only the current Claude and Codex accounts. |
 | `planswap.usageCheckIntervalSeconds` | `120` | Seconds between looks for accounts due for an automatic check, 30–600. Each account is still checked at its product's refresh interval. |
+| `planswap.notifications.enabled` | `true` | Notify once when the current Claude or Codex account's 5-hour or 7-day limit falls to the threshold below. No notice for a used-up limit: Claude Code and Codex report it themselves. |
+| `planswap.notifications.threshold` | `20` | Remaining percentage at or below which that notice appears, 1–99. |
 | `planswap.sidebar.showEmail` | `true` | Show account emails on sidebar cards. |
 | `planswap.sidebar.showFiveHourLimit` | `true` | Show the 5-hour limit on cards. |
 | `planswap.sidebar.showWeeklyLimit` | `true` | Show the 7-day limit on cards. |

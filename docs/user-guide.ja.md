@@ -247,6 +247,8 @@ PlanSwap がホームディレクトリで見つけた、有効な名前を持�
 | `planswap.usageDisplay` | `remaining` | サイドバーとステータスバーの使用量のバーとパーセンテージに、残りの量（`remaining`）と使用済みの量（`used`）のどちらを表示するか。色は常に残りの量に基づきます。 |
 | `planswap.usageAutoRefreshCurrentOnly` | `false` | 自動確認で Claude と Codex の現在のアカウントだけを確認します。 |
 | `planswap.usageCheckIntervalSeconds` | `120` | 自動確認の時期が来たアカウントを何秒ごとに調べるか。30–600。各アカウントは引き続き製品ごとの更新間隔で確認されます。 |
+| `planswap.notifications.enabled` | `true` | 現在の Claude または Codex アカウントの 5 時間の上限または 7 日間の上限が次のしきい値まで下がったときに一度通知します。上限に達したときは通知しません。Claude Code と Codex が自分で知らせます。 |
+| `planswap.notifications.threshold` | `20` | 残りの割合がこの値以下になると通知します。1–99。 |
 | `planswap.sidebar.showEmail` | `true` | サイドバーのカードにアカウントのメールアドレスを表示します。 |
 | `planswap.sidebar.showFiveHourLimit` | `true` | カードに 5 時間の上限を表示します。 |
 | `planswap.sidebar.showWeeklyLimit` | `true` | カードに 7 日間の上限を表示します。 |

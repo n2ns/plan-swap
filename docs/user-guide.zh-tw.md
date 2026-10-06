@@ -247,6 +247,8 @@ PlanSwap 啟動或重新整理時，會把在你的主目錄中找到、名稱�
 | `planswap.usageDisplay` | `remaining` | 側邊欄和狀態列中的用量條和百分比顯示剩餘量（`remaining`）還是已用量（`used`）。顏色一律依剩餘量計算。 |
 | `planswap.usageAutoRefreshCurrentOnly` | `false` | 自動查詢只查 Claude 和 Codex 的目前帳號。 |
 | `planswap.usageCheckIntervalSeconds` | `120` | 每隔多少秒檢查一次是否有帳號到了自動查詢的時間，30–600。每個帳號仍依各產品的重新整理間隔查詢。 |
+| `planswap.notifications.enabled` | `true` | 目前 Claude 或 Codex 帳號的 5 小時額度或 7 天額度降到下面的臨界值時提醒一次。額度用完時不提醒：Claude Code 和 Codex 會自行提示。 |
+| `planswap.notifications.threshold` | `20` | 剩餘百分比降到此值或更低時提醒，1–99。 |
 | `planswap.sidebar.showEmail` | `true` | 在側邊欄卡片上顯示帳號電子郵件。 |
 | `planswap.sidebar.showFiveHourLimit` | `true` | 在卡片上顯示 5 小時額度。 |
 | `planswap.sidebar.showWeeklyLimit` | `true` | 在卡片上顯示 7 天額度。 |

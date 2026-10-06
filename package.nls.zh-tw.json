@@ -48,6 +48,8 @@
   "config.usageDisplay.used": "已用量",
   "config.usageAutoRefreshCurrentOnly.description": "自動用量查詢（planswap.claude.usageAutoRefresh、planswap.codex.usageAutoRefresh）只查詢 Claude 目前帳號和 Codex 目前生效帳號。關閉時，其他已新增的帳號也會依相同間隔逐一查詢。不影響手動重新整理。",
   "config.usageCheckIntervalSeconds.description": "自動用量查詢每隔多少秒檢查一次是否有帳號已到重新整理間隔（planswap.claude.usageRefreshMinutes、planswap.codex.usageRefreshMinutes）（30–600）。只查詢已到期的帳號。",
+  "config.notificationsEnabled.description": "目前 Claude 或 Codex 帳號的一般額度（5 小時、7 天）降到提醒臨界值時顯示一次通知，每個額度在重設前只提醒一次。額度用完時不提醒：Claude Code 和 Codex 會自行提示。",
+  "config.notificationsThreshold.description": "一般額度剩餘百分比降到此值或更低時顯示提醒（1–99）。",
   "config.sidebarModelLimits.description": "在側邊欄中顯示 Claude 的各模型用量額度。啟用後，會直接顯示在一般額度下方。",
   "config.sidebarEmail.description": "在側邊欄中顯示各帳號的電子郵件。",
   "config.sidebarFiveHour.description": "在側邊欄中顯示各帳號的 5 小時用量額度。",
