@@ -604,8 +604,9 @@ body {
 .input-group vscode-button:not([disabled]):hover::part(base) { filter: brightness(1.12); }
 .input-group vscode-button:not([disabled]):focus-visible::part(base),
 .input-group vscode-button:not([disabled])[focused]::part(base) { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
-/* Shared / independent choice under the input: full width, the label wraps on narrow panels */
-.add-shared { display: block; max-width: 100%; min-width: 0; overflow-wrap: anywhere; }
+/* Linked / independent choice under the input: full width, each label wraps on narrow panels */
+.add-mode { display: block; max-width: 100%; min-width: 0; }
+.add-mode-option { display: block; max-width: 100%; min-width: 0; overflow-wrap: anywhere; }
 .help { color: var(--muted); font-size: max(11px, 0.8em); padding: 0 2px; min-width: 0; overflow-wrap: anywhere; }
 .help.error { color: var(--error); }
 

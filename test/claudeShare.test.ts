@@ -133,22 +133,48 @@ describe('ensureClaudeLinks', SHARING, () => {
     assert.ok(!r.conflicts.includes('projects'));
   });
 
-  test('settings.json is refused when the default has identity keys or is invalid JSON', () => {
+  test('settings.json is refused for every identity key; the account gets a stripped copy and an explaining note', () => {
     const acc = accountDir('a');
-    fs.mkdirSync(acc);
-    write(path.join(def, 'settings.json'), JSON.stringify({ env: { ANTHROPIC_API_KEY: 'k' } }));
-    let r = ensureClaudeLinks(acc);
-    assert.deepEqual(r.refused, ['settings.json']);
-    assert.ok(!exists(path.join(acc, 'settings.json')));
+    const settings = path.join(acc, 'settings.json');
+    const note = (key: string, why: 'credential' | 'loginMethod' | 'location', result: string): string =>
+      t('share.r.settingsRefused', { key, why: t(`share.r.why.${why}`), result });
+    const cases: Array<[Record<string, unknown>, string, 'credential' | 'loginMethod' | 'location']> = [
+      [{ apiKeyHelper: 'x' }, 'apiKeyHelper', 'credential'],
+      [{ forceLoginMethod: 'claudeai' }, 'forceLoginMethod', 'loginMethod'],
+      ...(['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_PROFILE'] as const)
+        .map((k): [Record<string, unknown>, string, 'credential'] => [{ env: { [k]: 'v' } }, `env.${k}`, 'credential']),
+      [{ env: { ANTHROPIC_FEDERATION_RULE_ID: 'r', ANTHROPIC_ORGANIZATION_ID: 'o' } }, 'env.ANTHROPIC_FEDERATION_RULE_ID', 'credential'],
+      [{ env: { CLAUDE_CONFIG_DIR: '/x' } }, 'env.CLAUDE_CONFIG_DIR', 'location'],
+      [{ env: { CLAUDE_SECURESTORAGE_CONFIG_DIR: '/x' } }, 'env.CLAUDE_SECURESTORAGE_CONFIG_DIR', 'location'],
+    ];
+    for (const [data, key, why] of cases) {
+      fs.rmSync(acc, { recursive: true, force: true });
+      fs.mkdirSync(acc);
+      write(path.join(def, 'settings.json'), JSON.stringify({ model: 'm', ...data }));
+      const r = ensureClaudeLinks(acc);
+      assert.deepEqual(r.refused, ['settings.json'], key);
+      assert.deepEqual(JSON.parse(read(settings)), { model: 'm', ...(data.env ? { env: {} } : {}) }, key);
+      assert.deepEqual(r.refusedNotes, { 'settings.json': note(key, why, t('share.r.settingsCopied', { key })) }, key);
+      // The next refresh keeps the copy and says so
+      assert.deepEqual(ensureClaudeLinks(acc).refusedNotes, { 'settings.json': note(key, why, t('share.r.settingsOwn')) }, key);
+    }
 
-    write(path.join(def, 'settings.json'), JSON.stringify({ apiKeyHelper: 'x' }));
-    r = ensureClaudeLinks(acc);
-    assert.deepEqual(r.refused, ['settings.json']);
+    // Not an identity setting: forceLoginOrgUUID only pre-selects an organization, one federation variable alone is
+    // no credential
+    fs.rmSync(acc, { recursive: true, force: true });
+    fs.mkdirSync(acc);
+    write(path.join(def, 'settings.json'), JSON.stringify({ forceLoginOrgUUID: 'org', env: { ANTHROPIC_ORGANIZATION_ID: 'o' } }));
+    let r = ensureClaudeLinks(acc);
+    assert.deepEqual(r.refused, []);
+    assert.ok(r.linked.includes('settings.json'));
+    fs.unlinkSync(settings);
 
     write(path.join(def, 'settings.json'), '{ bad');
     r = ensureClaudeLinks(acc);
     assert.deepEqual(r.refused, ['settings.json']);
     assert.equal(read(path.join(def, 'settings.json')), '{ bad');
+    assert.ok(!exists(settings), 'no copy of an unreadable file');
+    assert.deepEqual(r.refusedNotes, { 'settings.json': t('share.r.settingsUnreadable') });
 
     write(path.join(def, 'settings.json'), JSON.stringify({ env: { FOO: '1' }, model: 'x' }));
     r = ensureClaudeLinks(acc);

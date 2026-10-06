@@ -66,7 +66,7 @@ For Codex, [enable switching](#enable-and-switch-codex-accounts) first.
    - Use letters, digits, underscores or hyphens.
    - `default` is reserved.
    - A name cannot match another account's name or display name in the same tab, ignoring case.
-3. Leave **Link to the default account's settings and history** checked to share your existing setup, or uncheck it to start with an independent copy of the default configuration. See [account modes](#choose-linked-or-independent-accounts) before choosing.
+3. Keep **Linked to the default account (recommended)** selected to continue the same work with another account: settings, history and sessions are shared, only the sign-in is separate. Choose **Independent** to keep work and personal apart, starting from a copy of the current settings. See [account modes](#choose-linked-or-independent-accounts) before choosing.
 4. Click **Add** or press Enter. PlanSwap creates the account directory, or reuses an existing directory with that name. If it reports files it could not link or copy, read the list: those files stay as they are.
 5. Click **Log in** on the new row. A terminal opens; complete the official client's first-run setup and sign-in there. For Claude, you can instead switch to the account and sign in from the Claude Code panel.
 6. If the row still shows **Not logged in**, click the refresh button in the panel title bar. Closing the PlanSwap terminal also refreshes the list.
@@ -128,7 +128,7 @@ Changed your mind before restarting? Click the arrow icon on the highlighted (ef
 
 Linking does not guarantee that another account can resume a session, especially across different ChatGPT organizations. Do not open the same session from two accounts at once.
 
-Some settings are never linked. Claude: a `settings.json` that sets its own sign-in (for example an API key helper, a forced login method or an API key) is not linked. Codex: a `config.toml` that sets `forced_login_method` or `forced_chatgpt_workspace_id` (which would sign out accounts that sign in differently) or `sqlite_home` is not linked, and the account runs with Codex's built-in settings until you remove that setting and use **Re-link**. The result message names the file and, for Codex, the setting.
+Some settings are never linked. Claude: a `settings.json` that supplies or restricts a sign-in (for example an API key, an API key helper or a forced login method) is not linked; the account gets its own copy without that setting, which no longer follows later changes. Codex: a `config.toml` that sets `forced_login_method` or `forced_chatgpt_workspace_id` (which would sign out accounts that sign in differently) or `sqlite_home` is not linked, and the account runs with Codex's built-in settings until you remove that setting and use **Re-link**. The result message names the file and, for Codex, the setting.
 
 For linked Claude accounts, PlanSwap also copies the default account's MCP servers and per-project trust settings into the account. Once the account is signed in, it also copies the default account's first-run status, so Claude Code does not repeat its first-run setup.
 

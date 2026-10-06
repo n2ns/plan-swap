@@ -10,7 +10,7 @@ import { CLAUDE_SHARED_ENTRIES, ensureClaudeLinks, isSharedClaudeAccount } from 
 import { CONFIRM_SWITCH_SETTING, registerCommands, shQuote, validateName } from '../src/commands';
 import { t } from '../src/i18n';
 import { LabelStore } from '../src/labels';
-import { accountDir } from '../src/paths';
+import { accountDir, defaultDir } from '../src/paths';
 import type { FromWebview, ToWebview } from '../src/protocol';
 import type { StatusBar } from '../src/statusBar';
 import { commands, resetConfig, setConfig, updates, window } from './stubs/vscode';
@@ -215,6 +215,32 @@ describe('panel message handlers (Claude)', () => {
       assert.match(String(warning.mock.calls[0].arguments[0]), /projects/);
     } finally {
       h.dispose();
+    }
+  });
+
+  test('adding a linked account whose settings.json is refused says it was added and explains the copy', LINUX_ONLY, async (ctx) => {
+    const h = harness();
+    const def = defaultDir();
+    const cfg = path.join(def, 'settings.json');
+    const before = fs.existsSync(cfg) ? fs.readFileSync(cfg, 'utf8') : undefined;
+    fs.mkdirSync(def, { recursive: true });
+    fs.writeFileSync(cfg, JSON.stringify({ model: 'm', apiKeyHelper: 'x' }));
+    const dir = accountDir('refused-settings');
+    const warning = ctx.mock.method(window, 'showWarningMessage', async () => undefined);
+    try {
+      await h.handle({ type: 'add', mode: 'claude', name: 'refused-settings', shared: true });
+      assert.equal(isSharedClaudeAccount(dir), true);
+      assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, 'settings.json'), 'utf8')), { model: 'm' });
+      assert.equal(String(warning.mock.calls[0].arguments[0]), t('share.addNotes', {
+        name: 'refused-settings',
+        notes: t('share.r.settingsRefused', {
+          key: 'apiKeyHelper', why: t('share.r.why.credential'), result: t('share.r.settingsCopied', { key: 'apiKeyHelper' }),
+        }),
+      }));
+    } finally {
+      h.dispose();
+      if (before === undefined) fs.rmSync(cfg);
+      else fs.writeFileSync(cfg, before);
     }
   });
 

@@ -18,11 +18,34 @@ export interface Account { name: string; dir: string }
 // email, plan and sign-in state)
 export interface AccountInfo { email?: string; plan?: string; loggedIn: boolean; identity?: string }
 
-const STRIP_ENV_KEYS = ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CONFIG_DIR'];
-const STRIP_TOP_KEYS = ['apiKeyHelper', 'forceLoginMethod', 'forceLoginOrgUUID', 'enabledPlugins', 'extraKnownMarketplaces', 'additionalMarketplaces'];
+// settings.json keys that supply or restrict a sign-in, or move where Claude Code keeps an account's configuration and
+// credentials (Claude Code research, facts 15-17): a settings.json with one is never linked into another account, and
+// copies for another account drop them. The credentials outrank the account's own /login; forceLoginMethod restricts
+// how accounts sign in; the two directories, applied from env, would point every account at one location.
+// forceLoginOrgUUID is not one: outside managed settings it only pre-selects an organization at login.
+export const CLAUDE_IDENTITY_SETTING_KEYS = {
+  top: ['apiKeyHelper', 'forceLoginMethod'],
+  env: ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_PROFILE', 'CLAUDE_CONFIG_DIR', 'CLAUDE_SECURESTORAGE_CONFIG_DIR'],
+  // Workload Identity Federation outranks /login only with both set
+  envTogether: ['ANTHROPIC_FEDERATION_RULE_ID', 'ANTHROPIC_ORGANIZATION_ID'],
+} as const;
+// Plugin keys also stay out of an independent account's copy
+const STRIP_TOP_KEYS = [...CLAUDE_IDENTITY_SETTING_KEYS.top, 'enabledPlugins', 'extraKnownMarketplaces', 'additionalMarketplaces'];
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+/** The first identity key a parsed settings.json sets (CLAUDE_IDENTITY_SETTING_KEYS), named as written: a top-level key
+ *  as is, one under env as `env.<NAME>` (the federation pair as its first variable); undefined when there is none. */
+export function claudeIdentitySetting(data: Record<string, unknown>): string | undefined {
+  const top = CLAUDE_IDENTITY_SETTING_KEYS.top.find((k) => Object.hasOwn(data, k));
+  if (top) return top;
+  const env = data.env;
+  if (!isPlainObject(env)) return undefined;
+  const key = CLAUDE_IDENTITY_SETTING_KEYS.env.find((k) => Object.hasOwn(env, k))
+    ?? (CLAUDE_IDENTITY_SETTING_KEYS.envTogether.every((k) => Object.hasOwn(env, k)) ? CLAUDE_IDENTITY_SETTING_KEYS.envTogether[0] : undefined);
+  return key && `env.${key}`;
 }
 
 /** The default Claude account directory: the extension host's CLAUDE_CONFIG_DIR (see configDirFromEnv), else ~/.claude;
@@ -213,9 +236,10 @@ export function scanAccountDirs(): Account[] {
     .filter((a) => !sameRealPath(a.dir, def) && !realPathInside(a.dir, def));
 }
 
-/** Copies <fromDir>/settings.json to <toDir> (mode 0600, never overwriting) without the credential, login and plugin
- *  keys (STRIP_TOP_KEYS, and STRIP_ENV_KEYS under env). false, writing nothing, when the source is missing, unparsable
- *  or not an object, or the target already exists. Used by claudeShare.copyClaudeIndependent. */
+/** Copies <fromDir>/settings.json to <toDir> (mode 0600, never overwriting) without the identity keys
+ *  (CLAUDE_IDENTITY_SETTING_KEYS; the federation pair only when both are set) and the plugin keys. false, writing
+ *  nothing, when the source is missing, unparsable or not an object, or the target already exists. Used by
+ *  claudeShare.copyClaudeIndependent and for a linked account whose default settings.json cannot be linked. */
 export function copySettingsStripped(fromDir: string, toDir: string): boolean {
   const src = path.join(fromDir, 'settings.json');
   const dst = path.join(toDir, 'settings.json');
@@ -229,7 +253,10 @@ export function copySettingsStripped(fromDir: string, toDir: string): boolean {
   if (!isPlainObject(data)) return false;
   for (const k of STRIP_TOP_KEYS) delete data[k];
   const env = data.env;
-  if (isPlainObject(env)) for (const k of STRIP_ENV_KEYS) delete env[k];
+  if (isPlainObject(env)) {
+    const federation = CLAUDE_IDENTITY_SETTING_KEYS.envTogether.every((k) => Object.hasOwn(env, k));
+    for (const k of [...CLAUDE_IDENTITY_SETTING_KEYS.env, ...(federation ? CLAUDE_IDENTITY_SETTING_KEYS.envTogether : [])]) delete env[k];
+  }
   // wx: fail if the target exists; never overwrite
   fs.writeFileSync(dst, JSON.stringify(data, null, 2) + '\n', { mode: 0o600, flag: 'wx' });
   return true;

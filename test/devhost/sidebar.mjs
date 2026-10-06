@@ -47,12 +47,12 @@ export const rowAction = async (ctx, dir, action) => (await row(ctx, dir)).locat
 
 export const tab = (ctx, mode) => ctx.frame.locator(`#tab-${mode}`).click();
 
-/** Opens the add form if needed, sets the linked checkbox, types the name and submits with Enter */
+/** Opens the add form if needed, picks the linked or independent mode, types the name and submits with Enter */
 export async function addAccount(ctx, mode, name, shared) {
   const panel = ctx.frame.locator(`#panel-${mode}`);
   if (await panel.locator('.add').evaluate((el) => el.hidden)) await panel.locator('.add-toggle').click();
-  const box = panel.locator('vscode-checkbox.add-shared');
-  if ((await box.evaluate((el) => el.checked)) !== shared) await box.click();
+  const option = panel.locator(`vscode-radio.add-mode-option[value="${shared ? 'linked' : 'independent'}"]`);
+  if (!(await option.evaluate((el) => el.checked))) await option.click();
   const input = panel.locator('.add vscode-textfield input');
   await input.fill(name);
   await input.press('Enter');

@@ -4,7 +4,8 @@
 // with textContent, never interpolated innerHTML. Visible strings go through t() with a key in every locale table.
 // CSS colors in panel.css use only --vscode-* theme variables.
 import '@vscode-elements/elements/dist/vscode-button/index.js';
-import '@vscode-elements/elements/dist/vscode-checkbox/index.js';
+import '@vscode-elements/elements/dist/vscode-radio/index.js';
+import '@vscode-elements/elements/dist/vscode-radio-group/index.js';
 import '@vscode-elements/elements/dist/vscode-textfield/index.js';
 import '@vscode-elements/elements/dist/vscode-toolbar-button/index.js';
 import '@vscode-elements/elements/dist/vscode-icon/index.js';
@@ -333,8 +334,11 @@ class Page {
   private addOpen = false;
   private readonly addField: TextField;
   private readonly addButton: HTMLElement & { disabled: boolean };
-  // Shared (links to the default account) vs independent (copied settings); checked by default, kept across re-renders
-  private readonly addShared: HTMLElement & { checked: boolean };
+  // Account mode: linked to the default account (selected by default) or independent (copied settings), described by
+  // purpose; created once, so the choice is kept across re-renders
+  private readonly addMode: HTMLElement;
+  private readonly addLinked: HTMLElement & { checked: boolean };
+  private readonly addIndependent: HTMLElement & { checked: boolean };
   private readonly addHelp = h('div', { class: 'help' });
   private tools: HTMLElement;
   private syncButton!: HTMLElement;
@@ -362,13 +366,18 @@ class Page {
     this.text = TEXT[mode];
     this.addField = h('vscode-textfield') as TextField;
     this.addButton = h('vscode-button', { icon: 'add' }) as HTMLElement & { disabled: boolean };
-    this.addShared = h('vscode-checkbox', { class: 'add-shared', checked: true }) as HTMLElement & { checked: boolean };
-    this.addShared.checked = true;
+    // Radios of one group share a name; each tab has its own group in the same document
+    const radio = (value: string): HTMLElement & { checked: boolean } =>
+      h('vscode-radio', { class: 'add-mode-option', name: `add-mode-${mode}`, value }) as HTMLElement & { checked: boolean };
+    this.addLinked = radio('linked');
+    this.addLinked.checked = true;
+    this.addIndependent = radio('independent');
+    this.addMode = h('vscode-radio-group', { class: 'add-mode', variant: 'vertical' }, this.addLinked, this.addIndependent);
     this.addSection = h(
       'div',
       { class: 'add', id: `add-${mode}`, hidden: true },
       h('div', { class: 'input-group' }, this.addField, this.addButton),
-      this.addShared,
+      this.addMode,
       this.addHelp,
     );
     this.addToggle = h('button', { type: 'button', class: 'add-toggle', 'aria-expanded': 'false', 'aria-controls': `add-${mode}` }, h('vscode-icon', { name: 'add', size: '12' }), this.addToggleText);
@@ -407,7 +416,7 @@ class Page {
       }
     });
     onClick(this.addButton, () => this.submitAdd());
-    this.addShared.addEventListener('change', () => this.updateAddHelp());
+    this.addMode.addEventListener('change', () => this.updateAddHelp());
     this.tools = this.renderTools();
     this.root = h('div', { class: 'page', role: 'tabpanel', id: `panel-${mode}`, 'aria-labelledby': `tab-${mode}` }, this.top, this.listSection, this.tools);
     this.applyLocale();
@@ -426,7 +435,9 @@ class Page {
       button.setAttribute('label', t(key));
       button.setAttribute('title', t(key));
     }
-    this.addShared.textContent = t('add.shared');
+    this.addMode.setAttribute('aria-label', t('add.mode.ariaLabel'));
+    this.addLinked.textContent = t('add.mode.linked');
+    this.addIndependent.textContent = t('add.mode.independent');
     // A host add error is in the old locale; drop it so the help line shows the local validation in the new one
     if (this.addError) {
       this.addError = undefined;
@@ -630,7 +641,7 @@ class Page {
     this.addField.invalid = !!error;
     this.addButton.disabled = this.adding || !name || !!error;
     this.addHelp.className = error ? 'help error' : 'help';
-    const createKey = !this.addShared.checked ? 'add.help.independent'
+    const createKey = !this.addLinked.checked ? 'add.help.independent'
       : this.mode === 'codex' && codexRestart().userEnv ? 'codex.addHelpSharedWin'
         : (`${this.mode}.addHelpShared` as const);
     this.addHelp.textContent =
@@ -642,7 +653,7 @@ class Page {
     if (this.adding || this.addError || !name || this.validateName(name)) return;
     this.adding = true;
     this.updateAddHelp();
-    this.send({ type: 'add', name, shared: this.addShared.checked });
+    this.send({ type: 'add', name, shared: this.addLinked.checked });
   }
 
   // ---------- Rendering ----------

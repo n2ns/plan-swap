@@ -8,7 +8,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { t } from './i18n';
-import { claudeJsonName, copySettingsStripped, defaultDir, realPath, realPathInside, samePath, sameRealPath, syncMcpServers, unchangedSince } from './paths';
+import { claudeIdentitySetting, claudeJsonName, copySettingsStripped, defaultDir, realPath, realPathInside, samePath, sameRealPath, syncMcpServers, unchangedSince } from './paths';
 import {
   comparablePath, isOpaqueReparseDir, JunctionError, LinkPrivilegeError, createLink, fileLinksAvailable, isWindows, pidAlive, renameReplacing, type StartTimeProbe,
   stripBom, unlinkLinks, windowsStartTimes,
@@ -29,13 +29,6 @@ export const CLAUDE_SHARED_ENTRIES: ReadonlyArray<{ name: string; kind: 'file' |
 // Dirs shared per child: every child of the default dir's folder is linked, except these names
 export const CLAUDE_CHILD_SHARED_DIRS = ['skills', 'plugins'] as const;
 export const CLAUDE_CHILD_EXCLUDES = ['synced', '.trash'] as const;   // per-account cloud-synced buckets
-// Keys that must never be shared through settings.json (identity); linking settings.json is refused when the
-// default settings.json has any of them (top-level or inside env), and a link made before is replaced by a stripped copy
-export const CLAUDE_IDENTITY_SETTING_KEYS = {
-  top: ['apiKeyHelper', 'forceLoginMethod', 'forceLoginOrgUUID'],
-  env: ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CONFIG_DIR'],
-};
-
 // Per-project keys of .claude.json mirrored from the default account
 const PROJECT_KEYS = [
   'allowedTools', 'mcpServers', 'enabledMcpjsonServers', 'disabledMcpjsonServers', 'mcpContextUris',
@@ -52,7 +45,7 @@ export interface ShareReport {
   linked: string[];     // entry names (children as 'skills/<child>') newly linked
   created: string[];    // entries created empty in the default dir
   conflicts: string[];  // entries the account has as a real file/dir or a link elsewhere; left untouched
-  refused: string[];    // entries refused for safety ('settings.json' when the default has identity keys or is not a readable JSON object)
+  refused: string[];    // entries refused for safety ('settings.json' when the default sets an identity key or is not a readable JSON object)
   refusedNotes?: Record<string, string>; // localized explanation per refused entry, shown instead of the plain refusal
   copied?: string[];    // config files copied once instead of linked (Windows without file-link privilege); they no longer follow the default
   noPrivilege?: string[]; // single-file entries that could not be linked because Windows refuses file symlinks (Developer Mode off); left independent
@@ -103,24 +96,41 @@ export function emptyReport(): ShareReport {
 }
 
 // Whether the default settings.json can be shared: missing, or a JSON object without identity keys
-function settingsShareable(file: string): boolean {
+// Why the default settings.json cannot be linked: 'unreadable' (not a readable JSON object), the identity key it sets
+// (claudeIdentitySetting), or undefined (missing, or a JSON object without one)
+function settingsRefusal(file: string): string | undefined {
   let text: string;
   try {
     text = fs.readFileSync(file, 'utf8');
   } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return true;
-    return false;
+    return (e as NodeJS.ErrnoException).code === 'ENOENT' ? undefined : 'unreadable';
   }
   let data: unknown;
   try {
     data = JSON.parse(stripBom(text));
   } catch {
-    return false;
+    return 'unreadable';
   }
-  if (!isPlainObject(data)) return false;
-  if (CLAUDE_IDENTITY_SETTING_KEYS.top.some((k) => Object.hasOwn(data, k))) return false;
-  const env = data.env;
-  return !(isPlainObject(env) && CLAUDE_IDENTITY_SETTING_KEYS.env.some((k) => Object.hasOwn(env, k)));
+  return isPlainObject(data) ? claudeIdentitySetting(data) : 'unreadable';
+}
+
+function settingsShareable(file: string): boolean {
+  return settingsRefusal(file) === undefined;
+}
+
+// Localized explanation of a settings.json refusal: copied (the account just got the stripped copy) or own (it already
+// has a settings.json of its own); undefined when there is nothing more specific than the plain refusal
+function settingsRefusalNote(refusal: string, copied: boolean, own: boolean): string | undefined {
+  if (refusal === 'unreadable') return own ? undefined : t('share.r.settingsUnreadable');
+  if (!copied && !own) return undefined;
+  const why = refusal === 'forceLoginMethod' ? 'share.r.why.loginMethod'
+    : refusal === 'env.CLAUDE_CONFIG_DIR' || refusal === 'env.CLAUDE_SECURESTORAGE_CONFIG_DIR' ? 'share.r.why.location'
+      : 'share.r.why.credential';
+  return t('share.r.settingsRefused', {
+    key: refusal,
+    why: t(why),
+    result: copied ? t('share.r.settingsCopied', { key: refusal }) : t('share.r.settingsOwn'),
+  });
 }
 
 // Creates a missing default entry empty; returns true when created
@@ -231,7 +241,8 @@ export function mergeLines(src: string, dst: string): number {
  *  Those three steps move or unlink account files, so they are skipped and reported under busy while
  *  claudeAccountBusy(dir, procRoot) or options.busy() is true; that check runs lazily (once, only when such a step
  *  comes up) and the other links are still made. When the default settings.json cannot be shared, settings.json is
- *  refused and an existing settings.json link is replaced by the account's own copy without identity keys.
+ *  refused (explained in refusedNotes) and an existing settings.json link or a missing one becomes the account's own
+ *  copy without identity keys (copySettingsStripped).
  *  options.copyConfig enables the one-time Windows copy fallback (recordLink). dir === default → empty report. */
 export function ensureClaudeLinks(dir: string, procRoot = '/proc', options: LinkOptions = {}): ShareReport {
   const report = emptyReport();
@@ -252,14 +263,16 @@ export function ensureClaudeLinks(dir: string, procRoot = '/proc', options: Link
   for (const { name, kind } of CLAUDE_SHARED_ENTRIES) {
     const target = path.join(def, name);
     const link = path.join(acc, name);
-    if (name === 'settings.json' && !settingsShareable(target)) {
-      // A link created while the default settings were still shareable would hand the account the default's login
-      // identity: it is replaced by the account's own copy with the identity keys stripped
-      if (linksTo(link, target)) {
-        fs.unlinkSync(link);
-        copySettingsStripped(def, acc);
-      }
+    const refusal = name === 'settings.json' ? settingsRefusal(target) : undefined;
+    if (refusal) {
+      // A link would hand the account the default's sign-in settings: an existing link (made while the default was
+      // still shareable) and a missing entry both become the account's own copy with the identity keys stripped
+      if (linksTo(link, target)) fs.unlinkSync(link);
+      const own = !!lstatOrUndefined(link);
+      const copied = !own && copySettingsStripped(def, acc);
       report.refused.push(name);
+      const note = settingsRefusalNote(refusal, copied, own);
+      if (note) (report.refusedNotes ??= {})[name] = note;
       continue;
     }
     if (ensureDefaultEntry(target, kind)) report.created.push(name);
@@ -887,6 +900,7 @@ export function migrateClaudeToShared(dir: string, accountName: string, procRoot
   report.created.push(...links.created);
   report.conflicts.push(...links.conflicts);
   report.refused.push(...links.refused);
+  if (links.refusedNotes) report.refusedNotes = { ...links.refusedNotes };
   if (links.busy) report.busy = [...links.busy];
   if (links.failed) report.failed = [...links.failed];
   if (links.copied) report.copied = [...links.copied];

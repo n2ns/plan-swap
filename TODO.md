@@ -34,8 +34,6 @@ is still missing. Remove an item once it is done or decided.
   `CODEX_HOME`s with test accounts (never real ones) sharing one `sqlite_home`, and see whether memories stay consistent
   and Codex reports errors; then keep the refusal or drop `sqlite_home` from `CODEX_IDENTITY_CONFIG_KEYS`. A refusal
   leaves the account without any `config.toml`, so a needless one is costly.
-- **Claude refusal reasons are not specific.** When `settings.json` is not shared for safety, the report only names
-  the file, not the identity key that caused it (Codex `config.toml` refusals name the key since `refusedNotes`).
 - **Codex usage limits** (per-account observations and the status bar) are not yet accepted with real accounts, on WSL or
   Windows (`codex.cmd` fallback, the binary bundled with the Codex extension when `codex` is not on PATH), including switches, editor restarts, reset/24-hour expiry and sign-in changes. Run
   [the usage checks](docs/manual-verification.md#usage-limits-sign-in-tip-and-duplicate-sign-ins); re-verify the

@@ -218,7 +218,10 @@ describe('readAccountInfo', () => {
 describe('copySettingsStripped', () => {
   test('strips sensitive keys and writes with 0600', () => {
     fs.writeFileSync(path.join(def, 'settings.json'), JSON.stringify({
-      env: { ANTHROPIC_API_KEY: 'x', ANTHROPIC_AUTH_TOKEN: 'x', CLAUDE_CODE_OAUTH_TOKEN: 'x', CLAUDE_CONFIG_DIR: 'x', KEEP: '1' },
+      env: {
+        ANTHROPIC_API_KEY: 'x', ANTHROPIC_AUTH_TOKEN: 'x', CLAUDE_CODE_OAUTH_TOKEN: 'x', ANTHROPIC_PROFILE: 'x', CLAUDE_CONFIG_DIR: 'x',
+        CLAUDE_SECURESTORAGE_CONFIG_DIR: 'x', ANTHROPIC_FEDERATION_RULE_ID: 'x', ANTHROPIC_ORGANIZATION_ID: 'x', KEEP: '1',
+      },
       apiKeyHelper: 'x', forceLoginMethod: 'x', forceLoginOrgUUID: 'x', enabledPlugins: {}, extraKnownMarketplaces: {}, additionalMarketplaces: [],
       model: 'opus', permissions: { allow: ['Bash'] },
     }));
@@ -226,8 +229,15 @@ describe('copySettingsStripped', () => {
     ensureAccountDir(work);
     assertMode(work, '700');
     assert.equal(copySettingsStripped(def, work), true);
-    assert.deepEqual(JSON.parse(read(path.join(work, 'settings.json'))), { env: { KEEP: '1' }, model: 'opus', permissions: { allow: ['Bash'] } });
+    // forceLoginOrgUUID only pre-selects an organization outside managed settings: kept
+    assert.deepEqual(JSON.parse(read(path.join(work, 'settings.json'))), { env: { KEEP: '1' }, forceLoginOrgUUID: 'x', model: 'opus', permissions: { allow: ['Bash'] } });
     assertMode(path.join(work, 'settings.json'), '600');
+    // One federation variable alone is no credential: kept
+    const solo = accountDir('solo');
+    ensureAccountDir(solo);
+    fs.writeFileSync(path.join(def, 'settings.json'), JSON.stringify({ env: { ANTHROPIC_ORGANIZATION_ID: 'o' } }));
+    assert.equal(copySettingsStripped(def, solo), true);
+    assert.deepEqual(JSON.parse(read(path.join(solo, 'settings.json'))), { env: { ANTHROPIC_ORGANIZATION_ID: 'o' } });
   });
   test('reads a settings.json saved with a byte order mark', () => {
     fs.writeFileSync(path.join(def, 'settings.json'), '﻿{"model":"opus","apiKeyHelper":"x"}');
