@@ -123,6 +123,16 @@ test('each tab carries the recommendation computed on the full rows; the setting
     assert.ok(msg.type === 'state');
     assert.equal(msg.state.claude.recommended, '/h/.claude-work');
     assert.equal(msg.state.claude.hideRecommendation, undefined);
+    h.panel.setSwitchedTo('default');
+    msg = state();
+    assert.ok(msg.type === 'state');
+    assert.equal(msg.state.claude.switchedTo, 'default');
+    assert.equal(msg.state.claude.recommended, undefined);
+    assert.equal(msg.state.codex.recommended, '/h/.claude-work');
+    h.panel.setSwitchedTo(undefined);
+    msg = state();
+    assert.ok(msg.type === 'state');
+    assert.equal(msg.state.claude.recommended, '/h/.claude-work');
     // The 5-hour window hidden for display still counts for the recommendation
     setConfig('planswap', 'sidebar.showFiveHourLimit', false);
     msg = state();

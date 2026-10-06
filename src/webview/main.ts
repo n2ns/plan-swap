@@ -713,6 +713,7 @@ class Page {
   // as the row's button, so Codex gets its usual selection and restart flow) and Terminal. The card carries no
   // data-dir: focus restore must not take it for the recommended account's row
   private renderRecommendation(): HTMLElement | null {
+    if (this.mode === 'claude' ? this.tab.switchedTo : this.tab.pendingDir) return null;
     const a = this.tab.recommended !== undefined && !this.tab.hideRecommendation ? this.tab.accounts.find((x) => x.dir === this.tab.recommended) : undefined;
     if (!a) return null;
     const display = state.usageDisplay ?? 'remaining';
@@ -823,7 +824,7 @@ class Page {
         iconButtons.append(withAction(toolbarButton('terminal', t(`${this.mode}.terminalTitle`), () => this.send({ type: 'terminal', dir: a.dir })), 'terminal'));
       }
       // Registered accounts with usage limits can be left out of recommendations (the host keeps the mark)
-      if (a.kind !== 'external' && a.usageEligible && !this.tab.hideRecommendation) {
+      if (this.tab.accounts.length > 1 && a.kind !== 'external' && a.usageEligible && !this.tab.hideRecommendation) {
         const excluded = a.recommendExcluded === true;
         // A toggle button (role switch); the host's answer re-renders it, so the component's own flip is overridden
         const toggle = toolbarButton(excluded ? 'lightbulb-empty' : 'lightbulb', t(excluded ? 'row.recommendInclude' : 'row.recommendExclude'), () => this.send({ type: 'recommendExclude', dir: a.dir, excluded: !excluded }));

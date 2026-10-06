@@ -81,4 +81,13 @@ export async function run(ctx) {
   await step('card Switch (no confirmation): Work is current, no card, reload banner, setting written',
     d.rows.find((r) => r.dir === dirs.claudeWork)?.current === true && !d.card && !!d.banner && JSON.stringify(env ?? '').includes(dirs.claudeWork), { banner: d.banner, env });
   await sb.shot(ctx, '08-claude-after-switch.png');
+
+  // Switching to a low-usage account must show only the switch notice, even with a better candidate available.
+  await sb.rowAction(ctx, dirs.claudeDefault, 'switch');
+  d = await sb.waitFor(ctx, (x) => x.rows.find((r) => r.dir === dirs.claudeDefault)?.current === true && !!x.banner);
+  await step('low-usage account switch notice suppresses recommendation', !!d.banner && !d.card, { banner: d.banner, card: d.card });
+  await sb.shot(ctx, '09-claude-low-after-switch.png');
+  await ctx.frame.locator('#panel-claude [data-action="dismissBanner"]').click();
+  d = await sb.waitFor(ctx, (x) => !x.banner && !!x.card);
+  await step('dismissing switch notice restores recommendation', !d.banner && d.card?.title === 'Recommended: work', d.card);
 }

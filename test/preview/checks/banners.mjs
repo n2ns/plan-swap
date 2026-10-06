@@ -1,5 +1,5 @@
-// Banner layout: the Claude page with the reload banner and the recommendation card, the Codex page with the pending
-// banner. For every banner the icon shares the title line, nothing overflows, the buttons stay inside the sidebar and
+// Banner layout: switch/restart banners take precedence over recommendations on both pages.
+// For every banner the icon shares the title line, nothing overflows, the buttons stay inside the sidebar and
 // the title does not run under the close button.
 
 // State patches, serialized into the preview page by ctx.apply
@@ -13,11 +13,14 @@ const claudeBanners = (state) => {
   work.usage.checkedAt = Date.now() - 5000;
   tab.recommended = work.dir;
 };
-const codexBanners = (state) => { state.codex.pendingDir = 'Work'; };
+const codexBanners = (state) => {
+  state.codex.pendingDir = 'Work';
+  state.codex.recommended = '/fixture/.codex-work';
+};
 
 export async function run(ctx) {
   const { page, locale, width, step, shot } = ctx;
-  for (const [mode, mutate, expected] of [['claude', claudeBanners, 2], ['codex', codexBanners, 1]]) {
+  for (const [mode, mutate, expected] of [['claude', claudeBanners, 1], ['codex', codexBanners, 1]]) {
     await ctx.apply(mutate, mode);
     const banners = await page.evaluate((mode) => {
       const rect = (el) => el.getBoundingClientRect();
@@ -39,6 +42,7 @@ export async function run(ctx) {
       });
     }, mode);
     await step(`${mode}: ${expected} banner(s) rendered`, banners.length === expected, banners.map((b) => b.kind));
+    await step(`${mode}: switch banner hides recommendation`, banners.every((b) => b.kind !== 'recommend'));
     for (const b of banners) {
       await step(`${mode} ${b.kind}: icon on the title line`, b.iconOnTitleLine);
       await step(`${mode} ${b.kind}: no horizontal overflow`, !b.overflow);
@@ -46,5 +50,12 @@ export async function run(ctx) {
       await step(`${mode} ${b.kind}: title clear of the close button`, b.titleClearOfClose);
     }
     await shot(`${locale}-${width}-${mode}.png`);
+    await page.evaluate((mode) => {
+      const state = structuredClone(window.preview.state());
+      delete state[mode].switchedTo;
+      delete state[mode].pendingDir;
+      window.preview.post({ type: 'state', state });
+    }, mode);
+    await step(`${mode}: recommendation returns after switch banner clears`, await page.locator(`#panel-${mode} .banner.recommend`).count() === 1);
   }
 }

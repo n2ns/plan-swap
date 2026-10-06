@@ -61,7 +61,7 @@ export interface TabState {
   // Settings planswap.sidebar.showEmail: false hides the email line of every row (the host then sends no email)
   hideEmail?: boolean;
   // Directory of the account the host recommends while the current one runs low (recommend in src/recommend.ts); the
-  // page shows it in a card above the list. Absent: nothing to recommend, or recommendations are off
+  // page shows it in a card above the list. Absent: nothing to recommend, recommendations are off, or a switch/restart banner is shown
   recommended?: string;
   // Setting planswap.sidebar.showRecommendation off: no card and no per-row exclude buttons
   hideRecommendation?: boolean;
