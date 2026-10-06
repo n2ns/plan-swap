@@ -137,6 +137,33 @@ test('each tab carries the recommendation computed on the full rows; the setting
   } finally { h.panel.dispose(); resetConfig(); }
 });
 
+test('no recommendation while a Codex selection waits for the restart', () => {
+  resetConfig();
+  const usage = (used: number) => ({ windows: [{ usedPercent: used, windowMinutes: 300 }], checkedAt: 1 });
+  let pending: string | undefined = 'Jim5';
+  const h = harness({
+    accounts: (): AccountView[] => [
+      { kind: 'named', name: 'cur', label: 'cur', dir: '/h/.codex-cur', dirLabel: '~/.codex-cur', loggedIn: true, isCurrent: true, usage: usage(100) },
+      { kind: 'default', name: 'default', label: 'default', dir: '/h/.codex', dirLabel: '~/.codex', loggedIn: true, isCurrent: false, usage: usage(4) },
+      { kind: 'named', name: 'Jim5', label: 'Jim5', dir: '/h/.codex-jim5', dirLabel: '~/.codex-jim5', loggedIn: true, isCurrent: false, isSelected: true, usage: usage(0) },
+    ],
+    enabled: () => true,
+    pendingDir: () => pending,
+    watchTargets: () => [],
+  });
+  const state = (): ToWebview => { h.messages.length = 0; h.receive({ type: 'ready' }); return h.messages[0]; };
+  try {
+    let msg = state();
+    assert.ok(msg.type === 'state');
+    assert.equal(msg.state.codex.pendingDir, 'Jim5');
+    assert.equal(msg.state.codex.recommended, undefined);
+    pending = undefined;
+    msg = state();
+    assert.ok(msg.type === 'state');
+    assert.equal(msg.state.codex.recommended, '/h/.codex');
+  } finally { h.panel.dispose(); resetConfig(); }
+});
+
 test('the sidebar color thresholds default to 30 / 10 and are clamped to 0..100', () => {
   resetConfig();
   try {

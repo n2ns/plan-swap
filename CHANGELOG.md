@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- The Codex tab no longer recommends another account while a selected account waits for the server restart; the card used to suggest the next-best account, and its **Switch** button could replace a better selection.
+
 ## [0.3.5] - 2026-10-06
 
 ### Fixed

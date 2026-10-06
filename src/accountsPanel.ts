@@ -276,20 +276,22 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
     this.changed.dispose();
   }
 
-  // The recommendation is computed on the full rows, before the display settings drop any window
+  // The recommendation is computed on the full rows, before the display settings drop any window; none while a Codex
+  // selection waits for the restart, since the user already chose the next account
   private tabState(mode: PanelMode): TabState {
     const source = this.sources[mode];
     const display = sidebarDisplay();
     const rows = source.accounts();
     const showRecommendation = vscode.workspace.getConfiguration('planswap').get<boolean>(SHOW_RECOMMENDATION_SETTING, true);
+    const pendingDir = source.pendingDir();
     return {
       enabled: source.enabled(),
       accounts: applySidebarDisplay(rows, display),
       hideEmail: display.email ? undefined : true,
-      recommended: showRecommendation ? recommend(rows, sidebarThresholds().warning) : undefined,
+      recommended: showRecommendation && !pendingDir ? recommend(rows, sidebarThresholds().warning) : undefined,
       hideRecommendation: showRecommendation ? undefined : true,
       switchedTo: mode === 'claude' ? this.switchedTo : undefined,
-      pendingDir: source.pendingDir(),
+      pendingDir,
       restart: source.restart?.(),
       // New account folders as the platform writes them: ~/.claude- on Linux, ~\.claude- on Windows
       dirPrefix: tildify(path.join(os.homedir(), mode === 'claude' ? '.claude-' : '.codex-')),
