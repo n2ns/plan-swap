@@ -5,9 +5,6 @@ is still missing. Remove an item once it is done or decided.
 
 ## Known gaps
 
-- **No background mirroring.** Mirroring runs only when links are refreshed ([Claude design 6.7](docs/design.md#67-shared-and-independent-accounts), "When links are refreshed";
-  [§11](docs/design.md#11-known-limitations-and-risks) item 3).
-  Consider watching the default `.claude.json` and mirroring automatically.
 - **Claude prompt history "storage v5" (watch on upgrades).** Claude Code has a history storage backend behind the
   remote feature flag `tengu_hover_rest` (env override `CLAUDE_CODE_HOVER_REST`, cached per account in
   `.claude.json` under `cachedGrowthBookFeatures`) whose code opens `history.jsonl` with `O_NOFOLLOW`. In the public

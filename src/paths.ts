@@ -241,25 +241,34 @@ export function scanAccountDirs(): Account[] {
  *  nothing, when the source is missing, unparsable or not an object, or the target already exists. Used by
  *  claudeShare.copyClaudeIndependent and for a linked account whose default settings.json cannot be linked. */
 export function copySettingsStripped(fromDir: string, toDir: string): boolean {
-  const src = path.join(fromDir, 'settings.json');
   const dst = path.join(toDir, 'settings.json');
-  if (!fs.existsSync(src) || fs.existsSync(dst)) return false;
+  if (fs.existsSync(dst)) return false;
+  const data = strippedSettings(fromDir);
+  if (!data) return false;
+  // wx: fail if the target exists; never overwrite
+  fs.writeFileSync(dst, JSON.stringify(data, null, 2) + '\n', { mode: 0o600, flag: 'wx' });
+  return true;
+}
+
+/** <fromDir>/settings.json without the keys copySettingsStripped strips (read only); undefined when it is missing,
+ *  unparsable or not an object. */
+export function strippedSettings(fromDir: string): Record<string, unknown> | undefined {
+  const src = path.join(fromDir, 'settings.json');
+  if (!fs.existsSync(src)) return undefined;
   let data: unknown;
   try {
     data = JSON.parse(stripBom(fs.readFileSync(src, 'utf8')));
   } catch {
-    return false;
+    return undefined;
   }
-  if (!isPlainObject(data)) return false;
+  if (!isPlainObject(data)) return undefined;
   for (const k of STRIP_TOP_KEYS) delete data[k];
   const env = data.env;
   if (isPlainObject(env)) {
     const federation = CLAUDE_IDENTITY_SETTING_KEYS.envTogether.every((k) => Object.hasOwn(env, k));
     for (const k of [...CLAUDE_IDENTITY_SETTING_KEYS.env, ...(federation ? CLAUDE_IDENTITY_SETTING_KEYS.envTogether : [])]) delete env[k];
   }
-  // wx: fail if the target exists; never overwrite
-  fs.writeFileSync(dst, JSON.stringify(data, null, 2) + '\n', { mode: 0o600, flag: 'wx' });
-  return true;
+  return data;
 }
 
 /** Windows: the on-disk name of an existing folder that is `dir` except for letter case (the same folder there, e.g.

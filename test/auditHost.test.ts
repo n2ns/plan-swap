@@ -228,20 +228,27 @@ describe('account terminals count as busy for the linking steps', () => {
     }
   });
 
-  test('Re-link (sync) passes the caller\'s busy predicate for each account into the linking step', async (ctx) => {
+  test('Re-link (sync) passes the caller\'s busy predicate for each account into the check and the linking step', async (ctx) => {
     ctx.mock.method(window, 'showInformationMessage', async () => undefined);
-    ctx.mock.method(window, 'showWarningMessage', async () => undefined);
+    // Repair is chosen in the check's notification
+    ctx.mock.method(window, 'showWarningMessage', async (_message: string, ...items: string[]) => items.find((i) => i === t('linkCheck.repair')));
     const dirs = [path.join(home, '.codex-x'), path.join(home, '.codex-y')];
     for (const d of dirs) fs.mkdirSync(d, { recursive: true });
+    const checked: Array<{ dir: string; busy: boolean | undefined }> = [];
     const received: Array<{ dir: string; busy: boolean | undefined }> = [];
     const asked: string[] = [];
     await runTool('codex', 'sync', {
       codexDirs: () => dirs,
       codexShareOps: {
         isShared: () => true,
+        defaultDir: () => '/fixture/.codex',
         refresh(dir, options) {
           received.push({ dir, busy: options?.busy?.() });
           return { linked: [], created: [], conflicts: [], refused: [] } as never;
+        },
+        check(dir, options) {
+          checked.push({ dir, busy: options?.busy?.() });
+          return { report: { linked: ['sessions'], created: [], conflicts: [], refused: [] } };
         },
       },
       accountBusy: (mode, dir) => {
@@ -249,8 +256,9 @@ describe('account terminals count as busy for the linking steps', () => {
         return dir === dirs[1];
       },
     });
+    assert.deepEqual(checked, [{ dir: dirs[0], busy: false }, { dir: dirs[1], busy: true }]);
     assert.deepEqual(received, [{ dir: dirs[0], busy: false }, { dir: dirs[1], busy: true }]);
-    assert.deepEqual(asked, dirs.map((d) => `codex:${d}`));
+    assert.deepEqual(asked, [...dirs, ...dirs].map((d) => `codex:${d}`));
   });
 });
 

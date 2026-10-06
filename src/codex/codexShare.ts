@@ -11,7 +11,8 @@ import { realPathInside, samePath, sameRealPath } from '../paths';
 import { comparablePath, fileLinksAvailable, isWindows } from '../platform';
 import {
   type MergeCtx, type MigrateReport, type ShareReport, copyTree, defaultFolder, emptyReport, freeName, linkEntry, recordLink, type LinkOptions,
-  finalizeMerge, linksTo, lstatOrUndefined, mergeEntry, mergeLines, moveEntry, record, rememberMove, sameContent, unlinkChildLinks, unlinkIfLinksTo,
+  finalizeMerge, linksTo, lstatOrUndefined, markElsewhere, mergeEntry, mergeLines, missingLinkResult, moveEntry, record, rememberMove, sameContent,
+  unlinkChildLinks, unlinkIfLinksTo,
 } from '../claudeShare';
 import { blockedConfigReason, CODEX_IDENTITY_CONFIG_KEYS, codexDaemonAlive, codexDefaultDir, copyCodexSeed } from './codexPaths';
 
@@ -97,25 +98,35 @@ function ensureDefaultEntry(target: string, kind: 'file' | 'dir'): boolean {
 }
 
 // Ensures <acc>/<rel> and every folder above it (below acc) is a real folder: missing → created 0700, a link to the
-// same default folder → replaced by a real folder when replaceLinks. false when some part is a file or a (kept) link.
-function ensureAccountFolder(acc: string, def: string, rel: string, replaceLinks: boolean): boolean {
+// same default folder → replaced by a real folder when replaceLinks (its rel path recorded in unlinked). false when
+// some part is a file or a (kept) link; 'fresh' when <acc>/<rel> is new or replaced, so it is empty. check: nothing is
+// written, the result is the same
+function ensureAccountFolder(acc: string, def: string, rel: string, replaceLinks: boolean, unlinked: string[], check = false): boolean | 'fresh' {
   let a = acc;
   let d = def;
+  let r = '';
+  let fresh = false;
   for (const seg of rel.split('/')) {
     a = path.join(a, seg);
     d = path.join(d, seg);
-    const st = lstatOrUndefined(a);
+    r = r ? `${r}/${seg}` : seg;
+    // Below a folder that is new (or would be, in a check) there is nothing yet
+    const st = fresh ? undefined : lstatOrUndefined(a);
     if (replaceLinks && st?.isSymbolicLink() && linksTo(a, d)) {
       // Whole-folder link from an earlier version
+      unlinked.push(r);
+      fresh = true;
+      if (check) continue;
       fs.unlinkSync(a);
       fs.mkdirSync(a, { mode: 0o700 });
     } else if (!st) {
-      fs.mkdirSync(a, { mode: 0o700 });
+      fresh = true;
+      if (!check) fs.mkdirSync(a, { mode: 0o700 });
     } else if (!st.isDirectory()) {
       return false;
     }
   }
-  return true;
+  return fresh ? 'fresh' : true;
 }
 
 // Whether <acc>/<rel> and every folder above it (below acc) is a real folder (no links followed)
@@ -140,17 +151,20 @@ export function isSharedCodexAccount(dir: string): boolean {
 /** Creates/repairs every link of a shared account (idempotent). Never touches the default dir's existing content;
  *  missing default entries are created empty ('file' 0600, hooks.json '{}', 'dir' 0700; 'link-only' never).
  *  In a shared account a real history.jsonl / session_index.jsonl is merged back into the default file (mergeLines:
- *  missing lines appended) and relinked (reported under `linked`), except while codexAccountBusy(dir, procRoot) or
- *  options.busy() (checked lazily, only when a merge-back comes up): then the file is left untouched and reported
- *  under `busy`; without file-link privilege it is not merged. A real sqlite db stays a conflict. Nested entries
- *  ('.tmp/…') need a real account folder (created 0700; otherwise a conflict). A whole-folder skills / plugins/cache
- *  link from an earlier version is replaced by per-child links; child links whose default target is gone are removed.
+ *  missing lines appended) and relinked (reported under `merged` and `linked`), except while
+ *  codexAccountBusy(dir, procRoot) or options.busy() (checked lazily, only when a merge-back comes up): then the file
+ *  is left untouched and reported under `busy`; without file-link privilege it is not merged. A real sqlite db stays a
+ *  conflict (links elsewhere also under `elsewhere`). Nested entries ('.tmp/…') need a real account folder (created
+ *  0700; otherwise a conflict). A whole-folder skills / plugins/cache link from an earlier version is replaced by
+ *  per-child links; child links whose default target is gone are removed (both under `unlinked`).
  *  win32: *.sqlite entries are never linked; an existing link is removed by removeWindowsSqliteLink (reported under
- *  `refused`, or `busy` when a side file is in use). dir === default → empty report. procRoot is for tests. */
+ *  `refused` and `unlinked`, or `busy` when a side file is in use). options.check: read only, as in ensureClaudeLinks
+ *  (a Windows database link is expected to be removable). dir === default → empty report. procRoot is for tests. */
 export function ensureCodexLinks(dir: string, options: LinkOptions = {}, procRoot = '/proc'): ShareReport {
   const report = emptyReport();
   if (isDefault(dir)) return report;
   assertNotContainingDefault(dir);
+  const check = !!options.check;
   const def = codexDefaultDir();
   const acc = path.resolve(dir);
   const shared = isSharedCodexAccount(acc);
@@ -158,9 +172,14 @@ export function ensureCodexLinks(dir: string, options: LinkOptions = {}, procRoo
   let busy: boolean | undefined;
   const isBusy = (): boolean => (busy ??= codexAccountBusy(dir, procRoot) || !!options.busy?.());
   // Merging a file's lines back removes it; without file-link privilege it could not be linked again, so it stays
-  const fileLinks = fileLinksAvailable(acc);
-  fs.mkdirSync(def, { recursive: true, mode: 0o700 });
-  fs.mkdirSync(acc, { recursive: true, mode: 0o700 });
+  const fileLinks = check ? options.fileLinks ?? true : fileLinksAvailable(acc);
+  if (!check) {
+    fs.mkdirSync(def, { recursive: true, mode: 0o700 });
+    fs.mkdirSync(acc, { recursive: true, mode: 0o700 });
+  }
+  // A missing default entry: created empty, or (check) reported as such
+  const missingDefault = (target: string, kind: 'file' | 'dir'): boolean => (check ? !lstatOrUndefined(target) : ensureDefaultEntry(target, kind));
+  const unlinked: string[] = [];
 
   for (const { name, kind } of CODEX_SHARED_ENTRIES) {
     const target = path.join(def, name);
@@ -168,59 +187,81 @@ export function ensureCodexLinks(dir: string, options: LinkOptions = {}, procRoo
     const refusal = name === 'config.toml' ? configRefusal(target) : undefined;
     if (refusal) {
       // A link created while the default config was still shareable is removed; no copy is made
-      if (linksTo(link, target)) fs.unlinkSync(link);
+      const wasLinked = linksTo(link, target);
+      if (wasLinked) {
+        unlinked.push(name);
+        if (!check) fs.unlinkSync(link);
+      }
       report.refused.push(name);
-      if (!lstatOrUndefined(link)) (report.refusedNotes ??= {})[name] = configRefusalNote(refusal);
+      if (wasLinked || !lstatOrUndefined(link)) (report.refusedNotes ??= {})[name] = configRefusalNote(refusal);
       continue;
     }
     // Windows: databases stay per account (see removeWindowsSqliteLink); a link left from before is removed
     if (isWindows() && name.endsWith('.sqlite')) {
-      const r = removeWindowsSqliteLink(link, target);
-      if (r === 'removed') report.refused.push(name);
-      else if (r === 'busy') (report.busy ??= []).push(name);
+      const r = check ? (linksTo(link, target) ? 'removed' : 'none') : removeWindowsSqliteLink(link, target);
+      if (r === 'removed') {
+        report.refused.push(name);
+        unlinked.push(name);
+      } else if (r === 'busy') (report.busy ??= []).push(name);
       continue;
     }
     const parent = path.dirname(name);
     if (parent !== '.') {
-      if (!ensureAccountFolder(acc, def, parent, false)) {
+      if (!ensureAccountFolder(acc, def, parent, false, unlinked, check)) {
         report.conflicts.push(name);
         continue;
       }
       // The target's folder must exist, otherwise opening the link with O_CREAT fails; the target itself is not created
-      if (ensureDefaultEntry(path.join(def, parent), 'dir')) report.created.push(parent);
+      if (missingDefault(path.join(def, parent), 'dir')) report.created.push(parent);
     }
-    if (kind !== 'link-only' && ensureDefaultEntry(target, kind)) report.created.push(name);
+    if (kind !== 'link-only' && missingDefault(target, kind)) report.created.push(name);
     if (shared && fileLinks && JSONL_FILES.includes(name) && lstatOrUndefined(link)?.isFile()) {
       if (isBusy()) {
         (report.busy ??= []).push(name);
         continue;
       }
+      (report.merged ??= []).push(name);
+      if (check) {
+        // The merged file is removed, so the link is made next
+        record(report, name, missingLinkResult(target, { fileLinks }));
+        continue;
+      }
       mergeLines(link, target);
     }
-    recordLink(report, name, linkEntry(link, target), link, target, !!options.copyConfig);
+    recordLink(report, name, linkEntry(link, target, check ? { fileLinks, dir: kind === 'dir' } : undefined), link, target, !check && !!options.copyConfig);
   }
 
   for (const { dir: rel, excludes } of CODEX_CHILD_SHARED_DIRS) {
     const defFolder = path.join(def, rel);
-    if (ensureDefaultEntry(defFolder, 'dir')) report.created.push(rel);
-    if (!ensureAccountFolder(acc, def, rel, true)) {
+    if (missingDefault(defFolder, 'dir')) report.created.push(rel);
+    const folder = ensureAccountFolder(acc, def, rel, true, unlinked, check);
+    if (!folder) {
       report.conflicts.push(rel);
       continue;
     }
+    // Check: a new (or replaced) account folder is empty, so every child would be linked and none is dangling
+    const fresh = check && folder === 'fresh';
     const accFolder = path.join(acc, rel);
     const excluded = new Set<string>(excludes);
-    for (const child of fs.readdirSync(defFolder)) {
+    const children = check && !lstatOrUndefined(defFolder) ? [] : fs.readdirSync(defFolder);
+    for (const child of children) {
       if (excluded.has(child)) continue;
-      record(report, `${rel}/${child}`, linkEntry(path.join(accFolder, child), path.join(defFolder, child)));
+      const target = path.join(defFolder, child);
+      record(report, `${rel}/${child}`, fresh ? missingLinkResult(target, { fileLinks }) : linkEntry(path.join(accFolder, child), target, check ? { fileLinks } : undefined));
     }
+    if (fresh) continue;
     // Remove links into the default folder whose target no longer exists
     for (const child of fs.readdirSync(accFolder)) {
       const link = path.join(accFolder, child);
       if (!lstatOrUndefined(link)?.isSymbolicLink()) continue;
       const to = path.resolve(accFolder, fs.readlinkSync(link));
-      if (comparablePath(path.dirname(to)) === comparablePath(defFolder) && !lstatOrUndefined(to)) fs.unlinkSync(link);
+      if (comparablePath(path.dirname(to)) !== comparablePath(defFolder) || lstatOrUndefined(to)) continue;
+      unlinked.push(`${rel}/${child}`);
+      if (!check) fs.unlinkSync(link);
     }
   }
+  if (unlinked.length) report.unlinked = unlinked;
+  markElsewhere(report, acc);
   return report;
 }
 

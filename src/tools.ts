@@ -9,9 +9,10 @@ import { execFile } from 'node:child_process';
 import { currentDir, isExplicitConfigDir } from './claudeSettings';
 import { effectiveDir } from './codex/codexState';
 import { claudeJsonPath, defaultDir, syncMcpServers } from './paths';
-import { ensureClaudeLinks, isSharedClaudeAccount, mirrorClaudeJson, type LinkOptions } from './claudeShare';
+import { ensureClaudeLinks, isSharedClaudeAccount, mirrorClaudeJson, type LinkOptions, type ShareReport } from './claudeShare';
 import { askCopyFallback } from './linkPolicy';
 import { describeShareReport, type ShareReportLike } from './shareReport';
+import { announcementKeys, describeLinkCheck, type AccountCheck, type LinkCheckNotices } from './linkCheck';
 import type { PanelMode, ToolId } from './protocol';
 import { getLocale, LOCALE_INFO, t } from './i18n';
 import { CLAUDE_REFRESH_ALL_USAGE_COMMAND, CLAUDE_REFRESH_USAGE_COMMAND, CODEX_REFRESH_ALL_USAGE_COMMAND, REFRESH_USAGE_COMMAND } from './statusBar';
@@ -22,6 +23,11 @@ export interface ShareOps {
   isShared(dir: string): boolean;
   // Re-links the account and mirrors what the vendor mirrors; returns the report of the linking step
   refresh(dir: string, options?: LinkOptions): ShareReportLike;
+  // The same read only (options.check): the report refresh would return and what the account lacks of the default
+  // .claude.json (Claude only); writes nothing
+  check(dir: string, options?: LinkOptions): { report: ShareReport; mirror?: string[] };
+  // The vendor's default dir, where the links point
+  defaultDir(): string;
 }
 
 export interface ToolDeps {
@@ -40,6 +46,8 @@ export interface ToolDeps {
   labelOf?: (mode: PanelMode, dir: string) => string;
   // Extra busy check passed to the linking steps (Windows: PlanSwap has a terminal of the account open)
   accountBusy?: (mode: PanelMode, dir: string) => boolean;
+  // Announced link-check problems (state file), so windows and reloads do not repeat a notification
+  linkNotices?: LinkCheckNotices;
 }
 
 /** Whether PlanSwap has an account terminal open for dir (only meaningful on Windows; false elsewhere). */
@@ -71,7 +79,7 @@ function userGuideUrl(): string {
  * - restartServer: deps.codexRestart, or a "not initialized" warning.
  * - refreshUsage / refreshAllUsage: the vendor's own refresh command, so both entry points share one path.
  * - cliVersions: collectVersions, pushed to the panel through deps.postVersions or shown in a QuickPick.
- * - sync: re-links every shared account of the vendor (syncShared).
+ * - sync: checks every shared account of the vendor read only and offers to repair them (syncShared).
  * - updateCli: a terminal running `claude update`, or `codex update` with CODEX_HOME removed from its environment
  *   (`env -u CODEX_HOME` on Linux); no pre-check and no state change. Available even when Codex is not initialized.
  */
@@ -138,40 +146,126 @@ const claudeShareOps: ShareOps = {
     mirrorClaudeJsonInto(claudeJsonPath(def, isExplicitConfigDir(def)), dir);
     return report;
   },
+  check(dir, options) {
+    const report = ensureClaudeLinks(dir, '/proc', { ...options, check: true });
+    const def = defaultDir();
+    // Only shared accounts are checked, which mirrorClaudeJsonInto mirrors with mirrorClaudeJson
+    return { report, mirror: mirrorClaudeJson(claudeJsonPath(def, isExplicitConfigDir(def)), dir, undefined, true).changed };
+  },
+  defaultDir,
 };
 
-// Re-links every shared account of the vendor to the default account and reports in one notification; independent accounts are untouched.
-// A failing account is reported and the next one continues; with any issue the result is a warning that does not claim
-// every account was re-linked. Without the vendor's directory list or share ops (not initialized) only a warning is shown
-async function syncShared(mode: PanelMode, deps: ToolDeps): Promise<void> {
-  const vendor = mode === 'claude' ? 'Claude' : 'Codex';
+interface SharedAccounts {
+  vendor: 'Claude' | 'Codex';
+  ops: ShareOps;
+  dirs: string[];          // the vendor's shared accounts
+  nameOf: (dir: string) => string;
+  busyOf: (dir: string) => (() => boolean) | undefined;
+}
+
+// The vendor's shared accounts and how to name and busy-check them; undefined when the vendor is not initialized
+function sharedAccounts(mode: PanelMode, deps: ToolDeps): SharedAccounts | undefined {
   const dirs = mode === 'claude' ? deps.claudeDirs : deps.codexDirs;
   const ops = mode === 'claude' ? claudeShareOps : deps.codexShareOps;
-  if (!dirs || !ops) {
-    void vscode.window.showWarningMessage(t('tools.syncNotInit', { vendor }));
-    return;
-  }
+  if (!dirs || !ops) return undefined;
   const prefix = mode === 'claude' ? '.claude-' : '.codex-';
   const nameOf = (dir: string): string => {
     if (deps.labelOf) return deps.labelOf(mode, dir);
     const base = path.basename(dir);
     return base.startsWith(prefix) ? base.slice(prefix.length) : base;
   };
-  const shared = dirs().filter((d) => ops.isShared(d));
-  if (shared.length === 0) {
-    void vscode.window.showInformationMessage(t('sync.none', { vendor }));
+  const accountBusy = deps.accountBusy;
+  return {
+    vendor: mode === 'claude' ? 'Claude' : 'Codex',
+    ops,
+    dirs: dirs().filter((d) => ops.isShared(d)),
+    nameOf,
+    busyOf: (dir) => (accountBusy ? () => accountBusy(mode, dir) : undefined),
+  };
+}
+
+// Read-only check of every shared account; a failing account becomes an error entry and the next one continues.
+// keys: what the background check announces (announcementKeys; Windows file links count as unknown before a probe)
+function checkShared(accounts: SharedAccounts, deps: ToolDeps): { checks: AccountCheck[]; keys: string[] } {
+  const fileLinks = deps.linkNotices?.fileLinks();
+  const def = accounts.ops.defaultDir();
+  const checks = accounts.dirs.map((dir): AccountCheck => {
+    const label = accounts.nameOf(dir);
+    try {
+      return { dir, label, def, ...accounts.ops.check(dir, { busy: accounts.busyOf(dir), fileLinks }) };
+    } catch (err) {
+      return { dir, label, error: errText(err) };
+    }
+  });
+  return { checks, keys: announcementKeys(checks, isWindows() && fileLinks === undefined) };
+}
+
+// The check's notification: the problems and notes per account, with Repair when a repair would change something
+async function offerRepair(mode: PanelMode, deps: ToolDeps, accounts: SharedAccounts, checks: AccountCheck[]): Promise<void> {
+  const { lines, fixable } = describeLinkCheck(checks);
+  const message = t(fixable ? 'linkCheck.found' : 'linkCheck.foundNoFix', { vendor: accounts.vendor, list: lines.join(t('common.listSep')) });
+  const repair = t('linkCheck.repair');
+  const picked = await (fixable ? vscode.window.showWarningMessage(message, repair) : vscode.window.showWarningMessage(message));
+  if (picked === repair) await repairShared(mode, deps);
+}
+
+/**
+ * Background link check of one vendor (the host calls it in the focused window): checks every shared account read
+ * only and shows the Re-link notification (all problems) when LinkCheckNotices.take says its announcement keys
+ * (repairable problems only, announcementKeys) are due. Nothing is repaired without the user's Repair; nothing happens
+ * when the vendor is not initialized or deps.linkNotices is missing.
+ */
+export async function checkSharedInBackground(mode: PanelMode, deps: ToolDeps): Promise<void> {
+  const accounts = sharedAccounts(mode, deps);
+  const notices = deps.linkNotices;
+  if (!accounts || !notices) return;
+  const { checks, keys } = checkShared(accounts, deps);
+  if (await notices.take(mode, keys)) await offerRepair(mode, deps, accounts, checks);
+}
+
+// Re-link: checks every shared account of the vendor read only; without problems it reports "all fine" (with the notes
+// on entries kept as they are, if any), otherwise one notification lists every problem and note per account and offers
+// Repair (repairShared) when a repair would change something. Its
+// announcement keys are recorded so the background check does not repeat them. Without the vendor's directory list or
+// share ops (not initialized) only a warning is shown
+async function syncShared(mode: PanelMode, deps: ToolDeps): Promise<void> {
+  const accounts = sharedAccounts(mode, deps);
+  if (!accounts) {
+    void vscode.window.showWarningMessage(t('tools.syncNotInit', { vendor: mode === 'claude' ? 'Claude' : 'Codex' }));
     return;
   }
+  if (accounts.dirs.length === 0) {
+    void vscode.window.showInformationMessage(t('sync.none', { vendor: accounts.vendor }));
+    return;
+  }
+  const { checks, keys } = checkShared(accounts, deps);
+  await deps.linkNotices?.remember(mode, keys);
+  const { lines, problems } = describeLinkCheck(checks);
+  if (!problems) {
+    const params = { count: accounts.dirs.length, vendor: accounts.vendor };
+    void vscode.window.showInformationMessage(lines.length ? t('linkCheck.okNotes', { ...params, list: lines.join(t('common.listSep')) }) : t('linkCheck.ok', params));
+    return;
+  }
+  await offerRepair(mode, deps, accounts, checks);
+}
+
+// Repair: re-links every shared account of the vendor to the default account and reports in one notification;
+// independent accounts are untouched. A failing account is reported and the next one continues; with any issue the
+// result is a warning that does not claim every account was re-linked
+async function repairShared(mode: PanelMode, deps: ToolDeps): Promise<void> {
+  const accounts = sharedAccounts(mode, deps);
+  if (!accounts || accounts.dirs.length === 0) return;
+  const { vendor, ops, dirs: shared } = accounts;
   // One question for the whole run (Windows without file-link privilege only)
-  const options = await askCopyFallback(shared[0], mode === 'claude' ? 'Claude' : 'Codex');
+  const options = await askCopyFallback(shared[0], vendor);
   const issues: string[] = [];
   for (const dir of shared) {
     try {
-      const accountBusy = deps.accountBusy;
-      const notes = describeShareReport(ops.refresh(dir, accountBusy ? { ...options, busy: () => accountBusy(mode, dir) } : options));
-      if (notes) issues.push(t('sync.item', { name: nameOf(dir), notes }));
+      const busy = accounts.busyOf(dir);
+      const notes = describeShareReport(ops.refresh(dir, busy ? { ...options, busy } : options));
+      if (notes) issues.push(t('sync.item', { name: accounts.nameOf(dir), notes }));
     } catch (err) {
-      issues.push(t('sync.item', { name: nameOf(dir), notes: errText(err) }));
+      issues.push(t('sync.item', { name: accounts.nameOf(dir), notes: errText(err) }));
     }
   }
   const done = t(issues.length ? 'sync.attempted' : 'sync.done', { count: shared.length, vendor });

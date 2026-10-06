@@ -57,6 +57,15 @@ export function createLink(target: string, link: string, platform: string = proc
   }
 }
 
+// Result of the last completed fileLinksAvailable probe in this process (Windows only)
+let lastFileLinksProbe: boolean | undefined;
+
+/** The result of the last completed Windows file-link probe of this process, undefined before one (read-only checks
+ *  cannot probe, since the probe writes). */
+export function knownFileLinks(): boolean | undefined {
+  return lastFileLinksProbe;
+}
+
 /**
  * Whether single-file links can be created in `dir` (probes with a temporary file symlink, removed again). Always
  * true off Windows; on Windows false only when the OS refuses the privilege (EPERM). Directory junctions never need it.
@@ -74,9 +83,9 @@ export function fileLinksAvailable(dir: string, platform: string = process.platf
   }
   try {
     fs.symlinkSync(target, link, 'file');
-    return true;
+    return (lastFileLinksProbe = true);
   } catch (e) {
-    return (e as NodeJS.ErrnoException).code !== 'EPERM';
+    return (lastFileLinksProbe = (e as NodeJS.ErrnoException).code !== 'EPERM');
   } finally {
     fs.rmSync(link, { force: true });
     fs.rmSync(target, { force: true });

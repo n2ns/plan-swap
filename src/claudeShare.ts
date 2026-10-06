@@ -8,7 +8,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { t } from './i18n';
-import { claudeIdentitySetting, claudeJsonName, copySettingsStripped, defaultDir, realPath, realPathInside, samePath, sameRealPath, syncMcpServers, unchangedSince } from './paths';
+import { claudeIdentitySetting, claudeJsonName, copySettingsStripped, defaultDir, realPath, realPathInside, samePath, sameRealPath, strippedSettings, syncMcpServers, unchangedSince } from './paths';
 import {
   comparablePath, isOpaqueReparseDir, JunctionError, LinkPrivilegeError, createLink, fileLinksAvailable, isWindows, pidAlive, renameReplacing, type StartTimeProbe,
   stripBom, unlinkLinks, windowsStartTimes,
@@ -34,6 +34,23 @@ const PROJECT_KEYS = [
   'allowedTools', 'mcpServers', 'enabledMcpjsonServers', 'disabledMcpjsonServers', 'mcpContextUris',
   'hasTrustDialogAccepted', 'hasClaudeMdExternalIncludesApproved', 'hasClaudeMdExternalIncludesWarningShown',
 ];
+// Read-only mirror check: whether the account value acc already holds everything of the default value src. true needs
+// true; false is held by anything; every array element and object key (deep) of src must be in acc. A missing account
+// value holds only empty / false values, which is what Claude Code reads for a missing project key (research fact 18).
+// What the account has beyond the default (its own MCP server, a project it trusted) is not a difference here
+function holds(acc: unknown, src: unknown): boolean {
+  if (src === false || src === undefined) return true;
+  if (Array.isArray(src)) {
+    const have = Array.isArray(acc) ? acc : [];
+    return src.every((x) => have.some((y) => isDeepStrictEqual(x, y)));
+  }
+  if (isPlainObject(src)) {
+    const have = isPlainObject(acc) ? acc : {};
+    return Object.entries(src).every(([k, v]) => isDeepStrictEqual(have[k], v));
+  }
+  return isDeepStrictEqual(acc, src);
+}
+
 // Top-level onboarding keys of .claude.json added from the default account when a signed-in account lacks them, so the
 // CLI does not run its first-start onboarding again; never for a signed-out account, whose onboarding is its sign-in
 const ONBOARDING_KEYS = ['hasCompletedOnboarding', 'lastOnboardingVersion'];
@@ -51,6 +68,10 @@ export interface ShareReport {
   noPrivilege?: string[]; // single-file entries that could not be linked because Windows refuses file symlinks (Developer Mode off); left independent
   busy?: string[];      // entries whose repair would move or unlink account files, skipped because the account is busy (own check or LinkOptions.busy)
   failed?: string[];    // folder entries whose junction Windows could not create (not a local NTFS drive); left unlinked
+  merged?: string[];    // replaced history files whose lines are merged back into the default file before relinking (also under linked)
+  unlinked?: string[];  // links removed as a repair: a refused config link, an earlier whole-folder link, a child link whose default target is gone, a Windows database link
+  stripped?: string[];  // 'settings.json' given the account's own copy without identity keys
+  elsewhere?: string[]; // conflicts that are links resolving elsewhere (a subset of conflicts)
 }
 
 export interface MigrateReport extends ShareReport {
@@ -143,11 +164,30 @@ function ensureDefaultEntry(target: string, kind: 'file' | 'dir'): boolean {
 
 export type LinkResult = 'linked' | 'ok' | 'conflict' | 'noprivilege' | 'failed';
 
+/** Read-only mode of linkEntry: fileLinks says whether Windows file links work (it cannot be probed without writing);
+ *  dir: the target is a folder (a junction) even while it does not exist yet. */
+export interface LinkCheck { fileLinks: boolean; dir?: boolean }
+
+/** The result linkEntry would give for a missing link: 'noprivilege' for a Windows file link without file-link
+ *  privilege, otherwise 'linked' (a junction that the drive refuses cannot be foreseen). */
+export function missingLinkResult(target: string, check: LinkCheck): LinkResult {
+  if (!isWindows() || check.fileLinks) return 'linked';
+  let isDir = !!check.dir;
+  try {
+    isDir = fs.statSync(target).isDirectory();
+  } catch {
+    // Missing target: check.dir decides
+  }
+  return isDir ? 'linked' : 'noprivilege';
+}
+
 // Links link → target; 'linked' / 'ok' (already linked) / 'conflict' (real entry or link elsewhere, untouched) /
-// 'noprivilege' (Windows refuses a file symlink) / 'failed' (Windows cannot create a junction on this drive)
-export function linkEntry(link: string, target: string): LinkResult {
+// 'noprivilege' (Windows refuses a file symlink) / 'failed' (Windows cannot create a junction on this drive).
+// With check nothing is written and the result is the one the write would give
+export function linkEntry(link: string, target: string, check?: LinkCheck): LinkResult {
   const st = lstatOrUndefined(link);
   if (!st) {
+    if (check) return missingLinkResult(target, check);
     try {
       createLink(target, link);
     } catch (e) {
@@ -161,7 +201,9 @@ export function linkEntry(link: string, target: string): LinkResult {
   if (linksTo(link, target)) return 'ok';
   // Windows with file-link privilege now available: a copied config file identical to the default is upgraded to a real
   // link (config files only: databases and locks may be open elsewhere)
-  if (isWindows() && COPYABLE_ON_NO_LINK.includes(path.basename(link)) && st.isFile() && fs.existsSync(target) && sameContent(link, target, st, fs.statSync(target)) && fileLinksAvailable(path.dirname(link))) {
+  const fileLinks = (): boolean => (check ? check.fileLinks : fileLinksAvailable(path.dirname(link)));
+  if (isWindows() && COPYABLE_ON_NO_LINK.includes(path.basename(link)) && st.isFile() && fs.existsSync(target) && sameContent(link, target, st, fs.statSync(target)) && fileLinks()) {
+    if (check) return 'linked';
     // The link is made under a temporary name and then renamed over the copy, so a failure leaves the copy in place
     const tmp = `${link}.planswap-${process.pid}.link`;
     fs.rmSync(tmp, { force: true });
@@ -175,7 +217,7 @@ export function linkEntry(link: string, target: string): LinkResult {
     return 'linked';
   }
   // Windows without file-link privilege: a real config file is the expected state (a copy the user agreed to)
-  if (isWindows() && COPYABLE_ON_NO_LINK.includes(path.basename(link)) && st.isFile() && !fileLinksAvailable(path.dirname(link))) return 'ok';
+  if (isWindows() && COPYABLE_ON_NO_LINK.includes(path.basename(link)) && st.isFile() && !fileLinks()) return 'ok';
   return 'conflict';
 }
 
@@ -189,6 +231,11 @@ export interface LinkOptions {
   // Extra busy check of the caller (Windows: the account's own PlanSwap terminal is open); ORed with the module's own
   // busy check before any step that moves, merges or unlinks account files
   busy?: () => boolean;
+  // Read-only check: nothing is written and no folder is created; the report lists what a repair would do, in the same
+  // lists and order as the repair's own report
+  check?: boolean;
+  // Check only: whether Windows file links work (fileLinksAvailable would write a probe); default true
+  fileLinks?: boolean;
 }
 
 /** record() plus the Windows fallback: a refused link of a copyable file becomes a one-time copy of the default file. */
@@ -233,33 +280,42 @@ export function mergeLines(src: string, dst: string): number {
 
 /** Creates/repairs every link of a shared account (idempotent). Never touches the default dir's existing content: a
  *  missing default entry is created empty first (folder 0700, file 0600, settings.json '{}\n'); a missing account entry
- *  becomes a link; a regular entry or a link elsewhere stays and is reported under conflicts. Exception: in an already
- *  shared account a regular history.jsonl (replaced by `claude project purge`) is merged back with mergeLines and
- *  relinked (only while file links work); an independent account's own history.jsonl stays a conflict.
+ *  becomes a link; a regular entry or a link elsewhere stays and is reported under conflicts (links also under
+ *  elsewhere). Exception: in an already shared account a regular history.jsonl (replaced by `claude project purge`) is
+ *  merged back with mergeLines and relinked (merged and linked; only while file links work); an independent account's
+ *  own history.jsonl stays a conflict.
  *  skills/ plugins/: a whole-folder link from an earlier version is replaced by a real folder with per-child links
- *  (except CLAUDE_CHILD_EXCLUDES), and child links whose default child no longer exists are removed.
+ *  (except CLAUDE_CHILD_EXCLUDES), and child links whose default child no longer exists are removed (both unlinked).
  *  Those three steps move or unlink account files, so they are skipped and reported under busy while
  *  claudeAccountBusy(dir, procRoot) or options.busy() is true; that check runs lazily (once, only when such a step
  *  comes up) and the other links are still made. When the default settings.json cannot be shared, settings.json is
- *  refused (explained in refusedNotes) and an existing settings.json link or a missing one becomes the account's own
- *  copy without identity keys (copySettingsStripped).
- *  options.copyConfig enables the one-time Windows copy fallback (recordLink). dir === default → empty report. */
+ *  refused (explained in refusedNotes) and an existing settings.json link (unlinked) or a missing one becomes the
+ *  account's own copy without identity keys (copySettingsStripped; stripped).
+ *  options.copyConfig enables the one-time Windows copy fallback (recordLink). options.check: read only (no write, no
+ *  folder created, Windows file links taken from options.fileLinks); the report is the one the repair would return
+ *  except that the copy fallback is never offered and a junction the drive refuses cannot be foreseen.
+ *  dir === default → empty report. */
 export function ensureClaudeLinks(dir: string, procRoot = '/proc', options: LinkOptions = {}): ShareReport {
   const report = emptyReport();
   if (isDefault(dir)) return report;
   assertNotDefaultAncestor(dir);
+  const check = !!options.check;
   const def = defaultDir();
   const acc = path.resolve(dir);
-  fs.mkdirSync(def, { recursive: true, mode: 0o700 });
-  fs.mkdirSync(acc, { recursive: true, mode: 0o700 });
+  if (!check) {
+    fs.mkdirSync(def, { recursive: true, mode: 0o700 });
+    fs.mkdirSync(acc, { recursive: true, mode: 0o700 });
+  }
 
   // Checked only when a destructive step comes up; a running Claude process may still be writing those files
   let busy: boolean | undefined;
   const isBusy = (): boolean => (busy ??= claudeAccountBusy(dir, procRoot) || !!options.busy?.());
+  // A missing default entry: created empty, or (check) reported as such
+  const missingDefault = (target: string, kind: 'file' | 'dir'): boolean => (check ? !lstatOrUndefined(target) : ensureDefaultEntry(target, kind));
 
   const shared = isSharedClaudeAccount(dir);
   // Merging a file's lines back removes it; without file-link privilege it could not be linked again, so it stays
-  const fileLinks = fileLinksAvailable(acc);
+  const fileLinks = check ? options.fileLinks ?? true : fileLinksAvailable(acc);
   for (const { name, kind } of CLAUDE_SHARED_ENTRIES) {
     const target = path.join(def, name);
     const link = path.join(acc, name);
@@ -267,50 +323,71 @@ export function ensureClaudeLinks(dir: string, procRoot = '/proc', options: Link
     if (refusal) {
       // A link would hand the account the default's sign-in settings: an existing link (made while the default was
       // still shareable) and a missing entry both become the account's own copy with the identity keys stripped
-      if (linksTo(link, target)) fs.unlinkSync(link);
-      const own = !!lstatOrUndefined(link);
-      const copied = !own && copySettingsStripped(def, acc);
+      const wasLinked = linksTo(link, target);
+      if (wasLinked) {
+        (report.unlinked ??= []).push(name);
+        if (!check) fs.unlinkSync(link);
+      }
+      const own = !wasLinked && !!lstatOrUndefined(link);
+      const copied = !own && (check ? strippedSettings(def) !== undefined : copySettingsStripped(def, acc));
+      if (copied) (report.stripped ??= []).push(name);
       report.refused.push(name);
       const note = settingsRefusalNote(refusal, copied, own);
       if (note) (report.refusedNotes ??= {})[name] = note;
       continue;
     }
-    if (ensureDefaultEntry(target, kind)) report.created.push(name);
+    if (missingDefault(target, kind)) report.created.push(name);
     // `claude project purge` rewrites history.jsonl by rename, replacing the link: merge the lines back and relink
     if (shared && name === 'history.jsonl' && lstatOrUndefined(link)?.isFile() && fileLinks) {
       if (isBusy()) {
         (report.busy ??= []).push(name);
         continue;
       }
+      (report.merged ??= []).push(name);
+      if (check) {
+        // The merged file is removed, so the link is made next
+        record(report, name, missingLinkResult(target, { fileLinks }));
+        continue;
+      }
       mergeLines(link, target);
     }
-    recordLink(report, name, linkEntry(link, target), link, target, !!options.copyConfig);
+    recordLink(report, name, linkEntry(link, target, check ? { fileLinks, dir: kind === 'dir' } : undefined), link, target, !check && !!options.copyConfig);
   }
 
   for (const name of CLAUDE_CHILD_SHARED_DIRS) {
     const defFolder = path.join(def, name);
-    if (ensureDefaultEntry(defFolder, 'dir')) report.created.push(name);
+    if (missingDefault(defFolder, 'dir')) report.created.push(name);
     const accFolder = path.join(acc, name);
     const st = lstatOrUndefined(accFolder);
+    // Check: the account folder would be created (or re-created) empty, so every child would be linked
+    let fresh = false;
     if (st?.isSymbolicLink() && linksTo(accFolder, defFolder)) {
       // Whole-folder link from an earlier version: replace it by a real folder with per-child links
       if (isBusy()) {
         (report.busy ??= []).push(name);
         continue;
       }
-      fs.unlinkSync(accFolder);
-      fs.mkdirSync(accFolder, { mode: 0o700 });
+      (report.unlinked ??= []).push(name);
+      if (check) fresh = true;
+      else {
+        fs.unlinkSync(accFolder);
+        fs.mkdirSync(accFolder, { mode: 0o700 });
+      }
     } else if (!st) {
-      fs.mkdirSync(accFolder, { mode: 0o700 });
+      if (check) fresh = true;
+      else fs.mkdirSync(accFolder, { mode: 0o700 });
     } else if (!st.isDirectory()) {
       report.conflicts.push(name);
       continue;
     }
     const excluded = new Set<string>(CLAUDE_CHILD_EXCLUDES);
-    for (const child of fs.readdirSync(defFolder)) {
+    const children = check && !lstatOrUndefined(defFolder) ? [] : fs.readdirSync(defFolder);
+    for (const child of children) {
       if (excluded.has(child)) continue;
-      record(report, `${name}/${child}`, linkEntry(path.join(accFolder, child), path.join(defFolder, child)));
+      const target = path.join(defFolder, child);
+      record(report, `${name}/${child}`, fresh ? missingLinkResult(target, { fileLinks }) : linkEntry(path.join(accFolder, child), target, check ? { fileLinks } : undefined));
     }
+    if (fresh) continue;
     // Remove links into the default folder whose target no longer exists
     for (const child of fs.readdirSync(accFolder)) {
       const link = path.join(accFolder, child);
@@ -318,10 +395,29 @@ export function ensureClaudeLinks(dir: string, procRoot = '/proc', options: Link
       const to = path.resolve(accFolder, fs.readlinkSync(link));
       if (comparablePath(path.dirname(to)) !== comparablePath(defFolder) || lstatOrUndefined(to)) continue;
       if (isBusy()) (report.busy ??= []).push(`${name}/${child}`);
-      else fs.unlinkSync(link);
+      else {
+        (report.unlinked ??= []).push(`${name}/${child}`);
+        if (!check) fs.unlinkSync(link);
+      }
     }
   }
+  markElsewhere(report, acc);
   return report;
+}
+
+/** Lists under elsewhere the conflicts of report that are links (resolving elsewhere, since a link to the default
+ *  entry is no conflict); names are relative to the account dir acc. */
+export function markElsewhere(report: ShareReport, acc: string): void {
+  const isLink = (name: string): boolean => {
+    try {
+      return fs.lstatSync(path.join(acc, name)).isSymbolicLink();
+    } catch {
+      // Missing, or below a parent that is not a folder (a nested Codex entry)
+      return false;
+    }
+  };
+  const links = report.conflicts.filter(isLink);
+  if (links.length) report.elsewhere = links;
 }
 
 // Reads a JSON object; undefined when missing; throws when present but not a JSON object
@@ -354,8 +450,12 @@ function readSourceJson(file: string): Record<string, unknown> {
  *  file is created 0600; otherwise the write follows a symlink, keeps the mode and replaces atomically (temporary file +
  *  renameReplacing), refusing with t('mcp.changed') when the file changed since it was read. A target that is not a
  *  JSON object throws t('mcp.badTarget'). The default dir → no-op.
- *  beforeCommit runs between writing the temporary file and the change check (tests simulate a concurrent CLI write). */
-export function mirrorClaudeJson(fromJson: string, dir: string, beforeCommit?: () => void): { changed: string[] } {
+ *  beforeCommit runs between writing the temporary file and the change check (tests simulate a concurrent CLI write).
+ *  check: read only, nothing is written (the same errors are thrown); changed lists only what the account lacks of the
+ *  default (holds): a server or project setting the default adds or changes, a project it trusts. A key the account
+ *  lacks counts as empty / false (research fact 18), and what the account has beyond the default (its own MCP server,
+ *  a project only it trusts) is not listed, although the mirror itself would replace or remove it. */
+export function mirrorClaudeJson(fromJson: string, dir: string, beforeCommit?: () => void, check = false): { changed: string[] } {
   const changed: string[] = [];
   if (isDefault(dir)) return { changed };
   assertNotDefaultAncestor(dir);
@@ -382,7 +482,7 @@ export function mirrorClaudeJson(fromJson: string, dir: string, beforeCommit?: (
 
   const mcp =isPlainObject(source.mcpServers) ? source.mcpServers : {};
   const currentMcp = data.mcpServers === undefined ? {} : data.mcpServers;
-  if (!isDeepStrictEqual(currentMcp, mcp)) {
+  if (check ? !holds(currentMcp, mcp) : !isDeepStrictEqual(currentMcp, mcp)) {
     data.mcpServers = mcp;
     changed.push('mcpServers');
   }
@@ -405,9 +505,10 @@ export function mirrorClaudeJson(fromJson: string, dir: string, beforeCommit?: (
     if (!isPlainObject(data.projects)) data.projects = {};
     const projects = data.projects as Record<string, unknown>;
     const proj = isPlainObject(projects[p]) ? (projects[p] as Record<string, unknown>) : {};
-    let differs = !isPlainObject(projects[p]);
+    let differs = !check && !isPlainObject(projects[p]);
     for (const k of PROJECT_KEYS) {
       if (!Object.hasOwn(srcProj, k) || isDeepStrictEqual(proj[k], srcProj[k])) continue;
+      if (check && holds(proj[k], srcProj[k])) continue;
       proj[k] = srcProj[k];
       differs = true;
     }
@@ -416,7 +517,7 @@ export function mirrorClaudeJson(fromJson: string, dir: string, beforeCommit?: (
       changed.push(`projects:${p}`);
     }
   }
-  if (changed.length === 0) return { changed };
+  if (changed.length === 0 || check) return { changed };
 
   const tmp = `${real}.planswap-${process.pid}.tmp`;
   // A temporary file left by an interrupted run is replaced

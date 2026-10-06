@@ -143,7 +143,8 @@ Después:
 
 - **Vincular a la cuenta predeterminada:** haz clic en el icono de enlace de una fila con nombre independiente, o ejecuta el comando **Compartir con la cuenta predeterminada** del producto. Los ajustes y el historial propios de la cuenta se mueven a la cuenta predeterminada. Los archivos que difieren de los de la cuenta predeterminada se conservan uno junto al otro para que los fusiones a mano, y el resultado los enumera.
 - **Desvincular de la cuenta predeterminada:** haz clic en el icono de desconexión de una fila con nombre vinculada. La cuenta recibe su propia copia de la configuración predeterminada y conserva su inicio de sesión y los archivos que no estaban vinculados. El historial y las sesiones permanecen en la cuenta predeterminada y no se copian de vuelta. Desvincular no deshace la fusión hecha al vincular la cuenta.
-- **Revincular:** haz clic en **Revincular** en **Herramientas** después de cambiar la configuración de la cuenta predeterminada, o cuando haya que reparar enlaces. Revisa todas las cuentas vinculadas de esa pestaña y enumera lo que requiera atención. En Claude también actualiza sus servidores MCP a partir de la cuenta predeterminada.
+- **Revincular:** haz clic en **Revincular** en **Herramientas** después de cambiar la configuración de la cuenta predeterminada, o cuando haya que reparar enlaces. Primero revisa todas las cuentas vinculadas de esa pestaña sin cambiar nada. Si todo está bien, lo indica y enumera lo que se mantiene como está, como un enlace que apuntaste a otro sitio o un archivo propio de la cuenta. Si no, una sola notificación enumera los problemas de cada cuenta, como enlaces que faltan o una cuenta en uso. Haz clic en **Reparar** para resolver lo que se pueda; no se sobrescribe nada de la cuenta predeterminada. En Claude, la revisión también busca servidores MCP y proyectos de confianza que tiene la cuenta predeterminada y le faltan a la cuenta vinculada, y **Reparar** los añade.
+- **Revisión automática:** PlanSwap hace la misma revisión en segundo plano al iniciar el editor y al volver a su ventana (como mucho cada 10 minutos). Solo muestra la notificación cuando **Reparar** puede resolver algo; una cuenta en uso o un enlace que apuntaste a otro sitio solo se enumeran al hacer clic en **Revincular**. Nunca repara nada por su cuenta. Los mismos problemas se muestran una sola vez, aunque haya varias ventanas del editor abiertas, y de nuevo al cabo de un día si siguen ahí.
 
 ### Vincular en Windows
 
@@ -223,7 +224,7 @@ Los directorios de cuenta con nombres válidos que PlanSwap encuentra en tu dire
 | `CLAUDE.md` o `AGENTS.md` | Abre el archivo de reglas de la cuenta actual de Claude o de la cuenta efectiva de Codex. Si el archivo no existe, pregunta antes de crearlo. |
 | Ajustes de Claude o Ajustes de Codex | Abre los ajustes de la extensión oficial de Claude Code o de Codex (los ajustes de PlanSwap están en el engranaje de la barra de título del panel). |
 | Actualizar CLI | Abre un terminal que ejecuta el comando de actualización del producto. Sigue allí el progreso y las preguntas que aparezcan; si instalaste la CLI de otra forma, puede que tengas que actualizarla de esa forma. |
-| Revincular | Repara los enlaces de las cuentas vinculadas de esta pestaña (en Claude también actualiza sus servidores MCP). Solo se muestra si existe una cuenta vinculada. |
+| Revincular | Revisa los enlaces de las cuentas vinculadas de esta pestaña y ofrece **Reparar** para los problemas que encuentre (en Claude también sus servidores MCP). Solo se muestra si existe una cuenta vinculada. |
 
 El pie ofrece:
 

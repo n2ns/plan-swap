@@ -143,7 +143,8 @@ Then:
 
 - **Link to the default account:** click the link icon on an independent named row, or run the product's **Share with Default Account** command. The account's own settings and history move into the default account. Files that differ from the default account's are kept side by side for you to merge by hand, and the result lists them.
 - **Unlink from the default account:** click the disconnect icon on a linked named row. The account gets its own copy of the default configuration and keeps its sign-in and any files that were not linked. History and sessions stay in the default account and are not copied back. Unlinking does not undo the merge made when the account was linked.
-- **Re-link:** click **Re-link** in **Tools** after you change the default account's setup, or when links need repair. It checks every linked account in that tab and lists anything that needs attention. For Claude, it also updates their MCP servers from the default account.
+- **Re-link:** click **Re-link** in **Tools** after you change the default account's setup, or when links need repair. It first checks every linked account in that tab without changing anything. If all is well, it says so, and lists anything kept as it is on purpose or by the account, such as a link you pointed elsewhere or the account's own file. Otherwise one notification lists the problems per account, such as missing links or an account that is in use. Click **Repair** to fix what can be fixed; nothing in the default account is overwritten. For Claude, the check also looks for MCP servers and trusted projects that the default account has and the linked account lacks, and **Repair** adds them.
+- **Automatic check:** PlanSwap runs the same check in the background when the editor starts and when you return to its window (at most every 10 minutes). It shows the notification only when **Repair** can fix something; an account that is in use, or a link you pointed elsewhere, is listed only when you click **Re-link**. It never repairs anything on its own. The same problems are shown only once, even with several editor windows open, and again after a day if they are still there.
 
 ### Linking on Windows
 
@@ -223,7 +224,7 @@ Account directories with valid names that PlanSwap finds in your home directory 
 | `CLAUDE.md` or `AGENTS.md` | Opens the rules file of the current Claude account or the effective Codex account. If the file does not exist, asks before creating it. |
 | Claude Settings or Codex Settings | Opens the settings of the official Claude Code or Codex extension (PlanSwap's own settings are behind the gear in the panel title bar). |
 | Update CLI | Opens a terminal that runs the product's update command. Follow the progress and any prompts there; if you installed the CLI another way, you may need to update it that way. |
-| Re-link | Repairs the links of linked accounts in this tab (Claude: also updates their MCP servers). Shown only when a linked account exists. |
+| Re-link | Checks the links of linked accounts in this tab and offers **Repair** for the problems it finds (Claude: also their MCP servers). Shown only when a linked account exists. |
 
 The footer provides:
 

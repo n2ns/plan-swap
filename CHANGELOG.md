@@ -4,6 +4,8 @@
 
 ### Added
 
+- **Re-link** now checks the linked accounts first without changing anything: it says when all is well (noting links pointing elsewhere and the account's own files, which it leaves as they are), and otherwise lists per account what is wrong (missing or outdated links, replaced history files, MCP servers or project trust the default account has and the linked account lacks, an account in use) with a **Repair** button that fixes what can be fixed. The same check runs in the background when the editor starts and when you return to its window, and shows the notification only when **Repair** can fix something, once per set of problems across windows (again after a day); it never repairs on its own.
+
 - A notification when the current Claude or Codex account's 5-hour or 7-day limit has 20% or less left, once per limit until it resets, with **Open PlanSwap**. Turn it off with `planswap.notifications.enabled` or change the percentage with `planswap.notifications.threshold`. A used-up limit gets no notification, since Claude Code and Codex already report it.
 
 ## [0.3.6] - 2026-10-06

@@ -16,7 +16,8 @@ import { findBundledClaude, oneAtATime, queryClaudeUsage, queryEach, readClaudeU
 import { ClaudeUsageMonitor } from './claudeUsageMonitor';
 import { CodexAccountStore } from './codex/codexStore';
 import { codexPanelSource, codexRunsInWsl, registerCodexCommands, restartServerInteractive } from './codex/codexCommands';
-import { registerToolCommands, runTool, type TerminalCheck, type ToolDeps } from './tools';
+import { checkSharedInBackground, registerToolCommands, runTool, type TerminalCheck, type ToolDeps } from './tools';
+import { LinkCheckNotices } from './linkCheck';
 import { registerDiagnosticsCommand } from './diagnosticsCommand';
 import type { PanelMode } from './protocol';
 import { setLocale, t } from './i18n';
@@ -26,7 +27,7 @@ import { effectiveDir, migrateLegacyCodex } from './codex/codexState';
 import { CodexUsageMonitor, queryCodexAccount } from './codex/codexUsageMonitor';
 import { CodexUsageHistory } from './codex/codexUsageHistory';
 import { findBundledCodex, readCodexUsageWithFallback, type UsageResult } from './codex/codexUsage';
-import { readCodexAccountInfo } from './codex/codexPaths';
+import { codexDefaultDir, readCodexAccountInfo } from './codex/codexPaths';
 import { IdentityWarnings, claudeIdentity, codexIdentity, type IdentitySource } from './identityWarnings';
 import { UsageCooldown } from './usageCooldown';
 import { OtherAccountChecks } from './usageOthers';
@@ -41,6 +42,8 @@ const USAGE_TICK_MS = 60_000;
 const USAGE_CHECK_SECONDS = { min: 30, max: 600, default: 120 };
 // The first automatic check waits until the window has finished starting up
 const USAGE_FIRST_CHECK_MS = 20_000;
+// Background link checks of linked accounts run at most this often per window (on activation and on regaining focus)
+const LINK_CHECK_MIN_MS = 10 * 60_000;
 // planswap.<product>.usageAutoRefresh / usageRefreshMinutes; the interval is clamped to the range the manifest declares
 // Claude's usage endpoint is rate limited per account (shared with the user's own sessions), so its floor is higher
 const USAGE_MINUTES_MIN: Record<PanelMode, number> = { claude: 10, codex: 5 };
@@ -523,12 +526,28 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     postVersions: (items) => panel.post({ type: 'versions', items }),
     claudeDirs: () => store.named().map((a) => a.dir),
     codexDirs: codex ? () => codex.store.named().map((a) => a.dir) : undefined,
-    codexShareOps: codex ? { isShared: isSharedCodexAccount, refresh: (dir, options) => ensureCodexLinks(dir, options) } : undefined,
+    codexShareOps: codex
+      ? { isShared: isSharedCodexAccount, refresh: (dir, options) => ensureCodexLinks(dir, options), check: (dir, options) => ({ report: ensureCodexLinks(dir, { ...options, check: true }) }), defaultDir: codexDefaultDir }
+      : undefined,
     labelOf: (mode, dir) => {
       const account = mode === 'claude' ? store.findByDir(dir) : codex?.store.findByDir(dir);
       return account ? labelFor(account.name, mode === 'claude' ? claudeLabels : codexLabels) : path.basename(dir);
     },
+    linkNotices: new LinkCheckNotices(state),
   };
+  // Read-only link check of the linked accounts in the focused window, at most every LINK_CHECK_MIN_MS: on activation
+  // and on regaining focus. Problems are announced once per change (or again after a day) across windows
+  // (LinkCheckNotices); nothing is repaired without the user's Repair
+  let lastLinkCheck: number | undefined;
+  const checkLinks = (): void => {
+    if (!vscode.window.state.focused || (lastLinkCheck !== undefined && Date.now() - lastLinkCheck < LINK_CHECK_MIN_MS)) return;
+    lastLinkCheck = Date.now();
+    // Each vendor on its own: a notification left open must not hold back the other vendor's check
+    for (const mode of codex ? ['claude', 'codex'] as const : ['claude'] as const) {
+      checkSharedInBackground(mode, tools).catch((err: unknown) => console.warn(`[planswap] link check failed: ${err instanceof Error ? err.message : String(err)}`));
+    }
+  };
+  checkLinks();
 
   const panel = new AccountsPanel(ctx.extensionUri, { claude: claudePanelSource(store, claudeLabels, claudeExclusions), codex: codexSource }, ctx.globalState);
   // A stored observation of the effective Codex account (another window, an earlier session) is shown from the start
@@ -575,7 +594,9 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     }),
     { dispose: () => { clearTimeout(firstUsageCheck); clearInterval(usageTick); clearInterval(historyTick); } },
     vscode.window.onDidChangeWindowState((e) => {
-      if (e.focused) checkUsage();
+      if (!e.focused) return;
+      checkUsage();
+      checkLinks();
     }),
     vscode.commands.registerCommand(CLAUDE_REFRESH_USAGE_COMMAND, async () => {
       // A running query is joined; otherwise an account queried less than a minute ago is not asked again
