@@ -18,6 +18,20 @@ export interface CodexUsage {
   checkedAt: number;
 }
 
+/**
+ * The observation as of `now`: windows past their reset are dropped. limitReached is dropped with them when a window
+ * that was used up (100%) has reset and no remaining window is used up. The service does not say which window was
+ * reached, and a workspace limit (credits) is not tied to the windows, so the flag stays while no used-up window has
+ * reset.
+ */
+export function usageAsOf(usage: CodexUsage, now: number): CodexUsage {
+  const live = (w: UsageWindow): boolean => w.resetsAt === undefined || w.resetsAt * 1000 > now;
+  const usedUp = (w: UsageWindow): boolean => w.usedPercent >= 100;
+  const windows = usage.windows.filter(live);
+  const reachedWindowReset = usage.windows.some((w) => !live(w) && usedUp(w)) && !windows.some(usedUp);
+  return { ...usage, windows, limitReached: usage.limitReached && !reachedWindowReset };
+}
+
 // Failure reasons (the status bar translates them when rendering, so cached failures follow locale changes):
 // notLoggedIn: no auth.json (nothing started) or an authentication-required error; authExpired: auth.json exists but
 // the service refused it (401 / Unauthorized, checked first), i.e. the account has to sign in again; cliMissing: no

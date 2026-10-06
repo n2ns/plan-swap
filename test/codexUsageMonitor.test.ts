@@ -261,7 +261,7 @@ describe('CodexUsageMonitor', () => {
     assert.equal(h.monitor.current().result?.ok, true);
   });
 
-  test('a token refresh for the same identity keeps a good result, re-stamps it and leaves the query to the interval', async () => {
+  test('a token refresh for the same identity keeps a good result, re-stamps it and leaves the query to the timed check', async () => {
     const h = harness();
     const r = okResult(1);
     h.queue.push(r);
@@ -286,13 +286,16 @@ describe('CodexUsageMonitor', () => {
     await h.monitor.refreshIfStale();
     assert.equal(h.calls.length, 2);
 
-    // A rotation after the interval has passed is checked right away
+    // A rotation after the interval has passed only re-stamps too (in every window, focused or not); the timed check
+    // of the focused window queries
     h.clock.t = 2000;
     h.stamp.v = 'rotated-again';
-    h.queue.push(okResult(3));
     await h.monitor.refreshIfAuthChanged();
-    assert.equal(h.calls.length, 3);
+    assert.equal(h.calls.length, 2);
     assert.deepEqual(h.accepted.at(-1)?.stamp, 'rotated-again');
+    h.queue.push(okResult(3));
+    await h.monitor.refreshIfStale();
+    assert.equal(h.calls.length, 3);
   });
 
   test('an auth.json change after a failed result is queried at once, whatever the identity', async () => {

@@ -57,6 +57,21 @@ test('reset windows and observations older than one day disappear without predic
   } finally { tmp.restore(); }
 });
 
+test('a limit reached on a window that has since reset is no longer reported', async () => {
+  const tmp = makeTempHome('usage-reached-reset');
+  try {
+    let now = 100_000;
+    const history = new CodexUsageHistory(new FileMemento(), () => now, () => 'stamp');
+    await history.record(tmp.home, { ok: true, usage: {
+      checkedAt: now, limitReached: true,
+      windows: [{ usedPercent: 100, windowMinutes: 300, resetsAt: (now + 1000) / 1000 }, { usedPercent: 40, windowMinutes: 10080 }],
+    } }, 'stamp');
+    assert.equal(history.get(tmp.home)?.limitReached, true);
+    now += 1000;
+    assert.deepEqual(history.get(tmp.home), { windows: [{ usedPercent: 40, windowMinutes: 10080, resetsAt: undefined }], checkedAt: 100_000, limitReached: false });
+  } finally { tmp.restore(); }
+});
+
 test('changed sign-in metadata hides old usage and a successful query records the new stamp', async () => {
   const tmp = makeTempHome('usage-signin');
   try {

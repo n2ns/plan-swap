@@ -176,8 +176,8 @@ export class CodexUsageMonitor {
    * Queries when auth.json changed since the last accepted response: a sign-in, a re-login after an expired sign-in, or a
    * sign-out. A changed stamp for the same known identity while a successful result is shown is a token refresh (by
    * Codex itself or another window's query): the result stays, the accepted stamp moves to the new one (onAccepted
-   * re-stamps the persisted observation) and the check follows refreshIfStale, so a rotation does not start a query in
-   * every window. Other account-info events (tab switches, other accounts' files) start nothing. While a query runs it is
+   * re-stamps the persisted observation) and nothing is queried: the next timed check of the focused window does, so a
+   * rotation does not start a query in every window. Other account-info events (tab switches, other accounts' files) start nothing. While a query runs it is
    * joined, and a changed sign-in marks its response for discarding (a shown result is dropped while checking).
    */
   async refreshIfAuthChanged(): Promise<void> {
@@ -196,7 +196,7 @@ export class CodexUsageMonitor {
     if (result?.ok && sameAuth(this.accepted, current)) {
       this.accepted = current;
       try { await this.onAccepted?.(current.dir, result, current.stamp); } catch { /* a history failure does not hide live usage */ }
-      return this.refreshIfStale();
+      return;
     }
     return this.refresh();
   }

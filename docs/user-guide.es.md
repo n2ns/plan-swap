@@ -128,7 +128,7 @@ Hasta que se complete el reinicio, un aviso indica la cuenta seleccionada, y la 
 
 Vincular no garantiza que otra cuenta pueda reanudar una sesión, sobre todo entre organizaciones de ChatGPT distintas. No abras la misma sesión desde dos cuentas a la vez.
 
-Algunos ajustes nunca se vinculan: un archivo de ajustes que contiene su propia configuración de inicio de sesión o de proveedor (por ejemplo, un asistente de clave de API o un proveedor de modelos personalizado) sigue siendo independiente. El mensaje de resultado nombra esos archivos.
+Algunos ajustes nunca se vinculan. Claude: un `settings.json` que define su propio inicio de sesión (por ejemplo, un asistente de clave de API, un método de inicio de sesión forzado o una clave de API) no se vincula. Codex: un `config.toml` que define `forced_login_method` o `forced_chatgpt_workspace_id` (que cerrarían la sesión de las cuentas que inician sesión de otra forma) o `sqlite_home` no se vincula, y la cuenta funciona con los ajustes integrados de Codex hasta que quites ese ajuste y uses **Revincular**. El mensaje de resultado nombra el archivo y, en Codex, el ajuste.
 
 En las cuentas de Claude vinculadas, PlanSwap también copia en la cuenta los servidores MCP de la cuenta predeterminada y sus ajustes de confianza por proyecto. Cuando la cuenta tiene la sesión iniciada, también copia el estado de configuración inicial de la cuenta predeterminada, para que Claude Code no repita su configuración inicial.
 

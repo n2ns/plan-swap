@@ -128,7 +128,7 @@ Changed your mind before restarting? Click the arrow icon on the highlighted (ef
 
 Linking does not guarantee that another account can resume a session, especially across different ChatGPT organizations. Do not open the same session from two accounts at once.
 
-Some settings are never linked: a settings file that contains its own sign-in or provider configuration (for example an API key helper or a custom model provider) stays separate. The result message names such files.
+Some settings are never linked. Claude: a `settings.json` that sets its own sign-in (for example an API key helper, a forced login method or an API key) is not linked. Codex: a `config.toml` that sets `forced_login_method` or `forced_chatgpt_workspace_id` (which would sign out accounts that sign in differently) or `sqlite_home` is not linked, and the account runs with Codex's built-in settings until you remove that setting and use **Re-link**. The result message names the file and, for Codex, the setting.
 
 For linked Claude accounts, PlanSwap also copies the default account's MCP servers and per-project trust settings into the account. Once the account is signed in, it also copies the default account's first-run status, so Claude Code does not repeat its first-run setup.
 

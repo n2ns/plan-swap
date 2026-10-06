@@ -128,7 +128,7 @@ PlanSwap 讓你同時保持多個 Claude Code 和 Codex 帳號的登入狀態，
 
 連結並不保證另一個帳號能接續某個工作階段，尤其是跨不同的 ChatGPT 組織時。請勿同時以兩個帳號開啟同一個工作階段。
 
-有些設定永遠不會連結：包含自身登入或提供者設定的設定檔（例如 API 金鑰輔助程式或自訂模型提供者）會保持獨立。結果訊息會列出這些檔案。
+有些設定永遠不會連結。Claude：設定了自身登入方式的 `settings.json`（例如 API 金鑰輔助程式、強制登入方式或 API 金鑰）不會連結。Codex：設定了 `forced_login_method` 或 `forced_chatgpt_workspace_id`（會讓登入方式不同的帳號被登出）或 `sqlite_home` 的 `config.toml` 不會連結，該帳號會使用 Codex 的內建設定執行，直到你刪除該設定並使用 **重新連結**。結果訊息會列出該檔案，Codex 還會列出該設定。
 
 對於已連結的 Claude 帳號，PlanSwap 還會把預設帳號的 MCP 伺服器和各專案的信任設定複製到該帳號中。帳號登入後，還會複製預設帳號的首次執行狀態，讓 Claude Code 不再重複首次設定。
 

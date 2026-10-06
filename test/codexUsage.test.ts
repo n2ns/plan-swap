@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { PassThrough } from 'node:stream';
 import type { SpawnOptions } from 'node:child_process';
-import { findBundledCodex, parseRateLimits, readCodexUsage, readCodexUsageWithFallback, type UsageChild, type UsageOptions } from '../src/codex/codexUsage';
+import { findBundledCodex, parseRateLimits, readCodexUsage, readCodexUsageWithFallback, usageAsOf, type UsageChild, type UsageOptions } from '../src/codex/codexUsage';
 import { makeTempHome, type TempHome } from './helpers';
 
 let tmp: TempHome;
@@ -463,5 +463,25 @@ describe('expired sign-in and the bundled codex', () => {
     // No fallback available: still cliMissing
     const none = fakeSpawn(server((id) => ({ id, result: LIMITS })), { exitOnStdinEnd: true, enoent: () => true });
     assert.deepEqual(await readCodexUsageWithFallback(acct, () => undefined, opts(none.spawn)), { ok: false, reason: 'cliMissing' });
+  });
+});
+
+describe('usageAsOf', () => {
+  const now = 1_000_000_000_000;
+  const past = Math.floor(now / 1000) - 5;
+  const future = Math.floor(now / 1000) + 3600;
+  test('a used-up window that reset ends limitReached when nothing left is used up', () => {
+    const usage = { windows: [{ usedPercent: 100, windowMinutes: 300, resetsAt: past }, { usedPercent: 40, windowMinutes: 10080, resetsAt: future }], limitReached: true, checkedAt: now - 1000 };
+    assert.deepEqual(usageAsOf(usage, now), { windows: [{ usedPercent: 40, windowMinutes: 10080, resetsAt: future }], limitReached: false, checkedAt: now - 1000 });
+  });
+  test('limitReached stays while a remaining window is used up, before the reset, or when no used-up window reset', () => {
+    const both = { windows: [{ usedPercent: 100, windowMinutes: 300, resetsAt: past }, { usedPercent: 100, windowMinutes: 10080, resetsAt: future }], limitReached: true, checkedAt: now };
+    assert.equal(usageAsOf(both, now).limitReached, true);
+    const notYet = { windows: [{ usedPercent: 100, windowMinutes: 300, resetsAt: future }], limitReached: true, checkedAt: now };
+    assert.equal(usageAsOf(notYet, now).limitReached, true);
+    // A workspace limit (credits) with windows below 100%: a reset window does not end it
+    const workspace = { windows: [{ usedPercent: 30, windowMinutes: 300, resetsAt: past }, { usedPercent: 40, windowMinutes: 10080, resetsAt: future }], limitReached: true, checkedAt: now };
+    assert.equal(usageAsOf(workspace, now).limitReached, true);
+    assert.equal(usageAsOf({ ...workspace, limitReached: false }, now).limitReached, false);
   });
 });

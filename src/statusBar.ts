@@ -11,7 +11,7 @@ import { codexDefaultDir, readCodexAccountInfo } from './codex/codexPaths';
 import { effectiveDir, isEnabled, readSelectedDir } from './codex/codexState';
 import { codexRunsInWsl } from './codex/codexCommands';
 import type { CodexUsageState } from './codex/codexUsageMonitor';
-import type { CodexUsage, UsageFailure, UsageWindow } from './codex/codexUsage';
+import { usageAsOf, type CodexUsage, type UsageFailure, type UsageWindow } from './codex/codexUsage';
 import { USAGE_HISTORY_MAX_AGE_MS } from './codex/codexUsageHistory';
 import { readClaudeUsage, type ClaudeUsage, type ClaudeUsageFailure, type ClaudeUsageWindow } from './claudeUsage';
 import type { ClaudeUsageState } from './claudeUsageMonitor';
@@ -256,12 +256,12 @@ export interface UsageParts { rows: string[]; notes: string[] }
 
 /**
  * The Codex observation as far as it may still be shown: undefined when older than 24 hours or dated more than two
- * minutes ahead; windows past their reset dropped.
+ * minutes ahead; windows past their reset dropped (usageAsOf, with a limitReached that ended with them).
  */
 export function liveCodexUsage(usage: CodexUsage, now: number = Date.now()): CodexUsage | undefined {
   const age = now - usage.checkedAt;
   if (age >= USAGE_HISTORY_MAX_AGE_MS || age < -2 * 60_000) return undefined;
-  return { ...usage, windows: usage.windows.filter((w) => w.resetsAt === undefined || w.resetsAt * 1000 > now) };
+  return usageAsOf(usage, now);
 }
 
 /** Windows of the effective Codex account that may be shown, or undefined (no state, a failure, a stale observation). */

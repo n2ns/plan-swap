@@ -5,7 +5,7 @@
 import type { Memento } from 'vscode';
 import { samePath } from '../paths';
 import { authFileStamp } from './codexUsageMonitor';
-import type { CodexUsage, UsageResult } from './codexUsage';
+import { usageAsOf, type CodexUsage, type UsageResult } from './codexUsage';
 
 const KEY = 'codex.usageHistory';
 export const USAGE_HISTORY_MAX_AGE_MS = 24 * 60 * 60_000;
@@ -40,15 +40,16 @@ export class CodexUsageHistory {
   }
 
   /** The observation for dir when it is younger than USAGE_HISTORY_MAX_AGE_MS and its stamp still equals the current
-   *  auth.json stamp (never for 'missing'); windows past their reset time are omitted, and none left → undefined.
+   *  auth.json stamp (never for 'missing'); windows past their reset time are omitted (usageAsOf, which also clears a
+ *  limitReached that ended with them), and none left → undefined.
    *  Missing data never means zero usage. */
   get(dir: string): CodexUsage | undefined {
     const e = this.entries().find((entry) => samePath(entry.dir, dir));
     if (!e || !this.recent(e) || e.stamp === 'missing' || e.stamp !== this.stamp(dir)) return undefined;
-    const windows = e.usage.windows.filter((w) => w.resetsAt === undefined || w.resetsAt * 1000 > this.now())
-      .map(({ usedPercent, windowMinutes, resetsAt }) => ({ usedPercent, windowMinutes, resetsAt }));
+    const live = usageAsOf(e.usage, this.now());
+    const windows = live.windows.map(({ usedPercent, windowMinutes, resetsAt }) => ({ usedPercent, windowMinutes, resetsAt }));
     if (!windows.length) return undefined;
-    return { windows, checkedAt: e.usage.checkedAt, limitReached: e.usage.limitReached };
+    return { windows, checkedAt: e.usage.checkedAt, limitReached: live.limitReached };
   }
 
   /** Capture only completed queries. Ignored when acceptedStamp no longer matches auth.json. Success replaces this
