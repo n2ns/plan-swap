@@ -142,3 +142,5 @@ PlanSwap is an independent community project and is not affiliated with, endorse
 [MIT](LICENSE)
 
 Built by [N2NS Lab](https://n2ns.com/), the open-source lab of [datafrog.io](https://datafrog.io/) for practical AI developer tools.
+
+<!-- Cloud Git capability test: clone/edit/push from the selected cloud environment on 2026-10-09; isolated test branch only. -->
