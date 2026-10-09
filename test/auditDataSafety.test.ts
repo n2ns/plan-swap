@@ -8,7 +8,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { setLocale, t } from '../src/i18n';
 import {
-  accountDir, checkSafeToDelete, deleteAccountDir, readAccountInfo, realPathInside, scanAccountDirs, syncMcpServers,
+  accountDir, checkSafeToDelete, deleteAccountDir, readAccountInfo, realPath, realPathInside, scanAccountDirs, syncMcpServers,
 } from '../src/paths';
 import { checkCodexSafeToDelete, codexAccountDir, deleteCodexDir, scanCodexDirs } from '../src/codex/codexPaths';
 import { ensureClaudeLinks, linkEntry, mirrorClaudeJson } from '../src/claudeShare';
@@ -234,9 +234,9 @@ describe('renameReplacing re-checks before every attempt', () => {
     const file = path.join(acc, '.claude.json');
     write(file, '{"x":1}');
     const cli = (): void => fs.writeFileSync(file, '{"x":2}');
-    assert.throws(() => mirrorClaudeJson(from, acc, cli), { message: t('mcp.changed', { file: fs.realpathSync(file) }) });
+    assert.throws(() => mirrorClaudeJson(from, acc, cli), { message: t('mcp.changed', { file: realPath(file) }) });
     assert.equal(read(file), '{"x":2}');
-    assert.throws(() => syncMcpServers(from, acc, () => fs.writeFileSync(file, '{"x":3}')), { message: t('mcp.changed', { file: fs.realpathSync(file) }) });
+    assert.throws(() => syncMcpServers(from, acc, () => fs.writeFileSync(file, '{"x":3}')), { message: t('mcp.changed', { file: realPath(file) }) });
     assert.equal(read(file), '{"x":3}');
     assert.deepEqual(fs.readdirSync(acc), ['.claude.json']);
   });

@@ -124,7 +124,9 @@ describe('background link check', () => {
 
   test('stays quiet about problems Repair cannot fix, and announces a repairable one once', async (ctx) => {
     const warning = ctx.mock.method(window, 'showWarningMessage', async () => undefined);
-    const notices = new LinkCheckNotices(new MemoryMemento());
+    const state = new MemoryMemento();
+    await state.update('links.fileLinks', true); // This fixture tests announcements after file-link capability is known.
+    const notices = new LinkCheckNotices(state);
     const deps = (report: Record<string, string[]>) => ({ codexDirs: () => ['/fixture/.codex-a'], codexShareOps: ops(report), linkNotices: notices });
     await checkSharedInBackground('codex', deps({ conflicts: ['rules', 'hooks'], elsewhere: ['hooks'], busy: ['history.jsonl'] }));
     assert.equal(warning.mock.callCount(), 0);

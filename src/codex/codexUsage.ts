@@ -372,6 +372,11 @@ function attempt(
         child.once('close', onCleanupExit);
         const graceMs = options.graceMs ?? 1000;
         cleanupTimer = setTimeout(() => {
+          // Exit status can be set before the exit/close event is delivered, especially after an event-loop stall.
+          if (child.exitCode !== null || child.signalCode !== null) {
+            complete();
+            return;
+          }
           // A failed kill or a child that never reports exit must not hold the queue forever.
           cleanupTimer = setTimeout(() => complete(true), graceMs);
           try {

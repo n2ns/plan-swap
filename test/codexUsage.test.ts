@@ -86,7 +86,7 @@ type Responder = (msg: Record<string, unknown>, child: FakeChild, write: (o: unk
 
 interface SpawnCall { command: string; args: string[]; options: SpawnOptions }
 
-function fakeSpawn(respond: Responder, opts: { exitOnStdinEnd?: boolean; enoent?: (call: number) => boolean } = {}) {
+function fakeSpawn(respond: Responder, opts: { exitOnStdinEnd?: boolean; holdExitEvent?: boolean; enoent?: (call: number) => boolean } = {}) {
   const calls: SpawnCall[] = [];
   const children: FakeChild[] = [];
   const spawn = (command: string, args: string[], options: SpawnOptions): UsageChild => {
@@ -126,7 +126,7 @@ function fakeSpawn(respond: Responder, opts: { exitOnStdinEnd?: boolean; enoent?
       child.stdinEnded = true;
       if (opts.exitOnStdinEnd) {
         child.exitCode = 0;
-        setImmediate(() => child.emit('exit', 0, null));
+        if (!opts.holdExitEvent) setImmediate(() => child.emit('exit', 0, null));
       }
     });
     return child;
@@ -174,6 +174,14 @@ describe('readCodexUsage', () => {
     await settle();
     assert.equal(child.stdinEnded, true);
     assert.equal(child.killed, 0, 'a child that exits on its own is not killed');
+  });
+
+  test('an exited child is not killed while its exit event is delayed', async () => {
+    const f = fakeSpawn(server((id) => ({ id, result: LIMITS })), { exitOnStdinEnd: true, holdExitEvent: true });
+    const result = await readCodexUsage(acct, base(f.spawn));
+    assert.equal(result.ok, true);
+    assert.equal(f.children[0]!.exitCode, 0);
+    assert.equal(f.children[0]!.killed, 0);
   });
 
   test('ignores unrelated notifications, blank and non-JSON lines, and responses split across chunks', async () => {

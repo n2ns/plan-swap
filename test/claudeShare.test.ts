@@ -10,7 +10,7 @@ import {
   CLAUDE_SHARED_ENTRIES, claudeAccountBusy, copyClaudeIndependent, copyTree, ensureClaudeLinks, isSharedClaudeAccount, lstatOrUndefined,
   makeClaudeIndependent, mergeEntry, migrateClaudeToShared, mirrorClaudeJson, moveEntry, type MigrateReport, windowsSessionsBusy,
 } from '../src/claudeShare';
-import { accountDir, deleteAccountDir } from '../src/paths';
+import { accountDir, deleteAccountDir, realPath } from '../src/paths';
 import { assertTempHome, makeTempHome, assertMode, FILE_SYMLINKS, LINUX_ONLY, onWindows, SHARING, read, snapshot, withEnv, type TempHome } from './helpers';
 
 let tmp: TempHome;
@@ -472,7 +472,7 @@ describe('mirrorClaudeJson', () => {
     const file = path.join(acc, '.claude.json');
     write(file, JSON.stringify({ userID: 'u' }));
     const rewritten = JSON.stringify({ userID: 'u', numStartups: 2 });
-    assert.throws(() => mirrorClaudeJson(src(), acc, () => fs.writeFileSync(file, rewritten)), { message: t('mcp.changed', { file }) });
+    assert.throws(() => mirrorClaudeJson(src(), acc, () => fs.writeFileSync(file, rewritten)), { message: t('mcp.changed', { file: realPath(file) }) });
     assert.equal(read(file), rewritten);
     assert.deepEqual(fs.readdirSync(acc), ['.claude.json']);
     // The next run starts from the new content

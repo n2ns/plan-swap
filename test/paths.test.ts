@@ -7,7 +7,7 @@ import { setLocale, t } from '../src/i18n';
 import {
   accountDir, checkSafeToDelete, claudeJsonPath, copySettingsStripped, defaultDir, deleteAccountDir,
   ensureAccountDir, formatClaudePlan, readAccountInfo, samePath, sameRealPath, scanAccountDirs,
-  findSameDir, setClaudeSettingEnv, syncMcpServers,
+  findSameDir, realPath, setClaudeSettingEnv, syncMcpServers,
 } from '../src/paths';
 import { assertTempHome, makeTempHome, assertMode, FILE_SYMLINKS, read, withEnv, type TempHome } from './helpers';
 
@@ -522,7 +522,7 @@ describe('syncMcpServers', () => {
     const originalRename = fsModule.renameSync;
     let attempts = 0;
     ctx.mock.method(fsModule, 'renameSync', ((from: fs.PathLike, to: fs.PathLike) => {
-      if (String(to) === file) {
+      if (sameRealPath(String(to), file)) {
         attempts++;
         fs.unlinkSync(file); fs.symlinkSync(credential, file);
         throw Object.assign(new Error('synthetic lock'), { code: 'EPERM' });
@@ -549,7 +549,7 @@ describe('syncMcpServers', () => {
     const file = path.join(f, '.claude.json');
     fs.writeFileSync(file, JSON.stringify({ userID: 'u' }));
     const rewritten = JSON.stringify({ userID: 'u', numStartups: 2 });
-    assert.throws(() => syncMcpServers(src(), f, () => fs.writeFileSync(file, rewritten)), { message: t('mcp.changed', { file }) });
+    assert.throws(() => syncMcpServers(src(), f, () => fs.writeFileSync(file, rewritten)), { message: t('mcp.changed', { file: realPath(file) }) });
     assert.equal(read(file), rewritten);
     assert.deepEqual(fs.readdirSync(f), ['.claude.json']);
     assert.deepEqual(syncMcpServers(src(), f), { added: ['one'], kept: [] });
