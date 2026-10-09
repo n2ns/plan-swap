@@ -60,12 +60,12 @@ export interface UsageOptions {
   spawn?: UsageSpawn;
   /** Executable to start; default 'codex' (only the default gets the Windows codex.cmd fallback) */
   command?: string;
-  /** Whole operation, including start-up; default 15000 */
+  /** Query deadline, including start-up; default 15000. Bounded child cleanup follows before returning. */
   timeoutMs?: number;
   now?: () => number;
   /** Sent as clientInfo.version; default '0' */
   clientVersion?: string;
-  /** How long the child may take to exit after stdin is closed before it is killed; default 1000 */
+  /** Exit grace after stdin closes, and maximum wait after termination; default 1000 for each phase. */
   graceMs?: number;
   /** Platform override for tests; default process.platform */
   platform?: NodeJS.Platform;
@@ -199,10 +199,14 @@ function onPath(file: string): boolean {
 type Attempt = { kind: 'done'; result: UsageResult } | { kind: 'enoent' };
 
 const CANCELLED: UsageResult = { ok: false, reason: 'failed', detail: 'cancelled' };
+// A termination failure must not permit another CLI to refresh credentials alongside the surviving child.
+// Only children started here are retained; the exit listener removes them when cleanup finally completes.
+const unfinishedChildren = new Set<UsageChild>();
 
 /**
  * Starts `codex app-server` with CODEX_HOME=dir, performs the handshake, reads the limits, and always ends the child
  * it started (closes stdin, then kills it if it has not exited within graceMs). Only that child is ever signalled.
+ * Returns after exit or bounded cleanup; if termination is unconfirmed, later queries start nothing until it exits.
  * - No <dir>/auth.json → notLoggedIn without starting anything (existence check only; tokens are never read).
  * - Windows: when the default `codex` is not found and a PATH entry (quotes allowed) holds codex.cmd, runs the fixed
  *   command line `codex.cmd app-server` through the shell; its tree is ended with killTree (taskkill /T /F).
@@ -215,6 +219,7 @@ export async function readCodexUsage(dir: string, options: UsageOptions = {}): P
   // Existence check only; the file is never read
   if (!fs.existsSync(path.join(dir, 'auth.json'))) return { ok: false, reason: 'notLoggedIn' };
   if (options.signal?.aborted) return CANCELLED;
+  if (unfinishedChildren.size > 0) return { ok: false, reason: 'failed', detail: 'previous usage process is still exiting' };
   const spawn: UsageSpawn = options.spawn ?? ((c, a, o) => childProcess.spawn(c, a, o));
   const platform = options.platform ?? process.platform;
   const now = options.now ?? Date.now;
@@ -336,21 +341,58 @@ function attempt(
       child.removeListener('error', onError);
       child.removeListener('exit', onExit);
       child.on('error', () => undefined); // a late error must not become an uncaught exception
+      let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
+      let cleaned = false;
+      const onCleanupExit = (): void => {
+        unfinishedChildren.delete(child);
+        child.removeListener('exit', onCleanupExit);
+        child.removeListener('close', onCleanupExit);
+        complete();
+      };
+      const complete = (incomplete = false): void => {
+        if (cleaned) return;
+        cleaned = true;
+        clearTimeout(cleanupTimer);
+        if (incomplete) {
+          unfinishedChildren.add(child);
+          // Keep onCleanupExit registered so this process no longer blocks queries once it really exits.
+          resolve({ kind: 'done', result: { ok: false, reason: 'failed', detail: 'usage process did not exit after termination' } });
+        } else {
+          child.removeListener('exit', onCleanupExit);
+          child.removeListener('close', onCleanupExit);
+          resolve(a);
+        }
+      };
+      // Keep the caller's serial queue occupied until this process exits. ENOENT started no process.
+      if (a.kind === 'enoent' || child.exitCode !== null || child.signalCode !== null) {
+        complete();
+      } else {
+        child.once('exit', onCleanupExit);
+        // Failed spawns emit close but no exit; this also proves there is no live process left to serialize.
+        child.once('close', onCleanupExit);
+        const graceMs = options.graceMs ?? 1000;
+        cleanupTimer = setTimeout(() => {
+          // Exit status can be set before the exit/close event is delivered, especially after an event-loop stall.
+          if (child.exitCode !== null || child.signalCode !== null) {
+            complete();
+            return;
+          }
+          // A failed kill or a child that never reports exit must not hold the queue forever.
+          cleanupTimer = setTimeout(() => complete(true), graceMs);
+          try {
+            if (platform === 'win32' && spawnOptions.shell && child.pid !== undefined) (options.killTree ?? taskkillTree)(child.pid);
+            else child.kill();
+          } catch {
+            // The bounded wait reports cleanup failure unless the child still exits.
+          }
+        }, graceMs);
+      }
       try {
         stdin?.end();
       } catch {
         // already closed
       }
-      if (child.exitCode === null && child.signalCode === null) {
-        const kill = setTimeout(() => {
-          if (child.exitCode !== null || child.signalCode !== null) return;
-          if (platform === 'win32' && spawnOptions.shell && child.pid !== undefined) (options.killTree ?? taskkillTree)(child.pid);
-          else child.kill();
-        }, options.graceMs ?? 1000);
-        kill.unref?.();
-        child.once('exit', () => clearTimeout(kill));
-      }
-      resolve(a);
+      if (child.exitCode !== null || child.signalCode !== null) complete();
     }
 
     // EPIPE and the like after the child is gone are expected; the exit/error handlers report the outcome

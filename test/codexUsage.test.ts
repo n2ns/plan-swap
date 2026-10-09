@@ -7,6 +7,7 @@ import { PassThrough } from 'node:stream';
 import type { SpawnOptions } from 'node:child_process';
 import { findBundledCodex, parseRateLimits, readCodexUsage, readCodexUsageWithFallback, usageAsOf, type UsageChild, type UsageOptions } from '../src/codex/codexUsage';
 import { makeTempHome, type TempHome } from './helpers';
+import { oneAtATime } from '../src/claudeUsage';
 
 let tmp: TempHome;
 let acct: string;
@@ -85,7 +86,7 @@ type Responder = (msg: Record<string, unknown>, child: FakeChild, write: (o: unk
 
 interface SpawnCall { command: string; args: string[]; options: SpawnOptions }
 
-function fakeSpawn(respond: Responder, opts: { exitOnStdinEnd?: boolean; enoent?: (call: number) => boolean } = {}) {
+function fakeSpawn(respond: Responder, opts: { exitOnStdinEnd?: boolean; holdExitEvent?: boolean; enoent?: (call: number) => boolean } = {}) {
   const calls: SpawnCall[] = [];
   const children: FakeChild[] = [];
   const spawn = (command: string, args: string[], options: SpawnOptions): UsageChild => {
@@ -97,8 +98,10 @@ function fakeSpawn(respond: Responder, opts: { exitOnStdinEnd?: boolean; enoent?
       sent: [] as Record<string, unknown>[], killed: 0, stdinEnded: false,
       kill(signal?: NodeJS.Signals): boolean {
         child.killed++;
-        child.signalCode = signal ?? 'SIGTERM';
-        setImmediate(() => child.emit('exit', null, child.signalCode));
+        setImmediate(() => {
+          child.signalCode = signal ?? 'SIGTERM';
+          child.emit('exit', null, child.signalCode);
+        });
         return true;
       },
     }) as FakeChild;
@@ -123,7 +126,7 @@ function fakeSpawn(respond: Responder, opts: { exitOnStdinEnd?: boolean; enoent?
       child.stdinEnded = true;
       if (opts.exitOnStdinEnd) {
         child.exitCode = 0;
-        setImmediate(() => child.emit('exit', 0, null));
+        if (!opts.holdExitEvent) setImmediate(() => child.emit('exit', 0, null));
       }
     });
     return child;
@@ -171,6 +174,14 @@ describe('readCodexUsage', () => {
     await settle();
     assert.equal(child.stdinEnded, true);
     assert.equal(child.killed, 0, 'a child that exits on its own is not killed');
+  });
+
+  test('an exited child is not killed while its exit event is delayed', async () => {
+    const f = fakeSpawn(server((id) => ({ id, result: LIMITS })), { exitOnStdinEnd: true, holdExitEvent: true });
+    const result = await readCodexUsage(acct, base(f.spawn));
+    assert.equal(result.ok, true);
+    assert.equal(f.children[0]!.exitCode, 0);
+    assert.equal(f.children[0]!.killed, 0);
   });
 
   test('ignores unrelated notifications, blank and non-JSON lines, and responses split across chunks', async () => {
@@ -304,10 +315,74 @@ describe('readCodexUsage', () => {
     const r = await readCodexUsage(acct, base(f.spawn));
     assert.equal(r.ok, true);
     const child = f.children[0]!;
-    assert.equal(child.killed, 0, 'not killed before the grace period');
-    await settle();
+    assert.notEqual(child.signalCode, null, 'cleanup completes before returning');
     assert.equal(child.stdinEnded, true);
     assert.equal(child.killed, 1);
+  });
+
+  for (const outcome of ['success', 'timeout', 'cancel'] as const) {
+    test(`the serial queue waits for child exit after ${outcome}, including after kill is requested`, async () => {
+      const queue = oneAtATime();
+      const abort = new AbortController();
+      let started!: () => void;
+      let killed!: () => void;
+      const firstStarted = new Promise<void>((resolve) => { started = resolve; });
+      const terminationRequested = new Promise<void>((resolve) => { killed = resolve; });
+      const respond = server((id) => ({ id, result: LIMITS }));
+      const f = fakeSpawn((msg, child, write) => {
+        if (f.children.length > 1 || outcome === 'success') respond(msg, child, write);
+      });
+      const spawn: UsageOptions['spawn'] = (command, args, options) => {
+        const child = f.spawn(command, args, options) as FakeChild;
+        if (f.children.length === 1) {
+          child.kill = () => { child.killed++; killed(); return true; };
+          started();
+        }
+        return child;
+      };
+      const first = queue(() => readCodexUsage(acct, { ...base(spawn), graceMs: 100, timeoutMs: outcome === 'timeout' ? 20 : 2000, signal: abort.signal }));
+      const second = queue(() => readCodexUsage(acct, base(spawn)));
+      await firstStarted;
+      if (outcome === 'cancel') abort.abort();
+      await terminationRequested;
+      assert.equal(f.calls.length, 1, 'requesting kill is not proof that the old process exited');
+      const child = f.children[0]!;
+      assert.equal(child.stdinEnded, true);
+      assert.equal(child.signalCode, null);
+      child.signalCode = 'SIGTERM';
+      child.emit('exit', null, 'SIGTERM');
+      const result = await first;
+      if (outcome === 'success') assert.equal(result.ok, true);
+      else assert.deepEqual(result, outcome === 'timeout' ? { ok: false, reason: 'timeout' } : { ok: false, reason: 'failed', detail: 'cancelled' });
+      assert.equal((await second).ok, true);
+      assert.equal(f.calls.length, 2);
+    });
+  }
+
+  test('unconfirmed termination returns a bounded failure and blocks spawning until the surviving child exits', async () => {
+    const f = fakeSpawn(server((id) => ({ id, result: LIMITS })));
+    const spawn: UsageOptions['spawn'] = (command, args, options) => {
+      const child = f.spawn(command, args, options) as FakeChild;
+      child.kill = () => { child.killed++; return false; };
+      return child;
+    };
+    try {
+      assert.deepEqual(await readCodexUsage(acct, { ...base(spawn), graceMs: 5 }), {
+        ok: false, reason: 'failed', detail: 'usage process did not exit after termination',
+      });
+      assert.equal(f.children[0]!.killed, 1);
+      assert.deepEqual(await readCodexUsage(acct, base(spawn)), {
+        ok: false, reason: 'failed', detail: 'previous usage process is still exiting',
+      });
+      assert.equal(f.calls.length, 1);
+    } finally {
+      const child = f.children[0]!;
+      child.exitCode = 0;
+      child.emit('exit', 0, null);
+    }
+    const recovered = fakeSpawn(server((id) => ({ id, result: LIMITS })), { exitOnStdinEnd: true });
+    assert.equal((await readCodexUsage(acct, base(recovered.spawn))).ok, true);
+    assert.equal(recovered.calls.length, 1);
   });
 
   test('codexHome mismatch keeps the reported directory separately without asking for limits', async () => {
@@ -338,6 +413,22 @@ describe('readCodexUsage', () => {
   test('a synchronous spawn throw with ENOENT → cliMissing', async () => {
     const spawn = (): UsageChild => { throw Object.assign(new Error('spawn codex ENOENT'), { code: 'ENOENT' }); };
     assert.deepEqual(await readCodexUsage(acct, { ...base(spawn), platform: 'linux' }), { ok: false, reason: 'cliMissing' });
+  });
+
+  test('an asynchronous spawn failure closes without exit and preserves its error without blocking future queries', async () => {
+    const f = fakeSpawn(() => undefined);
+    const spawn: UsageOptions['spawn'] = (command, args, options) => {
+      const child = f.spawn(command, args, options);
+      setImmediate(() => {
+        child.emit('error', Object.assign(new Error('spawn codex EACCES'), { code: 'EACCES' }));
+        child.emit('close', -13, null);
+      });
+      return child;
+    };
+    assert.deepEqual(await readCodexUsage(acct, base(spawn)), { ok: false, reason: 'failed', detail: 'spawn codex EACCES' });
+    assert.equal(f.children[0]!.killed, 0, 'a failed spawn is not signalled');
+    const next = fakeSpawn(server((id) => ({ id, result: LIMITS })), { exitOnStdinEnd: true });
+    assert.equal((await readCodexUsage(acct, base(next.spawn))).ok, true);
   });
 
   describe('win32 codex.cmd fallback', () => {
@@ -384,7 +475,14 @@ describe('readCodexUsage', () => {
       const trees: number[] = [];
       const spawn: UsageOptions['spawn'] = (c, a, o) => Object.assign(f.spawn(c, a, o), { pid: 4242 });
       // The deadline leaves a slow CI runner time to report ENOENT for codex and start codex.cmd before it expires
-      const r = await readCodexUsage(acct, { ...base(spawn), platform: 'win32', timeoutMs: 300, killTree: (pid) => trees.push(pid) });
+      const r = await readCodexUsage(acct, { ...base(spawn), platform: 'win32', timeoutMs: 300, killTree: (pid) => {
+        trees.push(pid);
+        const child = f.children[1]!;
+        setImmediate(() => {
+          child.signalCode = 'SIGTERM';
+          child.emit('exit', null, child.signalCode);
+        });
+      } });
       assert.deepEqual(r, { ok: false, reason: 'timeout' });
       await settle();
       assert.deepEqual(trees, [4242]);

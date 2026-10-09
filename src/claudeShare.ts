@@ -8,7 +8,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { t } from './i18n';
-import { claudeIdentitySetting, claudeJsonName, copySettingsStripped, defaultDir, realPath, realPathInside, samePath, sameRealPath, strippedSettings, syncMcpServers, unchangedSince } from './paths';
+import { accountInfoTarget, claudeIdentitySetting, claudeJsonName, copySettingsStripped, defaultDir, realPath, realPathInside, samePath, sameRealPath, strippedSettings, syncMcpServers, unchangedSince } from './paths';
 import {
   comparablePath, isOpaqueReparseDir, JunctionError, LinkPrivilegeError, createLink, fileLinksAvailable, isWindows, pidAlive, renameReplacing, type StartTimeProbe,
   stripBom, unlinkLinks, windowsStartTimes,
@@ -449,7 +449,8 @@ function readSourceJson(file: string): Record<string, unknown> {
  *  changed lists 'mcpServers', the added onboarding keys and 'projects:<path>'. No write when nothing changes. A missing
  *  file is created 0600; otherwise the write follows a symlink, keeps the mode and replaces atomically (temporary file +
  *  renameReplacing), refusing with t('mcp.changed') when the file changed since it was read. A target that is not a
- *  JSON object throws t('mcp.badTarget'). The default dir → no-op.
+ *  JSON object throws t('mcp.badTarget'). Protected/ambiguous info targets throw t('mcp.unsafeTarget') before any
+ *  target content read, including check mode; legal external links remain supported. The default dir → no-op.
  *  beforeCommit runs between writing the temporary file and the change check (tests simulate a concurrent CLI write).
  *  check: read only, nothing is written (the same errors are thrown); changed lists only what the account lacks of the
  *  default (holds): a server or project setting the default adds or changes, a project it trusts. A key the account
@@ -459,17 +460,13 @@ export function mirrorClaudeJson(fromJson: string, dir: string, beforeCommit?: (
   const changed: string[] = [];
   if (isDefault(dir)) return { changed };
   assertNotDefaultAncestor(dir);
+  const file = path.join(path.resolve(dir), claudeJsonName());
+  const target = accountInfoTarget(file, dir, fromJson);
   const source = readSourceJson(fromJson);
 
-  const file = path.join(path.resolve(dir), claudeJsonName());
-  let real = file;
+  const { real, mode } = target;
   let before: string | undefined;
-  let mode = 0o600;
-  if (fs.existsSync(file)) {
-    real = fs.realpathSync(file);
-    before = fs.readFileSync(real, 'utf8');
-    mode = fs.statSync(real).mode & 0o777;
-  }
+  if (fs.existsSync(file)) before = fs.readFileSync(real, 'utf8');
   let data: unknown = {};
   if (before !== undefined) {
     try {
@@ -526,7 +523,7 @@ export function mirrorClaudeJson(fromJson: string, dir: string, beforeCommit?: (
     fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n', { mode, flag: 'wx' });
     beforeCommit?.();
     // Refuse to overwrite a write the CLI made in the meantime, checked again before every rename attempt
-    if (!renameReplacing(tmp, real, undefined, undefined, () => unchangedSince(real, before))) throw new Error(t('mcp.changed', { file: real }));
+    if (!renameReplacing(tmp, real, undefined, undefined, () => target.validate() && unchangedSince(real, before))) throw new Error(t('mcp.changed', { file: real }));
   } finally {
     fs.rmSync(tmp, { force: true });
   }

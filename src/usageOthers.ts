@@ -11,8 +11,9 @@ export interface OtherAccountChecksOptions {
   // when unknown
   checkedAt: (dir: string) => number | undefined;
   // Queries dir; the caller serializes it with the product's other queries. Resolving to false means it was not run
-  // (a manual refresh came first): no attempt is counted and the run stops
-  query: (dir: string) => Promise<boolean | void>;
+  // (a manual refresh came first): no attempt is counted and the run stops. 'skipped' means it became fresh during
+  // the queue wait: no attempt is counted, but the following accounts are still checked
+  query: (dir: string) => Promise<boolean | 'skipped' | void>;
   now?: () => number;
 }
 
@@ -46,14 +47,14 @@ export class OtherAccountChecks {
         if (now - last < this.options.staleMs()) continue;
         const previous = this.attempts.get(dir);
         this.attempts.set(dir, now);
-        let ran: boolean | void = true;
+        let ran: boolean | 'skipped' | void = true;
         try {
           ran = await this.options.query(dir);
         } catch { /* counted as an attempt; the next account is still checked */ }
-        if (ran === false) {
+        if (ran === false || ran === 'skipped') {
           if (previous === undefined) this.attempts.delete(dir);
           else this.attempts.set(dir, previous);
-          return;
+          if (ran === false) return;
         }
       }
     } finally {

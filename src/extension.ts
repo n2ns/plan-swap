@@ -13,7 +13,7 @@ import { CLAUDE_REFRESH_ALL_USAGE_COMMAND, CLAUDE_REFRESH_USAGE_COMMAND, CODEX_R
 import { registerCommands } from './commands';
 import { affectsSetting, currentDir, isExplicitConfigDir, settingEnv, settingEnvNames } from './claudeSettings';
 import { findBundledClaude, oneAtATime, queryClaudeUsage, queryEach, readClaudeUsage, readUsageFetchedAt, type ClaudeQueryResult } from './claudeUsage';
-import { ClaudeUsageMonitor } from './claudeUsageMonitor';
+import { ClaudeUsageMonitor, ClaudeUsageQueries } from './claudeUsageMonitor';
 import { CodexAccountStore } from './codex/codexStore';
 import { codexPanelSource, codexRunsInWsl, registerCodexCommands, restartServerInteractive } from './codex/codexCommands';
 import { checkSharedInBackground, registerToolCommands, runTool, type TerminalCheck, type ToolDeps } from './tools';
@@ -228,7 +228,6 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   // Usage limits of this window's current Claude account: claude refreshes the cache in the account's info file, which
   // the status bar and the panel read. Signed-out and non-subscription accounts start nothing
   // Every claude usage process of this window (scheduled, manual, all accounts) runs after the previous one ended
-  const claudeQueue = oneAtATime();
   const claudeCooldown = new UsageCooldown();
   // Claude Code's usage cache tells when any window or terminal last fetched the account's usage
   const claudeCooldownLeft = (dir: string): number => claudeCooldown.remaining(dir, readUsageFetchedAt(dir, isExplicitConfigDir(dir)));
@@ -243,7 +242,11 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
       },
     });
   };
-  const claudeQuery = (dir: string, signal?: AbortSignal) => claudeQueue(() => runClaudeQuery(dir, signal));
+  const claudeQueries = new ClaudeUsageQueries(runClaudeQuery, {
+    cachedAt: (dir) => readUsageFetchedAt(dir, isExplicitConfigDir(dir)),
+    staleMs: () => usageSchedule('claude').staleMs,
+  });
+  const claudeQuery = (dir: string, signal?: AbortSignal) => claudeQueries.query(dir, signal);
   // Low usage-limit notices of the current Claude and effective Codex account (usageNotices.ts), checked after every
   // usage result, account-info change and automatic check tick. Only the focused window announces, so the windows
   // reacting to the same file change do not all show the notice
@@ -284,6 +287,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     }
   }, {
     query: (dir) => claudeQuery(dir),
+    queryIfStale: (dir) => claudeQueries.queryIfStale(dir, () => readAccountInfo(dir, isExplicitConfigDir(dir)).identity !== undefined),
     eligible: (dir) => readAccountInfo(dir, isExplicitConfigDir(dir)).identity !== undefined,
     cachedAt: (dir) => readUsageFetchedAt(dir, isExplicitConfigDir(dir)),
     staleMs: () => usageSchedule('claude').staleMs,
@@ -454,12 +458,13 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     allowed: claudeOthersAllowed,
     staleMs: () => usageSchedule('claude').staleMs,
     checkedAt: (dir) => latest(readUsageFetchedAt(dir, isExplicitConfigDir(dir)), claudeCooldown.lastQueried(dir)),
-    query: (dir) => claudeQueue(async () => {
-      if (!claudeOthersAllowed()) return false;
+    query: async (dir) => {
+      const result = await claudeQueries.queryIfStale(dir, () => claudeOthersAllowed() && readAccountInfo(dir, isExplicitConfigDir(dir)).identity !== undefined);
+      if (!result) return claudeOthersAllowed() ? 'skipped' : false;
       // The account may have become the current one meanwhile: the monitor then takes the result as its attempt
-      claudeUsage.record(dir, await runClaudeQuery(dir));
+      claudeUsage.record(dir, result);
       return true;
-    }),
+    },
   });
   const otherCodexChecks = new OtherAccountChecks({
     allowed: codexOthersAllowed,

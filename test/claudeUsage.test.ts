@@ -9,13 +9,14 @@ import {
   CLAUDE_USAGE_MAX_AGE_MS, findBundledClaude, oneAtATime, parseUsageCache, queryClaudeUsage, queryEach, readClaudeUsage, readUsageFetchedAt, usageEnv,
   type ClaudeUsageChild, type ClaudeUsageSpawn,
 } from '../src/claudeUsage';
-import { ClaudeUsageMonitor, type ClaudeUsageState } from '../src/claudeUsageMonitor';
+import { ClaudeUsageMonitor, ClaudeUsageQueries, type ClaudeUsageState } from '../src/claudeUsageMonitor';
 import { StatusBar, claudeUsageFailureText, claudeUsageParts } from '../src/statusBar';
 import { htmlText, statusBarItems, tooltipText, setConfig, resetConfig } from './stubs/vscode';
 import { claudePanelSource, SHOW_MODEL_LIMITS_SETTING } from '../src/accountsPanel';
 import { AccountStore } from '../src/accounts';
 import { LabelStore } from '../src/labels';
 import { setLocale } from '../src/i18n';
+import { OtherAccountChecks } from '../src/usageOthers';
 import { LINUX_ONLY, makeTempHome, MemoryMemento, withEnv } from './helpers';
 
 const NOW = Date.parse('2026-10-01T12:00:00Z');
@@ -923,4 +924,98 @@ test('Claude panel rows carry the cached usage of a subscription sign-in only', 
     assert.equal(rows.find((r) => r.dir === other)?.usage, undefined);
     assert.ok(!JSON.stringify(rows).includes('acct-1'), 'no identity key reaches the Webview');
   } finally { resetConfig(); tmp.restore(); }
+});
+
+
+test('current Claude follow-up joins the fresh background observation after an A to B switch', async () => {
+  for (const result of [{ ok: true } as const, { ok: false, reason: 'timeout' } as const]) {
+    let dir = '/a';
+    let release!: () => void;
+    const calls: string[] = [];
+    const queries = new ClaudeUsageQueries(async (d) => {
+      calls.push(d);
+      if (d === '/a') await new Promise<void>((resolve) => { release = resolve; });
+      return d === '/b' ? result : { ok: true };
+    }, { cachedAt: () => undefined, staleMs: () => 900_000 });
+    const monitor = new ClaudeUsageMonitor(() => dir, () => undefined, {
+      query: (d) => queries.query(d), queryIfStale: (d) => queries.queryIfStale(d),
+    });
+    const others = new OtherAccountChecks({
+      allowed: () => true, staleMs: () => 900_000, checkedAt: () => undefined,
+      query: async (d) => {
+        const observed = await queries.queryIfStale(d);
+        if (!observed) return 'skipped';
+        monitor.record(d, observed);
+        return true;
+      },
+    });
+    const current = monitor.refreshIfStale();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    const background = others.run(['/b']);
+    dir = '/b';
+    release();
+    await Promise.all([current, background]);
+    assert.deepEqual(calls, ['/a', '/b'], 'the shared production queue suppresses a second B read');
+    assert.equal(monitor.current().checking, false);
+    assert.equal(monitor.current().failure?.reason, result.ok ? undefined : 'timeout', 'a skipped follow-up keeps the actual background outcome');
+    await monitor.refresh();
+    assert.deepEqual(calls, ['/a', '/b', '/b'], 'a manual initial refresh remains forced even with a fresh attempt');
+  }
+});
+
+test('queued automatic Claude reads recheck external freshness and permission when their turn arrives', async () => {
+  let now = 1_700_000_000_000;
+  let cached: number | undefined;
+  let allowed = true;
+  let release!: () => void;
+  const calls: string[] = [];
+  const queries = new ClaudeUsageQueries(async (dir) => {
+    calls.push(dir);
+    if (dir === '/a') await new Promise<void>((resolve) => { release = resolve; });
+    return { ok: true };
+  }, { cachedAt: (dir) => dir === '/b' ? cached : undefined, staleMs: () => 900_000, now: () => now });
+  const first = queries.query('/a');
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  const fresh = queries.queryIfStale('/b');
+  const denied = queries.queryIfStale('/c', () => allowed);
+  cached = now;
+  allowed = false;
+  release();
+  await first;
+  assert.equal(await fresh, undefined, 'a cache refreshed during the wait starts no query and fabricates no success');
+  assert.equal(await denied, undefined);
+  assert.deepEqual(calls, ['/a']);
+  allowed = true;
+  await queries.queryIfStale('/c', () => allowed);
+  assert.deepEqual(calls, ['/a', '/c'], 'a skipped read counted no attempt');
+  now += 900_000;
+  await queries.queryIfStale('/b');
+  assert.deepEqual(calls, ['/a', '/c', '/b'], 'an expired external cache is queried');
+});
+
+
+test('an automatic Claude read checks eligibility again after waiting in the product queue', async () => {
+  let eligible = true;
+  let release!: () => void;
+  const calls: string[] = [];
+  const queries = new ClaudeUsageQueries(async (dir) => {
+    calls.push(dir);
+    if (dir === '/blocker') await new Promise<void>((resolve) => { release = resolve; });
+    return { ok: false, reason: 'timeout' };
+  }, { cachedAt: () => undefined, staleMs: () => 900_000 });
+  const monitor = new ClaudeUsageMonitor(() => '/current', () => undefined, {
+    eligible: () => eligible, query: (dir) => queries.query(dir),
+    queryIfStale: (dir) => queries.queryIfStale(dir, () => eligible),
+  });
+  const blocker = queries.query('/blocker');
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  const scheduled = monitor.refreshIfStale();
+  eligible = false;
+  release();
+  await Promise.all([blocker, scheduled]);
+  assert.deepEqual(calls, ['/blocker'], 'sign-out during the wait starts no account CLI');
+  assert.equal(monitor.current().failure, undefined);
+  eligible = true;
+  await monitor.refreshIfStale();
+  assert.deepEqual(calls, ['/blocker', '/current'], 'the skipped monitor query did not count an attempt');
 });

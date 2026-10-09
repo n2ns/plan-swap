@@ -10,8 +10,8 @@ import {
   CLAUDE_SHARED_ENTRIES, claudeAccountBusy, copyClaudeIndependent, copyTree, ensureClaudeLinks, isSharedClaudeAccount, lstatOrUndefined,
   makeClaudeIndependent, mergeEntry, migrateClaudeToShared, mirrorClaudeJson, moveEntry, type MigrateReport, windowsSessionsBusy,
 } from '../src/claudeShare';
-import { accountDir, deleteAccountDir } from '../src/paths';
-import { assertTempHome, makeTempHome, assertMode, LINUX_ONLY, onWindows, SHARING, read, snapshot, withEnv, type TempHome } from './helpers';
+import { accountDir, deleteAccountDir, realPath } from '../src/paths';
+import { assertTempHome, makeTempHome, assertMode, FILE_SYMLINKS, LINUX_ONLY, onWindows, SHARING, read, snapshot, withEnv, type TempHome } from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -395,13 +395,84 @@ describe('mirrorClaudeJson', () => {
     assert.ok(!exists(path.join(def, '.claude.json')));
   });
 
+  test('linked-account repair rejects a credential info alias in write and check modes without reading it', FILE_SYMLINKS, (ctx) => {
+    write(src(), JSON.stringify({ mcpServers: { a: { command: 'a' } } }));
+    const acc = accountDir('protected');
+    const file = path.join(acc, '.claude.json');
+    const credential = path.join(def, '.credentials.json');
+    write(credential, '{"synthetic":true}');
+    fs.mkdirSync(acc);
+    fs.symlinkSync(credential, file);
+    const proc = path.join(home, 'fake-proc'); fs.mkdirSync(proc);
+    ensureClaudeLinks(acc, proc);
+    const originalRead = fsModule.readFileSync;
+    ctx.mock.method(fsModule, 'readFileSync', ((candidate: fs.PathOrFileDescriptor, ...args: unknown[]) => {
+      assert.notEqual(String(candidate), credential, 'credential payload must not be opened');
+      return Reflect.apply(originalRead, fsModule, [candidate, ...args]);
+    }) as typeof fs.readFileSync);
+    for (const check of [false, true]) {
+      assert.throws(() => mirrorClaudeJson(src(), acc, undefined, check), { message: t('mcp.unsafeTarget', { file }) });
+    }
+    assert.ok(fs.lstatSync(file).isSymbolicLink());
+  });
+
+  test('neutral sibling credential aliases and nested default links are refused in mirror and check modes', FILE_SYMLINKS, (ctx) => {
+    write(src(), JSON.stringify({ mcpServers: { a: { command: 'a' } } }));
+    const acc = accountDir('neutral-backing'); fs.mkdirSync(acc);
+    const file = path.join(acc, '.claude.json');
+    const other = accountDir('neutral-owner'); fs.mkdirSync(other);
+    const external = path.join(home, 'neutral-external.json'); write(external, '{}');
+    const owner = path.join(other, '.credentials.json'); fs.symlinkSync(external, owner);
+    const nested = path.join(def, 'rules', 'linked-rule.json');
+    fs.mkdirSync(path.dirname(nested), { recursive: true }); fs.symlinkSync(external, nested);
+    const originalRead = fsModule.readFileSync;
+    const spy = ctx.mock.method(fsModule, 'readFileSync', ((candidate: fs.PathOrFileDescriptor, ...args: unknown[]) => {
+      assert.notEqual(String(candidate), external, 'protected external payload must not be opened');
+      return Reflect.apply(originalRead, fsModule, [candidate, ...args]);
+    }) as typeof fs.readFileSync);
+    for (const destination of [external, nested]) {
+      if (destination === nested) fs.unlinkSync(owner);
+      fs.symlinkSync(destination, file);
+      for (const check of [false, true]) {
+        assert.throws(() => mirrorClaudeJson(src(), acc, undefined, check), { message: t('mcp.unsafeTarget', { file }) });
+        if (destination === nested) {
+          const alias = path.join(home, 'default-info-alias'); fs.symlinkSync(def, alias, 'junction');
+          withEnv({ CLAUDE_CONFIG_DIR: alias }, () => {
+            assert.throws(() => mirrorClaudeJson(src(), acc, undefined, check), { message: t('mcp.unsafeTarget', { file }) });
+          });
+          fs.unlinkSync(alias);
+        }
+      }
+      assert.ok(fs.lstatSync(file).isSymbolicLink()); fs.unlinkSync(file);
+    }
+    spy.mock.restore(); assert.equal(read(external), '{}');
+  });
+
+  test('safe external info links still mirror and an original target replaced by a credential alias is refused', FILE_SYMLINKS, () => {
+    write(src(), JSON.stringify({ mcpServers: { a: { command: 'a' } } }));
+    const acc = accountDir('external'); fs.mkdirSync(acc);
+    const file = path.join(acc, '.claude.json');
+    const external = path.join(home, 'external-info.json'); write(external, '{}');
+    fs.symlinkSync(external, file);
+    assert.deepEqual(mirrorClaudeJson(src(), acc).changed, ['mcpServers']);
+    assert.ok(fs.lstatSync(file).isSymbolicLink());
+    write(external, '{}');
+    const credential = path.join(acc, '.credentials.json'); write(credential, '{}');
+    assert.throws(() => mirrorClaudeJson(src(), acc, () => {
+      fs.unlinkSync(external); fs.symlinkSync(credential, external);
+    }), { message: t('mcp.unsafeTarget', { file }) });
+    assert.equal(read(credential), '{}');
+    assert.ok(fs.lstatSync(external).isSymbolicLink());
+    assert.ok(!fs.readdirSync(home).some((name) => name.includes('.planswap-')));
+  });
+
   test('a target rewritten by the CLI between read and rename is left unchanged and reported', () => {
     write(src(), JSON.stringify({ mcpServers: { a: { command: 'a' } } }));
     const acc = accountDir('race');
     const file = path.join(acc, '.claude.json');
     write(file, JSON.stringify({ userID: 'u' }));
     const rewritten = JSON.stringify({ userID: 'u', numStartups: 2 });
-    assert.throws(() => mirrorClaudeJson(src(), acc, () => fs.writeFileSync(file, rewritten)), { message: t('mcp.changed', { file }) });
+    assert.throws(() => mirrorClaudeJson(src(), acc, () => fs.writeFileSync(file, rewritten)), { message: t('mcp.changed', { file: realPath(file) }) });
     assert.equal(read(file), rewritten);
     assert.deepEqual(fs.readdirSync(acc), ['.claude.json']);
     // The next run starts from the new content

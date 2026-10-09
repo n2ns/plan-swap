@@ -114,7 +114,7 @@ Title bar and palette: re-syncs both vendors' account lists with the disk (secti
 
 ### 4.6 Share an independent account
 
-Row link button (independent named, not current) or `planswap.shareAccount`. After a modal confirmation, refused for the current or a busy account, the account's data moves into the default directory without overwriting anything there and is replaced by links ([Claude design 6.7](design.md#67-shared-and-independent-accounts)). Cancelling changes nothing; "linked" is reported only when the link exists, and after an error moved files stay in the default directory.
+Row link button (independent named, not current) or `planswap.shareAccount`. After a modal confirmation, refused for the current or a busy account, the account's data moves into the default directory without overwriting anything there and is replaced by links ([Claude design 6.7](design.md#67-shared-and-independent-accounts)). Account registration, current/selected state and busy state are checked again after the Windows file-link fallback dialog, before any conversion. Cancelling changes nothing; "linked" is reported only when the link exists, and after an error moved files stay in the default directory.
 
 ### 4.7 Unlink a shared account
 
@@ -131,7 +131,7 @@ Palette and the layers button, manual only: queries every registered signed-in s
 ## 5. Auto-discovery, shared and independent accounts
 
 - **Auto-discovery** (activation and Refresh): unregistered real `~/.claude-<name>` directories (not symlinks, not the default directory, not ignored, no case-insensitive clash with a name or alias) are registered, so hand-made folders are adopted and a lost state file does not empty the list. Accounts whose directory vanished are dropped with their alias, not ignored.
-- **Shared** ("linked" in the UI): everything but the login identity links to the default directory, which is never overwritten; MCP servers, project trust and onboarding state are mirrored. Links refresh only on add, before a switch, by Re-link's Repair and after linking; a background check of the focused window (on activation and on regaining focus, at most every 10 minutes) only points out problems that Repair can fix, once per change across windows and again after a day.
+- **Shared** ("linked" in the UI): everything but the login identity links to the default directory, which is never overwritten; MCP servers, project trust and onboarding state are mirrored. An unsafe account info target (credentials, default-account data, a hardlink or a dangling file link) is refused before its contents are read; safe external info-file links remain supported. Links refresh only on add, before a switch, by Re-link's Repair and after linking; a background check of the focused window (on activation and on regaining focus, at most every 10 minutes) only points out problems that Repair can fix, once per change across windows and again after a day.
 - **Independent**: a one-time, never-overwriting copy of the default configuration; history and sessions stay separate.
 
 Rules: [Claude design 6.7](design.md#67-shared-and-independent-accounts), [AGENTS.md](../AGENTS.md#account-and-data-safety); MCP OAuth and `env` caveats: [Claude design 11](design.md#11-known-limitations-and-risks).

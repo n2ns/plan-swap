@@ -2,7 +2,7 @@
 // values themselves are always read from the account's own info file; the monitor only keeps whether a refresh runs and
 // how the last one failed. One query at a time; the caller decides when to ask. No vscode import.
 import { samePath } from './paths';
-import type { ClaudeQueryResult, ClaudeUsageFailure } from './claudeUsage';
+import { oneAtATime, type ClaudeQueryResult, type ClaudeUsageFailure } from './claudeUsage';
 
 export interface ClaudeUsageState {
   checking: boolean;
@@ -12,6 +12,8 @@ export interface ClaudeUsageState {
 
 export interface ClaudeUsageMonitorOptions {
   query: (dir: string) => Promise<ClaudeQueryResult>;
+  // Scheduled checks and account-change follow-ups recheck freshness after waiting in the shared queue.
+  queryIfStale?: (dir: string) => Promise<ClaudeQueryResult | undefined>;
   // Whether the account can have usage limits (a subscription sign-in); others are never queried. Default: always
   eligible?: (dir: string) => boolean;
   // fetchedAtMs of the account's usage cache, whoever refreshed it (Claude Code itself, another window); a cache younger
@@ -31,6 +33,7 @@ export class ClaudeUsageMonitor {
   private running: Promise<void> | undefined;
   private last: { dir: string; at: number } | undefined;
   private readonly query: ClaudeUsageMonitorOptions['query'];
+  private readonly queryIfStale: ClaudeUsageMonitorOptions['queryIfStale'];
   private readonly eligible: (dir: string) => boolean;
   private readonly cachedAt: (dir: string) => number | undefined;
   private readonly now: () => number;
@@ -42,6 +45,7 @@ export class ClaudeUsageMonitor {
     options: ClaudeUsageMonitorOptions,
   ) {
     this.query = options.query;
+    this.queryIfStale = options.queryIfStale;
     this.eligible = options.eligible ?? (() => true);
     this.cachedAt = options.cachedAt ?? (() => undefined);
     this.now = options.now ?? Date.now;
@@ -58,10 +62,15 @@ export class ClaudeUsageMonitor {
    * { dir, at } before querying (failures count as attempts), notifies checking: true keeping the previous failure,
    * then stores the failure with its directory (a rejected query becomes failed with the error message) or clears it
    * on success. A directory that is not eligible is not queried and records no attempt; the run only clears a stale
-   * checking/failure state. When the current directory changed during the query, the new one is queried once more.
+   * checking/failure state. When the current directory changed during the query, the new one is checked once more; the shared queue
+   * may skip its follow-up if another trigger refreshed it meanwhile.
    */
   refresh(): Promise<void> {
-    this.running ??= this.run().finally(() => {
+    return this.start(true);
+  }
+
+  private start(force: boolean): Promise<void> {
+    this.running ??= this.run(force).finally(() => {
       this.running = undefined;
     });
     return this.running;
@@ -89,7 +98,7 @@ export class ClaudeUsageMonitor {
       if (failure && samePath(failure.dir, dir) && this.last && samePath(this.last.dir, dir) && cached > this.last.at) this.set({ checking: false });
       return Promise.resolve();
     }
-    return this.refresh();
+    return this.start(false);
   }
 
   /**
@@ -102,7 +111,7 @@ export class ClaudeUsageMonitor {
     this.set({ checking: this.state.checking, failure: result.ok ? undefined : { dir, reason: result.reason, detail: result.detail } });
   }
 
-  private async run(): Promise<void> {
+  private async run(force: boolean): Promise<void> {
     // One follow-up when the current account changed during the query
     for (let attempt = 0; attempt < 2; attempt++) {
       const dir = this.dirOf();
@@ -110,15 +119,22 @@ export class ClaudeUsageMonitor {
         if (this.state.checking || this.state.failure) this.set({ checking: false });
         return;
       }
-      this.last = { dir, at: this.now() };
+      const previous = this.last;
+      const lastAttempt = { dir, at: this.now() };
+      this.last = lastAttempt;
       this.set({ checking: true, failure: this.state.failure });
-      let result: ClaudeQueryResult;
+      let result: ClaudeQueryResult | undefined;
       try {
-        result = await this.query(dir);
+        result = await ((!force || attempt > 0) && this.queryIfStale ? this.queryIfStale(dir) : this.query(dir));
       } catch (e) {
         result = { ok: false, reason: 'failed', detail: e instanceof Error ? e.message : String(e) };
       }
-      this.set({ checking: false, failure: result.ok ? undefined : { dir, reason: result.reason, detail: result.detail } });
+      if (result) this.set({ checking: false, failure: result.ok ? undefined : { dir, reason: result.reason, detail: result.detail } });
+      else {
+        // A skipped queue task is not an attempt; keep any actual background record received while waiting.
+        if (this.last === lastAttempt) this.last = previous;
+        this.set({ checking: false, failure: this.eligible(dir) && this.state.failure && samePath(this.state.failure.dir, dir) ? this.state.failure : undefined });
+      }
       if (samePath(dir, this.dirOf())) return;
     }
   }
@@ -126,5 +142,43 @@ export class ClaudeUsageMonitor {
   private set(state: ClaudeUsageState): void {
     this.state = state;
     this.onChange(state);
+  }
+}
+
+
+/** Shared queue for every Claude usage trigger. Automatic calls recheck freshness inside the queue; forced manual
+ * calls always read. A skipped call returns undefined, never a fabricated successful query result. */
+export class ClaudeUsageQueries {
+  private readonly queue = oneAtATime();
+  private readonly attempts: Array<{ dir: string; at: number }> = [];
+
+  constructor(
+    private readonly read: (dir: string, signal?: AbortSignal) => Promise<ClaudeQueryResult>,
+    private readonly options: { cachedAt: (dir: string) => number | undefined; staleMs: () => number; now?: () => number },
+  ) {}
+
+  query(dir: string, signal?: AbortSignal): Promise<ClaudeQueryResult> {
+    return this.queue(() => this.run(dir, signal));
+  }
+
+  queryIfStale(dir: string, allowed: () => boolean = () => true): Promise<ClaudeQueryResult | undefined> {
+    return this.queue(async () => {
+      if (!allowed()) return undefined;
+      const now = (this.options.now ?? Date.now)();
+      const cached = this.options.cachedAt(dir);
+      const attempted = this.attempts.find((a) => samePath(a.dir, dir))?.at;
+      const fresh = (at: number | undefined): boolean => at !== undefined && at <= now + FUTURE_TOLERANCE_MS
+        && now - at < this.options.staleMs();
+      if (fresh(cached) || fresh(attempted)) return undefined;
+      return this.run(dir);
+    });
+  }
+
+  private run(dir: string, signal?: AbortSignal): Promise<ClaudeQueryResult> {
+    const at = (this.options.now ?? Date.now)();
+    const attempt = this.attempts.find((a) => samePath(a.dir, dir));
+    if (attempt) attempt.at = at;
+    else this.attempts.push({ dir, at });
+    return this.read(dir, signal);
   }
 }
