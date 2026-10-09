@@ -637,6 +637,54 @@ describe('panel message handlers', () => {
     }
   });
 
+  for (const changed of ['selected', 'effective', 'unregistered', 'terminal'] as const) {
+    test(`Windows share rechecks ${changed} after the file-link fallback modal`, LINUX_ONLY, async (ctx) => {
+      fs.mkdirSync(def, { recursive: true, mode: 0o700 });
+      const a = named(`fallback-${changed}`);
+      const h = await harness([a]);
+      fs.mkdirSync(path.join(a.dir, 'sessions'));
+      fs.writeFileSync(path.join(a.dir, 'sessions', 'keep.jsonl'), 'independent session');
+      writeSelectedDir(undefined);
+      const beforeAccount = snapshot(a.dir);
+      const beforeDefault = snapshot(def);
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+      const previousHome = process.env.CODEX_HOME;
+      const realSymlink = fsDefault.symlinkSync;
+      ctx.mock.method(fsDefault, 'symlinkSync', ((target: fs.PathLike, link: fs.PathLike, type?: fs.symlink.Type) => {
+        if (type === 'file') throw Object.assign(new Error('synthetic file-link refusal'), { code: 'EPERM' });
+        return realSymlink(target, link, type);
+      }) as typeof fs.symlinkSync);
+      let fallbackShown = false;
+      const warnings = ctx.mock.method(window, 'showWarningMessage', async (message: string) => {
+        if (message === t('share.noFileLinks.prompt', { files: 'config.toml, AGENTS.md, hooks.json' })) {
+          fallbackShown = true;
+          if (changed === 'selected') writeSelectedDir(a.dir);
+          if (changed === 'effective') process.env.CODEX_HOME = a.dir;
+          if (changed === 'unregistered') await h.store.remove(a.name);
+          if (changed === 'terminal') await h.handle({ type: 'terminal', mode: 'codex', dir: a.dir });
+          return t('share.noFileLinks.skip');
+        }
+        return message === t('share.confirmCodexWindows', { label: a.name, dir: a.dir }) ? t('share.confirmButton') : undefined;
+      });
+      try {
+        Object.defineProperty(process, 'platform', { value: 'win32' });
+        await h.handle({ type: 'share', mode: 'codex', dir: a.dir });
+        assert.equal(fallbackShown, true);
+        assert.deepEqual(snapshot(a.dir), beforeAccount);
+        assert.deepEqual(snapshot(def), beforeDefault);
+        assert.equal(isSharedCodexAccount(a.dir), false);
+        if (changed !== 'unregistered') {
+          assert.equal(warnings.mock.calls.at(-1)?.arguments[0], t(changed === 'terminal' ? 'share.busyCodex' : 'share.current', { label: a.name, name: a.name }));
+        }
+      } finally {
+        Object.defineProperty(process, 'platform', platform);
+        restoreEnv('CODEX_HOME', previousHome);
+        writeSelectedDir(undefined);
+        h.dispose();
+      }
+    });
+  }
+
   test('adding a kept independent directory does not claim that linking succeeded', LINUX_ONLY, async (ctx) => {
     const a = named('kept-unlinked');
     fs.mkdirSync(path.join(a.dir, 'sessions'), { recursive: true });

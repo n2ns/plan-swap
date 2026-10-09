@@ -73,7 +73,8 @@ export interface Deps {
  * - Add: always answers addResult, also when the flow throws. Linking or copying failures only warn and the account is
  *   still registered. A shared add creates the folder, then asks askCopyFallback (Windows) before anything is linked.
  * - Share / unshare: named, non-current accounts only, after a modal; current-account and busy state are re-checked
- *   after the modal. Share asks askCopyFallback after those re-checks. Add and share pass the answer plus the
+ *   after the modal. Share asks askCopyFallback after those re-checks and checks registration, current and busy state
+ *   again after its fallback modal. Add and share pass the answer plus the
  *   terminal-busy callback (linkBusy) to ensureClaudeLinks / migrateClaudeToShared; switching re-links with linkBusy only.
  * - Remove: the current account (any spelling, sameRealPath) and a busy one are refused before the first confirmation,
  *   after the Command Palette confirmation and again after the delete-directory confirmation. The alias is cleared with
@@ -245,6 +246,20 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
       return;
     }
     const linkOptions = await askCopyFallback(account.dir, 'Claude');
+    // The Windows fallback can show another modal; every account guard must hold after it too.
+    const registered = store.find(account.name);
+    if (!registered || !samePath(registered.dir, account.dir)) {
+      refreshUi();
+      return;
+    }
+    if (inUse(account)) {
+      void vscode.window.showWarningMessage(t('share.current', { label: labelOf(account) }));
+      return;
+    }
+    if (busy(account)) {
+      void vscode.window.showWarningMessage(t('share.busy', { name: labelOf(account) }));
+      return;
+    }
     try {
       const report = migrateClaudeToShared(account.dir, account.name, procRoot, labelOf(account), { ...linkOptions, busy: linkBusy(account) });
       mirrorClaudeJsonInto(defaultJson(), account.dir);

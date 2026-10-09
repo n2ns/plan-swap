@@ -1,6 +1,7 @@
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
+import fsModule from 'node:fs';
 import * as path from 'node:path';
 import { setLocale, t } from '../src/i18n';
 import {
@@ -390,6 +391,150 @@ describe('syncMcpServers', () => {
     assert.deepEqual(syncMcpServers(src(), e).added, ['one']);
     assert.ok(fs.lstatSync(path.join(e, '.claude.json')).isSymbolicLink());
     assert.deepEqual(JSON.parse(read(real)), { mcpServers: { one } });
+  });
+
+  test('protected info aliases are rejected before their payload is read', FILE_SYMLINKS, (ctx) => {
+    setSource({ one });
+    const a = mk('protected');
+    const file = path.join(a, '.claude.json');
+    const external = path.join(home, 'external-protected.json');
+    fs.writeFileSync(external, '{}');
+    const defaultAlias = path.join(def, 'security-settings.json');
+    fs.symlinkSync(external, defaultAlias);
+    const credentialAlias = path.join(a, '.credentials.json');
+    const renamedCredential = path.join(home, 'renamed-credential.json');
+    fs.writeFileSync(renamedCredential, '{}');
+    fs.symlinkSync(renamedCredential, credentialAlias);
+    const other = mk('other-credentials');
+    const otherCredential = path.join(other, '.credentials.json');
+    const externalOther = path.join(home, 'external-other.json');
+    fs.writeFileSync(externalOther, '{}');
+    fs.symlinkSync(externalOther, otherCredential);
+    const targets = [src(), external, renamedCredential, otherCredential, path.join(def, 'security-default.json'),
+      ...['.claude.json', '.claude-custom-oauth.json'].flatMap((name) => [path.join(home, name), path.join(def, name)]),
+      path.join(home, '.credentials.json'), path.join(home, 'auth.json')];
+    const created: string[] = [];
+    for (const destination of targets) {
+      if (!fs.existsSync(destination)) { fs.writeFileSync(destination, '{}'); created.push(destination); }
+      fs.symlinkSync(destination, file);
+      const originalRead = fsModule.readFileSync;
+      const spy = ctx.mock.method(fsModule, 'readFileSync', ((candidate: fs.PathOrFileDescriptor, ...args: unknown[]) => {
+        assert.ok(typeof candidate !== 'string' || candidate === src() || !sameRealPath(candidate, destination), 'protected target payload must not be opened');
+        return Reflect.apply(originalRead, fsModule, [candidate, ...args]);
+      }) as typeof fs.readFileSync);
+      try { assert.throws(() => syncMcpServers(src(), a), { message: t('mcp.unsafeTarget', { file }) }); }
+      finally { spy.mock.restore(); fs.unlinkSync(file); }
+    }
+    for (const destination of created) fs.unlinkSync(destination);
+    fs.unlinkSync(defaultAlias);
+    fs.unlinkSync(credentialAlias);
+  });
+
+  test('neutral external aliases of other managed credentials and nested default hops are rejected', FILE_SYMLINKS, (ctx) => {
+    setSource({ one });
+    const a = mk('neutral-backing');
+    const file = path.join(a, '.claude.json');
+    const other = mk('neutral-owner');
+    const external = path.join(home, 'neutral-backing.json'); fs.writeFileSync(external, '{}');
+    const owner = path.join(other, '.credentials.json'); fs.symlinkSync(external, owner);
+    const nested = path.join(def, 'security-rules', 'linked-rule.json');
+    fs.mkdirSync(path.dirname(nested), { recursive: true }); fs.symlinkSync(external, nested);
+    const originalRead = fsModule.readFileSync;
+    const spy = ctx.mock.method(fsModule, 'readFileSync', ((candidate: fs.PathOrFileDescriptor, ...args: unknown[]) => {
+      assert.ok(typeof candidate !== 'string' || !sameRealPath(candidate, external), 'external protected payload must not be opened');
+      return Reflect.apply(originalRead, fsModule, [candidate, ...args]);
+    }) as typeof fs.readFileSync);
+    for (const destination of [external, nested]) {
+      // The nested-default test must independently establish protection without the sibling credential alias.
+      if (destination === nested) fs.unlinkSync(owner);
+      fs.symlinkSync(destination, file);
+      assert.throws(() => syncMcpServers(src(), a), { message: t('mcp.unsafeTarget', { file }) });
+      if (destination === nested) {
+        const alias = path.join(home, 'security-default-alias'); fs.symlinkSync(def, alias, 'junction');
+        withEnv({ CLAUDE_CONFIG_DIR: alias }, () => {
+          assert.throws(() => syncMcpServers(src(), a), { message: t('mcp.unsafeTarget', { file }) });
+        });
+        fs.unlinkSync(alias);
+      }
+      assert.ok(fs.lstatSync(file).isSymbolicLink()); fs.unlinkSync(file);
+    }
+    spy.mock.restore();
+    assert.equal(read(external), '{}');
+    fs.unlinkSync(nested); fs.rmdirSync(path.dirname(nested));
+  });
+
+  test('empty MCP sources remain a no-op even for protected info targets', FILE_SYMLINKS, () => {
+    setSource({});
+    const a = mk('empty-protected');
+    const file = path.join(a, '.claude.json');
+    const credential = path.join(a, '.credentials.json'); fs.writeFileSync(credential, '{}'); fs.symlinkSync(credential, file);
+    assert.deepEqual(syncMcpServers(src(), a), { added: [], kept: [] });
+    assert.equal(read(credential), '{}'); assert.ok(fs.lstatSync(file).isSymbolicLink());
+  });
+
+  test('hard-linked and dangling info targets are refused unchanged', FILE_SYMLINKS, () => {
+    setSource({ one });
+    const a = mk('hard-dangling');
+    const file = path.join(a, '.claude.json');
+    const external = path.join(home, 'hardlink-info.json');
+    fs.writeFileSync(external, '{}');
+    fs.linkSync(external, file);
+    assert.throws(() => syncMcpServers(src(), a), { message: t('mcp.unsafeTarget', { file }) });
+    assert.equal(read(external), '{}');
+    fs.unlinkSync(file);
+    const missing = path.join(home, 'missing-info.json');
+    fs.symlinkSync(missing, file);
+    assert.throws(() => syncMcpServers(src(), a), { message: t('mcp.unsafeTarget', { file }) });
+    assert.ok(fs.lstatSync(file).isSymbolicLink());
+    assert.ok(!fs.existsSync(missing));
+  });
+
+  test('a protected replacement before commit is rejected before comparison reads it', FILE_SYMLINKS, (ctx) => {
+    setSource({ one });
+    const a = mk('protected-race');
+    const file = path.join(a, '.claude.json');
+    const credential = path.join(a, '.credentials.json');
+    fs.writeFileSync(file, '{}');
+    fs.writeFileSync(credential, '{}');
+    const originalRead = fsModule.readFileSync;
+    ctx.mock.method(fsModule, 'readFileSync', ((candidate: fs.PathOrFileDescriptor, ...args: unknown[]) => {
+      assert.ok(typeof candidate !== 'string' || !sameRealPath(candidate, credential), 'credential payload must not be opened');
+      return Reflect.apply(originalRead, fsModule, [candidate, ...args]);
+    }) as typeof fs.readFileSync);
+    assert.throws(() => syncMcpServers(src(), a, () => {
+      fs.unlinkSync(file); fs.symlinkSync(credential, file);
+    }), { message: t('mcp.unsafeTarget', { file }) });
+    assert.ok(fs.lstatSync(file).isSymbolicLink());
+    assert.deepEqual(fs.readdirSync(a).sort(), ['.claude.json', '.credentials.json']);
+  });
+
+  test('Windows rename retries revalidate a newly introduced credential alias before reading it', FILE_SYMLINKS, (ctx) => {
+    setSource({ one });
+    const a = mk('retry-protected');
+    const file = path.join(a, '.claude.json');
+    const credential = path.join(a, '.credentials.json');
+    fs.writeFileSync(file, '{}'); fs.writeFileSync(credential, '{}');
+    const originalRead = fsModule.readFileSync;
+    ctx.mock.method(fsModule, 'readFileSync', ((candidate: fs.PathOrFileDescriptor, ...args: unknown[]) => {
+      assert.ok(typeof candidate !== 'string' || !sameRealPath(candidate, credential), 'retry must not open credentials');
+      return Reflect.apply(originalRead, fsModule, [candidate, ...args]);
+    }) as typeof fs.readFileSync);
+    const originalRename = fsModule.renameSync;
+    let attempts = 0;
+    ctx.mock.method(fsModule, 'renameSync', ((from: fs.PathLike, to: fs.PathLike) => {
+      if (String(to) === file) {
+        attempts++;
+        fs.unlinkSync(file); fs.symlinkSync(credential, file);
+        throw Object.assign(new Error('synthetic lock'), { code: 'EPERM' });
+      }
+      return originalRename(from, to);
+    }) as typeof fs.renameSync);
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    try { assert.throws(() => syncMcpServers(src(), a), { message: t('mcp.unsafeTarget', { file }) }); }
+    finally { Object.defineProperty(process, 'platform', platform); }
+    assert.equal(attempts, 1);
+    assert.ok(fs.lstatSync(file).isSymbolicLink());
   });
 
   test('the default dir is never written', () => {

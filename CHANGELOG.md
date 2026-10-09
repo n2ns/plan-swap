@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- Refuse Claude account info targets that alias credentials or default-account data before reading or syncing them, while keeping safe external info-file links supported.
+- Recheck account selection and busy state after the Windows file-link fallback dialog, before converting an account to linked mode.
+- Avoid duplicate Claude usage queries when switching to an account whose automatic check is already queued; manual refreshes keep their usual behavior.
+- Wait for the Codex usage process to exit before starting the next queued query, and report failed cleanup without starting another process alongside it.
 - Hide the recommendation exclusion toggle when the Claude or Codex page has only one account.
 - Keep the account-switch notice and recommendation card mutually exclusive, including while Claude waits for a reload.
 

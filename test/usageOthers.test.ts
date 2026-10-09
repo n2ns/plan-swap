@@ -86,3 +86,17 @@ test('a call while a run is going on does nothing; the interval is read for ever
   await second;
   assert.deepEqual(t.queried, ['/a', '/a'], 'a shorter interval applies at once');
 });
+
+
+test('an account that became fresh in the queue is skipped without stopping or counting an attempt', async () => {
+  let skip = true;
+  const t = make({ query: async (dir) => {
+    if (dir === '/a' && skip) return 'skipped';
+    t.queried.push(dir);
+  } });
+  await t.checks.run(['/a', '/b']);
+  assert.deepEqual(t.queried, ['/b']);
+  skip = false;
+  await t.checks.run(['/a', '/b']);
+  assert.deepEqual(t.queried, ['/b', '/a'], 'the skipped account has no attempt; the actually queried one backs off');
+});

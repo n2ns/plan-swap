@@ -2,6 +2,7 @@ import { after, afterEach, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
+import fsDefault from 'node:fs';
 import * as path from 'node:path';
 import { AccountStore } from '../src/accounts';
 import { RecommendExclusions } from '../src/recommend';
@@ -452,6 +453,53 @@ describe('panel message handlers (Claude)', () => {
       h.dispose();
     }
   });
+
+  for (const changed of ['current', 'unregistered', 'terminal'] as const) {
+    test(`Windows share rechecks ${changed} after the file-link fallback modal`, LINUX_ONLY, async (ctx) => {
+      const h = harness();
+      const solo = await add(h, 'fallback-guard', false);
+      fs.mkdirSync(path.join(solo, 'projects'));
+      fs.writeFileSync(path.join(solo, 'projects', 'keep.txt'), 'independent data');
+      const beforeAccount = snapshot(solo);
+      const beforeDefault = snapshot(defaultDir());
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+      const realSymlink = fsDefault.symlinkSync;
+      const realNative = fsDefault.realpathSync.native;
+      // The Windows setting spelling resolves to the synthetic account, without using a real Windows profile.
+      const configured = 'C:\\PlanSwap-fixture\\current';
+      ctx.mock.method(fsDefault.realpathSync, 'native', ((p: fs.PathLike, options?: unknown) =>
+        String(p) === configured ? solo : realNative(p, options as never)) as typeof realNative);
+      ctx.mock.method(fsDefault, 'symlinkSync', ((target: fs.PathLike, link: fs.PathLike, type?: fs.symlink.Type) => {
+        if (type === 'file') throw Object.assign(new Error('synthetic file-link refusal'), { code: 'EPERM' });
+        return realSymlink(target, link, type);
+      }) as typeof fs.symlinkSync);
+      let fallbackShown = false;
+      const warnings = ctx.mock.method(window, 'showWarningMessage', async (message: string) => {
+        if (message === t('share.noFileLinks.prompt', { files: 'settings.json, CLAUDE.md' })) {
+          fallbackShown = true;
+          if (changed === 'current') setCurrent(configured);
+          if (changed === 'unregistered') await h.store.remove('fallback-guard');
+          if (changed === 'terminal') await h.handle({ type: 'terminal', mode: 'claude', dir: solo });
+          return t('share.noFileLinks.skip');
+        }
+        return message === t('share.confirm', { label: 'fallback-guard', dir: solo }) ? t('share.confirmButton') : undefined;
+      });
+      try {
+        Object.defineProperty(process, 'platform', { value: 'win32' });
+        await h.handle({ type: 'share', mode: 'claude', dir: solo });
+        assert.equal(fallbackShown, true);
+        assert.deepEqual(snapshot(solo), beforeAccount);
+        assert.deepEqual(snapshot(path.join(home, '.claude')), beforeDefault);
+        assert.equal(isSharedClaudeAccount(solo), false);
+        if (changed !== 'unregistered') {
+          assert.equal(warnings.mock.calls.at(-1)?.arguments[0], t(changed === 'current' ? 'share.current' : 'share.busy', { label: 'fallback-guard', name: 'fallback-guard' }));
+        }
+      } finally {
+        Object.defineProperty(process, 'platform', platform);
+        h.dispose();
+      }
+    });
+  }
 
   test('the share command picks only an independent non-current account and converts it after confirmation', LINUX_ONLY, async (ctx) => {
     const h = harness();

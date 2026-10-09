@@ -264,7 +264,8 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, h
  *   refreshes the panel. The mark is cleared with the account (remove, or a pruned directory on sync).
  * - share / unshare: effective or selected accounts (alternate spellings included) are refused before the modal and
  *   re-checked after it, then the host busy guard (codexAccountBusy or, on Windows, an open account terminal). Share
- *   passes the copy-fallback and terminal-busy options to migrateCodexToShared (busy checked again at its start; both
+ *   re-checks registration, effective/selected and busy state after the copy fallback too, then passes the copy-fallback
+ *   and terminal-busy options to migrateCodexToShared (busy checked again at its start; both
  *   apply to its final link repair).
  * - remove: one blocked() guard for effective, selected and busy, before the flow and after every modal, including
  *   right before deleteCodexDir; a successful deletion calls store.unignore.
@@ -571,6 +572,20 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       return;
     }
     const linkOptions = await askCopyFallback(account.dir, 'Codex');
+    // The Windows fallback can show another modal; every account guard must hold after it too.
+    const registered = store.find(account.name);
+    if (!registered || !samePath(registered.dir, account.dir)) {
+      panel.refresh();
+      return;
+    }
+    if (effectiveAlias(account) || selectedAlias(account)) {
+      void vscode.window.showWarningMessage(t('share.current', { label: labelOf(account) }));
+      return;
+    }
+    if (busy(account)) {
+      void vscode.window.showWarningMessage(t('share.busyCodex', { name: labelOf(account) }));
+      return;
+    }
     try {
       const report = migrateCodexToShared(account.dir, account.name, '/proc', { ...linkOptions, busy: linkBusy(account) });
       void vscode.window.showInformationMessage(t(isSharedCodexAccount(account.dir) ? 'share.done' : 'share.incomplete', { label: labelOf(account), summary: describeShareReport(report) || t('share.nothingElse') }));

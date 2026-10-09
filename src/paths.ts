@@ -302,6 +302,87 @@ export function unchangedSince(file: string, before: string | undefined): boolea
   return now === before;
 }
 
+/** Validates an account info target without reading its contents. Legal external symlinks remain supported;
+ * default data, credential aliases, multiply linked files and dangling links are refused. Revalidate before
+ * every compare/rename: portable path operations cannot eliminate a concurrent replacement between calls. */
+export function accountInfoTarget(file: string, dir: string, fromJson: string): { real: string; mode: number; validate: () => boolean } {
+  const def = defaultDir();
+  const knownCredentials = [path.join(dir, '.credentials.json'), path.join(def, '.credentials.json'),
+    path.join(path.dirname(fromJson), '.credentials.json'),
+    path.join(dir, 'auth.json'), path.join(os.homedir(), '.codex', 'auth.json')];
+  const protectedInfo = [fromJson, ...['.claude.json', '.claude-custom-oauth.json'].flatMap((name) =>
+    [path.join(os.homedir(), name), path.join(def, name)])];
+  const unsafe = (): never => { throw new Error(t('mcp.unsafeTarget', { file })); };
+  const inspect = (candidate: string): { real: string; mode: number } => {
+    let st: fs.Stats | undefined;
+    try { st = fs.lstatSync(candidate); } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+    }
+    if (st?.isSymbolicLink() && !fs.existsSync(candidate)) unsafe();
+    // Registered/discovered Claude accounts can share a credential's external backing object under a neutral
+    // name. Inspect only immediate managed account directories and credential metadata, never their payloads.
+    const credentials = [...knownCredentials];
+    for (const entry of fs.readdirSync(os.homedir(), { withFileTypes: true })) {
+      if (entry.isDirectory() && DIR_BASENAME_RE.test(entry.name)) {
+        credentials.push(path.join(os.homedir(), entry.name, '.credentials.json'));
+      }
+    }
+    const protectedHop = (p: string): boolean => {
+      // Lexical containment must be checked before resolving the parent: a nested default entry may itself
+      // link outside the default directory, and realpath would erase that protected hop.
+      const inDefault = [def, realPath(def)].some((root) => {
+        const rel = path.relative(comparablePath(root), comparablePath(p));
+        return rel === '' || (rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel));
+      });
+      return inDefault || credentials.some((credential) => sameRealPath(p, credential))
+        || protectedInfo.some((info) => sameRealPath(p, info));
+    };
+    // Check every file-link hop, not just the final name. No default-history walk is needed.
+    let hop = candidate;
+    const seen = new Set<string>();
+    for (;;) {
+      if (protectedHop(hop)) unsafe();
+      hop = path.join(realPath(path.dirname(hop)), path.basename(hop));
+      const name = path.basename(hop).toLowerCase();
+      if (name === '.credentials.json' || name === 'auth.json' || protectedHop(hop) || seen.has(comparablePath(hop))) unsafe();
+      seen.add(comparablePath(hop));
+      if (seen.size > 40) unsafe();
+      let link: fs.Stats | undefined;
+      try { link = fs.lstatSync(hop); } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+      }
+      if (!link?.isSymbolicLink()) break;
+      hop = path.resolve(path.dirname(hop), fs.readlinkSync(hop));
+    }
+    const real = realPath(candidate);
+    const basename = path.basename(real).toLowerCase();
+    if (basename === '.credentials.json' || basename === 'auth.json'
+      || credentials.some((p) => sameRealPath(candidate, p))
+      || protectedInfo.some((p) => sameRealPath(candidate, p))
+      || sameRealPath(real, def) || realPathInside(def, real)) unsafe();
+    // Resolve each immediate default entry as well: a default settings/rules file or folder may itself be linked
+    // outside the default directory. Do not read payloads or walk session/history trees.
+    let entries: string[] = [];
+    try { entries = fs.readdirSync(def); } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+    }
+    if (entries.some((name) => {
+      const entry = path.join(def, name);
+      return sameRealPath(candidate, entry) || realPathInside(entry, real);
+    })) unsafe();
+    const target = st && fs.statSync(candidate);
+    if (target && (!target.isFile() || target.nlink > 1)) unsafe();
+    return { real, mode: target ? target.mode & 0o777 : 0o600 };
+  };
+  const initial = inspect(file);
+  return { ...initial, validate: () => {
+    const current = inspect(file);
+    // Check the original write path too, before unchangedSince can read it.
+    inspect(initial.real);
+    return samePath(current.real, initial.real);
+  } };
+}
+
 function readJsonObject(file: string): Record<string, unknown> | undefined {
   let text: string;
   try {
@@ -322,7 +403,8 @@ function readJsonObject(file: string): Record<string, unknown> | undefined {
  * names the account lacks are added, identical ones skipped, differing ones kept (reported in kept); nothing is ever removed.
  * A missing target file is created (0600) with only mcpServers; an existing one keeps every other key and its mode
  * and is replaced atomically (<real>.planswap-<pid>.tmp + rename, symlinks followed). Throws Error(t('mcp.badTarget'))
- * when the target is not a JSON object, Error(t('mcp.changed')) when it changed between read and rename (the CLI
+ * when the target is not a JSON object, Error(t('mcp.unsafeTarget')) before reading a protected/ambiguous target,
+ * Error(t('mcp.changed')) when it changed between read and rename (the CLI
  * rewrites it; the file is then left unchanged). No write when dir is the default dir (sameRealPath), the source has
  * no servers or nothing is added. beforeCommit runs between writing the temporary file and the change check (tests
  * simulate a concurrent CLI write).
@@ -332,16 +414,12 @@ export function syncMcpServers(fromJson: string, dir: string, beforeCommit?: () 
   if (sameRealPath(dir, defaultDir())) return result;
   const source = readJsonObject(fromJson)?.mcpServers;
   if (!isPlainObject(source) || Object.keys(source).length === 0) return result;
-
   const file = path.join(path.resolve(dir), claudeJsonName());
-  let real = file;
+  const target = accountInfoTarget(file, dir, fromJson);
+
+  const { real, mode } = target;
   let before: string | undefined;
-  let mode = 0o600;
-  if (fs.existsSync(file)) {
-    real = fs.realpathSync(file);
-    before = fs.readFileSync(real, 'utf8');
-    mode = fs.statSync(real).mode & 0o777;
-  }
+  if (fs.existsSync(file)) before = fs.readFileSync(real, 'utf8');
   let data: unknown = {};
   if (before !== undefined) {
     try {
@@ -372,7 +450,7 @@ export function syncMcpServers(fromJson: string, dir: string, beforeCommit?: () 
     fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n', { mode, flag: 'wx' });
     beforeCommit?.();
     // Refuse to overwrite a write the CLI made in the meantime, checked again before every rename attempt
-    if (!renameReplacing(tmp, real, undefined, undefined, () => unchangedSince(real, before))) throw new Error(t('mcp.changed', { file: real }));
+    if (!renameReplacing(tmp, real, undefined, undefined, () => target.validate() && unchangedSince(real, before))) throw new Error(t('mcp.changed', { file: real }));
   } finally {
     fs.rmSync(tmp, { force: true });
   }
