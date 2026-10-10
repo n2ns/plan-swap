@@ -102,16 +102,21 @@ describe('Claude read-only link check', LINUX_ONLY, () => {
     { name: 'own folder', breakIt: (acc) => { fs.unlinkSync(path.join(acc, 'commands')); fs.mkdirSync(path.join(acc, 'commands')); }, expect: ['conflict'] },
     { name: 'history replaced by a file', breakIt: (acc) => { fs.unlinkSync(path.join(acc, 'history.jsonl')); write(path.join(acc, 'history.jsonl'), 'b\n'); }, expect: ['replaced'] },
     { name: 'history replaced while busy', busy: true, breakIt: (acc) => { fs.unlinkSync(path.join(acc, 'history.jsonl')); write(path.join(acc, 'history.jsonl'), 'b\n'); }, expect: ['busy'] },
-    { name: 'default entry deleted', breakIt: (_acc, def) => fs.rmSync(path.join(def, 'todos'), { recursive: true }), expect: ['defaultMissing'] },
+    { name: 'shared history target deleted', breakIt: (_acc, def) => fs.rmSync(path.join(def, 'file-history'), { recursive: true }), expect: ['defaultMissing'] },
     { name: 'whole-folder skills link', breakIt: (acc, def) => { fs.rmSync(path.join(acc, 'skills'), { recursive: true }); fs.symlinkSync(path.join(def, 'skills'), path.join(acc, 'skills')); }, expect: ['missing', 'stale'] },
     { name: 'dangling child link', breakIt: (_acc, def) => fs.rmSync(path.join(def, 'plugins', 'p'), { recursive: true }), expect: ['stale'] },
     { name: 'default settings gained a sign-in key', breakIt: (_acc, def) => write(path.join(def, 'settings.json'), '{"apiKeyHelper":"x"}\n'), expect: ['stale'] },
-    { name: 'default folder deleted', breakIt: (_acc, def) => { for (const e of fs.readdirSync(def)) if (e !== '.claude.json') fs.rmSync(path.join(def, e), { recursive: true }); }, expect: ['defaultMissing', 'stale'] },
+    { name: 'default folder deleted', breakIt: (_acc, def) => { for (const e of fs.readdirSync(def)) if (e !== '.claude.json') fs.rmSync(path.join(def, e), { recursive: true }); }, expect: ['defaultMissing'] },
   ];
   for (const scenario of scenarios) {
     test(scenario.name, () => {
       const { acc, def } = setup();
-      assertCheckMatchesRepair(scenario, (check, proc) => ensureClaudeLinks(acc, proc, { check }), acc, def, { CLAUDE_CONFIG_DIR: acc });
+      assertCheckMatchesRepair(scenario, (check, proc) => {
+        if (check) return ensureClaudeLinks(acc, proc, { check });
+        const report = ensureClaudeLinks(acc, proc, { check: true });
+        const entries = [...new Set([...report.linked, ...report.created, ...(report.merged ?? []), ...(report.unlinked ?? []), ...(report.busy ?? []), ...report.conflicts])];
+        return ensureClaudeLinks(acc, proc, { entries });
+      }, acc, def, { CLAUDE_CONFIG_DIR: acc });
     });
   }
 
@@ -209,7 +214,7 @@ describe('Codex read-only link check', LINUX_ONLY, () => {
     { name: 'index replaced by a file', breakIt: (acc) => { fs.unlinkSync(path.join(acc, 'session_index.jsonl')); write(path.join(acc, 'session_index.jsonl'), 'b\n'); }, expect: ['replaced'] },
     { name: 'history replaced while busy', busy: true, breakIt: (acc) => { fs.unlinkSync(path.join(acc, 'history.jsonl')); write(path.join(acc, 'history.jsonl'), 'b\n'); }, expect: ['busy'] },
     { name: '.tmp folder deleted', breakIt: (acc) => fs.rmSync(path.join(acc, '.tmp'), { recursive: true }), expect: ['missing'] },
-    { name: 'default entry deleted', breakIt: (_acc, def) => fs.rmSync(path.join(def, 'themes'), { recursive: true }), expect: ['defaultMissing'] },
+    { name: 'shared sessions target deleted', breakIt: (_acc, def) => fs.rmSync(path.join(def, 'sessions'), { recursive: true }), expect: ['defaultMissing'] },
     { name: 'whole-folder plugins link', breakIt: (acc, def) => { fs.rmSync(path.join(acc, 'plugins'), { recursive: true }); fs.symlinkSync(path.join(def, 'plugins'), path.join(acc, 'plugins')); }, expect: ['missing', 'stale'] },
     { name: 'dangling child link', breakIt: (_acc, def) => fs.rmSync(path.join(def, 'skills', 'one'), { recursive: true }), expect: ['stale'] },
     { name: 'default config gained a sign-in key', breakIt: (_acc, def) => write(path.join(def, 'config.toml'), 'forced_login_method = "api"\n'), expect: ['stale'] },
@@ -267,6 +272,39 @@ describe('link problems', () => {
       report: report({ linked: ['plugins/known_marketplaces.json', 'plugins/marketplaces'], conflicts: ['plugins/cache-v2.json'] }),
     };
     assert.deepEqual(accountProblems(check), [{ kind: 'missing', entries: ['plugins/marketplaces'] }]);
+  });
+
+  test('retention-cleaned Claude plugin backups are quiet while missing plugin and skill content remains actionable', LINUX_ONLY, () => {
+    const def = path.join(home, '.claude');
+    const acc = accountDir('backups');
+    const proc = fakeProc();
+    const backups = ['installed_plugins.set-aside.2026-08-01.example.json', 'installed_plugins.unreadable.2026-08-01.example.kept'];
+    for (const name of backups) write(path.join(def, 'plugins', name), '{}');
+    write(path.join(def, 'plugins', 'marketplaces', 'plugin.json'), '{}');
+    write(path.join(def, 'skills', 'one', 'SKILL.md'), 'skill');
+    ensureClaudeLinks(acc, proc);
+    for (const name of backups) fs.unlinkSync(path.join(def, 'plugins', name));
+    const snapshot = fullSnapshot(home);
+    const checked = (): AccountCheck => ({ dir: acc, label: 'a', vendor: 'claude', def, report: ensureClaudeLinks(acc, proc, { check: true }) });
+    const c = checked();
+    assert.deepEqual(c.report?.unlinked, backups.map((name) => `plugins/${name}`));
+    assert.deepEqual(accountProblems(c), []);
+    assert.deepEqual(announcementKeys([c]), []);
+    assert.deepEqual(fullSnapshot(home), snapshot);
+    fs.rmSync(path.join(def, 'plugins', 'marketplaces'), { recursive: true });
+    fs.rmSync(path.join(def, 'skills', 'one'), { recursive: true });
+    assert.deepEqual(accountProblems(checked()), [{ kind: 'stale', entries: ['skills/one', 'plugins/marketplaces'] }]);
+    assert.equal(announcementKeys([checked()]).length, 2);
+  });
+
+  test('the backup cleanup exception is Claude-only and does not hide live-session blockers for other entries', () => {
+    const entry = 'plugins/installed_plugins.set-aside.2026-08-01.example.json';
+    const r = report({ unlinked: [entry], busy: [entry, 'plugins/marketplaces'] });
+    const check: AccountCheck = { dir: '/a', label: 'a', vendor: 'claude', report: r };
+    assert.deepEqual(accountProblems(check), [{ kind: 'busy', entries: ['plugins/marketplaces'] }]);
+    assert.deepEqual(accountProblems({ ...check, vendor: 'codex' }), [
+      { kind: 'stale', entries: [entry] }, { kind: 'busy', entries: [entry, 'plugins/marketplaces'] },
+    ]);
   });
 
   test('announcement keys leave out missing file links while Windows file links are unknown', () => {

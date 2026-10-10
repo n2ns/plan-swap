@@ -40,3 +40,16 @@ The following facts about `settings.json` keys and sign-in were read on 2026-10-
 The following fact was read on 2026-10-06 from the native Linux x64 binary of Claude Code 2.1.291 (npm `@anthropic-ai/claude-code-linux-x64`); re-verify after upgrades.
 
 18. A project entry of `.claude.json` defaults to `{allowedTools: [], mcpContextUris: [], mcpServers: {}, enabledMcpjsonServers: [], disabledMcpjsonServers: [], hasTrustDialogAccepted: false, hasClaudeMdExternalIncludesApproved: false, hasClaudeMdExternalIncludesWarningShown: false}`: a missing entry is read as this object, and an entry that lacks one of these keys is not merged with it, but every reader treats the missing key as that default (`?.`, `?? []`, `?? {}`, `|| false`, `=== true`). A missing key therefore behaves like its default value. `mcpContextUris` and the project `allowedTools` are not read at all in this version.
+
+
+## Directory lifecycle
+
+Read from the official [Claude directory documentation](https://code.claude.com/docs/en/claude-directory#application-data) on 2026-10-10. This is documentation evidence, not a runtime test of a signed-in client:
+
+- `plugins/installed_plugins.set-aside.<date>.<hash>.json` and `plugins/installed_plugins.unreadable.<date>.<hash>.kept` are recovery copies removed by the retention sweep; the official deletion-impact table says nothing reads them back. A residual account link after this cleanup is not evidence of missing live plugin content.
+- `todos` is legacy, no longer written, and its contents and empty directory are removed by the cleanup sweep.
+- `tasks` holds persistent task lists; `uploads` holds attachments sent from web/mobile into Remote Control sessions. They are useful shared session data when present, rather than proof that an unused account is unhealthy when absent.
+- `projects` holds conversation transcripts and project auto memory; `file-history` holds checkpoint snapshots. `sessions` instead holds live-session records, removed at exit or after a crash.
+- `session-env` and `shell-snapshots` hold runtime data; cleanup of such data must not be interpreted as lost conversation history. Existing runtime links remain unchanged in PlanSwap because process detection and editor integration also depend on them.
+
+Temporary-directory filesystem tests cover target initialization and writes through shared links. They do not establish that a running official client survives target deletion without a subsequent PlanSwap refresh; real-editor task/attachment acceptance remains user-operated.

@@ -15,6 +15,7 @@ import { knownFileLinks } from './platform';
 export interface AccountCheck {
   dir: string;
   label: string;
+  vendor?: 'claude' | 'codex';
   def?: string;   // the vendor's default dir (the link targets), to tell plugin cache files and folders apart
   report?: ShareReport;
   mirror?: string[];
@@ -43,7 +44,8 @@ export interface Problem { kind: ProblemKind; entries: string[] }
  * - elsewhere / conflict (notes, isNote): conflicts that are links resolving elsewhere / real entries (never changed).
  * Known states, left out: refusals, Windows entries without file-link privilege, failed junctions, and a top-level
  * file under plugins/ whose default is a file (Claude Code's plugin caches: it rewrites them by rename, which replaces
- * the link, so each account keeps its own and a new link would not last; needs c.def).
+ * the link, so each account keeps its own and a new link would not last; needs c.def). Claude's dated plugin install
+ * backups are also known states after retention cleanup, even when their default target no longer exists.
  */
 export function accountProblems(c: AccountCheck): Problem[] {
   if (c.error !== undefined) return [{ kind: 'error', entries: [c.error] }];
@@ -51,6 +53,9 @@ export function accountProblems(c: AccountCheck): Problem[] {
   const merged = new Set(r?.merged ?? []);
   const unlinked = new Set(r?.unlinked ?? []);
   const elsewhere = new Set(r?.elsewhere ?? []);
+  // These are retention-managed recovery copies, not plugin content. Their names remain recognizable after cleanup.
+  const retiredBackup = (entry: string): boolean => c.vendor === 'claude'
+    && /^plugins\/installed_plugins\.(?:set-aside\.[^/]+\.json|unreadable\.[^/]+\.kept)$/.test(entry);
   const cache = (entry: string): boolean => {
     if (c.def === undefined || !/^plugins\/[^/]+$/.test(entry)) return false;
     try {
@@ -64,9 +69,9 @@ export function accountProblems(c: AccountCheck): Problem[] {
     missing: kept([...(r?.linked ?? []).filter((n) => !merged.has(n)), ...(r?.stripped ?? []).filter((n) => !unlinked.has(n))]),
     defaultMissing: r?.created ?? [],
     replaced: r?.merged ?? [],
-    stale: r?.unlinked ?? [],
+    stale: (r?.unlinked ?? []).filter((n) => !retiredBackup(n)),
     mirror: c.mirror?.length ? ['.claude.json'] : [],
-    busy: r?.busy ?? [],
+    busy: (r?.busy ?? []).filter((n) => !retiredBackup(n)),
     error: [],
     elsewhere: kept(r?.elsewhere ?? []),
     conflict: kept((r?.conflicts ?? []).filter((n) => !elsewhere.has(n))),
@@ -96,7 +101,9 @@ export function describeLinkCheck(checks: readonly AccountCheck[]): { lines: str
     any ||= problems.some((p) => !isNote(p.kind));
     const parts = problems.map((p) => (p.kind === 'error'
       ? t('linkCheck.error', { error: p.entries[0] })
-      : t(`linkCheck.${p.kind}`, { list: p.entries.join(t('common.nameSep')) })));
+      : t(c.vendor === 'claude' && p.kind === 'defaultMissing' ? 'linkCheck.claudeDefaultMissing' : `linkCheck.${p.kind}`, {
+        list: (c.vendor === 'claude' && p.kind === 'mirror' ? (c.mirror ?? []).map((key) => `.claude.json (${key})`) : p.entries).join(t('common.nameSep')),
+      })));
     lines.push(t('sync.item', { name: c.label, notes: parts.join(t('common.listSep')) }));
   }
   return { lines, problems: any, fixable };

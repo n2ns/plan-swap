@@ -48,3 +48,8 @@ The daemon liveness check also relies on the JSON format Codex writes to `<dir>/
 ## Rate limits
 
 Checked on 2026-10-02 against the codex-cli 0.139.0 source and public docs: `account/rateLimits/read` sends one `GET <chatgpt_base_url>/wham/usage` (default `https://chatgpt.com/backend-api/wham/usage`), no model request; OpenAI publishes no frequency limit for it and no 429 reports for it were found. The official TUI read it only at start-up and on `/status` in 0.139; later main-branch versions poll every 60 s (down to 5 s near exhaustion). The practical risk is a token refresh: Codex refreshes an access token within 5 minutes of its expiry without a cross-process lock, and OpenAI advises against concurrent users of one `auth.json`; the service tolerates reuse of a refresh token for about an hour (maintainer statement, openai/codex#10332).
+
+
+## Optional custom themes
+
+The official [CLI customization guide](https://learn.chatgpt.com/docs/cli-customization#syntax-highlighting-and-themes), inspected on 2026-10-10, describes `themes` as the location for user-supplied `.tmTheme` files. An unused, absent custom-theme directory does not imply missing conversation or configuration data. This establishes optionality, not that the real client automatically deletes this directory. PlanSwap's regression checks use temporary HOME directories and filesystem writes, not a signed-in client.

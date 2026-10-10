@@ -159,7 +159,9 @@ export function isSharedCodexAccount(dir: string): boolean {
  *  per-child links; child links whose default target is gone are removed (both under `unlinked`).
  *  win32: *.sqlite entries are never linked; an existing link is removed by removeWindowsSqliteLink (reported under
  *  `refused` and `unlinked`, or `busy` when a side file is in use). options.check: read only, as in ensureClaudeLinks
- *  (a Windows database link is expected to be removable). dir === default → empty report. procRoot is for tests. */
+ *  (a Windows database link is expected to be removable). Absent optional themes are omitted from checks, but
+ *  initialized on refresh; existing themes must resolve to an accessible directory. dir === default → empty report.
+ *  procRoot is for tests. */
 export function ensureCodexLinks(dir: string, options: LinkOptions = {}, procRoot = '/proc'): ShareReport {
   const report = emptyReport();
   if (isDefault(dir)) return report;
@@ -184,6 +186,16 @@ export function ensureCodexLinks(dir: string, options: LinkOptions = {}, procRoo
   for (const { name, kind } of CODEX_SHARED_ENTRIES) {
     const target = path.join(def, name);
     const link = path.join(acc, name);
+    if (name === 'themes') {
+      // Custom themes need no source until first use; only add/switch/repair initialize the empty directory.
+      if (lstatOrUndefined(target)) {
+        if (!fs.statSync(target).isDirectory()) throw new Error(t('share.badEntry', { file: target }));
+        fs.accessSync(target, fs.constants.R_OK | fs.constants.X_OK);
+      } else if (check) {
+        if (lstatOrUndefined(link) && !linksTo(link, target)) report.conflicts.push(name);
+        continue;
+      }
+    }
     const refusal = name === 'config.toml' ? configRefusal(target) : undefined;
     if (refusal) {
       // A link created while the default config was still shareable is removed; no copy is made

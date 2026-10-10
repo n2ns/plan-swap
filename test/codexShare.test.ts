@@ -101,6 +101,79 @@ describe('default directory ancestor safety', () => {
 });
 
 describe('ensureCodexLinks', SHARING, () => {
+  test('absent optional themes do not request repair, with or without the expected account link', () => {
+    const acc = newAccount('a');
+    const proc = fakeProc({});
+    ensureCodexLinks(acc, {}, proc);
+    fs.rmdirSync(path.join(def, 'themes'));
+    for (const linked of [true, false]) {
+      if (!linked) fs.unlinkSync(path.join(acc, 'themes'));
+      const before = snapshot(home);
+      assert.deepEqual(ensureCodexLinks(acc, { check: true }, proc), { linked: [], created: [], conflicts: [], refused: [] });
+      assert.deepEqual(snapshot(home), before);
+    }
+  });
+
+  test('absent optional themes preserve an account directory or foreign link as a note', () => {
+    const acc = newAccount('a');
+    const proc = fakeProc({});
+    ensureCodexLinks(acc, {}, proc);
+    fs.rmdirSync(path.join(def, 'themes'));
+    fs.unlinkSync(path.join(acc, 'themes'));
+    write(path.join(acc, 'themes', 'own.tmTheme'), 'own theme');
+    const before = snapshot(home);
+    assert.deepEqual(ensureCodexLinks(acc, { check: true }, proc), {
+      linked: [], created: [], conflicts: ['themes'], refused: [],
+    });
+    assert.deepEqual(snapshot(home), before);
+    const elsewhere = path.join(home, 'own-themes');
+    fs.renameSync(path.join(acc, 'themes'), elsewhere);
+    fs.symlinkSync(elsewhere, path.join(acc, 'themes'), 'junction');
+    const beforeLink = snapshot(home);
+    assert.deepEqual(ensureCodexLinks(acc, { check: true }, proc), {
+      linked: [], created: [], conflicts: ['themes'], refused: [], elsewhere: ['themes'],
+    });
+    assert.deepEqual(snapshot(home), beforeLink);
+  });
+
+  test('refresh initializes optional themes for first writes and checks still detect missing links to existing themes', () => {
+    const acc = newAccount('a');
+    const other = newAccount('b');
+    const proc = fakeProc({});
+    ensureCodexLinks(acc, {}, proc);
+    fs.rmdirSync(path.join(def, 'themes'));
+    fs.unlinkSync(path.join(acc, 'themes'));
+    const refreshed = ensureCodexLinks(acc, {}, proc);
+    assert.ok(refreshed.created.includes('themes'));
+    assert.ok(refreshed.linked.includes('themes'));
+    fs.writeFileSync(path.join(acc, 'themes', 'shared.tmTheme'), 'shared theme');
+    ensureCodexLinks(other, {}, proc);
+    assert.equal(read(path.join(other, 'themes', 'shared.tmTheme')), 'shared theme');
+    fs.unlinkSync(path.join(acc, 'themes'));
+    const before = snapshot(home);
+    assert.deepEqual(ensureCodexLinks(acc, { check: true }, proc), {
+      linked: ['themes'], created: [], conflicts: [], refused: [],
+    });
+    assert.deepEqual(snapshot(home), before);
+  });
+
+  test('invalid or dangling default themes remain check errors rather than optional absence', () => {
+    const acc = newAccount('a');
+    const proc = fakeProc({});
+    ensureCodexLinks(acc, {}, proc);
+    const target = path.join(def, 'themes');
+    fs.rmdirSync(target);
+    fs.writeFileSync(target, 'not a directory');
+    let before = snapshot(home);
+    assert.throws(() => ensureCodexLinks(acc, { check: true }, proc), { message: t('share.badEntry', { file: target }) });
+    assert.deepEqual(snapshot(home), before);
+    fs.unlinkSync(target);
+    fs.symlinkSync(path.join(home, 'missing-themes'), target, 'junction');
+    before = snapshot(home);
+    assert.throws(() => ensureCodexLinks(acc, { check: true }, proc), { code: 'ENOENT' });
+    assert.deepEqual(snapshot(home), before);
+  });
+
   test('creates absolute links and empty default entries with modes; link-only targets are not created; idempotent', () => {
     const acc = newAccount('a');
     const r = ensureCodexLinks(acc);

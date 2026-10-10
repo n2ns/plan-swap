@@ -118,8 +118,8 @@ describe('Windows without Developer Mode', () => {
     const r = migrateClaudeToShared(acc, 'work', FAKE_PROC, 'work', COPY);
     assert.equal(fs.readFileSync(path.join(acc, 'CLAUDE.md'), 'utf8'), 'mine\n');
     assert.equal(fs.readFileSync(path.join(acc, 'history.jsonl'), 'utf8'), '{"a":1}\n');
-    // The default may get an empty link target, but the account's content is never moved into it
-    assert.equal(fs.readFileSync(path.join(home, '.claude', 'CLAUDE.md'), 'utf8'), '');
+    // An account-owned optional file needs no empty default target; its content is never moved into the default.
+    assert.equal(fs.existsSync(path.join(home, '.claude', 'CLAUDE.md')), false);
     assert.ok(r.noPrivilege?.includes('CLAUDE.md'));
     assert.equal(fs.lstatSync(path.join(acc, 'projects')).isSymbolicLink(), true);
   });

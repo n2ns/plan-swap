@@ -1,10 +1,147 @@
 import { after, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { checkSharedInBackground, runTool } from '../src/tools';
 import { LinkCheckNotices } from '../src/linkCheck';
+import { ensureClaudeLinks, mirrorClaudeJson } from '../src/claudeShare';
+import { ensureCodexLinks, isSharedCodexAccount } from '../src/codex/codexShare';
 import { setLocale, t } from '../src/i18n';
 import { commands, env, window } from './stubs/vscode';
-import { inLocale, MemoryMemento } from './helpers';
+import { inLocale, LINUX_ONLY, makeTempHome, MemoryMemento } from './helpers';
+
+describe('Claude repair scope', LINUX_ONLY, () => {
+  function fixture() {
+    const tmp = makeTempHome('claude-repair');
+    const def = path.join(tmp.home, '.claude');
+    const proc = path.join(tmp.home, 'proc');
+    fs.mkdirSync(proc);
+    const source = path.join(tmp.home, '.claude.json');
+    fs.writeFileSync(source, '{}');
+    const dirs = ['a', 'b'].map((name) => path.join(tmp.home, `.claude-${name}`));
+    for (const dir of dirs) {
+      ensureClaudeLinks(dir, proc);
+      mirrorClaudeJson(source, dir);
+    }
+    return { tmp, def, source, dirs };
+  }
+
+  test('absent optional targets and legacy todos do not prompt or write during background checks', async (ctx) => {
+    const { tmp, def, dirs } = fixture();
+    try {
+      for (const name of ['tasks', 'uploads']) fs.rmdirSync(path.join(def, name));
+      fs.symlinkSync(path.join(def, 'todos'), path.join(dirs[0], 'todos'));
+      const warning = ctx.mock.method(window, 'showWarningMessage', async () => undefined);
+      await checkSharedInBackground('claude', { claudeDirs: () => dirs, linkNotices: new LinkCheckNotices(new MemoryMemento()) });
+      assert.equal(warning.mock.callCount(), 0);
+      for (const name of ['tasks', 'uploads', 'todos']) assert.equal(fs.existsSync(path.join(def, name)), false);
+      assert.equal(fs.lstatSync(path.join(dirs[0], 'todos')).isSymbolicLink(), true);
+    } finally { tmp.restore(); }
+  });
+
+  test('independent history and cleaned plugin backups do not produce background repair notifications', async (ctx) => {
+    const { tmp, def, dirs } = fixture();
+    try {
+      const acc = dirs[0];
+      fs.unlinkSync(path.join(acc, 'file-history'));
+      fs.mkdirSync(path.join(acc, 'file-history'));
+      fs.writeFileSync(path.join(acc, 'file-history', 'snapshot'), 'own snapshot');
+      fs.rmdirSync(path.join(def, 'file-history'));
+      const backup = 'installed_plugins.set-aside.2026-08-01.example.json';
+      fs.symlinkSync(path.join(def, 'plugins', backup), path.join(acc, 'plugins', backup));
+      const warning = ctx.mock.method(window, 'showWarningMessage', async () => undefined);
+      await checkSharedInBackground('claude', { claudeDirs: () => [acc], linkNotices: new LinkCheckNotices(new MemoryMemento()) });
+      assert.equal(warning.mock.callCount(), 0);
+      assert.equal(fs.existsSync(path.join(def, 'file-history')), false);
+      assert.equal(fs.readFileSync(path.join(acc, 'file-history', 'snapshot'), 'utf8'), 'own snapshot');
+      assert.equal(fs.lstatSync(path.join(acc, 'plugins', backup)).isSymbolicLink(), true);
+    } finally { tmp.restore(); }
+  });
+
+  test('repairs only the listed account and entry, preserving optional absence and account-only MCP data', async (ctx) => {
+    const { tmp, def, dirs } = fixture();
+    try {
+      fs.unlinkSync(path.join(dirs[0], 'rules'));
+      fs.rmdirSync(path.join(def, 'tasks'));
+      const ownInfo = JSON.stringify({ mcpServers: { personal: { command: 'personal' } }, projects: { '/own': { hasTrustDialogAccepted: true } }, oauthAccount: { emailAddress: 'fixture@example.test' } });
+      for (const dir of dirs) fs.writeFileSync(path.join(dir, '.claude.json'), ownInfo);
+      const warning = ctx.mock.method(window, 'showWarningMessage', async (_m: string, ...items: string[]) => items.find((i) => i === t('linkCheck.repair')));
+      const info = ctx.mock.method(window, 'showInformationMessage', async () => undefined);
+      await runTool('claude', 'sync', { claudeDirs: () => dirs });
+      assert.equal(fs.readlinkSync(path.join(dirs[0], 'rules')), path.join(def, 'rules'));
+      assert.equal(fs.existsSync(path.join(def, 'tasks')), false);
+      for (const dir of dirs) assert.equal(fs.readFileSync(path.join(dir, '.claude.json'), 'utf8'), ownInfo);
+      assert.equal(warning.mock.callCount(), 1);
+      assert.equal(info.mock.calls[0].arguments[0], t('linkCheck.claudeRepaired', { count: 1 }));
+    } finally { tmp.restore(); }
+  });
+
+  test('a mirror repair preserves account extras and does not initialize unrelated folders', async (ctx) => {
+    const { tmp, def, source, dirs } = fixture();
+    try {
+      fs.rmdirSync(path.join(def, 'uploads'));
+      fs.writeFileSync(source, JSON.stringify({ mcpServers: { shared: { command: 'shared' } } }));
+      const personal = { mcpServers: { personal: { command: 'personal' } }, projects: { '/own': { hasTrustDialogAccepted: true } } };
+      fs.writeFileSync(path.join(dirs[0], '.claude.json'), JSON.stringify(personal));
+      const warning = ctx.mock.method(window, 'showWarningMessage', async (_m: string, ...items: string[]) => items.find((i) => i === t('linkCheck.repair')));
+      ctx.mock.method(window, 'showInformationMessage', async () => undefined);
+      await runTool('claude', 'sync', { claudeDirs: () => [dirs[0]] });
+      assert.ok(String(warning.mock.calls[0].arguments[0]).includes('.claude.json (mcpServers)'));
+      const actual = JSON.parse(fs.readFileSync(path.join(dirs[0], '.claude.json'), 'utf8'));
+      assert.deepEqual(actual, { ...personal, mcpServers: { ...personal.mcpServers, shared: { command: 'shared' } } });
+      assert.equal(fs.existsSync(path.join(def, 'uploads')), false);
+    } finally { tmp.restore(); }
+  });
+
+  test('an account added while the Repair notification is open is not refreshed', async (ctx) => {
+    const { tmp, def, dirs } = fixture();
+    try {
+      fs.unlinkSync(path.join(dirs[0], 'rules'));
+      fs.unlinkSync(path.join(dirs[1], 'rules'));
+      let registered = [dirs[0]];
+      ctx.mock.method(window, 'showWarningMessage', async (_m: string, ...items: string[]) => {
+        registered = dirs;
+        return items.find((i) => i === t('linkCheck.repair'));
+      });
+      ctx.mock.method(window, 'showInformationMessage', async () => undefined);
+      await runTool('claude', 'sync', { claudeDirs: () => registered });
+      assert.equal(fs.readlinkSync(path.join(dirs[0], 'rules')), path.join(def, 'rules'));
+      assert.equal(fs.existsSync(path.join(dirs[1], 'rules')), false);
+    } finally { tmp.restore(); }
+  });
+});
+
+describe('Codex optional theme checks', LINUX_ONLY, () => {
+  test('unused themes are quiet, but existing themes with a missing account link still prompt', async (ctx) => {
+    const tmp = makeTempHome('codex-theme-notice');
+    try {
+      const def = path.join(tmp.home, '.codex');
+      const acc = path.join(tmp.home, '.codex-a');
+      const proc = path.join(tmp.home, 'proc');
+      fs.mkdirSync(proc);
+      ensureCodexLinks(acc, {}, proc);
+      fs.rmdirSync(path.join(def, 'themes'));
+      const warning = ctx.mock.method(window, 'showWarningMessage', async () => undefined);
+      const deps = {
+        codexDirs: () => [acc], linkNotices: new LinkCheckNotices(new MemoryMemento()),
+        codexShareOps: {
+          defaultDir: () => def, isShared: isSharedCodexAccount,
+          check: () => ({ report: ensureCodexLinks(acc, { check: true }, proc) }),
+          refresh: () => assert.fail('background checks must not write'),
+        },
+      };
+      await checkSharedInBackground('codex', deps);
+      assert.equal(warning.mock.callCount(), 0);
+      assert.equal(fs.existsSync(path.join(def, 'themes')), false);
+      fs.mkdirSync(path.join(def, 'themes'));
+      fs.writeFileSync(path.join(def, 'themes', 'custom.tmTheme'), 'fixture theme');
+      fs.unlinkSync(path.join(acc, 'themes'));
+      await checkSharedInBackground('codex', deps);
+      assert.equal(warning.mock.callCount(), 1);
+      assert.ok(String(warning.mock.calls[0].arguments[0]).includes('themes'));
+    } finally { tmp.restore(); }
+  });
+});
 
 describe('re-link result messages', () => {
   after(() => setLocale('en'));

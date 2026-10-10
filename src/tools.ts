@@ -12,7 +12,7 @@ import { claudeJsonPath, defaultDir, syncMcpServers } from './paths';
 import { ensureClaudeLinks, isSharedClaudeAccount, mirrorClaudeJson, type LinkOptions, type ShareReport } from './claudeShare';
 import { askCopyFallback } from './linkPolicy';
 import { describeShareReport, type ShareReportLike } from './shareReport';
-import { announcementKeys, describeLinkCheck, type AccountCheck, type LinkCheckNotices } from './linkCheck';
+import { accountProblems, announcementKeys, describeLinkCheck, isFixable, type AccountCheck, type LinkCheckNotices } from './linkCheck';
 import type { PanelMode, ToolId } from './protocol';
 import { getLocale, LOCALE_INFO, t } from './i18n';
 import { CLAUDE_REFRESH_ALL_USAGE_COMMAND, CLAUDE_REFRESH_USAGE_COMMAND, CODEX_REFRESH_ALL_USAGE_COMMAND, REFRESH_USAGE_COMMAND } from './statusBar';
@@ -23,7 +23,7 @@ export interface ShareOps {
   isShared(dir: string): boolean;
   // Re-links the account and mirrors what the vendor mirrors; returns the report of the linking step
   refresh(dir: string, options?: LinkOptions): ShareReportLike;
-  // The same read only (options.check): the report refresh would return and what the account lacks of the default
+  // Read-only actionable repairs (Claude skips absent optional targets) and what the account lacks of the default
   // .claude.json (Claude only); writes nothing
   check(dir: string, options?: LinkOptions): { report: ShareReport; mirror?: string[] };
   // The vendor's default dir, where the links point
@@ -192,7 +192,7 @@ function checkShared(accounts: SharedAccounts, deps: ToolDeps): { checks: Accoun
   const checks = accounts.dirs.map((dir): AccountCheck => {
     const label = accounts.nameOf(dir);
     try {
-      return { dir, label, def, ...accounts.ops.check(dir, { busy: accounts.busyOf(dir), fileLinks }) };
+      return { dir, label, def, vendor: accounts.vendor === 'Claude' ? 'claude' : 'codex', ...accounts.ops.check(dir, { busy: accounts.busyOf(dir), fileLinks }) };
     } catch (err) {
       return { dir, label, error: errText(err) };
     }
@@ -203,10 +203,57 @@ function checkShared(accounts: SharedAccounts, deps: ToolDeps): { checks: Accoun
 // The check's notification: the problems and notes per account, with Repair when a repair would change something
 async function offerRepair(mode: PanelMode, deps: ToolDeps, accounts: SharedAccounts, checks: AccountCheck[]): Promise<void> {
   const { lines, fixable } = describeLinkCheck(checks);
-  const message = t(fixable ? 'linkCheck.found' : 'linkCheck.foundNoFix', { vendor: accounts.vendor, list: lines.join(t('common.listSep')) });
+  const message = t(fixable ? (mode === 'claude' ? 'linkCheck.claudeFound' : 'linkCheck.found') : 'linkCheck.foundNoFix', { vendor: accounts.vendor, list: lines.join(t('common.listSep')) });
   const repair = t('linkCheck.repair');
   const picked = await (fixable ? vscode.window.showWarningMessage(message, repair) : vscode.window.showWarningMessage(message));
-  if (picked === repair) await repairShared(mode, deps);
+  if (picked === repair) {
+    if (mode === 'claude') await repairClaudeChecks(deps, checks);
+    else await repairShared(mode, deps);
+  }
+}
+
+// Only entries offered as repairable authorize writes. Mirror groups are listed separately in the notification.
+function claudeRepairScope(check: AccountCheck): { entries: string[]; mirror: string[] } {
+  const problems = accountProblems(check);
+  return {
+    entries: [...new Set(problems.filter((p) => isFixable(p.kind) && p.kind !== 'mirror').flatMap((p) => p.entries))],
+    mirror: problems.some((p) => p.kind === 'mirror') ? check.mirror ?? [] : [],
+  };
+}
+
+// Claude Repair is bounded by the notification, even when the user leaves it open while accounts or files change.
+// Normal add/switch initialization and Codex's refresh keep their existing behavior.
+async function repairClaudeChecks(deps: ToolDeps, offered: AccountCheck[]): Promise<void> {
+  const selected = offered.filter((c) => {
+    const scope = claudeRepairScope(c);
+    return scope.entries.length || scope.mirror.length;
+  });
+  if (!selected.length) return;
+  const options = selected.some((c) => claudeRepairScope(c).entries.length)
+    ? await askCopyFallback(selected[0].dir, 'Claude') : {};
+  const accounts = sharedAccounts('claude', deps);
+  if (!accounts) return;
+  const issues: string[] = [];
+  let count = 0;
+  for (const check of selected) {
+    if (!accounts.dirs.includes(check.dir)) continue;
+    count++;
+    try {
+      const scope = claudeRepairScope(check);
+      const report = ensureClaudeLinks(check.dir, '/proc', { ...options, busy: accounts.busyOf(check.dir), entries: scope.entries });
+      if (scope.mirror.length) {
+        const def = defaultDir();
+        mirrorClaudeJson(claudeJsonPath(def, isExplicitConfigDir(def)), check.dir, undefined, false, scope.mirror);
+      }
+      const notes = describeShareReport(report);
+      if (notes) issues.push(t('sync.item', { name: accounts.nameOf(check.dir), notes }));
+    } catch (err) {
+      issues.push(t('sync.item', { name: accounts.nameOf(check.dir), notes: errText(err) }));
+    }
+  }
+  const done = t(issues.length ? 'linkCheck.claudeAttempted' : 'linkCheck.claudeRepaired', { count });
+  if (issues.length) void vscode.window.showWarningMessage(`${done} ${t('sync.issues', { list: issues.join(t('common.listSep')) })}`);
+  else void vscode.window.showInformationMessage(done);
 }
 
 /**
@@ -225,7 +272,7 @@ export async function checkSharedInBackground(mode: PanelMode, deps: ToolDeps): 
 
 // Re-link: checks every shared account of the vendor read only; without problems it reports "all fine" (with the notes
 // on entries kept as they are, if any), otherwise one notification lists every problem and note per account and offers
-// Repair (repairShared) when a repair would change something. Its
+// Repair (scoped for Claude; full refresh for Codex) when a repair would change something. Its
 // announcement keys are recorded so the background check does not repeat them. Without the vendor's directory list or
 // share ops (not initialized) only a warning is shown
 async function syncShared(mode: PanelMode, deps: ToolDeps): Promise<void> {
@@ -249,7 +296,7 @@ async function syncShared(mode: PanelMode, deps: ToolDeps): Promise<void> {
   await offerRepair(mode, deps, accounts, checks);
 }
 
-// Repair: re-links every shared account of the vendor to the default account and reports in one notification;
+// Codex Repair: re-links every shared account to the default account and reports in one notification;
 // independent accounts are untouched. A failing account is reported and the next one continues; with any issue the
 // result is a warning that does not claim every account was re-linked
 async function repairShared(mode: PanelMode, deps: ToolDeps): Promise<void> {
