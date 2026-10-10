@@ -7,6 +7,7 @@ import { AccountsPanel, VIEW_ID, claudePanelSource, type PanelSource } from './a
 import { EXTERNAL_NAME, LabelStore, labelFor } from './labels';
 import { FileMemento, STATE_JSON } from './fileState';
 import { RecommendExclusions } from './recommend';
+import { usageColorsChanged } from './usageSettings';
 import { findSameDir, readAccountInfo, samePath, setClaudeSettingEnv } from './paths';
 import { ensureCodexLinks, isSharedCodexAccount } from './codex/codexShare';
 import { CLAUDE_REFRESH_ALL_USAGE_COMMAND, CLAUDE_REFRESH_USAGE_COMMAND, CODEX_REFRESH_ALL_USAGE_COMMAND, REFRESH_USAGE_COMMAND, StatusBar, claudeUsageFailureText, codexUsageFailureText, formatDuration, liveCodexUsage, relativeReset } from './statusBar';
@@ -630,8 +631,8 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     vscode.workspace.onDidChangeConfiguration((e) => {
       // The Codex extension's run-in-WSL switch changes what the Codex section of the tooltip can say
       if (e.affectsConfiguration('chatgpt.runCodexInWindowsSubsystemForLinux')) { statusBar.update(); panel.refresh(); }
-      // Sidebar display and recommendation settings, including the independent trigger threshold, and remaining/used display
-      if (e.affectsConfiguration('planswap.sidebar') || e.affectsConfiguration('planswap.usageDisplay')) panel.refresh();
+      // Sidebar display, recommendations, shared colors and remaining/used display
+      if (e.affectsConfiguration('planswap.sidebar') || usageColorsChanged(e) || e.affectsConfiguration('planswap.usageDisplay')) panel.refresh();
       // Automatic usage checks turned on or a shorter interval: check now when due
       if (['claude', 'codex'].some((p) => e.affectsConfiguration(`planswap.${p}.usageAutoRefresh`) || e.affectsConfiguration(`planswap.${p}.usageRefreshMinutes`))
         || e.affectsConfiguration('planswap.usageAutoRefreshCurrentOnly')) checkUsage();

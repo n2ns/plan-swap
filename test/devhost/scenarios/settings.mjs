@@ -30,7 +30,7 @@ export async function run(ctx) {
   writeSettings({ 'planswap.sidebar.showFiveHourLimit': false });
   d = await sb.waitFor(ctx, (x) => work(x).usage.length === 1);
   await step('showFiveHourLimit off: only the 7-day window', work(d).usage.length === 1 && work(d).usage[0].startsWith('7-day'), work(d).usage);
-  writeSettings({ 'planswap.sidebar.showFiveHourLimit': false, 'planswap.sidebar.showWeeklyLimit': false });
+  writeSettings({ 'planswap.sidebar.showFiveHourLimit': false, 'planswap.sidebar.showWeeklyLimit': false, 'planswap.sidebar.recommendationThreshold': 30 });
   d = await sb.waitFor(ctx, (x) => work(x).usage.length === 0);
   await step('both general windows off: no usage block, recommendation card still names the account with its time', work(d).usage.length === 0 && d.card?.title === 'Recommended: work' && /Updated/.test(d.card?.text ?? ''), d.card);
 
@@ -39,7 +39,7 @@ export async function run(ctx) {
   await step('showModelLimits on: the Fable window appears after the general ones', work(d).usage[2] === '7-day limit · Fable 90% ok', work(d).usage);
   await sb.shot(ctx, '02-model-limits.png');
 
-  writeSettings({ 'planswap.sidebar.warningThreshold': 60, 'planswap.sidebar.errorThreshold': 25 });
+  writeSettings({ 'planswap.usageWarningThreshold': 60, 'planswap.usageErrorThreshold': 25 });
   d = await sb.waitFor(ctx, (x) => work(x).usage[0].endsWith(' warn'));
   await step('sidebar thresholds 60/25: 58% left is warn, 20% left is low', work(d).usage[0].endsWith(' warn') && d.rows[0].usage[0].endsWith(' low'), { work: work(d).usage[0], current: d.rows[0].usage[0] });
   writeSettings();

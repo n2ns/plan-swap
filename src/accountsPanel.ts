@@ -9,7 +9,8 @@ import { EXTERNAL_NAME, labelFor, type LabelStore } from './labels';
 import type { AccountView, FromWebview, PanelMode, PanelState, RestartInfo, TabState, ToWebview } from './protocol';
 import { isSharedClaudeAccount } from './claudeShare';
 import { readClaudeUsage } from './claudeUsage';
-import { threshold, usageDisplay } from './statusBar';
+import { usageDisplay } from './statusBar';
+import { threshold, usageThresholds } from './usageSettings';
 import { recommend, type RecommendExclusions } from './recommend';
 import { getLocale, intlLocale, t } from './i18n';
 import { comparablePath, isWindows } from './platform';
@@ -39,21 +40,10 @@ export function sidebarDisplay(): SidebarDisplay {
   };
 }
 
-/** Settings planswap.sidebar.warningThreshold / errorThreshold (remaining percentages, default 30 / 10), clamped to 0..100. */
-export function sidebarThresholds(): { warning: number; error: number } {
-  const config = vscode.workspace.getConfiguration('planswap');
-  return { warning: threshold(config.get<number>('sidebar.warningThreshold'), 30), error: threshold(config.get<number>('sidebar.errorThreshold'), 10) };
-}
-
-/** Independent recommendation trigger; retain an explicit legacy warning value until the new setting is configured. */
+/** Independent recommendation trigger, default 10% remaining; color settings do not affect it. */
 export function recommendationThreshold(): number {
   const config = vscode.workspace.getConfiguration('planswap');
-  const explicit = (key: string): unknown => {
-    const inspected = config.inspect<unknown>(key);
-    return [inspected?.workspaceFolderValue, inspected?.workspaceValue, inspected?.globalValue].find((value) => value !== undefined);
-  };
-  const configured = explicit(RECOMMENDATION_THRESHOLD_SETTING);
-  return threshold(configured === undefined ? explicit('sidebar.warningThreshold') : configured, 10);
+  return threshold(config.get(RECOMMENDATION_THRESHOLD_SETTING), 10);
 }
 
 /**
@@ -319,7 +309,7 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
       claude: this.tabState('claude'),
       codex: this.tabState('codex'),
       usageDisplay: usageDisplay() === 'used' ? 'used' : undefined,
-      usageThresholds: sidebarThresholds(),
+      usageThresholds: usageThresholds(),
     };
     console.debug(`[planswap] state read: ${(performance.now() - startedAt).toFixed(1)}ms; claude=${state.claude.accounts.length}, codex=${state.codex.accounts.length}`);
     this.post({ type: 'state', state });

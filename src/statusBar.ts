@@ -16,6 +16,7 @@ import { USAGE_HISTORY_MAX_AGE_MS } from './codex/codexUsageHistory';
 import { readClaudeUsage, type ClaudeUsage, type ClaudeUsageFailure, type ClaudeUsageWindow } from './claudeUsage';
 import type { ClaudeUsageState } from './claudeUsageMonitor';
 import type { UsageDisplay } from './protocol';
+import { usageColorsChanged, usageThresholds } from './usageSettings';
 
 // Refresh commands; only the two single-account ones are trusted command links in the tooltip (buildTooltip)
 export const REFRESH_USAGE_COMMAND = 'planswap.codex.refreshUsage';
@@ -138,21 +139,17 @@ export interface StatusBarSettings {
   alignment: 'left' | 'right';
 }
 
-/** A threshold setting clamped to 0..100 like the manifest range; anything that is not a number takes the default. */
-export function threshold(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : fallback;
-}
-
-/** The planswap.statusBar.* settings, read on every update; unknown enum values take the defaults. */
+/** Status bar display and shared usage color settings, read on every update; unknown enum values take the defaults. */
 export function statusBarSettings(): StatusBarSettings {
   const config = vscode.workspace.getConfiguration('planswap');
+  const colors = usageThresholds();
   const products = config.get<string>('statusBar.products', 'both');
   return {
     enabled: config.get<boolean>('statusBar.enabled', true) !== false,
     claude: products !== 'codex',
     codex: products !== 'claude',
-    warningThreshold: threshold(config.get<number>('statusBar.warningThreshold'), 30),
-    errorThreshold: threshold(config.get<number>('statusBar.errorThreshold'), 10),
+    warningThreshold: colors.warning,
+    errorThreshold: colors.error,
     alignment: config.get<string>('statusBar.alignment', 'right') === 'left' ? 'left' : 'right',
   };
 }
@@ -360,9 +357,9 @@ function candidatesOf(product: string, windows: ReadonlyArray<UsageWindow | Clau
 }
 
 /**
- * The PlanSwap status bar item; a click opens the PlanSwap view. The planswap.statusBar.* settings (statusBarSettings)
+ * The PlanSwap status bar item; a click opens the PlanSwap view. Display and shared color settings (statusBarSettings)
  * apply on every update, and a change of any of them updates at once: enabled off hides the item, products leaves a vendor out of the text, tooltip and background,
- * the thresholds pick the background, and an alignment change replaces the item (a status bar item's side is fixed).
+ * usageWarningThreshold / usageErrorThreshold pick the background, and an alignment change replaces the item (a status bar item's side is fixed).
  * planswap.usageDisplay (usageDisplay) picks whether the text, bars and percentages show what is left or what is used;
  * the background always follows what is left.
  *
@@ -388,7 +385,7 @@ export class StatusBar implements vscode.Disposable {
   private alignment = statusBarSettings().alignment;
   private item = createItem(this.alignment);
   private readonly settingsListener = vscode.workspace.onDidChangeConfiguration((e) => {
-    if (e.affectsConfiguration('planswap.statusBar') || e.affectsConfiguration('planswap.usageDisplay')
+    if (e.affectsConfiguration('planswap.statusBar') || usageColorsChanged(e) || e.affectsConfiguration('planswap.usageDisplay')
       || e.affectsConfiguration('planswap.sidebar.showEmail')) this.update();
   });
   private codexUsage: CodexUsageState | undefined;

@@ -157,7 +157,7 @@ Then:
 
 ## Read and refresh usage limits
 
-Usage bars and percentages show what is **left**; set `planswap.usageDisplay` to `used` in [settings](#change-language-and-display-settings) to show what is used instead. The duration next to each limit, such as `2d 5h`, is the time until it resets. Hover a bar to see both, for example `97% left (3% used)`. A bar turns yellow when 30% or less is left and red at 10% or less, also when it shows what is used; change these levels with `planswap.sidebar.warningThreshold` and `planswap.sidebar.errorThreshold`. A used-up limit shows its percentage and reset time in red. No usage line means no data yet, not zero usage or unlimited quota.
+Usage bars and percentages show what is **left**; set `planswap.usageDisplay` to `used` in [settings](#change-language-and-display-settings) to show what is used instead. The duration next to each limit, such as `2d 5h`, is the time until it resets. Hover a bar to see both, for example `97% left (3% used)`. A bar turns yellow when 30% or less is left and red at 10% or less, also when it shows what is used; change these levels with `planswap.usageWarningThreshold` and `planswap.usageErrorThreshold`. A used-up limit shows its percentage and reset time in red. No usage line means no data yet, not zero usage or unlimited quota.
 
 Usage checks need a Claude subscription sign-in, or a Codex ChatGPT sign-in (not API key mode). They run the official CLI.
 
@@ -240,38 +240,38 @@ To get a troubleshooting report, run **PlanSwap: Preview Diagnostics Report** fr
 
 ## Change language and display settings
 
-Click the settings icon in the panel title bar, or run **PlanSwap: Open PlanSwap Settings**. The Settings editor groups them as General, Sidebar, Status Bar, Claude, Codex and Advanced; the table follows that order. To find a setting, type its name from the table into the Settings search box. Changes apply immediately:
+Click the settings icon in the panel title bar, or run **PlanSwap: Open PlanSwap Settings**. The Settings editor groups them as General, Sidebar, Status Bar, Accounts and Advanced; the table follows that order. To find a setting, type its name from the table into the Settings search box. Changes apply immediately:
+
+Accounts keeps the Claude settings together, followed by Codex.
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `planswap.language` | `auto` | Follow the editor, or choose `en`, `zh-cn`, `zh-tw`, `es` or `ja`. |
-| `planswap.usageDisplay` | `remaining` | Usage bars and percentages, in the sidebar and the status bar, show what is left (`remaining`) or what is used (`used`). Colors always follow what is left. |
-| `planswap.usageAutoRefreshCurrentOnly` | `false` | When enabled, automatic checks query only the current Claude account and the effective Codex account; when disabled, other eligible registered accounts are checked too. Manual refreshes are unaffected. |
-| `planswap.notifications.enabled` | `true` | Notify once when the current Claude or Codex account's 5-hour or 7-day limit falls to the threshold below. No notice for a used-up limit: Claude Code and Codex report it themselves. |
-| `planswap.notifications.threshold` | `20` | Remaining percentage at or below which that notice appears, 1–99. |
-| `planswap.sidebar.showEmail` | `true` | Show account emails on sidebar cards and in the status bar tooltip; when hidden, the tooltip uses account labels. |
-| `planswap.sidebar.showFiveHourLimit` | `true` | Show the 5-hour limit on cards. |
-| `planswap.sidebar.showWeeklyLimit` | `true` | Show the 7-day limit on cards. |
-| `planswap.sidebar.showModelLimits` | `false` | Add Claude's model-specific limits to cards. |
-| `planswap.sidebar.warningThreshold` | `30` | Warning color at or below this remaining percentage, 0–100. |
-| `planswap.sidebar.errorThreshold` | `10` | Card bars turn to the error color at or below this remaining percentage, 0–100. It wins over the warning color. |
-| `planswap.sidebar.showRecommendation` | `true` | Show the [recommended account](#recommended-account) card and the lightbulb icons on the cards. |
-| `planswap.sidebar.recommendationThreshold` | `10` | Recommend another account at or below this remaining percentage (0–100), independently of colors. If unset, inherits an explicitly configured `planswap.sidebar.warningThreshold`; otherwise uses 10. Settings are not rewritten. |
-| `planswap.statusBar.enabled` | `true` | Show the PlanSwap item in the status bar. |
-| `planswap.statusBar.products` | `both` | Products displayed in the status bar: `both`, `claude` or `codex`. Does not disable background usage refreshes. |
-| `planswap.statusBar.warningThreshold` | `30` | Warning color at or below this remaining percentage, 0–100. |
-| `planswap.statusBar.errorThreshold` | `10` | Error color at or below this remaining percentage, 0–100. It wins over the warning color. |
-| `planswap.statusBar.alignment` | `right` | Side of the status bar: `left` or `right`. |
-| `planswap.claude.confirmSwitch` | `true` | Ask before switching Claude accounts from the sidebar. Codex switching always asks. When off, double-click or Enter on a focused row switches at once. |
-| `planswap.claude.usageAutoRefresh` | `true` | Automatically check eligible Claude accounts. Account scope follows `planswap.usageAutoRefreshCurrentOnly`. |
-| `planswap.claude.usageRefreshMinutes` | `15` | Age threshold in minutes for automatic Claude refreshes, 10–1440; cached usage or the last check determines whether an account is due. Not an exact schedule. |
-| `planswap.codex.usageAutoRefresh` | `true` | Automatically check eligible Codex accounts. Account scope follows `planswap.usageAutoRefreshCurrentOnly`. |
-| `planswap.codex.usageRefreshMinutes` | `15` | Age threshold in minutes for automatic Codex refreshes, 5–1440; cached usage or the last check determines whether an account is due. Not an exact schedule. |
-| `planswap.usageCheckIntervalSeconds` | `120` | Scheduler check period in seconds, 30–600. Looks for due accounts; does not guarantee exact query times. |
-| `planswap.claude.usageTimeoutSeconds` | `30` | Seconds before a Claude usage query times out, 10–120; applies to automatic and manual queries. |
-| `planswap.codex.usageTimeoutSeconds` | `15` | Seconds before a Codex usage query times out, 5–120; applies to automatic and manual queries. |
+| `planswap.language` | `auto` | Language for the sidebar, status bar and messages. Command titles follow the editor language. |
+| `planswap.usageDisplay` | `remaining` | Show remaining or used percentages in the sidebar and status bar. Colors always follow what is left. |
+| `planswap.usageWarningThreshold` | `30` | Warning color when a limit has this percentage or less left. Applies to sidebar bars and the status bar background. Range: 0–100. |
+| `planswap.usageErrorThreshold` | `10` | Error color when a limit has this percentage or less left. Applies to sidebar bars and the status bar background; error wins over warning. Range: 0–100. |
+| `planswap.usageAutoRefreshCurrentOnly` | `false` | Automatic checks query only the current Claude and effective Codex accounts. When off, other signed-in accounts are checked too. Manual refresh is unchanged. |
+| `planswap.notifications.enabled` | `true` | Notify when the current account’s 5-hour or 7-day quota reaches the notification threshold. Once per limit until reset; no notice for an exhausted limit. |
+| `planswap.notifications.threshold` | `20` | Notify at or below this remaining percentage. Requires usage notifications to be enabled. Range: 1–99. |
+| `planswap.sidebar.showEmail` | `true` | Show emails in the sidebar and status bar tooltip. When hidden, the tooltip uses account labels; names and aliases are unchanged. |
+| `planswap.sidebar.showFiveHourLimit` | `true` | Show each account’s 5-hour limit in the sidebar. |
+| `planswap.sidebar.showWeeklyLimit` | `true` | Show each account’s 7-day limit in the sidebar. |
+| `planswap.sidebar.showModelLimits` | `false` | Show Claude’s model-specific limits below its general limits. |
+| `planswap.sidebar.showRecommendation` | `true` | Show account recommendations and the lightbulb buttons used to exclude accounts. |
+| `planswap.sidebar.recommendationThreshold` | `10` | Recommend when the current account’s lowest general remaining percentage is at or below this value. Requires recommendations; independent of colors. Range: 0–100. |
+| `planswap.statusBar.enabled` | `true` | Show PlanSwap in the status bar. |
+| `planswap.statusBar.products` | `both` | Services shown in the status bar. Affects text, tooltip and color only; automatic checks continue. |
+| `planswap.statusBar.alignment` | `right` | Place PlanSwap on the left or right of the status bar. |
+| `planswap.claude.confirmSwitch` | `true` | Claude: ask before switching accounts from the sidebar. Codex always asks. |
+| `planswap.claude.usageAutoRefresh` | `true` | Claude: automatically check usage while this window is focused. Account scope follows `planswap.usageAutoRefreshCurrentOnly`. Manual refresh stays available. |
+| `planswap.claude.usageRefreshMinutes` | `15` | Claude: minutes before cached usage or the last check is due for automatic refresh. Requires automatic refresh; not an exact schedule. Range: 10–1440. |
+| `planswap.codex.usageAutoRefresh` | `true` | Codex: automatically check usage while this window is focused. Account scope follows `planswap.usageAutoRefreshCurrentOnly`. API key accounts are skipped; manual refresh stays available. |
+| `planswap.codex.usageRefreshMinutes` | `15` | Codex: minutes before cached usage or the last check is due for automatic refresh. Requires automatic refresh; not an exact schedule. Range: 5–1440. |
+| `planswap.usageCheckIntervalSeconds` | `120` | Seconds between checks for accounts due for automatic refresh. Each account’s refresh age is set under Accounts. Range: 30–600. |
+| `planswap.claude.usageTimeoutSeconds` | `30` | Claude: seconds before a usage query times out. Applies to automatic and manual refreshes. Range: 10–120. |
+| `planswap.codex.usageTimeoutSeconds` | `15` | Codex: seconds before a usage query times out. Applies to automatic and manual refreshes. Range: 5–120. |
 
-With automatic checks off, the refresh icons and commands still work. The email setting also controls the status bar tooltip; sidebar limit and recommendation display settings do not change the status bar. Command Palette titles and the sidebar's name follow the editor's display language, not `planswap.language`.
+With automatic checks off, the refresh icons and commands still work. The email setting also controls the status bar tooltip. Colors use the shared General thresholds; recommendation and sidebar limit visibility settings do not affect the status bar. Command Palette titles and the sidebar's name follow the editor's display language, not `planswap.language`.
 
 ## Troubleshoot common problems
 

@@ -196,7 +196,7 @@ function loginStatus(a: AccountView, hideEmail?: boolean): HTMLElement | null {
 
 type UsageWindowView = NonNullable<AccountView['usage']>['windows'][number];
 
-// Color level of what is left: the thresholds come from planswap.sidebar.warningThreshold / errorThreshold (error wins)
+// Color level of what is left: shared usageWarningThreshold / usageErrorThreshold settings (error wins)
 function usageLevel(remaining: number): 'empty' | 'low' | 'warn' | 'ok' {
   const { warning, error } = state.usageThresholds ?? { warning: 30, error: 10 };
   return remaining <= 0 ? 'empty' : remaining <= error ? 'low' : remaining <= warning ? 'warn' : 'ok';

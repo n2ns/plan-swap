@@ -157,7 +157,7 @@ PlanSwap 讓你同時保持多個 Claude Code 和 Codex 帳號的登入狀態，
 
 ## 查看和重新整理用量額度
 
-用量條和百分比顯示的是**剩餘**額度；在[設定](#變更語言和顯示設定)中將 `planswap.usageDisplay` 設為 `used` 可改為顯示已用量。每項額度旁的時間長度（例如 `2 天 5 小時`）是距離重設的時間。將游標停留在用量條上可同時看到兩者，例如 `剩餘 97%（已用 3%）`。剩餘 30% 或更少時用量條變黃，剩餘 10% 或更少時變紅，顯示已用量時也是如此；這兩個界線可以用 `planswap.sidebar.warningThreshold` 和 `planswap.sidebar.errorThreshold` 調整。已用完的額度會以紅色顯示百分比和重設時間。沒有用量列表示還沒有資料，而不是用量為零或額度無限。
+用量條和百分比顯示的是**剩餘**額度；在[設定](#變更語言和顯示設定)中將 `planswap.usageDisplay` 設為 `used` 可改為顯示已用量。每項額度旁的時間長度（例如 `2 天 5 小時`）是距離重設的時間。將游標停留在用量條上可同時看到兩者，例如 `剩餘 97%（已用 3%）`。剩餘 30% 或更少時用量條變黃，剩餘 10% 或更少時變紅，顯示已用量時也是如此；這兩個界線可以用 `planswap.usageWarningThreshold` 和 `planswap.usageErrorThreshold` 調整。已用完的額度會以紅色顯示百分比和重設時間。沒有用量列表示還沒有資料，而不是用量為零或額度無限。
 
 查詢用量需要以 Claude 訂閱登入，或以 Codex 的 ChatGPT 方式登入（不支援 API 金鑰模式）。查詢會執行官方 CLI。
 
@@ -240,38 +240,38 @@ PlanSwap 啟動或重新整理時，會把在你的主目錄中找到、名稱�
 
 ## 變更語言和顯示設定
 
-按一下面板標題列中的設定圖示，或執行 **PlanSwap: 開啟 PlanSwap 設定**（PlanSwap: Open PlanSwap Settings）。設定編輯器將它們分為一般、側邊欄、狀態列、Claude、Codex 和進階幾組；下表依相同順序排列。在設定編輯器的搜尋框中輸入表中的設定名稱即可找到對應設定。變更會立即生效：
+按一下面板標題列中的設定圖示，或執行 **PlanSwap: 開啟 PlanSwap 設定**（PlanSwap: Open PlanSwap Settings）。設定編輯器將它們分為一般、側邊欄、狀態列、帳號和進階五組；下表依相同順序排列。在設定編輯器的搜尋框中輸入表中的設定名稱即可找到對應設定。變更會立即生效：
+
+帳號組先列 Claude 設定，再列 Codex 設定。
 
 | 設定 | 預設值 | 用途 |
 | --- | --- | --- |
-| `planswap.language` | `auto` | 跟隨編輯器，或選擇 `en`、`zh-cn`、`zh-tw`、`es` 或 `ja`。 |
-| `planswap.usageDisplay` | `remaining` | 側邊欄和狀態列中的用量條和百分比顯示剩餘量（`remaining`）還是已用量（`used`）。顏色一律依剩餘量計算。 |
-| `planswap.usageAutoRefreshCurrentOnly` | `false` | 開啟時，自動查詢只查目前 Claude 帳號和目前生效 Codex 帳號；關閉時也查詢其他符合條件的已登記帳號。不影響手動重新整理。 |
-| `planswap.notifications.enabled` | `true` | 目前 Claude 或 Codex 帳號的 5 小時額度或 7 天額度降到下面的臨界值時提醒一次。額度用完時不提醒：Claude Code 和 Codex 會自行提示。 |
-| `planswap.notifications.threshold` | `20` | 剩餘百分比降到此值或更低時提醒，1–99。 |
-| `planswap.sidebar.showEmail` | `true` | 在側邊欄卡片和狀態列暫留提示中顯示帳號電子郵件；隱藏時，暫留提示改用帳號標籤。 |
-| `planswap.sidebar.showFiveHourLimit` | `true` | 在卡片上顯示 5 小時額度。 |
-| `planswap.sidebar.showWeeklyLimit` | `true` | 在卡片上顯示 7 天額度。 |
-| `planswap.sidebar.showModelLimits` | `false` | 在卡片上額外顯示 Claude 的各模型額度。 |
-| `planswap.sidebar.warningThreshold` | `30` | 剩餘百分比小於或等於此值時顯示警告色（0–100）。 |
-| `planswap.sidebar.errorThreshold` | `10` | 剩餘百分比小於或等於此值時，卡片上的用量條顯示錯誤色，0–100。優先於警告色。 |
-| `planswap.sidebar.showRecommendation` | `true` | 顯示[推薦帳號](#推薦帳號)卡片和卡片上的燈泡圖示。 |
-| `planswap.sidebar.recommendationThreshold` | `10` | 剩餘百分比小於或等於此值時推薦其他帳號（0–100），與顏色獨立。未設定時繼承明確設定的 `planswap.sidebar.warningThreshold`；否則使用 10。不會改寫設定。 |
-| `planswap.statusBar.enabled` | `true` | 在狀態列中顯示 PlanSwap 項目。 |
-| `planswap.statusBar.products` | `both` | 狀態列顯示的產品：`both`、`claude` 或 `codex`。不會關閉背景用量重新整理。 |
-| `planswap.statusBar.warningThreshold` | `30` | 剩餘百分比小於或等於此值時顯示警告色，0–100。 |
-| `planswap.statusBar.errorThreshold` | `10` | 剩餘百分比小於或等於此值時顯示錯誤色，0–100。優先於警告色。 |
-| `planswap.statusBar.alignment` | `right` | 所在的狀態列一側：`left` 或 `right`。 |
-| `planswap.claude.confirmSwitch` | `true` | 從側邊欄切換 Claude 帳號前先確認。Codex 切換一律需要確認。關閉後，在有焦點的列上按兩下或按 Enter 會立即切換。 |
-| `planswap.claude.usageAutoRefresh` | `true` | 自動查詢符合條件的 Claude 帳號，範圍由 `planswap.usageAutoRefreshCurrentOnly` 控制。 |
-| `planswap.claude.usageRefreshMinutes` | `15` | 自動重新整理 Claude 的時間門檻（分鐘，10–1440），依帳號用量快取或上次查詢判斷是否到期，並非精準定時。 |
-| `planswap.codex.usageAutoRefresh` | `true` | 自動查詢符合條件的 Codex 帳號，範圍由 `planswap.usageAutoRefreshCurrentOnly` 控制。 |
-| `planswap.codex.usageRefreshMinutes` | `15` | 自動重新整理 Codex 的時間門檻（分鐘，5–1440），依帳號用量快取或上次查詢判斷是否到期，並非精準定時。 |
-| `planswap.usageCheckIntervalSeconds` | `120` | 排程檢查週期（秒，30–600），用於尋找已到重新整理時間的帳號，不保證精準查詢時間。 |
-| `planswap.claude.usageTimeoutSeconds` | `30` | 單次 Claude 用量查詢逾時前允許執行的秒數（10–120），適用於自動和手動查詢。 |
-| `planswap.codex.usageTimeoutSeconds` | `15` | 單次 Codex 用量查詢逾時前允許執行的秒數（5–120），適用於自動和手動查詢。 |
+| `planswap.language` | `auto` | 側邊欄、狀態列和訊息的語言。命令標題跟隨編輯器語言。 |
+| `planswap.usageDisplay` | `remaining` | 側邊欄和狀態列顯示剩餘或已用百分比。顏色一律依剩餘額度判斷。 |
+| `planswap.usageWarningThreshold` | `30` | 額度餘量小於或等於此百分比時顯示警告色。用於側邊欄用量條和狀態列背景。範圍：0–100。 |
+| `planswap.usageErrorThreshold` | `10` | 額度餘量小於或等於此百分比時顯示錯誤色。用於側邊欄用量條和狀態列背景，錯誤色優先於警告色。範圍：0–100。 |
+| `planswap.usageAutoRefreshCurrentOnly` | `false` | 自動查詢只查目前 Claude 和目前生效的 Codex 帳號。關閉時也查詢其他已登入帳號。手動重新整理不受影響。 |
+| `planswap.notifications.enabled` | `true` | 目前帳號的 5 小時或 7 天額度達到通知門檻時提醒。每項額度重設前只提醒一次；用完後不提醒。 |
+| `planswap.notifications.threshold` | `20` | 剩餘百分比小於或等於此值時提醒。需開啟用量通知。範圍：1–99。 |
+| `planswap.sidebar.showEmail` | `true` | 在側邊欄和狀態列工具提示中顯示電子郵件。隱藏時，工具提示顯示帳號名稱；名稱和別名不變。 |
+| `planswap.sidebar.showFiveHourLimit` | `true` | 在側邊欄顯示各帳號的 5 小時額度。 |
+| `planswap.sidebar.showWeeklyLimit` | `true` | 在側邊欄顯示各帳號的 7 天額度。 |
+| `planswap.sidebar.showModelLimits` | `false` | 在 Claude 一般額度下方顯示各模型的額度。 |
+| `planswap.sidebar.showRecommendation` | `true` | 顯示帳號推薦卡片和用來排除帳號的燈泡按鈕。 |
+| `planswap.sidebar.recommendationThreshold` | `10` | 目前帳號的一般額度中，最低剩餘百分比小於或等於此值時推薦。需開啟帳號推薦，與顏色門檻獨立。範圍：0–100。 |
+| `planswap.statusBar.enabled` | `true` | 在狀態列顯示 PlanSwap。 |
+| `planswap.statusBar.products` | `both` | 狀態列顯示的服務。只影響文字、工具提示和顏色；自動查詢繼續執行。 |
+| `planswap.statusBar.alignment` | `right` | 將 PlanSwap 放在狀態列左側或右側。 |
+| `planswap.claude.confirmSwitch` | `true` | Claude：從側邊欄切換帳號前確認。Codex 切換一律需要確認。 |
+| `planswap.claude.usageAutoRefresh` | `true` | Claude：視窗取得焦點時自動查詢用量。帳號範圍由 `planswap.usageAutoRefreshCurrentOnly` 控制。手動重新整理仍可用。 |
+| `planswap.claude.usageRefreshMinutes` | `15` | Claude：快取用量或上次查詢經過幾分鐘後可自動重新整理。需開啟自動重新整理，不保證準時查詢。範圍：10–1440。 |
+| `planswap.codex.usageAutoRefresh` | `true` | Codex：視窗取得焦點時自動查詢用量。帳號範圍由 `planswap.usageAutoRefreshCurrentOnly` 控制。不查詢 API key 帳號；手動重新整理仍可用。 |
+| `planswap.codex.usageRefreshMinutes` | `15` | Codex：快取用量或上次查詢經過幾分鐘後可自動重新整理。需開啟自動重新整理，不保證準時查詢。範圍：5–1440。 |
+| `planswap.usageCheckIntervalSeconds` | `120` | 每隔幾秒檢查哪些帳號該自動重新整理。各帳號的重新整理間隔在「帳號」組設定。範圍：30–600。 |
+| `planswap.claude.usageTimeoutSeconds` | `30` | Claude：用量查詢的逾時秒數。自動查詢和手動重新整理均適用。範圍：10–120。 |
+| `planswap.codex.usageTimeoutSeconds` | `15` | Codex：用量查詢的逾時秒數。自動查詢和手動重新整理均適用。範圍：5–120。 |
 
-關閉自動查詢後，重新整理圖示和命令仍然可用。電子郵件設定也控制狀態列暫留提示；側邊欄額度和推薦顯示設定不影響狀態列。命令選擇區標題和側邊欄名稱會跟隨編輯器的顯示語言，而不是 `planswap.language`。
+關閉自動查詢後，重新整理圖示和命令仍然可用。電子郵件設定也控制狀態列工具提示。顏色使用一般組的共用門檻；推薦和側邊欄額度顯示設定不影響狀態列。命令選擇區標題和側邊欄名稱會跟隨編輯器的顯示語言，而不是 `planswap.language`。
 
 ## 排解常見問題
 

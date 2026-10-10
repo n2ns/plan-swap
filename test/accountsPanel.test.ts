@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type * as vscode from 'vscode';
-import { AccountsPanel, applySidebarDisplay, claudePanelSource, recommendationThreshold, sidebarDisplay, sidebarThresholds, type PanelSource } from '../src/accountsPanel';
+import { AccountsPanel, applySidebarDisplay, claudePanelSource, recommendationThreshold, sidebarDisplay, type PanelSource } from '../src/accountsPanel';
+import { usageThresholds } from '../src/usageSettings';
 import { AccountStore } from '../src/accounts';
 import { LabelStore } from '../src/labels';
 import { readAccountInfo } from '../src/paths';
@@ -174,31 +175,30 @@ test('no recommendation while a Codex selection waits for the restart', () => {
   } finally { h.panel.dispose(); resetConfig(); }
 });
 
-test('the sidebar color thresholds default to 30 / 10 and are clamped to 0..100', () => {
+test('the shared color thresholds default to 30 / 10 and are clamped to 0..100', () => {
   resetConfig();
   try {
-    assert.deepEqual(sidebarThresholds(), { warning: 30, error: 10 });
-    setConfig('planswap', 'sidebar.warningThreshold', 60);
-    setConfig('planswap', 'sidebar.errorThreshold', -5);
-    assert.deepEqual(sidebarThresholds(), { warning: 60, error: 0 });
-    setConfig('planswap', 'sidebar.warningThreshold', 'x');
-    setConfig('planswap', 'sidebar.errorThreshold', 150);
-    assert.deepEqual(sidebarThresholds(), { warning: 30, error: 100 });
+    assert.deepEqual(usageThresholds(), { warning: 30, error: 10 });
+    setConfig('planswap', 'usageWarningThreshold', 60);
+    setConfig('planswap', 'usageErrorThreshold', -5);
+    assert.deepEqual(usageThresholds(), { warning: 60, error: 0 });
+    setConfig('planswap', 'usageWarningThreshold', 'x');
+    setConfig('planswap', 'usageErrorThreshold', 150);
+    assert.deepEqual(usageThresholds(), { warning: 30, error: 100 });
   } finally { resetConfig(); }
 });
 
-test('recommendation threshold defaults to 10, inherits only explicit legacy values and never rewrites settings', () => {
+test('recommendation threshold defaults to 10, ignores legacy and shared colors, and never rewrites settings', () => {
   resetConfig();
   try {
-    setConfigDefault('planswap', 'sidebar.warningThreshold', 30);
     setConfigDefault('planswap', 'sidebar.recommendationThreshold', 10);
-    assert.equal(recommendationThreshold(), 10, 'the legacy manifest default is not an explicit customization');
-    setConfig('planswap', 'statusBar.warningThreshold', 60);
-    assert.equal(recommendationThreshold(), 10, 'status bar colors never affect recommendations');
-    setConfig('planswap', 'sidebar.warningThreshold', 45);
-    assert.equal(recommendationThreshold(), 45);
-    setConfig('planswap', 'sidebar.recommendationThreshold', 10);
-    assert.equal(recommendationThreshold(), 10, 'an explicit new default overrides the legacy customization');
+    assert.equal(recommendationThreshold(), 10);
+    for (const key of ['sidebar.warningThreshold', 'statusBar.warningThreshold', 'usageWarningThreshold', 'usageErrorThreshold']) {
+      setConfig('planswap', key, 60);
+    }
+    assert.equal(recommendationThreshold(), 10, 'old values and shared colors never affect the trigger');
+    setConfig('planswap', 'sidebar.recommendationThreshold', 25);
+    assert.equal(recommendationThreshold(), 25);
     setConfig('planswap', 'sidebar.recommendationThreshold', 0);
     assert.equal(recommendationThreshold(), 0);
     setConfig('planswap', 'sidebar.recommendationThreshold', 150);
@@ -210,7 +210,7 @@ test('recommendation threshold defaults to 10, inherits only explicit legacy val
       assert.equal(recommendationThreshold(), 10);
     }
     setConfig('planswap', 'sidebar.recommendationThreshold', undefined);
-    assert.equal(recommendationThreshold(), 45, 'removing the new value restores explicit legacy compatibility');
+    assert.equal(recommendationThreshold(), 10);
     assert.deepEqual(updates, []);
   } finally { resetConfig(); }
 });
@@ -243,7 +243,12 @@ test('both pages refresh recommendations using the independent inclusive thresho
     assert.equal(refreshed.state.claude.recommended, '/h/.claude-work', 'refresh pushes the updated recommendation without another ready message');
     assert.equal(refreshed.state.codex.recommended, '/h/.claude-work');
     assert.deepEqual(recommendations(), ['/h/.claude-work', '/h/.claude-work']);
-    setConfig('planswap', 'sidebar.warningThreshold', 1);
+    setConfig('planswap', 'usageWarningThreshold', 1);
+    h.messages.length = 0;
+    h.panel.refresh();
+    const recolored = h.messages[0];
+    assert.ok(recolored.type === 'state');
+    assert.deepEqual(recolored.state.usageThresholds, { warning: 1, error: 10 }, 'the panel sends the shared colors on refresh');
     assert.deepEqual(recommendations(), ['/h/.claude-work', '/h/.claude-work'], 'explicit recommendation setting decouples colors');
     setConfig('planswap', 'sidebar.showRecommendation', false);
     assert.deepEqual(recommendations(), [undefined, undefined]);

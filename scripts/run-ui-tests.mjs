@@ -866,7 +866,7 @@ async function usedDisplay() {
   }
   results.interactions.push('usageDisplay used: bars, percentages and tooltips show what is used in every locale and width; colors follow what is left');
 
-  // planswap.sidebar.warningThreshold / errorThreshold move the color levels (remaining 58% and 14%)
+  // planswap.usageWarningThreshold / usageErrorThreshold move the color levels (remaining 58% and 14%)
   const levels = async (thresholds) => {
     await page.evaluate((thresholds) => {
       window.preview.apply({ locale: 'en', width: 280, active: 'codex' });

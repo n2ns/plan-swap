@@ -238,19 +238,37 @@
             "description": "%config.usageDisplay.description%",
             "order": 1
           },
+          "planswap.usageWarningThreshold": {
+            "type": "number",
+            "default": 30,
+            "minimum": 0,
+            "maximum": 100,
+            "scope": "application",
+            "description": "%config.usageWarningThreshold.description%",
+            "order": 2
+          },
+          "planswap.usageErrorThreshold": {
+            "type": "number",
+            "default": 10,
+            "minimum": 0,
+            "maximum": 100,
+            "scope": "application",
+            "description": "%config.usageErrorThreshold.description%",
+            "order": 3
+          },
           "planswap.usageAutoRefreshCurrentOnly": {
             "type": "boolean",
             "default": false,
             "scope": "application",
             "description": "%config.usageAutoRefreshCurrentOnly.description%",
-            "order": 2
+            "order": 4
           },
           "planswap.notifications.enabled": {
             "type": "boolean",
             "default": true,
             "scope": "application",
             "description": "%config.notificationsEnabled.description%",
-            "order": 4
+            "order": 5
           },
           "planswap.notifications.threshold": {
             "type": "number",
@@ -259,7 +277,7 @@
             "maximum": 99,
             "scope": "application",
             "description": "%config.notificationsThreshold.description%",
-            "order": 5
+            "order": 6
           }
         }
       },
@@ -296,30 +314,12 @@
             "description": "%config.sidebarModelLimits.description%",
             "order": 3
           },
-          "planswap.sidebar.warningThreshold": {
-            "type": "number",
-            "default": 30,
-            "minimum": 0,
-            "maximum": 100,
-            "scope": "application",
-            "description": "%config.sidebarWarningThreshold.description%",
-            "order": 4
-          },
-          "planswap.sidebar.errorThreshold": {
-            "type": "number",
-            "default": 10,
-            "minimum": 0,
-            "maximum": 100,
-            "scope": "application",
-            "description": "%config.sidebarErrorThreshold.description%",
-            "order": 5
-          },
           "planswap.sidebar.showRecommendation": {
             "type": "boolean",
             "default": true,
             "scope": "application",
             "description": "%config.sidebarRecommendation.description%",
-            "order": 6
+            "order": 4
           },
           "planswap.sidebar.recommendationThreshold": {
             "type": "number",
@@ -328,7 +328,7 @@
             "maximum": 100,
             "scope": "application",
             "description": "%config.sidebarRecommendationThreshold.description%",
-            "order": 7
+            "order": 5
           }
         }
       },
@@ -361,24 +361,6 @@
             "description": "%config.statusBarProducts.description%",
             "order": 1
           },
-          "planswap.statusBar.warningThreshold": {
-            "type": "number",
-            "default": 30,
-            "minimum": 0,
-            "maximum": 100,
-            "scope": "application",
-            "description": "%config.statusBarWarningThreshold.description%",
-            "order": 2
-          },
-          "planswap.statusBar.errorThreshold": {
-            "type": "number",
-            "default": 10,
-            "minimum": 0,
-            "maximum": 100,
-            "scope": "application",
-            "description": "%config.statusBarErrorThreshold.description%",
-            "order": 3
-          },
           "planswap.statusBar.alignment": {
             "type": "string",
             "enum": [
@@ -392,13 +374,13 @@
               "%config.statusBarAlignment.right%"
             ],
             "description": "%config.statusBarAlignment.description%",
-            "order": 4
+            "order": 2
           }
         }
       },
       {
-        "id": "planswap.claude",
-        "title": "Claude",
+        "id": "planswap.accounts",
+        "title": "%config.group.accounts%",
         "order": 3,
         "properties": {
           "planswap.claude.confirmSwitch": {
@@ -423,20 +405,13 @@
             "scope": "application",
             "description": "%config.claudeUsageRefreshMinutes.description%",
             "order": 2
-          }
-        }
-      },
-      {
-        "id": "planswap.codex",
-        "title": "Codex",
-        "order": 4,
-        "properties": {
+          },
           "planswap.codex.usageAutoRefresh": {
             "type": "boolean",
             "default": true,
             "scope": "application",
             "description": "%config.codexUsageAutoRefresh.description%",
-            "order": 0
+            "order": 3
           },
           "planswap.codex.usageRefreshMinutes": {
             "type": "number",
@@ -445,14 +420,14 @@
             "maximum": 1440,
             "scope": "application",
             "description": "%config.codexUsageRefreshMinutes.description%",
-            "order": 1
+            "order": 4
           }
         }
       },
       {
         "id": "planswap.advanced",
         "title": "%config.group.advanced%",
-        "order": 5,
+        "order": 4,
         "properties": {
           "planswap.usageCheckIntervalSeconds": {
             "type": "number",

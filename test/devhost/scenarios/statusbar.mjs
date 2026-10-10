@@ -15,7 +15,7 @@ export async function run(ctx) {
   s = await item({ hover: true });
   await step('tooltip: one block per product with email, plan and windows', !!s?.tooltip && /default@fake\.invalid/.test(s.tooltip) && /codex-default@fake\.invalid/.test(s.tooltip) && /5[- ]hour|5h/i.test(s.tooltip), s?.tooltip?.slice(0, 200));
 
-  writeSettings({ ...codexAuto, 'planswap.statusBar.errorThreshold': 25 });
+  writeSettings({ ...codexAuto, 'planswap.usageErrorThreshold': 25 });
   s = await ctx.waitFor(() => sb.statusItem(ctx), (v) => v?.kind === 'error-kind');
   await step('error threshold 25: error color (15% left is at or below it)', s?.kind === 'error-kind', s?.kind);
 

@@ -117,12 +117,12 @@ describe('pure helpers', () => {
     resetConfig();
     try {
       assert.deepEqual(statusBarSettings(), { enabled: true, claude: true, codex: true, warningThreshold: 30, errorThreshold: 10, alignment: 'right' });
-      setConfig('planswap', 'statusBar.warningThreshold', 150);
-      setConfig('planswap', 'statusBar.errorThreshold', -5);
+      setConfig('planswap', 'usageWarningThreshold', 150);
+      setConfig('planswap', 'usageErrorThreshold', -5);
       setConfig('planswap', 'statusBar.products', 'nope');
       setConfig('planswap', 'statusBar.alignment', 'top');
       assert.deepEqual(statusBarSettings(), { enabled: true, claude: true, codex: true, warningThreshold: 100, errorThreshold: 0, alignment: 'right' });
-      setConfig('planswap', 'statusBar.warningThreshold', 'x');
+      setConfig('planswap', 'usageWarningThreshold', 'x');
       assert.equal(statusBarSettings().warningThreshold, 30);
     } finally { resetConfig(); }
   });
@@ -343,9 +343,12 @@ describe('Codex usage limits in the tooltip', () => {
         assert.equal(item.accessibilityInformation?.label, 'PlanSwap: Codex 42% used');
         assert.match(tooltipText(item.tooltip), /\| 5h \| ████░░░░░░ \| 42% \|[^\n]*\n\| 7d \| █░░░░░░░░░ \| 7% \|/);
         assert.equal(item.backgroundColor, undefined);
-        setConfig('planswap', 'statusBar.warningThreshold', 60);
-        fireConfigurationChange('planswap.statusBar.warningThreshold');
+        setConfig('planswap', 'usageWarningThreshold', 60);
+        fireConfigurationChange('planswap.usageWarningThreshold');
         assert.equal((item.backgroundColor as ThemeColor | undefined)?.id, 'statusBarItem.warningBackground', '58% left is below a 60% threshold');
+        setConfig('planswap', 'usageErrorThreshold', 60);
+        fireConfigurationChange('planswap.usageErrorThreshold');
+        assert.equal((item.backgroundColor as ThemeColor | undefined)?.id, 'statusBarItem.errorBackground', 'shared error changes apply immediately and win over warning');
       } finally { resetConfig(); bar.dispose(); }
     });
 
@@ -578,10 +581,10 @@ describe('both products in the status bar', LINUX_ONLY, () => {
       bar.setClaudeUsage({ checking: false });
       bar.setCodexUsage(codexOk(18, 50));
       assert.equal(color(item), undefined);
-      setConfig('planswap', 'statusBar.warningThreshold', 50);
+      setConfig('planswap', 'usageWarningThreshold', 50);
       bar.update();
       assert.equal(color(item), 'statusBarItem.warningBackground');
-      setConfig('planswap', 'statusBar.errorThreshold', 50);
+      setConfig('planswap', 'usageErrorThreshold', 50);
       bar.update();
       assert.equal(color(item), 'statusBarItem.errorBackground');
     } finally { bar.dispose(); resetConfig(); }

@@ -157,7 +157,7 @@ Después:
 
 ## Consultar y actualizar los límites de uso
 
-Las barras de uso y los porcentajes muestran lo que **queda**; pon `planswap.usageDisplay` en `used` en los [ajustes](#cambiar-el-idioma-y-los-ajustes-de-visualización) para que muestren lo que se ha usado. La duración junto a cada límite, como `2d 5h`, es el tiempo hasta que se restablece. Pasa el puntero sobre una barra para ver ambos valores, por ejemplo `97% restante (3% usado)`. Una barra se vuelve amarilla cuando queda un 30 % o menos y roja con un 10 % o menos, también cuando muestra lo usado; puedes cambiar estos niveles con `planswap.sidebar.warningThreshold` y `planswap.sidebar.errorThreshold`. Un límite agotado muestra su porcentaje y su hora de restablecimiento en rojo. Si no hay línea de uso, es que aún no hay datos, no que el uso sea cero ni que la cuota sea ilimitada.
+Las barras de uso y los porcentajes muestran lo que **queda**; pon `planswap.usageDisplay` en `used` en los [ajustes](#cambiar-el-idioma-y-los-ajustes-de-visualización) para que muestren lo que se ha usado. La duración junto a cada límite, como `2d 5h`, es el tiempo hasta que se restablece. Pasa el puntero sobre una barra para ver ambos valores, por ejemplo `97% restante (3% usado)`. Una barra se vuelve amarilla cuando queda un 30 % o menos y roja con un 10 % o menos, también cuando muestra lo usado; puedes cambiar estos niveles con `planswap.usageWarningThreshold` y `planswap.usageErrorThreshold`. Un límite agotado muestra su porcentaje y su hora de restablecimiento en rojo. Si no hay línea de uso, es que aún no hay datos, no que el uso sea cero ni que la cuota sea ilimitada.
 
 Las consultas de uso requieren un inicio de sesión con suscripción de Claude, o un inicio de sesión de ChatGPT en Codex (no el modo de clave de API). Ejecutan la CLI oficial.
 
@@ -240,38 +240,38 @@ Para obtener un informe de diagnóstico, ejecuta **PlanSwap: Vista previa del in
 
 ## Cambiar el idioma y los ajustes de visualización
 
-Haz clic en el icono de ajustes de la barra de título del panel, o ejecuta **PlanSwap: Abrir ajustes de PlanSwap**. El editor de configuración los agrupa en General, Barra lateral, Barra de estado, Claude, Codex y Avanzado; la tabla sigue ese orden. Para encontrar un ajuste, escribe su nombre de la tabla en el cuadro de búsqueda de la configuración. Los cambios se aplican al instante:
+Haz clic en el icono de ajustes de la barra de título del panel, o ejecuta **PlanSwap: Abrir ajustes de PlanSwap**. El editor de configuración los agrupa en General, Barra lateral, Barra de estado, Cuentas y Avanzado; la tabla sigue ese orden. Para encontrar un ajuste, escribe su nombre de la tabla en el cuadro de búsqueda de la configuración. Los cambios se aplican al instante:
+
+En Cuentas, los ajustes de Claude aparecen juntos, seguidos por los de Codex.
 
 | Ajuste | Predeterminado | Función |
 | --- | --- | --- |
-| `planswap.language` | `auto` | Seguir el editor, o elegir `en`, `zh-cn`, `zh-tw`, `es` o `ja`. |
-| `planswap.usageDisplay` | `remaining` | Las barras y los porcentajes de uso, en la barra lateral y la barra de estado, muestran lo que queda (`remaining`) o lo que se ha usado (`used`). Los colores siempre se basan en lo que queda. |
-| `planswap.usageAutoRefreshCurrentOnly` | `false` | Activado consulta solo la cuenta actual de Claude y la efectiva de Codex; desactivado también consulta otras cuentas registradas aptas. No afecta a la actualización manual. |
-| `planswap.notifications.enabled` | `true` | Avisa una vez cuando el Límite de 5 h o el Límite de 7 días de la cuenta actual de Claude o Codex baja al umbral siguiente. Un límite agotado no genera aviso: Claude Code y Codex lo indican por sí mismos. |
-| `planswap.notifications.threshold` | `20` | Porcentaje restante igual o inferior al cual aparece ese aviso, 1–99. |
-| `planswap.sidebar.showEmail` | `true` | Mostrar los correos en las tarjetas laterales y en la información sobre herramientas de la barra de estado; al ocultarlos, esta usa las etiquetas de las cuentas. |
-| `planswap.sidebar.showFiveHourLimit` | `true` | Mostrar el límite de 5 horas en las tarjetas. |
-| `planswap.sidebar.showWeeklyLimit` | `true` | Mostrar el límite de 7 días en las tarjetas. |
-| `planswap.sidebar.showModelLimits` | `false` | Añadir a las tarjetas los límites de Claude por modelo. |
-| `planswap.sidebar.warningThreshold` | `30` | Color de advertencia con este porcentaje restante o menos (0–100). |
-| `planswap.sidebar.errorThreshold` | `10` | Las barras de las tarjetas usan el color de error con este porcentaje restante o menos, 0–100. Tiene prioridad sobre el color de advertencia. |
-| `planswap.sidebar.showRecommendation` | `true` | Mostrar la tarjeta de [cuenta recomendada](#cuenta-recomendada) y los iconos de bombilla en las tarjetas. |
-| `planswap.sidebar.recommendationThreshold` | `10` | Recomendar otra cuenta con este porcentaje restante o menos (0–100), independientemente de los colores. Si no se configura, hereda un `planswap.sidebar.warningThreshold` explícito; en otro caso usa 10. No reescribe los ajustes. |
-| `planswap.statusBar.enabled` | `true` | Mostrar el elemento de PlanSwap en la barra de estado. |
-| `planswap.statusBar.products` | `both` | Productos mostrados en la barra de estado: `both`, `claude` o `codex`. No desactiva las actualizaciones de uso en segundo plano. |
-| `planswap.statusBar.warningThreshold` | `30` | Color de advertencia con este porcentaje restante o menos, 0–100. |
-| `planswap.statusBar.errorThreshold` | `10` | Color de error con este porcentaje restante o menos, 0–100. Tiene prioridad sobre el color de advertencia. |
-| `planswap.statusBar.alignment` | `right` | Lado de la barra de estado: `left` o `right`. |
-| `planswap.claude.confirmSwitch` | `true` | Pedir confirmación antes de cambiar de cuenta de Claude desde la barra lateral. El cambio de Codex siempre la pide. Si está desactivado, el doble clic o Enter en una fila con el foco cambia de inmediato. |
-| `planswap.claude.usageAutoRefresh` | `true` | Consultar automáticamente las cuentas aptas de Claude. El alcance sigue `planswap.usageAutoRefreshCurrentOnly`. |
-| `planswap.claude.usageRefreshMinutes` | `15` | Umbral de antigüedad en minutos para actualizar Claude, 10–1440; la caché de uso o la última consulta determina si la cuenta está pendiente. No es un horario exacto. |
-| `planswap.codex.usageAutoRefresh` | `true` | Consultar automáticamente las cuentas aptas de Codex. El alcance sigue `planswap.usageAutoRefreshCurrentOnly`. |
-| `planswap.codex.usageRefreshMinutes` | `15` | Umbral de antigüedad en minutos para actualizar Codex, 5–1440; la caché de uso o la última consulta determina si la cuenta está pendiente. No es un horario exacto. |
-| `planswap.usageCheckIntervalSeconds` | `120` | Periodo del planificador en segundos, 30–600. Busca cuentas pendientes; no garantiza horas exactas de consulta. |
-| `planswap.claude.usageTimeoutSeconds` | `30` | Segundos antes de que una consulta de uso de Claude agote el tiempo, 10–120; se aplica a consultas automáticas y manuales. |
-| `planswap.codex.usageTimeoutSeconds` | `15` | Segundos antes de que una consulta de uso de Codex agote el tiempo, 5–120; se aplica a consultas automáticas y manuales. |
+| `planswap.language` | `auto` | Idioma de la barra lateral, la barra de estado y los mensajes. Los títulos de comandos siguen el idioma del editor. |
+| `planswap.usageDisplay` | `remaining` | Mostrar porcentajes restantes o usados en la barra lateral y de estado. Los colores siempre siguen lo que queda. |
+| `planswap.usageWarningThreshold` | `30` | Color de advertencia cuando un límite tiene este porcentaje restante o menos. Se aplica a las barras laterales y al fondo de la barra de estado. Rango: 0–100. |
+| `planswap.usageErrorThreshold` | `10` | Color de error cuando un límite tiene este porcentaje restante o menos. Se aplica a las barras laterales y al fondo de la barra de estado; el error tiene prioridad. Rango: 0–100. |
+| `planswap.usageAutoRefreshCurrentOnly` | `false` | Las consultas automáticas solo revisan la cuenta actual de Claude y la efectiva de Codex. Al desactivarlo, también revisan otras cuentas con sesión iniciada. No afecta a las consultas manuales. |
+| `planswap.notifications.enabled` | `true` | Avisar cuando el límite de 5 horas o 7 días de la cuenta actual llegue al umbral de notificación. Una vez por límite hasta su restablecimiento; sin aviso si está agotado. |
+| `planswap.notifications.threshold` | `20` | Avisar con este porcentaje restante o menos. Requiere las notificaciones de uso activadas. Rango: 1–99. |
+| `planswap.sidebar.showEmail` | `true` | Mostrar correos en la barra lateral y la información sobre herramientas de la barra de estado. Al ocultarlos, esta muestra nombres de cuentas; nombres y alias no cambian. |
+| `planswap.sidebar.showFiveHourLimit` | `true` | Mostrar el límite de 5 horas de cada cuenta en la barra lateral. |
+| `planswap.sidebar.showWeeklyLimit` | `true` | Mostrar el límite de 7 días de cada cuenta en la barra lateral. |
+| `planswap.sidebar.showModelLimits` | `false` | Mostrar los límites por modelo de Claude debajo de sus límites generales. |
+| `planswap.sidebar.showRecommendation` | `true` | Mostrar recomendaciones y los botones de bombilla para excluir cuentas. |
+| `planswap.sidebar.recommendationThreshold` | `10` | Recomendar cuando el porcentaje restante general más bajo de la cuenta actual sea igual o inferior a este valor. Requiere las recomendaciones; es independiente de los colores. Rango: 0–100. |
+| `planswap.statusBar.enabled` | `true` | Mostrar PlanSwap en la barra de estado. |
+| `planswap.statusBar.products` | `both` | Servicios mostrados en la barra de estado. Solo afecta al texto, la información sobre herramientas y el color; las consultas automáticas continúan. |
+| `planswap.statusBar.alignment` | `right` | Colocar PlanSwap a la izquierda o a la derecha de la barra de estado. |
+| `planswap.claude.confirmSwitch` | `true` | Claude: pedir confirmación antes de cambiar de cuenta desde la barra lateral. Codex siempre pide confirmación. |
+| `planswap.claude.usageAutoRefresh` | `true` | Claude: consultar automáticamente el uso cuando esta ventana tenga el foco. Las cuentas dependen de `planswap.usageAutoRefreshCurrentOnly`. Las consultas manuales siguen disponibles. |
+| `planswap.claude.usageRefreshMinutes` | `15` | Claude: minutos hasta que el uso almacenado o la última consulta puedan actualizarse automáticamente. Requiere consultas automáticas; no es un horario exacto. Rango: 10–1440. |
+| `planswap.codex.usageAutoRefresh` | `true` | Codex: consultar automáticamente el uso cuando esta ventana tenga el foco. Las cuentas dependen de `planswap.usageAutoRefreshCurrentOnly`. Se omiten cuentas con API key; las consultas manuales siguen disponibles. |
+| `planswap.codex.usageRefreshMinutes` | `15` | Codex: minutos hasta que el uso almacenado o la última consulta puedan actualizarse automáticamente. Requiere consultas automáticas; no es un horario exacto. Rango: 5–1440. |
+| `planswap.usageCheckIntervalSeconds` | `120` | Segundos entre revisiones de las cuentas pendientes de consulta automática. La antigüedad para actualizar cada cuenta se configura en Cuentas. Rango: 30–600. |
+| `planswap.claude.usageTimeoutSeconds` | `30` | Claude: segundos antes de que una consulta de uso agote el tiempo. Se aplica a consultas automáticas y manuales. Rango: 10–120. |
+| `planswap.codex.usageTimeoutSeconds` | `15` | Codex: segundos antes de que una consulta de uso agote el tiempo. Se aplica a consultas automáticas y manuales. Rango: 5–120. |
 
-Con las consultas automáticas desactivadas, los iconos y comandos de actualizar siguen funcionando. El ajuste de correo también controla la información sobre herramientas de la barra de estado; los ajustes laterales de límites y recomendaciones no cambian la barra de estado. Los títulos de la paleta de comandos y el nombre de la barra lateral siguen el idioma de visualización del editor, no `planswap.language`.
+Con las consultas automáticas desactivadas, los iconos y comandos de actualizar siguen funcionando. El ajuste de correo también controla la información sobre herramientas de la barra de estado. Los colores usan los umbrales compartidos de General; las recomendaciones y la visibilidad de límites laterales no afectan a la barra de estado. Los títulos de la paleta de comandos y el nombre de la barra lateral siguen el idioma de visualización del editor, no `planswap.language`.
 
 ## Solucionar problemas comunes
 

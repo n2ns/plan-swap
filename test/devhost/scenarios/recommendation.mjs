@@ -3,7 +3,10 @@
 import * as sb from '../sidebar.mjs';
 
 export async function run(ctx) {
-  const { dirs, step, writeSettings, readSettings, notifications, sleep } = ctx;
+  const { dirs, step, readSettings, notifications, sleep } = ctx;
+  // This ranking fixture has 20% remaining; explicitly enable its card above the independent 10% default.
+  const writeSettings = (extra = {}) => ctx.writeSettings({ 'planswap.sidebar.recommendationThreshold': 30, ...extra });
+  writeSettings();
   const short = (rows) => rows.map((r) => `${sb.basename(r.dir)} ${r.usage.join(',')} ${r.toggle ? r.toggle.icon : '-'}`);
 
   // Claude: the default account is low, Work is recommended, Personal (weekly used up) never
@@ -30,9 +33,9 @@ export async function run(ctx) {
   await step('including again restores Work and clears the state entry', d.card?.title === 'Recommended: work' && sb.readState(ctx)['claude.recommendExcluded'] === undefined, { card: d.card?.title, state: sb.readState(ctx)['claude.recommendExcluded'] });
 
   // Settings
-  writeSettings({ 'planswap.sidebar.warningThreshold': 10 });
+  writeSettings({ 'planswap.sidebar.recommendationThreshold': 10 });
   d = await sb.waitFor(ctx, (x) => !x.card);
-  await step('warningThreshold 10 (current has 20% left): no card, no warning bar', !d.card && d.rows.every((r) => !r.usage.some((u) => u.endsWith(' warn'))), d.card);
+  await step('recommendationThreshold 10: no card at 20% left, warning colors unchanged', !d.card && d.rows[0].usage.some((u) => u.endsWith(' warn')), d.card);
   writeSettings({ 'planswap.sidebar.showRecommendation': false });
   d = await sb.waitFor(ctx, (x) => x.rows.every((r) => !r.toggle));
   await step('showRecommendation off: no card, no toggles', !d.card && d.rows.every((r) => !r.toggle));
