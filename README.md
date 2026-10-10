@@ -25,6 +25,7 @@ See how much is left on each Claude Code and Codex subscription account you own 
 
 - **Usage limits on every card**: what is left (or used) of each limit and when it resets, checked automatically or on demand.
 - **Status bar summary**: `Claude 97% · Codex 82%`, turning yellow or red when a limit runs low.
+- **Low-limit notifications**: a notice when the current account's 5-hour or 7-day limit has 20% or less left; the threshold is adjustable.
 
 ### Know when to switch
 
@@ -37,7 +38,7 @@ See how much is left on each Claude Code and Codex subscription account you own 
 - **One sidebar, two tabs**: Claude and Codex accounts side by side, each with its email and plan.
 - **Stay signed in everywhere**: sign in once per account, then switch with one click.
 - **Linked or independent accounts**: share the default account's setup and history, or keep them separate.
-- **Tools**: open your rules file and the official extension's settings, update the CLI, re-link accounts.
+- **Tools**: open your rules file and the official extension's settings, update the CLI, check linked accounts and repair their links.
 - **Five languages**: English, Simplified Chinese, Traditional Chinese, Spanish and Japanese.
 
 Every setting is listed in the [user guide](docs/user-guide.md#change-language-and-display-settings).
@@ -77,7 +78,7 @@ Open **PlanSwap** in the activity bar. The `default` row is your existing accoun
 
 **Claude**
 
-1. Click **+ Add**, type a name and press Enter. Keep **Link to the default account's settings and history** checked to reuse your setup.
+1. Click **+ Add**, type a name and press Enter. Keep **Linked to the default account (recommended)** selected to reuse your setup, or choose **Independent** to keep it separate.
 2. Click the row's **Log in** button and sign in in the terminal.
 3. Click the **Switch to this account** arrow icon and confirm.
 
@@ -97,7 +98,7 @@ Signing in to a new account never signs out the others. The [user guide](docs/us
 | History and sessions | The default account's | Its own |
 | Sign-in | Its own | Its own |
 
-You can change an account's mode later, and **Re-link** in Tools brings linked accounts up to date after you change the default setup ([user guide](docs/user-guide.md#change-an-existing-account-mode)).
+You can change an account's mode later, and **Re-link** in Tools checks linked accounts after you change the default setup and offers **Repair** for what it finds. PlanSwap also runs this check in the background and notifies you when something can be repaired ([user guide](docs/user-guide.md#change-an-existing-account-mode)).
 
 ## Known limitations
 
@@ -106,7 +107,7 @@ You can change an account's mode later, and **Re-link** in Tools brings linked a
 - **Continuing another account's session can fail**, especially between Codex accounts in different ChatGPT organizations.
 - **Some sign-ins apply to every account**, such as an `ANTHROPIC_API_KEY` in the environment; PlanSwap warns you ([details](docs/user-guide.md#sign-ins-that-apply-to-every-account)).
 - **On Windows**, linking single files needs Developer Mode, and Codex thread databases stay per account ([details](docs/user-guide.md#linking-on-windows)).
-- **Not yet verified everywhere**: switching has been tested end to end only in Antigravity IDE in WSL, and usage limits only with a default Claude account.
+- **Not yet verified everywhere**: switching and usage limits have been tested end to end with real accounts only in Antigravity IDE in WSL and on native Windows.
 
 ## Privacy
 

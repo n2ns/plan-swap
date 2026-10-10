@@ -13,25 +13,14 @@ is still missing. Remove an item once it is done or decided.
 - **Codex `plugins/cache` real-client acceptance.** The shared marketplace layout passed isolated filesystem installation, upgrade, manifest-read and MCP-path checks; the remote marketplace cache stays per account. Still verify actual plugin installation and loading in a shared account. [Evidence boundaries](docs/research/codex.md#sharing-recheck-2026-10-10).
 - **Codex memories stay per account (watch on upgrades).** This includes `memories_v2/` and `memories_v2_1.sqlite`. The current source still refuses a symlinked memory root and offers no custom root setting. Revisit if that changes; see [the sharing recheck](docs/research/codex.md#sharing-recheck-2026-10-10).
 - **Codex `sqlite_home` real-client acceptance.** A common SQLite path shares memory job state despite separate output directories; upstream SQL isolation reproduced cross-account running/cooldown suppression. Preserve that protection. Official-client memory behavior remains unverified; [the sharing recheck](docs/research/codex.md#sharing-recheck-2026-10-10) distinguishes source, SQL and PlanSwap evidence.
-- **Codex usage limits** (per-account observations and the status bar) are not yet accepted with real accounts, on WSL or
-  Windows (`codex.cmd` fallback, the binary bundled with the Codex extension when `codex` is not on PATH), including switches, editor restarts, reset/24-hour expiry and sign-in changes. Run
-  [the usage checks](docs/manual-verification.md#usage-limits-sign-in-tip-and-duplicate-sign-ins); re-verify the
+- **Codex usage limits (watch on upgrades).** Accepted with real accounts on WSL and native Windows; re-verify the
   `codex app-server` facts ([Codex research](docs/research/codex.md#facts)) after CLI upgrades.
 - **Status bar text, warning background and tooltip** are covered by unit tests only; a headless preview cannot render
   the status bar. Look at them in a real editor in light, dark and high-contrast themes and in every UI language
   ([Claude usage checks](docs/manual-verification.md#claude-usage-limits), step 8).
-- **Claude usage limits** ([Claude design 6.9](docs/design.md#69-claude-usage-limits)) still need real-editor acceptance;
-  module-level checks passed for Windows default and WSL default/named accounts ([verification scope](docs/research/claude-usage.md#implementation-verification)).
-  Run [the Claude usage checks](docs/manual-verification.md#claude-usage-limits). Not covered
-  by a step there: API-key sign-ins, a non-English locale and time zone (expired sign-ins: step 9, "Failing account"). The endpoint's own rate limits stay
-  unobserved ([research](docs/research/claude-usage.md#rate-limiting)).
-
-## Windows verification
-
-- **Native Windows is implemented but not yet accepted on a real machine.** Run
-  [the Windows checklist](docs/manual-verification.md#native-windows-user-operated). Settled facts and open questions:
-  [Windows support](docs/design.md#windows-support), [Codex 9a](docs/codex-design.md#9a-native-windows). Also still
-  open: rc/state behavior of the `.vsix` under a real Windows editor.
+- **Claude usage limits** ([Claude design 6.9](docs/design.md#69-claude-usage-limits)) are accepted with real default and
+  named accounts. Not covered yet: API-key sign-ins and a non-English locale and time zone. The endpoint's own rate
+  limits stay unobserved ([research](docs/research/claude-usage.md#rate-limiting)).
 
 ## UI polish
 
