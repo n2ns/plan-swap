@@ -310,6 +310,7 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
       codex: this.tabState('codex'),
       usageDisplay: usageDisplay() === 'used' ? 'used' : undefined,
       usageThresholds: usageThresholds(),
+      shortFormat: vscode.workspace.getConfiguration('planswap').get<boolean>('sidebar.shortFormat', false) || undefined,
     };
     console.debug(`[planswap] state read: ${(performance.now() - startedAt).toFixed(1)}ms; claude=${state.claude.accounts.length}, codex=${state.codex.accounts.length}`);
     this.post({ type: 'state', state });

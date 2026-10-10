@@ -675,3 +675,15 @@ body {
 .version-label { color: var(--muted); font-size: max(11px, 0.78em); letter-spacing: 0.04em; }
 .version-value { color: var(--ink); font-size: 0.95em; font-family: var(--vscode-editor-font-family); min-width: 0; overflow-wrap: anywhere; white-space: normal; }
 .tools .icon-btn:hover { color: var(--ink); }
+
+/* Keep the compact recommendation's full localized meaning in the accessibility tree. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

@@ -51,6 +51,7 @@
   "config.notificationsEnabled.description": "Notify when the current account’s 5-hour or 7-day quota reaches the notification threshold. Once per limit until reset; no notice for an exhausted limit.",
   "config.notificationsThreshold.description": "Notify at or below this remaining percentage. Requires usage notifications to be enabled.",
   "config.sidebarModelLimits.description": "Show Claude’s model-specific limits below its general limits.",
+  "config.sidebarShortFormat.description": "Use short sidebar limit labels and reset times such as 5d 12h. Full localized explanations remain in tooltips and accessibility text.",
   "config.sidebarEmail.description": "Show emails in the sidebar and status bar tooltip. When hidden, the tooltip uses account labels; names and aliases are unchanged.",
   "config.sidebarFiveHour.description": "Show each account’s 5-hour limit in the sidebar.",
   "config.sidebarWeekly.description": "Show each account’s 7-day limit in the sidebar.",

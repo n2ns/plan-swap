@@ -12,10 +12,10 @@ interface ConfigurationGroup {
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
 const groups = manifest.contributes.configuration as ConfigurationGroup[];
 
-test('five ordered groups contain exactly the 24 unique settings in their intended sections', () => {
+test('five ordered groups contain exactly the 25 unique settings in their intended sections', () => {
   const expected = [
     ['planswap', ['language', 'usageDisplay', 'usageWarningThreshold', 'usageErrorThreshold', 'usageAutoRefreshCurrentOnly', 'notifications.enabled', 'notifications.threshold']],
-    ['planswap.sidebar', ['sidebar.showEmail', 'sidebar.showFiveHourLimit', 'sidebar.showWeeklyLimit', 'sidebar.showModelLimits', 'sidebar.showRecommendation', 'sidebar.recommendationThreshold']],
+    ['planswap.sidebar', ['sidebar.shortFormat', 'sidebar.showEmail', 'sidebar.showFiveHourLimit', 'sidebar.showWeeklyLimit', 'sidebar.showModelLimits', 'sidebar.showRecommendation', 'sidebar.recommendationThreshold']],
     ['planswap.statusBar', ['statusBar.enabled', 'statusBar.products', 'statusBar.alignment']],
     ['planswap.accounts', ['claude.confirmSwitch', 'claude.usageAutoRefresh', 'claude.usageRefreshMinutes', 'codex.usageAutoRefresh', 'codex.usageRefreshMinutes']],
     ['planswap.advanced', ['usageCheckIntervalSeconds', 'claude.usageTimeoutSeconds', 'codex.usageTimeoutSeconds']],
@@ -28,9 +28,9 @@ test('five ordered groups contain exactly the 24 unique settings in their intend
     assert.deepEqual(Object.values(group.properties).map((setting) => setting.order), keys.map((_, i) => i), id);
   }
   const keys = groups.flatMap((group) => Object.keys(group.properties));
-  assert.equal(keys.length, 24);
-  assert.equal(new Set(keys).size, 24);
-  assert.deepEqual(groups.map((group) => Object.keys(group.properties).length), [7, 6, 3, 5, 3]);
+  assert.equal(keys.length, 25);
+  assert.equal(new Set(keys).size, 25);
+  assert.deepEqual(groups.map((group) => Object.keys(group.properties).length), [7, 7, 3, 5, 3]);
 });
 
 test('shared colors use 30 / 10 and independent recommendation and notification defaults stay 10 / 20', () => {
@@ -72,4 +72,10 @@ test('Advanced contains only the scheduler period and query timeouts with their 
     assert.deepEqual({ type: setting.type, scope: setting.scope, default: setting.default, minimum: setting.minimum, maximum: setting.maximum },
       { type: 'number', scope: 'application', ...expected }, `${key} retains its contract`);
   }
+});
+
+test('sidebar short format is an application setting disabled by default', () => {
+  const setting = groups.find((group) => group.id === 'planswap.sidebar')!.properties['planswap.sidebar.shortFormat'];
+  assert.deepEqual({ type: setting.type, default: setting.default, scope: setting.scope },
+    { type: 'boolean', default: false, scope: 'application' });
 });

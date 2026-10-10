@@ -51,6 +51,7 @@
   "config.notificationsEnabled.description": "現在のアカウントの 5 時間か 7 日間の上限が通知のしきい値に達したら通知します。リセットまで各上限につき一度だけ通知し、使い切った上限は通知しません。",
   "config.notificationsThreshold.description": "残りの割合がこの値以下になると通知します。使用量の通知をオンにする必要があります。",
   "config.sidebarModelLimits.description": "Claude の一般的な上限の下にモデル別の上限を表示します。",
+  "config.sidebarShortFormat.description": "サイドバーの上限ラベルとリセットまでの時間を短く表示します（例：5d 12h）。ツールチップとアクセシビリティテキストは現在の言語で詳しく表示します。",
   "config.sidebarEmail.description": "サイドバーとステータスバーのツールチップにメールを表示します。非表示の場合、ツールチップはアカウント名を表示します。名前と別名は変わりません。",
   "config.sidebarFiveHour.description": "サイドバーに各アカウントの 5 時間の上限を表示します。",
   "config.sidebarWeekly.description": "サイドバーに各アカウントの 7 日間の上限を表示します。",

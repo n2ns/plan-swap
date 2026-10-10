@@ -253,6 +253,7 @@ Accounts keeps the Claude settings together, followed by Codex.
 | `planswap.usageAutoRefreshCurrentOnly` | `false` | Automatic checks query only the current Claude and effective Codex accounts. When off, other signed-in accounts are checked too. Manual refresh is unchanged. |
 | `planswap.notifications.enabled` | `true` | Notify when the current account’s 5-hour or 7-day quota reaches the notification threshold. Once per limit until reset; no notice for an exhausted limit. |
 | `planswap.notifications.threshold` | `20` | Notify at or below this remaining percentage. Requires usage notifications to be enabled. Range: 1–99. |
+| `planswap.sidebar.shortFormat` | `false` | Use short sidebar limit labels and reset times such as 5d 12h. Full localized explanations remain in tooltips and accessibility text. |
 | `planswap.sidebar.showEmail` | `true` | Show emails in the sidebar and status bar tooltip. When hidden, the tooltip uses account labels; names and aliases are unchanged. |
 | `planswap.sidebar.showFiveHourLimit` | `true` | Show each account’s 5-hour limit in the sidebar. |
 | `planswap.sidebar.showWeeklyLimit` | `true` | Show each account’s 7-day limit in the sidebar. |

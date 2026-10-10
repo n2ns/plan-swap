@@ -175,6 +175,25 @@ test('no recommendation while a Codex selection waits for the restart', () => {
   } finally { h.panel.dispose(); resetConfig(); }
 });
 
+test('sidebar short format defaults off and follows the current setting in shared panel state', () => {
+  resetConfig();
+  const h = harness();
+  const state = () => {
+    h.messages.length = 0;
+    h.receive({ type: 'ready' });
+    const msg = h.messages[0];
+    assert.ok(msg.type === 'state');
+    return msg.state;
+  };
+  try {
+    assert.equal(state().shortFormat, undefined);
+    setConfig('planswap', 'sidebar.shortFormat', true);
+    assert.equal(state().shortFormat, true);
+    setConfig('planswap', 'sidebar.shortFormat', false);
+    assert.equal(state().shortFormat, undefined);
+  } finally { h.panel.dispose(); resetConfig(); }
+});
+
 test('the shared color thresholds default to 30 / 10 and are clamped to 0..100', () => {
   resetConfig();
   try {

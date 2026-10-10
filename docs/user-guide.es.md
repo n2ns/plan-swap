@@ -253,6 +253,7 @@ En Cuentas, los ajustes de Claude aparecen juntos, seguidos por los de Codex.
 | `planswap.usageAutoRefreshCurrentOnly` | `false` | Las consultas automáticas solo revisan la cuenta actual de Claude y la efectiva de Codex. Al desactivarlo, también revisan otras cuentas con sesión iniciada. No afecta a las consultas manuales. |
 | `planswap.notifications.enabled` | `true` | Avisar cuando el límite de 5 horas o 7 días de la cuenta actual llegue al umbral de notificación. Una vez por límite hasta su restablecimiento; sin aviso si está agotado. |
 | `planswap.notifications.threshold` | `20` | Avisar con este porcentaje restante o menos. Requiere las notificaciones de uso activadas. Rango: 1–99. |
+| `planswap.sidebar.shortFormat` | `false` | Usar etiquetas cortas de límites y tiempos de reinicio como 5d 12h en la barra lateral. La información sobre herramientas y el texto de accesibilidad conservan las explicaciones completas en el idioma actual. |
 | `planswap.sidebar.showEmail` | `true` | Mostrar correos en la barra lateral y la información sobre herramientas de la barra de estado. Al ocultarlos, esta muestra nombres de cuentas; nombres y alias no cambian. |
 | `planswap.sidebar.showFiveHourLimit` | `true` | Mostrar el límite de 5 horas de cada cuenta en la barra lateral. |
 | `planswap.sidebar.showWeeklyLimit` | `true` | Mostrar el límite de 7 días de cada cuenta en la barra lateral. |

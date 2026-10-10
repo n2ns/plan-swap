@@ -17,6 +17,8 @@
 
 ### Added
 
+- Add an optional short sidebar format with localized limit labels and uniform `d` / `h` / `m` reset countdowns; full localized explanations remain in tooltips and accessibility text.
+
 - Use `planswap.usageWarningThreshold` (30%) and `planswap.usageErrorThreshold` (10%) for both sidebar and status bar colors. Former per-surface color keys are no longer used; settings are not migrated or rewritten.
 - Group the usage check period and Claude/Codex query timeouts under Advanced in Settings, keeping their existing keys and behavior.
 - Set when another account is recommended independently of usage colors with `planswap.sidebar.recommendationThreshold` (default 10% remaining, inclusive). It reads only its own setting, independently of colors.

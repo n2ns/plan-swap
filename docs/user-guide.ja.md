@@ -253,6 +253,7 @@ PlanSwap がホームディレクトリで見つけた、有効な名前を持�
 | `planswap.usageAutoRefreshCurrentOnly` | `false` | 自動確認は現在の Claude と現在有効な Codex のアカウントだけを対象にします。オフの場合は他のサインイン済みアカウントも確認します。手動更新には影響しません。 |
 | `planswap.notifications.enabled` | `true` | 現在のアカウントの 5 時間か 7 日間の上限が通知のしきい値に達したら通知します。リセットまで各上限につき一度だけ通知し、使い切った上限は通知しません。 |
 | `planswap.notifications.threshold` | `20` | 残りの割合がこの値以下になると通知します。使用量の通知をオンにする必要があります。範囲：1–99。 |
+| `planswap.sidebar.shortFormat` | `false` | サイドバーの上限ラベルとリセットまでの時間を短く表示します（例：5d 12h）。ツールチップとアクセシビリティテキストは現在の言語で詳しく表示します。 |
 | `planswap.sidebar.showEmail` | `true` | サイドバーとステータスバーのツールチップにメールを表示します。非表示の場合、ツールチップはアカウント名を表示します。名前と別名は変わりません。 |
 | `planswap.sidebar.showFiveHourLimit` | `true` | サイドバーに各アカウントの 5 時間の上限を表示します。 |
 | `planswap.sidebar.showWeeklyLimit` | `true` | サイドバーに各アカウントの 7 日間の上限を表示します。 |

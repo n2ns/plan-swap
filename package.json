@@ -286,40 +286,47 @@
         "title": "%config.group.sidebar%",
         "order": 1,
         "properties": {
+          "planswap.sidebar.shortFormat": {
+            "type": "boolean",
+            "default": false,
+            "scope": "application",
+            "description": "%config.sidebarShortFormat.description%",
+            "order": 0
+          },
           "planswap.sidebar.showEmail": {
             "type": "boolean",
             "default": true,
             "scope": "application",
             "description": "%config.sidebarEmail.description%",
-            "order": 0
+            "order": 1
           },
           "planswap.sidebar.showFiveHourLimit": {
             "type": "boolean",
             "default": true,
             "scope": "application",
             "description": "%config.sidebarFiveHour.description%",
-            "order": 1
+            "order": 2
           },
           "planswap.sidebar.showWeeklyLimit": {
             "type": "boolean",
             "default": true,
             "scope": "application",
             "description": "%config.sidebarWeekly.description%",
-            "order": 2
+            "order": 3
           },
           "planswap.sidebar.showModelLimits": {
             "type": "boolean",
             "default": false,
             "scope": "application",
             "description": "%config.sidebarModelLimits.description%",
-            "order": 3
+            "order": 4
           },
           "planswap.sidebar.showRecommendation": {
             "type": "boolean",
             "default": true,
             "scope": "application",
             "description": "%config.sidebarRecommendation.description%",
-            "order": 4
+            "order": 5
           },
           "planswap.sidebar.recommendationThreshold": {
             "type": "number",
@@ -328,7 +335,7 @@
             "maximum": 100,
             "scope": "application",
             "description": "%config.sidebarRecommendationThreshold.description%",
-            "order": 5
+            "order": 6
           }
         }
       },

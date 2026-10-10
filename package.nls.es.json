@@ -51,6 +51,7 @@
   "config.notificationsEnabled.description": "Avisar cuando el límite de 5 horas o 7 días de la cuenta actual llegue al umbral de notificación. Una vez por límite hasta su restablecimiento; sin aviso si está agotado.",
   "config.notificationsThreshold.description": "Avisar con este porcentaje restante o menos. Requiere las notificaciones de uso activadas.",
   "config.sidebarModelLimits.description": "Mostrar los límites por modelo de Claude debajo de sus límites generales.",
+  "config.sidebarShortFormat.description": "Usar etiquetas cortas de límites y tiempos de reinicio como 5d 12h en la barra lateral. La información sobre herramientas y el texto de accesibilidad conservan las explicaciones completas en el idioma actual.",
   "config.sidebarEmail.description": "Mostrar correos en la barra lateral y la información sobre herramientas de la barra de estado. Al ocultarlos, esta muestra nombres de cuentas; nombres y alias no cambian.",
   "config.sidebarFiveHour.description": "Mostrar el límite de 5 horas de cada cuenta en la barra lateral.",
   "config.sidebarWeekly.description": "Mostrar el límite de 7 días de cada cuenta en la barra lateral.",

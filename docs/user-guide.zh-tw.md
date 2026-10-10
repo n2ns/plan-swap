@@ -253,6 +253,7 @@ PlanSwap 啟動或重新整理時，會把在你的主目錄中找到、名稱�
 | `planswap.usageAutoRefreshCurrentOnly` | `false` | 自動查詢只查目前 Claude 和目前生效的 Codex 帳號。關閉時也查詢其他已登入帳號。手動重新整理不受影響。 |
 | `planswap.notifications.enabled` | `true` | 目前帳號的 5 小時或 7 天額度達到通知門檻時提醒。每項額度重設前只提醒一次；用完後不提醒。 |
 | `planswap.notifications.threshold` | `20` | 剩餘百分比小於或等於此值時提醒。需開啟用量通知。範圍：1–99。 |
+| `planswap.sidebar.shortFormat` | `false` | 在側邊欄使用簡短額度標籤和重設倒數，如 5d 12h。工具提示和無障礙文字保留完整中文說明。 |
 | `planswap.sidebar.showEmail` | `true` | 在側邊欄和狀態列工具提示中顯示電子郵件。隱藏時，工具提示顯示帳號名稱；名稱和別名不變。 |
 | `planswap.sidebar.showFiveHourLimit` | `true` | 在側邊欄顯示各帳號的 5 小時額度。 |
 | `planswap.sidebar.showWeeklyLimit` | `true` | 在側邊欄顯示各帳號的 7 天額度。 |

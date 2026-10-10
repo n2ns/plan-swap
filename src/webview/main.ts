@@ -208,11 +208,16 @@ const remainingPercent = (w: UsageWindowView): number => Number((100 - w.usedPer
 type DurationFormatConstructor = new (locale: string, options: { style: string }) => { format(duration: Record<string, number>): string };
 
 // Time until a reset as a short duration in the panel language with the two largest units, a zero unit left out
-// ("2d 5h" / "2天5小时", "5h 20m", "45m"), rounded up to the minute; a copy of relativeReset in src/statusBar.ts
-function relativeTime(epochSeconds: number): string {
+// ("2d 5h" / "2天5小时", "5h 20m", "45m"), rounded up to the minute; the same rules as relativeReset in src/statusBar.ts.
+// Compact display fixes the units and spacing; full tooltip and accessibility callers keep the locale default.
+function relativeTime(epochSeconds: number, compact = false): string {
   const total = Math.max(1, Math.ceil((epochSeconds * 1000 - Date.now()) / 60000));
   const days = Math.floor(total / 1440), hours = Math.floor((total % 1440) / 60), minutes = total % 60;
   const parts = Object.entries(days ? { days, hours } : hours ? { hours, minutes } : { minutes }).filter(([, n]) => n > 0);
+  if (compact) {
+    const units: Record<string, string> = { days: 'd', hours: 'h', minutes: 'm' };
+    return parts.map(([unit, n]) => `${n}${units[unit]}`).join(' ');
+  }
   const locale = intlLocale();
   const { durationStyle, durationUnitSeparator } = WEB_LOCALE_INFO[getLocale()];
   // Japanese narrow units are Latin letters ("2d5h") and Traditional Chinese narrow spacing is uneven ("2 天5 小時"); the short style gives "2 日 5 時間" / "2 天 5 小時"
@@ -246,7 +251,11 @@ function refreshLiveTimes(): void {
     const checkedAt = Number(el.dataset.checkedAt);
     if (Number.isFinite(checkedAt)) el.textContent = updatedAgo(checkedAt);
   }
-  for (const el of document.querySelectorAll<HTMLElement>('.usage-reset-time[data-resets-at]')) el.textContent = relativeTime(Number(el.dataset.resetsAt));
+  for (const el of document.querySelectorAll<HTMLElement>('.usage-reset-time[data-resets-at]')) {
+    const resetsAt = Number(el.dataset.resetsAt);
+    el.textContent = relativeTime(resetsAt, state.shortFormat);
+    if (state.shortFormat) el.parentElement!.title = resetSentence(resetsAt, el.dataset.resetDate ?? '');
+  }
   for (const el of document.querySelectorAll<HTMLElement>('.usage-track[data-resets-at]')) {
     el.setAttribute('aria-valuetext', `${el.dataset.valuetextPrefix ?? ''}${resetSentence(Number(el.dataset.resetsAt), el.dataset.resetDate ?? '')}`);
   }
@@ -260,12 +269,12 @@ function updatedAgo(checkedAtMs: number): string {
 }
 
 // Window duration text: "5-hour limit", "7-day limit", with the model name for Claude's model-specific limits
-function windowDuration(w: UsageWindowView): string {
+function windowDuration(w: UsageWindowView, compact = false): string {
   const minutes = w.windowMinutes;
   const limit = minutes === undefined ? t('usage.window')
-    : minutes % 1440 === 0 ? t('usage.days', { n: minutes / 1440 })
-      : minutes % 60 === 0 ? t('usage.hours', { n: minutes / 60 })
-        : t('usage.minutes', { n: minutes });
+    : minutes % 1440 === 0 ? t(compact ? 'usage.shortDays' : 'usage.days', { n: minutes / 1440 })
+      : minutes % 60 === 0 ? t(compact ? 'usage.shortHours' : 'usage.hours', { n: minutes / 60 })
+        : t(compact ? 'usage.shortMinutes' : 'usage.minutes', { n: minutes });
   // Claude model-specific limits carry the model name (account-independent text, rendered via textContent)
   return w.scope ? t('usage.scoped', { limit, scope: w.scope }) : limit;
 }
@@ -280,18 +289,18 @@ function usageWindow(w: UsageWindowView, display: UsageDisplay): HTMLElement {
   const level = usageLevel(100 - w.usedPercent);
   const exhausted = level === 'empty';
   // Two lines per window: the duration with the time until the reset (clock icon + short duration) at the right, then
-  // the bar with the shown percentage at its right. Only the bar has a tooltip, saying whether its length is what is
-  // left or what is used; the full reset sentence and date are part of the bar's screen reader value
+  // the bar with the shown percentage at its right. The bar tooltip identifies remaining vs. used; the full reset
+  // sentence and date are part of its screen reader value. Compact labels and times also have full localized tooltips.
   const resetDate = w.resetsAt !== undefined ? new Date(w.resetsAt * 1000).toLocaleString(intlLocale(), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }) : undefined;
   const resetText = w.resetsAt !== undefined && resetSentence(w.resetsAt, resetDate!);
   const resetsAt = w.resetsAt !== undefined ? String(w.resetsAt) : undefined;
   if (resetsAt) keepLive();
-  const reset = resetText && h('span', { class: 'usage-reset', 'aria-hidden': 'true' },
-    h('vscode-icon', { name: 'clock', size: '12' }), h('span', { class: 'usage-reset-time', 'data-resets-at': resetsAt }, relativeTime(w.resetsAt!)));
+  const reset = resetText && h('span', { class: 'usage-reset', 'aria-hidden': 'true', title: state.shortFormat ? resetText : undefined },
+    h('vscode-icon', { name: 'clock', size: '12' }), h('span', { class: 'usage-reset-time', 'data-resets-at': resetsAt, 'data-reset-date': resetDate }, relativeTime(w.resetsAt!, state.shortFormat)));
   // The static part of the screen reader value, kept so the reset sentence can be refreshed in place
   const valuetextPrefix = [label, exhausted && t('usage.exhausted')].filter(Boolean).map((p) => `${p}, `).join('');
   return h('div', { class: 'usage-window', 'data-level': level },
-    h('div', { class: 'usage-labels' }, h('span', { class: 'usage-duration' }, duration), reset),
+    h('div', { class: 'usage-labels' }, h('span', { class: 'usage-duration', title: state.shortFormat ? duration : undefined, 'aria-hidden': state.shortFormat ? 'true' : undefined }, windowDuration(w, state.shortFormat)), reset),
     h('div', { class: 'usage-bar' },
       h('div', {
         class: 'usage-track', 'data-level': level, role: 'progressbar', 'aria-label': duration,
@@ -720,7 +729,12 @@ class Page {
     const windows = (a.usage?.windows ?? []).filter((w) => !w.scope).map((w) => {
       const remaining = remainingPercent(w);
       const percent = display === 'used' ? Number((100 - remaining).toFixed(2)) : remaining;
-      return `${windowDuration(w)} ${t(display === 'used' ? 'usage.used' : 'usage.remaining', { percent })}`;
+      const full = `${windowDuration(w)} ${t(display === 'used' ? 'usage.used' : 'usage.remaining', { percent })}`;
+      return state.shortFormat
+        ? h('span', { title: full },
+          h('span', { 'aria-hidden': 'true' }, `${windowDuration(w, true)} ${percent}%`),
+          h('span', { class: 'sr-only' }, full))
+        : full;
     });
     const actions = h('div', { class: 'banner-actions' });
     // Each button carries a tooltip saying what it does with the recommended account (switch vs. a terminal without switching)
@@ -952,7 +966,7 @@ class Page {
   private renderedKey?: string;
 
   private renderKey(): string {
-    return `${receivedState}|${getLocale()}|${JSON.stringify([this.tab, codexRestart(), state.usageDisplay, state.usageThresholds])}`;
+    return `${receivedState}|${getLocale()}|${JSON.stringify([this.tab, codexRestart(), state.usageDisplay, state.usageThresholds, state.shortFormat])}`;
   }
 
   renderIfChanged(): void {

@@ -51,6 +51,7 @@
   "config.notificationsEnabled.description": "目前帳號的 5 小時或 7 天額度達到通知門檻時提醒。每項額度重設前只提醒一次；用完後不提醒。",
   "config.notificationsThreshold.description": "剩餘百分比小於或等於此值時提醒。需開啟用量通知。",
   "config.sidebarModelLimits.description": "在 Claude 一般額度下方顯示各模型的額度。",
+  "config.sidebarShortFormat.description": "在側邊欄使用簡短額度標籤和重設倒數，如 5d 12h。工具提示和無障礙文字保留完整中文說明。",
   "config.sidebarEmail.description": "在側邊欄和狀態列工具提示中顯示電子郵件。隱藏時，工具提示顯示帳號名稱；名稱和別名不變。",
   "config.sidebarFiveHour.description": "在側邊欄顯示各帳號的 5 小時額度。",
   "config.sidebarWeekly.description": "在側邊欄顯示各帳號的 7 天額度。",
