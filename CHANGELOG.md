@@ -1,30 +1,30 @@
 # Changelog
 
-## [Unreleased]
+## [0.3.7] - 2026-10-10
 
 ### Fixed
 
-- Simplify setting descriptions and group all settings into General, Sidebar, Status Bar, Accounts and Advanced.
-- Compare unrounded usage observations for colors, window selection and account recommendations; only displayed percentages are rounded.
-- Hide Claude and Codex account emails in the status bar tooltip as well as the sidebar when `planswap.sidebar.showEmail` is off; changing it updates the tooltip immediately, while account names and aliases stay unchanged.
-- Clarify automatic usage checks and the display effects of email and status bar product settings.
 - Refuse Claude account info targets that alias credentials or default-account data before reading or syncing them, while keeping safe external info-file links supported.
 - Recheck account selection and busy state after the Windows file-link fallback dialog, before converting an account to linked mode.
 - Avoid duplicate Claude usage queries when switching to an account whose automatic check is already queued; manual refreshes keep their usual behavior.
-- Wait for the Codex usage process to exit before starting the next queued query, and report failed cleanup without starting another process alongside it.
+- Wait for the Codex usage process to exit before starting the next queued query, and report failed cleanup without starting another process alongside it. Do not signal a child that has already exited while its exit event is still pending.
+- Compare unrounded usage observations for colors, window selection and account recommendations; only displayed percentages are rounded.
+- Hide Claude and Codex account emails in the status bar tooltip as well as the sidebar when `planswap.sidebar.showEmail` is off; changing it updates the tooltip immediately, while account names and aliases stay unchanged.
 - Hide the recommendation exclusion toggle when the Claude or Codex page has only one account.
 - Keep the account-switch notice and recommendation card mutually exclusive, including while Claude waits for a reload.
 
 ### Added
 
-- Add an optional short sidebar format with localized limit labels and uniform `d` / `h` / `m` reset countdowns; full localized explanations remain in tooltips and accessibility text.
+- Use `planswap.sidebar.shortFormat` (default off) for short localized limit labels, bare recommendation percentages and uniform `d` / `h` / `m` reset countdowns. Full localized tooltips and accessibility text respect remaining/used display, and account and model names stay unchanged.
+- **Re-link** now checks linked accounts without changing anything and lists each account's missing or outdated links, replaced history files, missing MCP servers or project trust, and busy state. **Repair** fixes what can be fixed; links pointing elsewhere and the account's own files are left alone. The same check runs in the background at editor startup and when returning to its window, notifying only about repairable problems once per set of problems across windows (again after a day); it never repairs automatically.
+- Notify once per limit until it resets when the current Claude or Codex account's 5-hour or 7-day limit has 20% or less left, with **Open PlanSwap**. Use `planswap.notifications.enabled` to disable notifications or `planswap.notifications.threshold` to change the percentage. Used-up limits do not notify, since Claude Code and Codex already report them.
 
+### Changed
+
+- Organize all 25 settings into General, Sidebar, Status Bar, Accounts and Advanced, with shorter descriptions in all five languages. Advanced contains the usage check period and Claude/Codex query timeouts, keeping their existing keys and behavior.
 - Use `planswap.usageWarningThreshold` (30%) and `planswap.usageErrorThreshold` (10%) for both sidebar and status bar colors. Former per-surface color keys are no longer used; settings are not migrated or rewritten.
-- Group the usage check period and Claude/Codex query timeouts under Advanced in Settings, keeping their existing keys and behavior.
-- Set when another account is recommended independently of usage colors with `planswap.sidebar.recommendationThreshold` (default 10% remaining, inclusive). It reads only its own setting, independently of colors.
-- **Re-link** now checks the linked accounts first without changing anything: it says when all is well (noting links pointing elsewhere and the account's own files, which it leaves as they are), and otherwise lists per account what is wrong (missing or outdated links, replaced history files, MCP servers or project trust the default account has and the linked account lacks, an account in use) with a **Repair** button that fixes what can be fixed. The same check runs in the background when the editor starts and when you return to its window, and shows the notification only when **Repair** can fix something, once per set of problems across windows (again after a day); it never repairs on its own.
-
-- A notification when the current Claude or Codex account's 5-hour or 7-day limit has 20% or less left, once per limit until it resets, with **Open PlanSwap**. Turn it off with `planswap.notifications.enabled` or change the percentage with `planswap.notifications.threshold`. A used-up limit gets no notification, since Claude Code and Codex already report it.
+- Set when another account is recommended independently of usage colors with `planswap.sidebar.recommendationThreshold` (default 10% remaining, inclusive), reading only its own setting.
+- Clarify automatic usage checks and the display effects of email and status bar product settings.
 
 ## [0.3.6] - 2026-10-06
 
