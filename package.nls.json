@@ -51,7 +51,7 @@
   "config.notificationsEnabled.description": "Show a notification once when the current Claude or Codex account’s general usage limit (5-hour, 7-day) falls to the notification threshold, once per limit until it resets. A used-up limit gets no notification: Claude Code and Codex report it themselves.",
   "config.notificationsThreshold.description": "The remaining percentage of a general usage limit at or below which the notification appears (1–99).",
   "config.sidebarModelLimits.description": "Show Claude’s model-specific usage limits in the sidebar. When enabled, they appear below the general limits.",
-  "config.sidebarEmail.description": "Show each account’s email in the sidebar. Does not affect emails in the status bar tooltip.",
+  "config.sidebarEmail.description": "Show account emails in the sidebar and the status bar tooltip. When off, the tooltip uses account labels instead. Account names and aliases are unchanged.",
   "config.sidebarFiveHour.description": "Show the 5-hour usage limit of each account in the sidebar.",
   "config.sidebarWeekly.description": "Show the 7-day usage limit of each account in the sidebar.",
   "config.claudeUsageAutoRefresh.description": "Automatically check usage limits of eligible signed-in Claude accounts while the window is focused. Account scope follows planswap.usageAutoRefreshCurrentOnly: when off, other registered accounts are checked too; when on, only the current account. Manual refreshes remain available.",

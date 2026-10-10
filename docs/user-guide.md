@@ -190,7 +190,7 @@ To keep an account out of the recommendations, for example a work account, click
 
 The status bar shows each product's short limit, for example `Claude 97% · Codex 82%`: what is left, or what is used when `planswap.usageDisplay` is `used`. When a longer limit is the one running low, the item shows that one with its length instead, for example `Claude 2% (7d)`, since that figure only recovers days later. Its background turns to the theme's warning color when any general limit, including longer ones, is at 30% or less, and to the error color at 10% or less. You can change these thresholds, show only one product, move the item to the left or hide it ([Change language and display settings](#change-language-and-display-settings)).
 
-Hover it for a table with one header row per product (email, plan and, when the account can be checked, a refresh icon) and one row per general limit. Click it to open PlanSwap.
+Hover it for a table with one header row per product (email, plan and, when the account can be checked, a refresh icon) and one row per general limit. Click it to open PlanSwap. With `planswap.sidebar.showEmail` off, the tooltip uses account labels instead of emails; user-defined names and aliases are unchanged.
 
 ## Rename or remove accounts
 
@@ -250,7 +250,7 @@ Click the settings icon in the panel title bar, or run **PlanSwap: Open PlanSwap
 | `planswap.usageCheckIntervalSeconds` | `120` | Scheduler check period in seconds, 30–600. Looks for due accounts; does not guarantee exact query times. |
 | `planswap.notifications.enabled` | `true` | Notify once when the current Claude or Codex account's 5-hour or 7-day limit falls to the threshold below. No notice for a used-up limit: Claude Code and Codex report it themselves. |
 | `planswap.notifications.threshold` | `20` | Remaining percentage at or below which that notice appears, 1–99. |
-| `planswap.sidebar.showEmail` | `true` | Show account emails on sidebar cards; does not affect the status bar tooltip. |
+| `planswap.sidebar.showEmail` | `true` | Show account emails on sidebar cards and in the status bar tooltip; when hidden, the tooltip uses account labels. |
 | `planswap.sidebar.showFiveHourLimit` | `true` | Show the 5-hour limit on cards. |
 | `planswap.sidebar.showWeeklyLimit` | `true` | Show the 7-day limit on cards. |
 | `planswap.sidebar.showModelLimits` | `false` | Add Claude's model-specific limits to cards. |
@@ -270,7 +270,7 @@ Click the settings icon in the panel title bar, or run **PlanSwap: Open PlanSwap
 | `planswap.codex.usageRefreshMinutes` | `15` | Age threshold in minutes for automatic Codex refreshes, 5–1440; cached usage or the last check determines whether an account is due. Not an exact schedule. |
 | `planswap.codex.usageTimeoutSeconds` | `15` | Seconds before a Codex usage query times out, 5–120; applies to automatic and manual queries. |
 
-With automatic checks off, the refresh icons and commands still work. The sidebar display settings do not change the status bar. Command Palette titles and the sidebar's name follow the editor's display language, not `planswap.language`.
+With automatic checks off, the refresh icons and commands still work. The email setting also controls the status bar tooltip; sidebar limit and recommendation display settings do not change the status bar. Command Palette titles and the sidebar's name follow the editor's display language, not `planswap.language`.
 
 ## Troubleshoot common problems
 

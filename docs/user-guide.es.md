@@ -190,7 +190,7 @@ Para dejar una cuenta fuera de las recomendaciones, por ejemplo una cuenta de tr
 
 La barra de estado muestra el límite corto de cada producto, por ejemplo `Claude 97% · Codex 82%`: lo que queda, o lo que se ha usado cuando `planswap.usageDisplay` está en `used`. Cuando el que se está agotando es un límite más largo, el elemento muestra ese límite con su duración, por ejemplo `Claude 2% (7 d)`, porque esa cifra tarda días en recuperarse. Su fondo cambia al color de advertencia del tema cuando algún límite general, incluidos los más largos, está al 30 % o menos, y al color de error al 10 % o menos. Puedes cambiar estos umbrales, mostrar un solo producto, mover el elemento a la izquierda u ocultarlo ([Cambiar el idioma y los ajustes de visualización](#cambiar-el-idioma-y-los-ajustes-de-visualización)).
 
-Pasa el puntero sobre ella para ver una tabla con una fila de encabezado por producto (correo, plan y, cuando la cuenta se puede consultar, un icono de actualizar) y una fila por límite general. Haz clic en ella para abrir PlanSwap.
+Pasa el puntero sobre ella para ver una tabla con una fila de encabezado por producto (correo, plan y, cuando la cuenta se puede consultar, un icono de actualizar) y una fila por límite general. Haz clic en ella para abrir PlanSwap. Con `planswap.sidebar.showEmail` desactivado, la información sobre herramientas usa etiquetas de cuenta en lugar de correos; los nombres y alias personalizados no cambian.
 
 ## Renombrar o quitar cuentas
 
@@ -250,7 +250,7 @@ Haz clic en el icono de ajustes de la barra de título del panel, o ejecuta **Pl
 | `planswap.usageCheckIntervalSeconds` | `120` | Periodo del planificador en segundos, 30–600. Busca cuentas pendientes; no garantiza horas exactas de consulta. |
 | `planswap.notifications.enabled` | `true` | Avisa una vez cuando el Límite de 5 h o el Límite de 7 días de la cuenta actual de Claude o Codex baja al umbral siguiente. Un límite agotado no genera aviso: Claude Code y Codex lo indican por sí mismos. |
 | `planswap.notifications.threshold` | `20` | Porcentaje restante igual o inferior al cual aparece ese aviso, 1–99. |
-| `planswap.sidebar.showEmail` | `true` | Mostrar correos en las tarjetas laterales; no afecta a la información sobre herramientas de la barra de estado. |
+| `planswap.sidebar.showEmail` | `true` | Mostrar los correos en las tarjetas laterales y en la información sobre herramientas de la barra de estado; al ocultarlos, esta usa las etiquetas de las cuentas. |
 | `planswap.sidebar.showFiveHourLimit` | `true` | Mostrar el límite de 5 horas en las tarjetas. |
 | `planswap.sidebar.showWeeklyLimit` | `true` | Mostrar el límite de 7 días en las tarjetas. |
 | `planswap.sidebar.showModelLimits` | `false` | Añadir a las tarjetas los límites de Claude por modelo. |
@@ -270,7 +270,7 @@ Haz clic en el icono de ajustes de la barra de título del panel, o ejecuta **Pl
 | `planswap.codex.usageRefreshMinutes` | `15` | Umbral de antigüedad en minutos para actualizar Codex, 5–1440; la caché de uso o la última consulta determina si la cuenta está pendiente. No es un horario exacto. |
 | `planswap.codex.usageTimeoutSeconds` | `15` | Segundos antes de que una consulta de uso de Codex agote el tiempo, 5–120; se aplica a consultas automáticas y manuales. |
 
-Con las consultas automáticas desactivadas, los iconos y comandos de actualizar siguen funcionando. Los ajustes de visualización de la barra lateral no cambian la barra de estado. Los títulos de la paleta de comandos y el nombre de la barra lateral siguen el idioma de visualización del editor, no `planswap.language`.
+Con las consultas automáticas desactivadas, los iconos y comandos de actualizar siguen funcionando. El ajuste de correo también controla la información sobre herramientas de la barra de estado; los ajustes laterales de límites y recomendaciones no cambian la barra de estado. Los títulos de la paleta de comandos y el nombre de la barra lateral siguen el idioma de visualización del editor, no `planswap.language`.
 
 ## Solucionar problemas comunes
 

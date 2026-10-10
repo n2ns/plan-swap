@@ -190,7 +190,7 @@ PlanSwap 讓你同時保持多個 Claude Code 和 Codex 帳號的登入狀態，
 
 狀態列會顯示每個產品的短週期額度，例如 `Claude 97% · Codex 82%`：預設是剩餘量，`planswap.usageDisplay` 設為 `used` 時是已用量。當快用完的是更長週期的額度時，會改為顯示該額度並附上週期，例如 `Claude 2%（7 天）`，因為這個數字要幾天後才會恢復。當任一一般額度（包括較長週期的額度）剩餘 30% 或更少時，其背景會變為佈景主題的警告色；剩餘 10% 或更少時則變為錯誤色。你可以變更這些臨界值、只顯示一個產品、將該項目移到左側或隱藏它（[變更語言和顯示設定](#變更語言和顯示設定)）。
 
-將游標停留在上面可查看一張表格：每個產品一列標題（電子郵件、方案，以及帳號可查詢時的重新整理圖示），每項一般額度一列。按一下它可開啟 PlanSwap。
+將游標停留在上面可查看一張表格：每個產品一列標題（電子郵件、方案，以及帳號可查詢時的重新整理圖示），每項一般額度一列。按一下它可開啟 PlanSwap。 關閉 `planswap.sidebar.showEmail` 後，暫留提示改用帳號標籤代替電子郵件；使用者自訂名稱和別名保持不變。
 
 ## 重新命名或移除帳號
 
@@ -250,7 +250,7 @@ PlanSwap 啟動或重新整理時，會把在你的主目錄中找到、名稱�
 | `planswap.usageCheckIntervalSeconds` | `120` | 排程檢查週期（秒，30–600），用於尋找已到重新整理時間的帳號，不保證精準查詢時間。 |
 | `planswap.notifications.enabled` | `true` | 目前 Claude 或 Codex 帳號的 5 小時額度或 7 天額度降到下面的臨界值時提醒一次。額度用完時不提醒：Claude Code 和 Codex 會自行提示。 |
 | `planswap.notifications.threshold` | `20` | 剩餘百分比降到此值或更低時提醒，1–99。 |
-| `planswap.sidebar.showEmail` | `true` | 在側邊欄卡片上顯示帳號電子郵件，不影響狀態列暫留提示。 |
+| `planswap.sidebar.showEmail` | `true` | 在側邊欄卡片和狀態列暫留提示中顯示帳號電子郵件；隱藏時，暫留提示改用帳號標籤。 |
 | `planswap.sidebar.showFiveHourLimit` | `true` | 在卡片上顯示 5 小時額度。 |
 | `planswap.sidebar.showWeeklyLimit` | `true` | 在卡片上顯示 7 天額度。 |
 | `planswap.sidebar.showModelLimits` | `false` | 在卡片上額外顯示 Claude 的各模型額度。 |
@@ -270,7 +270,7 @@ PlanSwap 啟動或重新整理時，會把在你的主目錄中找到、名稱�
 | `planswap.codex.usageRefreshMinutes` | `15` | 自動重新整理 Codex 的時間門檻（分鐘，5–1440），依帳號用量快取或上次查詢判斷是否到期，並非精準定時。 |
 | `planswap.codex.usageTimeoutSeconds` | `15` | 單次 Codex 用量查詢逾時前允許執行的秒數（5–120），適用於自動和手動查詢。 |
 
-關閉自動查詢後，重新整理圖示和命令仍然可用。側邊欄顯示設定不會影響狀態列。命令選擇區標題和側邊欄名稱會跟隨編輯器的顯示語言，而不是 `planswap.language`。
+關閉自動查詢後，重新整理圖示和命令仍然可用。電子郵件設定也控制狀態列暫留提示；側邊欄額度和推薦顯示設定不影響狀態列。命令選擇區標題和側邊欄名稱會跟隨編輯器的顯示語言，而不是 `planswap.language`。
 
 ## 排解常見問題
 

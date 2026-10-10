@@ -51,7 +51,7 @@
   "config.notificationsEnabled.description": "目前 Claude 或 Codex 帳號的一般額度（5 小時、7 天）降到提醒臨界值時顯示一次通知，每個額度在重設前只提醒一次。額度用完時不提醒：Claude Code 和 Codex 會自行提示。",
   "config.notificationsThreshold.description": "一般額度剩餘百分比降到此值或更低時顯示提醒（1–99）。",
   "config.sidebarModelLimits.description": "在側邊欄中顯示 Claude 的各模型用量額度。啟用後，會直接顯示在一般額度下方。",
-  "config.sidebarEmail.description": "在側邊欄中顯示各帳號的電子郵件，不影響狀態列暫留提示中的電子郵件。",
+  "config.sidebarEmail.description": "在側邊欄和狀態列暫留提示中顯示帳號電子郵件。關閉後，暫留提示改用帳號標籤。帳號名稱和別名保持不變。",
   "config.sidebarFiveHour.description": "在側邊欄中顯示各帳號的 5 小時用量額度。",
   "config.sidebarWeekly.description": "在側邊欄中顯示各帳號的 7 天用量額度。",
   "config.claudeUsageAutoRefresh.description": "在視窗取得焦點時，自動查詢符合條件且已登入的 Claude 帳號用量額度。帳號範圍由 planswap.usageAutoRefreshCurrentOnly 控制：關閉時也查詢其他已登記帳號，開啟時只查詢目前帳號。手動重新整理仍可使用。",

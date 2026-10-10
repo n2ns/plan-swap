@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Hide Claude and Codex account emails in the status bar tooltip as well as the sidebar when `planswap.sidebar.showEmail` is off; changing it updates the tooltip immediately, while account names and aliases stay unchanged.
 - Clarify automatic usage refresh account scope and scheduling, the sidebar warning threshold's recommendation role, and the display-only effects of email and status bar product settings.
 - Refuse Claude account info targets that alias credentials or default-account data before reading or syncing them, while keeping safe external info-file links supported.
 - Recheck account selection and busy state after the Windows file-link fallback dialog, before converting an account to linked mode.

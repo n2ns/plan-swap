@@ -190,7 +190,7 @@ PlanSwap 让你同时保持多个 Claude Code 和 Codex 账号的登录状态，
 
 状态栏显示每个产品的短周期额度，例如 `Claude 97% · Codex 82%`：默认是剩余量，`planswap.usageDisplay` 设为 `used` 时是已用量。当快用完的是更长周期的额度时，改为显示该额度并附上周期，例如 `Claude 2%（7 天）`，因为这个数字要几天后才会恢复。当任一通用额度（包括较长周期的额度）剩余 30% 或更少时，其背景会变为主题的警告色；剩余 10% 或更少时变为错误色。你可以更改这些阈值、只显示一个产品、把该项移到左侧或隐藏它（[更改语言和显示设置](#更改语言和显示设置)）。
 
-悬停可查看一张表格：每个产品一行表头（邮箱、套餐，以及账号可查询时的刷新图标），每项通用额度一行。点击它可打开 PlanSwap。
+悬停可查看一张表格：每个产品一行表头（邮箱、套餐，以及账号可查询时的刷新图标），每项通用额度一行。点击它可打开 PlanSwap。 关闭 `planswap.sidebar.showEmail` 后，悬停提示改用账号标签代替邮箱；用户自定义名称和别名保持不变。
 
 ## 重命名或删除账号
 
@@ -250,7 +250,7 @@ PlanSwap 启动或刷新时，会把在你的主目录中找到的、名称有�
 | `planswap.usageCheckIntervalSeconds` | `120` | 调度检查周期（秒，30–600），用于查找已到刷新时间的账号，不保证精准查询时间。 |
 | `planswap.notifications.enabled` | `true` | 当前 Claude 或 Codex 账号的 5 小时额度或 7 天额度降到下面的阈值时提醒一次。额度用完时不提醒：Claude Code 和 Codex 会自行提示。 |
 | `planswap.notifications.threshold` | `20` | 剩余百分比降到此值或更低时提醒，1–99。 |
-| `planswap.sidebar.showEmail` | `true` | 在侧边栏卡片上显示账号邮箱，不影响状态栏悬停提示。 |
+| `planswap.sidebar.showEmail` | `true` | 在侧边栏卡片和状态栏悬停提示中显示账号邮箱；隐藏时，悬停提示改用账号标签。 |
 | `planswap.sidebar.showFiveHourLimit` | `true` | 在卡片上显示 5 小时额度。 |
 | `planswap.sidebar.showWeeklyLimit` | `true` | 在卡片上显示 7 天额度。 |
 | `planswap.sidebar.showModelLimits` | `false` | 在卡片上额外显示 Claude 的按模型额度。 |
@@ -270,7 +270,7 @@ PlanSwap 启动或刷新时，会把在你的主目录中找到的、名称有�
 | `planswap.codex.usageRefreshMinutes` | `15` | 自动刷新 Codex 的时间门槛（分钟，5–1440），根据账号用量缓存或上次查询判断是否到期，并非精准定时。 |
 | `planswap.codex.usageTimeoutSeconds` | `15` | 单次 Codex 用量查询超时前允许运行的秒数（5–120），适用于自动和手动查询。 |
 
-关闭自动查询后，刷新图标和命令仍然可用。侧边栏显示设置不影响状态栏。命令面板标题和侧边栏名称跟随编辑器的显示语言，而不是 `planswap.language`。
+关闭自动查询后，刷新图标和命令仍然可用。邮箱设置也控制状态栏悬停提示；侧边栏额度和推荐显示设置不影响状态栏。命令面板标题和侧边栏名称跟随编辑器的显示语言，而不是 `planswap.language`。
 
 ## 排查常见问题
 

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type * as vscode from 'vscode';
-import { AccountsPanel, applySidebarDisplay, claudePanelSource, sidebarThresholds, type PanelSource } from '../src/accountsPanel';
+import { AccountsPanel, applySidebarDisplay, claudePanelSource, sidebarDisplay, sidebarThresholds, type PanelSource } from '../src/accountsPanel';
 import { AccountStore } from '../src/accounts';
 import { LabelStore } from '../src/labels';
 import { readAccountInfo } from '../src/paths';
@@ -184,6 +184,24 @@ test('the sidebar color thresholds default to 30 / 10 and are clamped to 0..100'
     setConfig('planswap', 'sidebar.warningThreshold', 'x');
     setConfig('planswap', 'sidebar.errorThreshold', 150);
     assert.deepEqual(sidebarThresholds(), { warning: 30, error: 100 });
+  } finally { resetConfig(); }
+});
+
+test('the email setting hides and restores both pages without altering labels or missing-email rows', () => {
+  resetConfig();
+  const rows: AccountView[] = [
+    { name: 'claude-work', dir: '/fixture/.claude-work', dirLabel: '~/.claude-work', label: 'Claude work', kind: 'named', isCurrent: true, loggedIn: true, email: 'claude@example.com' },
+    { name: 'codex-work', dir: '/fixture/.codex-work', dirLabel: '~/.codex-work', label: 'Codex work', kind: 'named', isCurrent: true, loggedIn: true, email: 'codex@example.com' },
+    { name: 'no-email', dir: '/fixture/.claude-no-email', dirLabel: '~/.claude-no-email', label: 'label@example.com', kind: 'named', isCurrent: false, loggedIn: true },
+  ];
+  try {
+    assert.deepEqual(applySidebarDisplay(rows, sidebarDisplay()), rows);
+    setConfig('planswap', 'sidebar.showEmail', false);
+    const hidden = applySidebarDisplay(rows, sidebarDisplay());
+    assert.ok(hidden.every((row) => row.email === undefined));
+    assert.deepEqual(hidden.map((row) => row.label), rows.map((row) => row.label), 'user labels are not redacted');
+    setConfig('planswap', 'sidebar.showEmail', true);
+    assert.deepEqual(applySidebarDisplay(rows, sidebarDisplay()), rows);
   } finally { resetConfig(); }
 });
 

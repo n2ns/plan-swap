@@ -51,7 +51,7 @@
   "config.notificationsEnabled.description": "当前 Claude 或 Codex 账号的通用额度（5 小时、7 天）降到提醒阈值时弹出一次通知，每个额度在重置前只提醒一次。额度用完时不提醒：Claude Code 和 Codex 会自行提示。",
   "config.notificationsThreshold.description": "通用额度剩余百分比降到此值或更低时弹出提醒（1–99）。",
   "config.sidebarModelLimits.description": "在侧边栏中显示 Claude 的按模型用量额度。开启后，直接显示在通用额度下方。",
-  "config.sidebarEmail.description": "在侧边栏中显示各账号的邮箱，不影响状态栏悬停提示中的邮箱。",
+  "config.sidebarEmail.description": "在侧边栏和状态栏悬停提示中显示账号邮箱。关闭后，悬停提示改用账号标签。账号名称和别名保持不变。",
   "config.sidebarFiveHour.description": "在侧边栏中显示各账号的 5 小时用量额度。",
   "config.sidebarWeekly.description": "在侧边栏中显示各账号的 7 天用量额度。",
   "config.claudeUsageAutoRefresh.description": "在窗口获得焦点时，自动查询符合条件且已登录的 Claude 账号用量额度。账号范围由 planswap.usageAutoRefreshCurrentOnly 控制：关闭时也查询其他已登记账号，开启时只查询当前账号。手动刷新仍然可用。",

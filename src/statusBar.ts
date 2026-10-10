@@ -374,7 +374,8 @@ function candidatesOf(product: string, windows: ReadonlyArray<UsageWindow | Clau
  * (signed in, not API key, not codexRunsInWsl()). The background follows the lowest remaining percentage over the
  * general windows of both products (never model-specific ones).
  *
- * Tooltip: one usageTable with one block per vendor. Identity is the email; without one, a Codex API key account shows
+ * Tooltip: one usageTable with one block per vendor. Identity is the email unless planswap.sidebar.showEmail is off;
+ * with email hidden or absent, a Codex API key account shows
  * "API key" (and no plan), another signed-in account its label, a signed-out one "Not logged in". Codex notes in order:
  * the pending selection (only while switching is enabled and the selected and effective directories differ; an
  * unreadable switching configuration shows none), the run-in-WSL note (instead of usage), then codexUsageParts. A
@@ -384,7 +385,8 @@ export class StatusBar implements vscode.Disposable {
   private alignment = statusBarSettings().alignment;
   private item = createItem(this.alignment);
   private readonly settingsListener = vscode.workspace.onDidChangeConfiguration((e) => {
-    if (e.affectsConfiguration('planswap.statusBar') || e.affectsConfiguration('planswap.usageDisplay')) this.update();
+    if (e.affectsConfiguration('planswap.statusBar') || e.affectsConfiguration('planswap.usageDisplay')
+      || e.affectsConfiguration('planswap.sidebar.showEmail')) this.update();
   });
   private codexUsage: CodexUsageState | undefined;
   private claudeUsage: ClaudeUsageState | undefined;
@@ -412,6 +414,7 @@ export class StatusBar implements vscode.Disposable {
   update(): void {
     const settings = statusBarSettings();
     const display = usageDisplay();
+    const showEmail = vscode.workspace.getConfiguration('planswap').get<boolean>('sidebar.showEmail', true);
     if (settings.alignment !== this.alignment) {
       this.item.dispose();
       this.alignment = settings.alignment;
@@ -439,7 +442,7 @@ export class StatusBar implements vscode.Disposable {
       products.push(productPart('Claude', usage?.windows, display, settings));
       if (usage) candidates.push(...candidatesOf('Claude', usage.windows));
       blocks.push({
-        identity: info.email ?? (info.loggedIn ? label : t('common.notLoggedIn')),
+        identity: (showEmail ? info.email : undefined) ?? (info.loggedIn ? label : t('common.notLoggedIn')),
         plan: info.plan,
         refresh: showUsage && this.claudeUsage !== undefined ? CLAUDE_REFRESH_USAGE_COMMAND : undefined,
         usage: showUsage ? claudeUsageParts(usage, this.claudeUsage, dir, now, display) : { rows: [], notes: [] },
@@ -476,7 +479,7 @@ export class StatusBar implements vscode.Disposable {
       }
       products.push(part);
       blocks.push({
-        identity: apiKey ? 'API key' : info.email ?? (info.loggedIn ? label : t('common.notLoggedIn')),
+        identity: apiKey ? 'API key' : (showEmail ? info.email : undefined) ?? (info.loggedIn ? label : t('common.notLoggedIn')),
         plan: apiKey ? undefined : info.plan,
         refresh: showUsage && this.codexUsage !== undefined ? REFRESH_USAGE_COMMAND : undefined,
         usage,

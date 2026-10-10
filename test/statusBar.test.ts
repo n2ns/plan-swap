@@ -569,7 +569,7 @@ describe('both products in the status bar', LINUX_ONLY, () => {
       fireConfigurationChange('planswap.statusBar.enabled');
       assert.equal(item.visible, false);
       setConfig('planswap', 'statusBar.enabled', true);
-      fireConfigurationChange('planswap.sidebar.showEmail');
+      fireConfigurationChange('planswap.sidebar.showWeeklyLimit');
       assert.equal(item.visible, false, 'other settings do not update the status bar');
       fireConfigurationChange('planswap.statusBar.enabled');
       assert.equal(item.visible, true);
@@ -643,6 +643,82 @@ describe('both products in the status bar', LINUX_ONLY, () => {
       bar.setClaudeUsage({ checking: false, failure: { dir: path.join(temp.home, '.other'), reason: 'timeout' } });
       assert.ok(!tooltipText(item.tooltip).includes('failed'), 'a failure of another directory is not shown');
     } finally { bar.dispose(); }
+  });
+
+  test('showEmail immediately hides and restores both product emails without changing usage', () => {
+    resetConfig();
+    writeClaude([session(3)]);
+    const auth = path.join(temp.home, '.codex', 'auth.json');
+    const previous = fs.readFileSync(auth);
+    fs.writeFileSync(auth, JSON.stringify({ tokens: { id_token: `x.${Buffer.from(JSON.stringify({
+      email: 'codex@example.com', 'https://api.openai.com/auth': { chatgpt_plan_type: 'plus' },
+    })).toString('base64url')}.y` } }));
+    const { bar, item } = make();
+    try {
+      bar.setClaudeUsage({ checking: false });
+      bar.setCodexUsage(codexOk(18, 50));
+      const text = item.text;
+      const background = color(item);
+      const accessibility = item.accessibilityInformation;
+      const shown = (item.tooltip as MarkdownString).value;
+      assert.ok(shown.includes('me@example.com') && shown.includes('codex@example.com'), 'emails shown by default');
+      setConfig('planswap', 'sidebar.showEmail', false);
+      fireConfigurationChange('planswap.sidebar.showEmail');
+      const hidden = (item.tooltip as MarkdownString).value;
+      assert.ok(!hidden.includes('me@example.com') && !hidden.includes('codex@example.com'), 'emails absent from raw tooltip');
+      assert.equal((hidden.match(/<strong>default<\/strong>/g) ?? []).length, 2, 'both products use account labels');
+      assert.equal(item.text, text);
+      assert.equal(color(item), background);
+      assert.deepEqual(item.accessibilityInformation, accessibility);
+      assert.deepEqual((item.tooltip as MarkdownString).isTrusted, { enabledCommands: ['planswap.claude.refreshUsage', 'planswap.codex.refreshUsage'] });
+      setConfig('planswap', 'sidebar.showEmail', true);
+      fireConfigurationChange('planswap.sidebar.showEmail');
+      assert.equal((item.tooltip as MarkdownString).value, shown, 'enabling restores the complete tooltip');
+    } finally { bar.dispose(); fs.writeFileSync(auth, previous); resetConfig(); }
+  });
+
+  test('hidden emails stay absent on initial render and later usage updates', () => {
+    resetConfig();
+    writeClaude([session(3)]);
+    const auth = path.join(temp.home, '.codex', 'auth.json');
+    const previous = fs.readFileSync(auth);
+    fs.writeFileSync(auth, JSON.stringify({ tokens: { id_token: `x.${Buffer.from(JSON.stringify({
+      email: 'codex@example.com', 'https://api.openai.com/auth': { chatgpt_plan_type: 'plus' },
+    })).toString('base64url')}.y` } }));
+    setConfig('planswap', 'sidebar.showEmail', false);
+    const { bar, item } = make();
+    try {
+      assert.doesNotMatch((item.tooltip as MarkdownString).value, /me@example\.com|codex@example\.com/);
+      bar.setClaudeUsage({ checking: true });
+      bar.setCodexUsage(codexOk(18, 50));
+      assert.doesNotMatch((item.tooltip as MarkdownString).value, /me@example\.com|codex@example\.com/);
+      assert.match(tooltipText(item.tooltip), /Checking usage limits/);
+      assert.match(tooltipText(item.tooltip), /5h/);
+    } finally { bar.dispose(); fs.writeFileSync(auth, previous); resetConfig(); }
+  });
+
+  test('accounts without emails keep their labels when showEmail is toggled', () => {
+    resetConfig();
+    fs.writeFileSync(path.join(temp.home, '.claude', '.credentials.json'), '{}');
+    fs.writeFileSync(path.join(temp.home, '.claude.json'), '{}');
+    const auth = path.join(temp.home, '.codex', 'auth.json');
+    const previous = fs.readFileSync(auth);
+    fs.writeFileSync(auth, JSON.stringify({ tokens: { id_token: `x.${Buffer.from(JSON.stringify({
+      'https://api.openai.com/auth': { chatgpt_plan_type: 'plus' },
+    })).toString('base64url')}.y` } }));
+    const { bar, item } = make();
+    try {
+      const shown = (item.tooltip as MarkdownString).value;
+      assert.equal((shown.match(/<strong>default<\/strong>/g) ?? []).length, 2);
+      for (const show of [false, true]) {
+        setConfig('planswap', 'sidebar.showEmail', show);
+        fireConfigurationChange('planswap.sidebar.showEmail');
+        assert.equal((item.tooltip as MarkdownString).value, shown);
+      }
+    } finally {
+      bar.dispose(); fs.writeFileSync(auth, previous);
+      fs.rmSync(path.join(temp.home, '.claude', '.credentials.json'), { force: true }); resetConfig();
+    }
   });
 
   test('a Claude sign-in without an email shows the account label as its first line', () => {
