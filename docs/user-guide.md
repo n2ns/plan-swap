@@ -176,7 +176,7 @@ An account checked less than a minute ago is not checked again. A manual refresh
 
 ### Automatic checks
 
-By default, PlanSwap checks every signed-in account of each product automatically, the current one first and the others one at a time: about 20 seconds after the window opens, then about every 15 minutes while the window is focused. To check only the current accounts, turn on `planswap.usageAutoRefreshCurrentOnly`. You can also change the interval or turn automatic checks off in [settings](#change-language-and-display-settings).
+By default, automatic checks cover eligible signed-in accounts of each product, the current Claude or effective Codex account first, then other registered accounts one at a time. The first check is about 20 seconds after activation. While the window is focused, the scheduler looks for due accounts every 120 seconds by default, using a 15-minute freshness threshold per account. Queries may wait in a queue, and fresh caches can avoid a query; this is not an exact 15-minute schedule. Turn on `planswap.usageAutoRefreshCurrentOnly` to limit the account scope, or change the intervals and automatic-check switches in [settings](#change-language-and-display-settings).
 
 Other rows show the result of their last check. Values disappear after their reset time or after 24 hours, and are hidden when the account has since signed in again.
 
@@ -246,29 +246,29 @@ Click the settings icon in the panel title bar, or run **PlanSwap: Open PlanSwap
 | --- | --- | --- |
 | `planswap.language` | `auto` | Follow the editor, or choose `en`, `zh-cn`, `zh-tw`, `es` or `ja`. |
 | `planswap.usageDisplay` | `remaining` | Usage bars and percentages, in the sidebar and the status bar, show what is left (`remaining`) or what is used (`used`). Colors always follow what is left. |
-| `planswap.usageAutoRefreshCurrentOnly` | `false` | Automatic checks query only the current Claude and Codex accounts. |
-| `planswap.usageCheckIntervalSeconds` | `120` | Seconds between looks for accounts due for an automatic check, 30–600. Each account is still checked at its product's refresh interval. |
+| `planswap.usageAutoRefreshCurrentOnly` | `false` | When enabled, automatic checks query only the current Claude account and the effective Codex account; when disabled, other eligible registered accounts are checked too. Manual refreshes are unaffected. |
+| `planswap.usageCheckIntervalSeconds` | `120` | Scheduler check period in seconds, 30–600. Looks for due accounts; does not guarantee exact query times. |
 | `planswap.notifications.enabled` | `true` | Notify once when the current Claude or Codex account's 5-hour or 7-day limit falls to the threshold below. No notice for a used-up limit: Claude Code and Codex report it themselves. |
 | `planswap.notifications.threshold` | `20` | Remaining percentage at or below which that notice appears, 1–99. |
-| `planswap.sidebar.showEmail` | `true` | Show account emails on sidebar cards. |
+| `planswap.sidebar.showEmail` | `true` | Show account emails on sidebar cards; does not affect the status bar tooltip. |
 | `planswap.sidebar.showFiveHourLimit` | `true` | Show the 5-hour limit on cards. |
 | `planswap.sidebar.showWeeklyLimit` | `true` | Show the 7-day limit on cards. |
 | `planswap.sidebar.showModelLimits` | `false` | Add Claude's model-specific limits to cards. |
-| `planswap.sidebar.warningThreshold` | `30` | Card bars turn to the warning color at or below this remaining percentage, 0–100. |
+| `planswap.sidebar.warningThreshold` | `30` | Warning color at or below this remaining percentage, 0–100; also sets the low-usage threshold for account recommendations when enabled. |
 | `planswap.sidebar.errorThreshold` | `10` | Card bars turn to the error color at or below this remaining percentage, 0–100. It wins over the warning color. |
 | `planswap.sidebar.showRecommendation` | `true` | Show the [recommended account](#recommended-account) card and the lightbulb icons on the cards. |
 | `planswap.statusBar.enabled` | `true` | Show the PlanSwap item in the status bar. |
-| `planswap.statusBar.products` | `both` | Products in the status bar item: `both`, `claude` or `codex`. |
+| `planswap.statusBar.products` | `both` | Products displayed in the status bar: `both`, `claude` or `codex`. Does not disable background usage refreshes. |
 | `planswap.statusBar.warningThreshold` | `30` | Warning color at or below this remaining percentage, 0–100. |
 | `planswap.statusBar.errorThreshold` | `10` | Error color at or below this remaining percentage, 0–100. It wins over the warning color. |
 | `planswap.statusBar.alignment` | `right` | Side of the status bar: `left` or `right`. |
 | `planswap.claude.confirmSwitch` | `true` | Ask before switching Claude accounts from the sidebar. Codex switching always asks. When off, double-click or Enter on a focused row switches at once. |
-| `planswap.claude.usageAutoRefresh` | `true` | Check Claude usage limits automatically. |
-| `planswap.claude.usageRefreshMinutes` | `15` | Minutes between automatic Claude checks, 10–1440. |
-| `planswap.claude.usageTimeoutSeconds` | `30` | Seconds one Claude check may run before it times out, 10–120. |
-| `planswap.codex.usageAutoRefresh` | `true` | Check Codex usage limits automatically. |
-| `planswap.codex.usageRefreshMinutes` | `15` | Minutes between automatic Codex checks, 5–1440. |
-| `planswap.codex.usageTimeoutSeconds` | `15` | Seconds one Codex check may run before it times out, 5–120. |
+| `planswap.claude.usageAutoRefresh` | `true` | Automatically check eligible Claude accounts. Account scope follows `planswap.usageAutoRefreshCurrentOnly`. |
+| `planswap.claude.usageRefreshMinutes` | `15` | Age threshold in minutes for automatic Claude refreshes, 10–1440; cached usage or the last check determines whether an account is due. Not an exact schedule. |
+| `planswap.claude.usageTimeoutSeconds` | `30` | Seconds before a Claude usage query times out, 10–120; applies to automatic and manual queries. |
+| `planswap.codex.usageAutoRefresh` | `true` | Automatically check eligible Codex accounts. Account scope follows `planswap.usageAutoRefreshCurrentOnly`. |
+| `planswap.codex.usageRefreshMinutes` | `15` | Age threshold in minutes for automatic Codex refreshes, 5–1440; cached usage or the last check determines whether an account is due. Not an exact schedule. |
+| `planswap.codex.usageTimeoutSeconds` | `15` | Seconds before a Codex usage query times out, 5–120; applies to automatic and manual queries. |
 
 With automatic checks off, the refresh icons and commands still work. The sidebar display settings do not change the status bar. Command Palette titles and the sidebar's name follow the editor's display language, not `planswap.language`.
 
