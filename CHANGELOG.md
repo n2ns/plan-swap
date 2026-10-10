@@ -1,12 +1,11 @@
 # Changelog
 
-## [Unreleased]
+## [0.3.8] - 2026-10-10
 
 ### Fixed
 
 - Stop treating absent optional Claude shared directories such as `tasks` and `uploads` as broken accounts, while preparing their targets when adding or switching accounts. Retire legacy `todos` from creation and checks without deleting existing data. Missing history targets explicitly warn that creating an empty folder or file does not recover history.
 - Limit Claude link-check repairs to the accounts and entries shown in the notification; keep unrelated account MCP settings and optional directories unchanged. Report invalid shared source types as check errors.
-
 - Keep Claude account-owned history directories and links elsewhere as notes when the unused default target is absent. Do not report normally expired plugin install backups as shared-data faults.
 - Stop reporting an absent optional Codex `themes` directory as a broken account; adding or switching accounts still prepares it for use, and missing links to existing themes remain actionable.
 
