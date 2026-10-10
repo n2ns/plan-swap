@@ -182,7 +182,7 @@ PlanSwap 讓你同時保持多個 Claude Code 和 Codex 帳號的登入狀態，
 
 ### 推薦帳號
 
-目前帳號最低的一般額度到達黃色界線時，清單上方會出現一張綠色卡片，推薦同一索引標籤中的另一個已登入帳號：在最低額度上剩餘最多的那個，前提是它比目前帳號剩得多，而且沒有任何額度已用完。卡片顯示該帳號的各項額度和上次查詢距今的時間，並提供 **切換** 和 **終端機** 按鈕，作用與該帳號卡片上的按鈕相同（Claude：之後仍有一般確認；Codex：選定該帳號，隨後需重新啟動編輯器的伺服器）。在 Codex 索引標籤中，已選定的帳號等待伺服器重新啟動期間不顯示卡片。各模型額度不參與比較；卡片本身從不發起查詢，數值與該帳號上次查詢時一樣新。
+目前帳號最低一般額度的剩餘百分比小於或等於 `planswap.sidebar.recommendationThreshold`（預設 10%）時，清單上方會出現一張綠色卡片，推薦同一索引標籤中的另一個已登入帳號：在最低額度上剩餘最多的那個，前提是它比目前帳號剩得多，而且沒有任何額度已用完。卡片顯示該帳號的各項額度和上次查詢距今的時間，並提供 **切換** 和 **終端機** 按鈕，作用與該帳號卡片上的按鈕相同（Claude：之後仍有一般確認；Codex：選定該帳號，隨後需重新啟動編輯器的伺服器）。在 Codex 索引標籤中，已選定的帳號等待伺服器重新啟動期間不顯示卡片。各模型額度不參與比較；卡片本身從不發起查詢，數值與該帳號上次查詢時一樣新。
 
 如果不希望某個帳號被推薦（例如工作帳號），點選其卡片上的燈泡圖示；再點一次即可恢復。在[設定](#變更語言和顯示設定)中關閉 `planswap.sidebar.showRecommendation` 可隱藏推薦卡片和燈泡圖示。
 
@@ -240,23 +240,23 @@ PlanSwap 啟動或重新整理時，會把在你的主目錄中找到、名稱�
 
 ## 變更語言和顯示設定
 
-按一下面板標題列中的設定圖示，或執行 **PlanSwap: 開啟 PlanSwap 設定**（PlanSwap: Open PlanSwap Settings）。設定編輯器將它們分為一般、側邊欄、狀態列、Claude 和 Codex 幾組；下表依相同順序排列。在設定編輯器的搜尋框中輸入表中的設定名稱即可找到對應設定。變更會立即生效：
+按一下面板標題列中的設定圖示，或執行 **PlanSwap: 開啟 PlanSwap 設定**（PlanSwap: Open PlanSwap Settings）。設定編輯器將它們分為一般、側邊欄、狀態列、Claude、Codex 和進階幾組；下表依相同順序排列。在設定編輯器的搜尋框中輸入表中的設定名稱即可找到對應設定。變更會立即生效：
 
 | 設定 | 預設值 | 用途 |
 | --- | --- | --- |
 | `planswap.language` | `auto` | 跟隨編輯器，或選擇 `en`、`zh-cn`、`zh-tw`、`es` 或 `ja`。 |
 | `planswap.usageDisplay` | `remaining` | 側邊欄和狀態列中的用量條和百分比顯示剩餘量（`remaining`）還是已用量（`used`）。顏色一律依剩餘量計算。 |
 | `planswap.usageAutoRefreshCurrentOnly` | `false` | 開啟時，自動查詢只查目前 Claude 帳號和目前生效 Codex 帳號；關閉時也查詢其他符合條件的已登記帳號。不影響手動重新整理。 |
-| `planswap.usageCheckIntervalSeconds` | `120` | 排程檢查週期（秒，30–600），用於尋找已到重新整理時間的帳號，不保證精準查詢時間。 |
 | `planswap.notifications.enabled` | `true` | 目前 Claude 或 Codex 帳號的 5 小時額度或 7 天額度降到下面的臨界值時提醒一次。額度用完時不提醒：Claude Code 和 Codex 會自行提示。 |
 | `planswap.notifications.threshold` | `20` | 剩餘百分比降到此值或更低時提醒，1–99。 |
 | `planswap.sidebar.showEmail` | `true` | 在側邊欄卡片和狀態列暫留提示中顯示帳號電子郵件；隱藏時，暫留提示改用帳號標籤。 |
 | `planswap.sidebar.showFiveHourLimit` | `true` | 在卡片上顯示 5 小時額度。 |
 | `planswap.sidebar.showWeeklyLimit` | `true` | 在卡片上顯示 7 天額度。 |
 | `planswap.sidebar.showModelLimits` | `false` | 在卡片上額外顯示 Claude 的各模型額度。 |
-| `planswap.sidebar.warningThreshold` | `30` | 剩餘百分比小於或等於此值時顯示警告色（0–100）；開啟帳號推薦時也用此門檻觸發推薦。 |
+| `planswap.sidebar.warningThreshold` | `30` | 剩餘百分比小於或等於此值時顯示警告色（0–100）。 |
 | `planswap.sidebar.errorThreshold` | `10` | 剩餘百分比小於或等於此值時，卡片上的用量條顯示錯誤色，0–100。優先於警告色。 |
 | `planswap.sidebar.showRecommendation` | `true` | 顯示[推薦帳號](#推薦帳號)卡片和卡片上的燈泡圖示。 |
+| `planswap.sidebar.recommendationThreshold` | `10` | 剩餘百分比小於或等於此值時推薦其他帳號（0–100），與顏色獨立。未設定時繼承明確設定的 `planswap.sidebar.warningThreshold`；否則使用 10。不會改寫設定。 |
 | `planswap.statusBar.enabled` | `true` | 在狀態列中顯示 PlanSwap 項目。 |
 | `planswap.statusBar.products` | `both` | 狀態列顯示的產品：`both`、`claude` 或 `codex`。不會關閉背景用量重新整理。 |
 | `planswap.statusBar.warningThreshold` | `30` | 剩餘百分比小於或等於此值時顯示警告色，0–100。 |
@@ -265,9 +265,10 @@ PlanSwap 啟動或重新整理時，會把在你的主目錄中找到、名稱�
 | `planswap.claude.confirmSwitch` | `true` | 從側邊欄切換 Claude 帳號前先確認。Codex 切換一律需要確認。關閉後，在有焦點的列上按兩下或按 Enter 會立即切換。 |
 | `planswap.claude.usageAutoRefresh` | `true` | 自動查詢符合條件的 Claude 帳號，範圍由 `planswap.usageAutoRefreshCurrentOnly` 控制。 |
 | `planswap.claude.usageRefreshMinutes` | `15` | 自動重新整理 Claude 的時間門檻（分鐘，10–1440），依帳號用量快取或上次查詢判斷是否到期，並非精準定時。 |
-| `planswap.claude.usageTimeoutSeconds` | `30` | 單次 Claude 用量查詢逾時前允許執行的秒數（10–120），適用於自動和手動查詢。 |
 | `planswap.codex.usageAutoRefresh` | `true` | 自動查詢符合條件的 Codex 帳號，範圍由 `planswap.usageAutoRefreshCurrentOnly` 控制。 |
 | `planswap.codex.usageRefreshMinutes` | `15` | 自動重新整理 Codex 的時間門檻（分鐘，5–1440），依帳號用量快取或上次查詢判斷是否到期，並非精準定時。 |
+| `planswap.usageCheckIntervalSeconds` | `120` | 排程檢查週期（秒，30–600），用於尋找已到重新整理時間的帳號，不保證精準查詢時間。 |
+| `planswap.claude.usageTimeoutSeconds` | `30` | 單次 Claude 用量查詢逾時前允許執行的秒數（10–120），適用於自動和手動查詢。 |
 | `planswap.codex.usageTimeoutSeconds` | `15` | 單次 Codex 用量查詢逾時前允許執行的秒數（5–120），適用於自動和手動查詢。 |
 
 關閉自動查詢後，重新整理圖示和命令仍然可用。電子郵件設定也控制狀態列暫留提示；側邊欄額度和推薦顯示設定不影響狀態列。命令選擇區標題和側邊欄名稱會跟隨編輯器的顯示語言，而不是 `planswap.language`。

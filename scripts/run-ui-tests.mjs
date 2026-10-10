@@ -879,6 +879,18 @@ async function usedDisplay() {
   assert.deepEqual(await levels({ warning: 10, error: 30 }), ['ok', 'low'], 'error wins over warning');
   await shot('codex-thresholds.png', 'codex');
   results.interactions.push('sidebar thresholds move the bar colors; error wins over warning');
+
+  await page.evaluate(() => {
+    window.preview.apply({ locale: 'en', width: 280, active: 'codex' });
+    const state = structuredClone(window.preview.state());
+    state.usageThresholds = { warning: 30, error: 10 };
+    state.codex.accounts.find((a) => a.dir === '/fixture/.codex-work').usage.windows =
+      [69.6, 69.996, 70, 89.6, 89.996, 90, 99.996, 100].map((usedPercent) => ({ usedPercent, windowMinutes: 300 }));
+    window.preview.post({ type: 'state', state });
+  });
+  assert.deepEqual(await page.locator(`${row('codex', 'work')} .usage-track`).evaluateAll((tracks) => tracks.map((t) => t.dataset.level)),
+    ['ok', 'ok', 'warn', 'warn', 'warn', 'low', 'low', 'empty'], 'color and exhaustion compare unrounded observations');
+  results.interactions.push('fractional observations above warning, error and exhaustion boundaries retain their raw color levels');
 }
 
 async function addFormAndTools() {

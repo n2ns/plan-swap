@@ -182,7 +182,7 @@ Codex タブでは、Codex の切り替えが無効な間、また Windows で C
 
 ### おすすめのアカウント
 
-現在のアカウントの一般的な上限のうち最も低いものが黄色の水準に達すると、一覧の上に緑色のカードが表示され、同じタブの別のサインイン済みアカウントをおすすめします。最も低い上限の残りが最も多いアカウントで、現在のアカウントより残りが多く、使い切った上限がないものが対象です。カードにはそのアカウントの上限と前回の確認からの経過時間が表示され、**切り替え** と **ターミナル** のボタンがあり、そのアカウントのカードにあるボタンと同じ動作をします（Claude: 通常の確認が続きます。Codex: アカウントが選択され、エディターのサーバーの再起動が続きます）。Codex タブでは、選択したアカウントがサーバーの再起動を待っている間はカードを表示しません。モデル別の上限は比較されません。カード自体は何も問い合わせないので、数値はそのアカウントの前回の確認時点のものです。
+現在のアカウントの一般的な上限のうち最も低い残りの割合が `planswap.sidebar.recommendationThreshold`（既定値 10%）以下になると、一覧の上に緑色のカードが表示され、同じタブの別のサインイン済みアカウントをおすすめします。最も低い上限の残りが最も多いアカウントで、現在のアカウントより残りが多く、使い切った上限がないものが対象です。カードにはそのアカウントの上限と前回の確認からの経過時間が表示され、**切り替え** と **ターミナル** のボタンがあり、そのアカウントのカードにあるボタンと同じ動作をします（Claude: 通常の確認が続きます。Codex: アカウントが選択され、エディターのサーバーの再起動が続きます）。Codex タブでは、選択したアカウントがサーバーの再起動を待っている間はカードを表示しません。モデル別の上限は比較されません。カード自体は何も問い合わせないので、数値はそのアカウントの前回の確認時点のものです。
 
 仕事用アカウントなどをおすすめから外すには、そのカードの電球アイコンをクリックします。もう一度クリックすると戻ります。[設定](#言語と表示の設定を変更する)で `planswap.sidebar.showRecommendation` をオフにすると、カードと電球アイコンを非表示にできます。
 
@@ -240,23 +240,23 @@ PlanSwap がホームディレクトリで見つけた、有効な名前を持�
 
 ## 言語と表示の設定を変更する
 
-パネルのタイトルバーにある設定アイコンをクリックするか、**PlanSwap: PlanSwap の設定を開く**（PlanSwap: Open PlanSwap Settings）を実行します。設定エディターでは、全般、サイドバー、ステータスバー、Claude、Codex のグループに分かれています。下の表も同じ順序です。設定を探すには、表の設定名を設定エディターの検索ボックスに入力します。変更はすぐに反映されます：
+パネルのタイトルバーにある設定アイコンをクリックするか、**PlanSwap: PlanSwap の設定を開く**（PlanSwap: Open PlanSwap Settings）を実行します。設定エディターでは、全般、サイドバー、ステータスバー、Claude、Codex、詳細設定のグループに分かれています。下の表も同じ順序です。設定を探すには、表の設定名を設定エディターの検索ボックスに入力します。変更はすぐに反映されます：
 
 | 設定 | デフォルト | 用途 |
 | --- | --- | --- |
 | `planswap.language` | `auto` | エディターに合わせるか、`en`、`zh-cn`、`zh-tw`、`es`、`ja` から選びます。 |
 | `planswap.usageDisplay` | `remaining` | サイドバーとステータスバーの使用量のバーとパーセンテージに、残りの量（`remaining`）と使用済みの量（`used`）のどちらを表示するか。色は常に残りの量に基づきます。 |
 | `planswap.usageAutoRefreshCurrentOnly` | `false` | オンの場合は現在の Claude アカウントと現在有効な Codex アカウントだけを、オフの場合はほかの条件を満たす登録済みアカウントも自動確認します。手動更新には影響しません。 |
-| `planswap.usageCheckIntervalSeconds` | `120` | スケジューラーの確認周期（秒、30–600）。確認時期が来たアカウントを探します。正確な確認時刻は保証しません。 |
 | `planswap.notifications.enabled` | `true` | 現在の Claude または Codex アカウントの 5 時間の上限または 7 日間の上限が次のしきい値まで下がったときに一度通知します。上限に達したときは通知しません。Claude Code と Codex が自分で知らせます。 |
 | `planswap.notifications.threshold` | `20` | 残りの割合がこの値以下になると通知します。1–99。 |
 | `planswap.sidebar.showEmail` | `true` | サイドバーのカードとステータスバーのツールチップにメールアドレスを表示します。非表示の場合、ツールチップにはアカウントのラベルを表示します。 |
 | `planswap.sidebar.showFiveHourLimit` | `true` | カードに 5 時間の上限を表示します。 |
 | `planswap.sidebar.showWeeklyLimit` | `true` | カードに 7 日間の上限を表示します。 |
 | `planswap.sidebar.showModelLimits` | `false` | カードに Claude のモデル別の上限を追加します。 |
-| `planswap.sidebar.warningThreshold` | `30` | 残りの割合がこの値以下で警告色（0–100）。推奨が有効な場合は、アカウント推奨のしきい値にもなります。 |
+| `planswap.sidebar.warningThreshold` | `30` | 残りの割合がこの値以下で警告色になります（0–100）。 |
 | `planswap.sidebar.errorThreshold` | `10` | 残りの割合がこの値以下になると、カードのバーがエラー色になります。0–100。警告色より優先されます。 |
 | `planswap.sidebar.showRecommendation` | `true` | [おすすめのアカウント](#おすすめのアカウント)のカードと、カードの電球アイコンを表示します。 |
+| `planswap.sidebar.recommendationThreshold` | `10` | 残りの割合がこの値以下で別のアカウントを推奨します（0–100）。色とは独立しています。未設定の場合は明示的に指定した `planswap.sidebar.warningThreshold` を引き継ぎ、それ以外は 10 を使います。設定は書き換えません。 |
 | `planswap.statusBar.enabled` | `true` | ステータスバーに PlanSwap の項目を表示します。 |
 | `planswap.statusBar.products` | `both` | ステータスバーに表示する製品：`both`、`claude`、`codex`。バックグラウンドの使用量更新は無効になりません。 |
 | `planswap.statusBar.warningThreshold` | `30` | 残りの割合がこの値以下で警告色（0–100）。 |
@@ -265,9 +265,10 @@ PlanSwap がホームディレクトリで見つけた、有効な名前を持�
 | `planswap.claude.confirmSwitch` | `true` | サイドバーから Claude アカウントを切り替える前に確認します。Codex の切り替えは常に確認します。オフにすると、フォーカスのある行でのダブルクリックまたは Enter ですぐに切り替わります。 |
 | `planswap.claude.usageAutoRefresh` | `true` | 条件を満たす Claude アカウントを自動確認します。対象範囲は `planswap.usageAutoRefreshCurrentOnly` に従います。 |
 | `planswap.claude.usageRefreshMinutes` | `15` | Claude の自動更新の時間のしきい値（分、10–1440）。使用量キャッシュまたは前回の確認から判断します。正確な更新予定ではありません。 |
-| `planswap.claude.usageTimeoutSeconds` | `30` | Claude の使用量確認がタイムアウトするまでの秒数（10–120）。自動・手動の確認に適用されます。 |
 | `planswap.codex.usageAutoRefresh` | `true` | 条件を満たす Codex アカウントを自動確認します。対象範囲は `planswap.usageAutoRefreshCurrentOnly` に従います。 |
 | `planswap.codex.usageRefreshMinutes` | `15` | Codex の自動更新の時間のしきい値（分、5–1440）。使用量キャッシュまたは前回の確認から判断します。正確な更新予定ではありません。 |
+| `planswap.usageCheckIntervalSeconds` | `120` | スケジューラーの確認周期（秒、30–600）。確認時期が来たアカウントを探します。正確な確認時刻は保証しません。 |
+| `planswap.claude.usageTimeoutSeconds` | `30` | Claude の使用量確認がタイムアウトするまでの秒数（10–120）。自動・手動の確認に適用されます。 |
 | `planswap.codex.usageTimeoutSeconds` | `15` | Codex の使用量確認がタイムアウトするまでの秒数（5–120）。自動・手動の確認に適用されます。 |
 
 自動確認をオフにしても、更新アイコンとコマンドは引き続き使えます。メールアドレスの設定はステータスバーのツールチップにも適用されます。サイドバーの上限と推奨の表示設定はステータスバーには影響しません。コマンドパレットのタイトルとサイドバーの名前は、`planswap.language` ではなくエディターの表示言語に従います。

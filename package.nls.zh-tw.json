@@ -60,7 +60,7 @@
   "config.codexUsageAutoRefresh.description": "在視窗取得焦點時，自動查詢符合條件且已登入的 Codex 帳號用量額度。帳號範圍由 planswap.usageAutoRefreshCurrentOnly 控制：關閉時也查詢其他已登記帳號，開啟時只查詢目前生效帳號。不查詢 API key 帳號。手動重新整理仍可使用。",
   "config.codexUsageRefreshMinutes.description": "自動重新整理 Codex 時，判斷每個帳號的用量快取或上次查詢是否過期的時間門檻（分鐘，5–1440）。帳號範圍由 planswap.usageAutoRefreshCurrentOnly 控制，不保證精準定時重新整理。",
   "config.codexUsageTimeoutSeconds.description": "單次查詢 Codex 帳號用量額度允許執行的最長時間，逾時後結束查詢並回報逾時（秒，5–120）。自動查詢和手動重新整理都適用。",
-  "config.sidebarWarningThreshold.description": "側邊欄用量條在剩餘百分比小於或等於此值時顯示警告色（0–100）。開啟 planswap.sidebar.showRecommendation 時，此值也是觸發帳號推薦的低餘量門檻。",
+  "config.sidebarWarningThreshold.description": "側邊欄用量條在剩餘百分比小於或等於此值時顯示警告色（0–100）。",
   "config.sidebarErrorThreshold.description": "側邊欄中用量額度的剩餘百分比小於或等於此值時，進度條顯示錯誤色（0–100）。優先於警告臨界值。",
   "config.sidebarRecommendation.description": "目前帳號最低的一般用量額度剩餘不超過側邊欄警告臨界值時，在側邊欄推薦另一個帳號：已登入且剩餘最多的帳號，標記為不參與推薦的帳號除外。關閉後不再顯示推薦卡片和各帳號的推薦按鈕。",
   "config.statusBarEnabled.description": "在狀態列中顯示 PlanSwap 用量項目。",
@@ -73,5 +73,7 @@
   "config.statusBarAlignment.description": "PlanSwap 狀態列項目所在的一側。",
   "config.statusBarAlignment.left": "狀態列左側",
   "config.statusBarAlignment.right": "狀態列右側",
-  "config.claudeConfirmSwitch.description": "從側邊欄切換 Claude 帳號（切換按鈕、按兩下或 Enter）前先要求確認。Codex 切換一律需要確認。關閉後，在有焦點的列上按兩下或按 Enter 會立即切換。"
+  "config.claudeConfirmSwitch.description": "從側邊欄切換 Claude 帳號（切換按鈕、按兩下或 Enter）前先要求確認。Codex 切換一律需要確認。關閉後，在有焦點的列上按兩下或按 Enter 會立即切換。",
+  "config.sidebarRecommendationThreshold.description": "目前帳號最低一般額度的剩餘百分比小於或等於此值時推薦其他帳號（0–100，預設 10），與用量顏色門檻獨立。僅在 planswap.sidebar.showRecommendation 開啟時生效。未明確設定此項時，繼承舊 planswap.sidebar.warningThreshold 的明確設定值；不會自動改寫設定。",
+  "config.group.advanced": "進階"
 }

@@ -245,15 +245,6 @@
             "description": "%config.usageAutoRefreshCurrentOnly.description%",
             "order": 2
           },
-          "planswap.usageCheckIntervalSeconds": {
-            "type": "number",
-            "default": 120,
-            "minimum": 30,
-            "maximum": 600,
-            "scope": "application",
-            "description": "%config.usageCheckIntervalSeconds.description%",
-            "order": 3
-          },
           "planswap.notifications.enabled": {
             "type": "boolean",
             "default": true,
@@ -329,6 +320,15 @@
             "scope": "application",
             "description": "%config.sidebarRecommendation.description%",
             "order": 6
+          },
+          "planswap.sidebar.recommendationThreshold": {
+            "type": "number",
+            "default": 10,
+            "minimum": 0,
+            "maximum": 100,
+            "scope": "application",
+            "description": "%config.sidebarRecommendationThreshold.description%",
+            "order": 7
           }
         }
       },
@@ -423,15 +423,6 @@
             "scope": "application",
             "description": "%config.claudeUsageRefreshMinutes.description%",
             "order": 2
-          },
-          "planswap.claude.usageTimeoutSeconds": {
-            "type": "number",
-            "default": 30,
-            "minimum": 10,
-            "maximum": 120,
-            "scope": "application",
-            "description": "%config.claudeUsageTimeoutSeconds.description%",
-            "order": 3
           }
         }
       },
@@ -454,6 +445,31 @@
             "maximum": 1440,
             "scope": "application",
             "description": "%config.codexUsageRefreshMinutes.description%",
+            "order": 1
+          }
+        }
+      },
+      {
+        "id": "planswap.advanced",
+        "title": "%config.group.advanced%",
+        "order": 5,
+        "properties": {
+          "planswap.usageCheckIntervalSeconds": {
+            "type": "number",
+            "default": 120,
+            "minimum": 30,
+            "maximum": 600,
+            "scope": "application",
+            "description": "%config.usageCheckIntervalSeconds.description%",
+            "order": 0
+          },
+          "planswap.claude.usageTimeoutSeconds": {
+            "type": "number",
+            "default": 30,
+            "minimum": 10,
+            "maximum": 120,
+            "scope": "application",
+            "description": "%config.claudeUsageTimeoutSeconds.description%",
             "order": 1
           },
           "planswap.codex.usageTimeoutSeconds": {

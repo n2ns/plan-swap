@@ -19,7 +19,7 @@ const model = (usedPercent: number): Window => ({ usedPercent, windowMinutes: 10
 describe('lowestRemaining', () => {
   test('is the lowest remaining percentage of the general windows, model-specific windows left out', () => {
     assert.equal(lowestRemaining({ windows: [fiveHour(20), weekly(54), model(99)], checkedAt: 0 }), 46);
-    assert.equal(lowestRemaining({ windows: [fiveHour(33.333)], checkedAt: 0 }), 66.67);
+    assert.equal(lowestRemaining({ windows: [fiveHour(33.333)], checkedAt: 0 }), 100 - 33.333);
   });
   test('is undefined without an observation or without a general window', () => {
     assert.equal(lowestRemaining(undefined), undefined);
@@ -29,6 +29,18 @@ describe('lowestRemaining', () => {
 });
 
 describe('recommend', () => {
+  test('warning comparisons and candidate ranking use unrounded observations', () => {
+    const other = row('other', [fiveHour(10)]);
+    for (const used of [69.6, 69.996]) {
+      assert.equal(recommend([row('default', [fiveHour(used)], { isCurrent: true }), other], 30), undefined);
+    }
+    assert.equal(recommend([row('default', [fiveHour(70)], { isCurrent: true }), other], 30), other.dir);
+    const current = row('default', [fiveHour(80)], { isCurrent: true });
+    const better = row('better', [fiveHour(49.996)]);
+    const fresher = row('fresher', [fiveHour(50)]);
+    fresher.usage!.checkedAt = 2_000;
+    assert.equal(recommend([current, fresher, better], 30), better.dir, 'display rounding must not create a freshness tie');
+  });
   test('nothing while the current account is above the warning threshold or has no observation', () => {
     const other = row('b', [fiveHour(10), weekly(10)]);
     assert.equal(recommend([row('default', [fiveHour(60), weekly(40)], { isCurrent: true }), other], 30), undefined);

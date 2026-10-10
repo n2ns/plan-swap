@@ -60,7 +60,7 @@
   "config.codexUsageAutoRefresh.description": "Automatically check usage limits of eligible signed-in Codex accounts while the window is focused. Account scope follows planswap.usageAutoRefreshCurrentOnly: when off, other registered accounts are checked too; when on, only the effective account. API key accounts are not queried. Manual refreshes remain available.",
   "config.codexUsageRefreshMinutes.description": "Age threshold in minutes for an account’s cached usage or last check before automatic Codex refreshes are due (5–1440). Account scope follows planswap.usageAutoRefreshCurrentOnly. This does not guarantee refreshes at exact times.",
   "config.codexUsageTimeoutSeconds.description": "Maximum seconds one usage limit check of a Codex account may run before it is ended and reported as timed out (5–120). Applies to automatic and manual checks.",
-  "config.sidebarWarningThreshold.description": "A sidebar usage bar turns to the warning color at or below this remaining percentage (0–100). This is also the low-usage threshold for account recommendations when planswap.sidebar.showRecommendation is enabled.",
+  "config.sidebarWarningThreshold.description": "A sidebar usage bar turns to the warning color at or below this remaining percentage (0–100).",
   "config.sidebarErrorThreshold.description": "A usage limit bar in the sidebar turns to the error color when the remaining percentage is at or below this value (0–100). Takes precedence over the warning threshold.",
   "config.sidebarRecommendation.description": "Recommend another account in the sidebar while the current account’s lowest general usage limit is at or below the sidebar warning threshold: the signed-in account with the most left, excluding accounts marked as not recommended. Off hides the recommendation card and the per-account buttons.",
   "config.statusBarEnabled.description": "Show the PlanSwap usage item in the status bar.",
@@ -73,5 +73,7 @@
   "config.statusBarAlignment.description": "Side of the status bar the PlanSwap item sits on.",
   "config.statusBarAlignment.left": "Left side of the status bar",
   "config.statusBarAlignment.right": "Right side of the status bar",
-  "config.claudeConfirmSwitch.description": "Ask for confirmation before switching Claude accounts from the sidebar (switch button, double-click or Enter). Codex switching always asks. When off, double-click or Enter on a focused row switches at once."
+  "config.claudeConfirmSwitch.description": "Ask for confirmation before switching Claude accounts from the sidebar (switch button, double-click or Enter). Codex switching always asks. When off, double-click or Enter on a focused row switches at once.",
+  "config.sidebarRecommendationThreshold.description": "Recommend another account when the current account’s lowest general remaining percentage is at or below this value (0–100, default 10), independently of usage colors. Applies when planswap.sidebar.showRecommendation is enabled. Until this setting is explicitly configured, an explicit legacy planswap.sidebar.warningThreshold value is used instead; settings are never rewritten.",
+  "config.group.advanced": "Advanced"
 }

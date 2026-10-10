@@ -277,7 +277,7 @@ function usageWindow(w: UsageWindowView, display: UsageDisplay): HTMLElement {
   // planswap.usageDisplay picks what the bar and percentage show; the level (color) always follows what is left
   const shown = display === 'used' ? used : remaining;
   const label = display === 'used' ? t('usage.used', { percent: used }) : t('usage.remaining', { percent: remaining });
-  const level = usageLevel(remaining);
+  const level = usageLevel(100 - w.usedPercent);
   const exhausted = level === 'empty';
   // Two lines per window: the duration with the time until the reset (clock icon + short duration) at the right, then
   // the bar with the shown percentage at its right. Only the bar has a tooltip, saying whether its length is what is

@@ -22,6 +22,7 @@ export const SHOW_FIVE_HOUR_SETTING = 'sidebar.showFiveHourLimit';
 export const SHOW_WEEKLY_SETTING = 'sidebar.showWeeklyLimit';
 // Off: no recommendation card and no per-row exclude buttons
 export const SHOW_RECOMMENDATION_SETTING = 'sidebar.showRecommendation';
+export const RECOMMENDATION_THRESHOLD_SETTING = 'sidebar.recommendationThreshold';
 
 const FIVE_HOURS = 300;
 const SEVEN_DAYS = 7 * 1440;
@@ -42,6 +43,17 @@ export function sidebarDisplay(): SidebarDisplay {
 export function sidebarThresholds(): { warning: number; error: number } {
   const config = vscode.workspace.getConfiguration('planswap');
   return { warning: threshold(config.get<number>('sidebar.warningThreshold'), 30), error: threshold(config.get<number>('sidebar.errorThreshold'), 10) };
+}
+
+/** Independent recommendation trigger; retain an explicit legacy warning value until the new setting is configured. */
+export function recommendationThreshold(): number {
+  const config = vscode.workspace.getConfiguration('planswap');
+  const explicit = (key: string): unknown => {
+    const inspected = config.inspect<unknown>(key);
+    return [inspected?.workspaceFolderValue, inspected?.workspaceValue, inspected?.globalValue].find((value) => value !== undefined);
+  };
+  const configured = explicit(RECOMMENDATION_THRESHOLD_SETTING);
+  return threshold(configured === undefined ? explicit('sidebar.warningThreshold') : configured, 10);
 }
 
 /**
@@ -289,7 +301,7 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
       enabled: source.enabled(),
       accounts: applySidebarDisplay(rows, display),
       hideEmail: display.email ? undefined : true,
-      recommended: showRecommendation && !pendingDir && !switchedTo ? recommend(rows, sidebarThresholds().warning) : undefined,
+      recommended: showRecommendation && !pendingDir && !switchedTo ? recommend(rows, recommendationThreshold()) : undefined,
       hideRecommendation: showRecommendation ? undefined : true,
       switchedTo,
       pendingDir,

@@ -5,6 +5,7 @@ export const version = '1.107.0';
 export interface UpdateRecord { section: string; key: string; value: unknown; target: unknown }
 
 const store = new Map<string, Map<string, unknown>>();
+const defaults = new Map<string, Map<string, unknown>>();
 export const updates: UpdateRecord[] = [];
 
 /** Sets the value returned by getConfiguration(section).get(key); undefined means not set */
@@ -13,8 +14,15 @@ export function setConfig(section: string, key: string, value: unknown): void {
   store.get(section)!.set(key, value);
 }
 
+/** Sets a manifest default independently from an explicit user configuration. */
+export function setConfigDefault(section: string, key: string, value: unknown): void {
+  if (!defaults.has(section)) defaults.set(section, new Map());
+  defaults.get(section)!.set(key, value);
+}
+
 export function resetConfig(): void {
   store.clear();
+  defaults.clear();
   updates.length = 0;
 }
 
@@ -36,7 +44,11 @@ export const workspace = {
   getConfiguration(section: string) {
     return {
       get<T>(key: string, defaultValue?: T): T | undefined {
-        return (store.get(section)?.get(key) as T | undefined) ?? defaultValue;
+        return (store.get(section)?.get(key) as T | undefined) ?? (defaults.get(section)?.get(key) as T | undefined) ?? defaultValue;
+      },
+      inspect<T>(key: string) {
+        return { key: `${section}.${key}`, defaultValue: defaults.get(section)?.get(key) as T | undefined, globalValue: store.get(section)?.get(key) as T | undefined,
+          workspaceValue: undefined, workspaceFolderValue: undefined };
       },
       async update(key: string, value: unknown, target: unknown): Promise<void> {
         setConfig(section, key, value);

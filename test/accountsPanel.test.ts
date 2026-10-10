@@ -3,14 +3,14 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type * as vscode from 'vscode';
-import { AccountsPanel, applySidebarDisplay, claudePanelSource, sidebarDisplay, sidebarThresholds, type PanelSource } from '../src/accountsPanel';
+import { AccountsPanel, applySidebarDisplay, claudePanelSource, recommendationThreshold, sidebarDisplay, sidebarThresholds, type PanelSource } from '../src/accountsPanel';
 import { AccountStore } from '../src/accounts';
 import { LabelStore } from '../src/labels';
 import { readAccountInfo } from '../src/paths';
 import type { AccountView, FromWebview, ToWebview } from '../src/protocol';
 import { makeTempHome, MemoryMemento } from './helpers';
 import { intlLocale, setLocale, t } from '../src/i18n';
-import { resetConfig, setConfig } from './stubs/vscode';
+import { resetConfig, setConfig, setConfigDefault, updates } from './stubs/vscode';
 
 function harness(claude?: PanelSource) {
   const messages: ToWebview[] = [];
@@ -113,7 +113,7 @@ test('each tab carries the recommendation computed on the full rows; the setting
   resetConfig();
   const usage = (used: number) => ({ windows: [{ usedPercent: used, windowMinutes: 300 }], checkedAt: 1 });
   const rows = (): AccountView[] => [
-    { kind: 'default', name: 'default', label: 'default', dir: '/h/.claude', dirLabel: '~/.claude', loggedIn: true, isCurrent: true, usage: usage(80) },
+    { kind: 'default', name: 'default', label: 'default', dir: '/h/.claude', dirLabel: '~/.claude', loggedIn: true, isCurrent: true, usage: usage(95) },
     { kind: 'named', name: 'work', label: 'work', dir: '/h/.claude-work', dirLabel: '~/.claude-work', loggedIn: true, isCurrent: false, usage: usage(10) },
   ];
   const h = harness({ accounts: rows, enabled: () => true, pendingDir: () => undefined, watchTargets: () => [] });
@@ -185,6 +185,69 @@ test('the sidebar color thresholds default to 30 / 10 and are clamped to 0..100'
     setConfig('planswap', 'sidebar.errorThreshold', 150);
     assert.deepEqual(sidebarThresholds(), { warning: 30, error: 100 });
   } finally { resetConfig(); }
+});
+
+test('recommendation threshold defaults to 10, inherits only explicit legacy values and never rewrites settings', () => {
+  resetConfig();
+  try {
+    setConfigDefault('planswap', 'sidebar.warningThreshold', 30);
+    setConfigDefault('planswap', 'sidebar.recommendationThreshold', 10);
+    assert.equal(recommendationThreshold(), 10, 'the legacy manifest default is not an explicit customization');
+    setConfig('planswap', 'statusBar.warningThreshold', 60);
+    assert.equal(recommendationThreshold(), 10, 'status bar colors never affect recommendations');
+    setConfig('planswap', 'sidebar.warningThreshold', 45);
+    assert.equal(recommendationThreshold(), 45);
+    setConfig('planswap', 'sidebar.recommendationThreshold', 10);
+    assert.equal(recommendationThreshold(), 10, 'an explicit new default overrides the legacy customization');
+    setConfig('planswap', 'sidebar.recommendationThreshold', 0);
+    assert.equal(recommendationThreshold(), 0);
+    setConfig('planswap', 'sidebar.recommendationThreshold', 150);
+    assert.equal(recommendationThreshold(), 100);
+    setConfig('planswap', 'sidebar.recommendationThreshold', -5);
+    assert.equal(recommendationThreshold(), 0);
+    for (const invalid of ['x', NaN, Infinity, null]) {
+      setConfig('planswap', 'sidebar.recommendationThreshold', invalid);
+      assert.equal(recommendationThreshold(), 10);
+    }
+    setConfig('planswap', 'sidebar.recommendationThreshold', undefined);
+    assert.equal(recommendationThreshold(), 45, 'removing the new value restores explicit legacy compatibility');
+    assert.deepEqual(updates, []);
+  } finally { resetConfig(); }
+});
+
+test('both pages refresh recommendations using the independent inclusive threshold', () => {
+  resetConfig();
+  let usedPercent = 90;
+  const h = harness({
+    accounts: (): AccountView[] => [
+      { kind: 'default', name: 'default', label: 'default', dir: '/h/.claude', dirLabel: '~/.claude', loggedIn: true, isCurrent: true, usage: { windows: [{ usedPercent, windowMinutes: 300 }], checkedAt: 1 } },
+      { kind: 'named', name: 'work', label: 'work', dir: '/h/.claude-work', dirLabel: '~/.claude-work', loggedIn: true, isCurrent: false, usage: { windows: [{ usedPercent: 10, windowMinutes: 300 }], checkedAt: 1 } },
+    ], enabled: () => true, pendingDir: () => undefined, watchTargets: () => [],
+  });
+  const recommendations = () => {
+    h.messages.length = 0;
+    h.receive({ type: 'ready' });
+    const msg = h.messages[0];
+    assert.ok(msg.type === 'state');
+    return [msg.state.claude.recommended, msg.state.codex.recommended];
+  };
+  try {
+    assert.deepEqual(recommendations(), ['/h/.claude-work', '/h/.claude-work'], 'at 10%');
+    usedPercent = 89.996;
+    assert.deepEqual(recommendations(), [undefined, undefined], '10.004% is above the trigger');
+    setConfig('planswap', 'sidebar.recommendationThreshold', 11);
+    h.messages.length = 0;
+    h.panel.refresh();
+    const refreshed = h.messages[0];
+    assert.ok(refreshed.type === 'state');
+    assert.equal(refreshed.state.claude.recommended, '/h/.claude-work', 'refresh pushes the updated recommendation without another ready message');
+    assert.equal(refreshed.state.codex.recommended, '/h/.claude-work');
+    assert.deepEqual(recommendations(), ['/h/.claude-work', '/h/.claude-work']);
+    setConfig('planswap', 'sidebar.warningThreshold', 1);
+    assert.deepEqual(recommendations(), ['/h/.claude-work', '/h/.claude-work'], 'explicit recommendation setting decouples colors');
+    setConfig('planswap', 'sidebar.showRecommendation', false);
+    assert.deepEqual(recommendations(), [undefined, undefined]);
+  } finally { h.panel.dispose(); resetConfig(); }
 });
 
 test('the email setting hides and restores both pages without altering labels or missing-email rows', () => {

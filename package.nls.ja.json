@@ -60,7 +60,7 @@
   "config.codexUsageAutoRefresh.description": "ウィンドウにフォーカスがある間、条件を満たすサインイン済み Codex アカウントの使用量の上限を自動確認します。範囲は planswap.usageAutoRefreshCurrentOnly に従い、オフならほかの登録済みアカウントも、オンなら現在有効なアカウントだけを確認します。API key アカウントは確認しません。手動更新は引き続き使えます。",
   "config.codexUsageRefreshMinutes.description": "Codex の自動更新で、各アカウントの使用量キャッシュまたは前回の確認が古くなったと判断する時間のしきい値（分、5–1440）。対象範囲は planswap.usageAutoRefreshCurrentOnly に従います。正確な時刻での更新を保証するものではありません。",
   "config.codexUsageTimeoutSeconds.description": "Codex アカウントの使用量の上限を 1 回確認するときの最大時間。超えると確認を終了してタイムアウトとして報告します（秒、5–120）。自動確認と手動更新の両方に適用されます。",
-  "config.sidebarWarningThreshold.description": "サイドバーの使用量バーは残りの割合がこの値以下になると警告色になります（0–100）。planswap.sidebar.showRecommendation がオンの場合、アカウントの推奨を表示する残量のしきい値にもなります。",
+  "config.sidebarWarningThreshold.description": "サイドバーの使用量バーは残りの割合がこの値以下になると警告色になります（0–100）。",
   "config.sidebarErrorThreshold.description": "サイドバーの使用量の上限の残りの割合がこの値以下になると、バーがエラー色になります（0–100）。警告のしきい値より優先されます。",
   "config.sidebarRecommendation.description": "現在のアカウントの一般的な使用量の上限のうち最も低いものの残りがサイドバーの警告のしきい値以下のとき、サイドバーで別のアカウントをおすすめします。サインイン済みで残りが最も多いアカウントが対象で、おすすめから除外したアカウントは含みません。オフにすると、おすすめカードと各アカウントのボタンを表示しません。",
   "config.statusBarEnabled.description": "ステータスバーに PlanSwap の使用量項目を表示します。",
@@ -73,5 +73,7 @@
   "config.statusBarAlignment.description": "PlanSwap 項目を表示するステータスバーの側。",
   "config.statusBarAlignment.left": "ステータスバーの左側",
   "config.statusBarAlignment.right": "ステータスバーの右側",
-  "config.claudeConfirmSwitch.description": "サイドバーから Claude アカウントを切り替える前（切り替えボタン、ダブルクリック、Enter）に確認します。Codex の切り替えは常に確認します。オフにすると、フォーカスのある行でのダブルクリックまたは Enter ですぐに切り替わります。"
+  "config.claudeConfirmSwitch.description": "サイドバーから Claude アカウントを切り替える前（切り替えボタン、ダブルクリック、Enter）に確認します。Codex の切り替えは常に確認します。オフにすると、フォーカスのある行でのダブルクリックまたは Enter ですぐに切り替わります。",
+  "config.sidebarRecommendationThreshold.description": "現在のアカウントの一般的な上限のうち最も低い残りの割合がこの値以下になると、別のアカウントを推奨します（0–100、既定値 10）。使用量の色のしきい値とは独立しており、planswap.sidebar.showRecommendation がオンの場合に適用されます。この設定を明示的に指定するまでは、旧 planswap.sidebar.warningThreshold に明示的に指定した値を引き継ぎます。設定は自動で書き換えません。",
+  "config.group.advanced": "詳細設定"
 }

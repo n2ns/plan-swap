@@ -7,29 +7,29 @@ import type { AccountView } from './protocol';
 type UsageWindow = NonNullable<AccountView['usage']>['windows'][number];
 
 /**
- * Lowest remaining percentage of the general (non model-specific) windows of a usage observation, with at most two
- * decimals like the Webview; undefined without a general window. Model-specific windows never count: PlanSwap does
+ * Lowest unrounded remaining percentage of the general (non model-specific) windows of a usage observation;
+ * undefined without a general window. Model-specific windows never count: PlanSwap does
  * not know which model the user will use next.
  */
 export function lowestRemaining(usage: AccountView['usage']): number | undefined {
   const general = (usage?.windows ?? []).filter((w: UsageWindow) => !w.scope);
   if (general.length === 0) return undefined;
-  return Math.min(...general.map((w) => Number((100 - w.usedPercent).toFixed(2))));
+  return Math.min(...general.map((w) => 100 - w.usedPercent));
 }
 
 /**
  * The directory of the account to recommend, or undefined. A recommendation is made only while the current row's
- * lowest general window is at or below warningThreshold (the sidebar's warning color); without a current observation
+ * lowest general window is at or below recommendationThreshold; without a current observation
  * nothing is low, so nothing is recommended. Candidates are the registered rows (never the external directory) that
  * are not excluded, not already selected (Codex, pending restart) and have a general window observation with nothing
  * used up (lowest remaining > 0, no limitReached). The candidate with the highest lowest-remaining wins, a fresher
  * observation (checkedAt) breaking ties, and only when it is strictly better than the current account; so the current
  * account is never recommended.
  */
-export function recommend(rows: readonly AccountView[], warningThreshold: number): string | undefined {
+export function recommend(rows: readonly AccountView[], recommendationThreshold: number): string | undefined {
   const current = rows.find((r) => r.isCurrent);
   const currentLowest = lowestRemaining(current?.usage);
-  if (currentLowest === undefined || currentLowest > warningThreshold) return undefined;
+  if (currentLowest === undefined || currentLowest > recommendationThreshold) return undefined;
   let best: { dir: string; lowest: number; checkedAt: number } | undefined;
   for (const row of rows) {
     if (row.kind === 'external' || row.isCurrent || row.isSelected || row.recommendExcluded || row.usage?.limitReached) continue;

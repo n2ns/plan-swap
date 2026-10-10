@@ -109,6 +109,8 @@ describe('pure helpers', () => {
     assert.equal(backgroundIdFor(11), 'statusBarItem.warningBackground');
     assert.equal(backgroundIdFor(10), 'statusBarItem.errorBackground');
     assert.equal(backgroundIdFor(0), 'statusBarItem.errorBackground');
+    assert.equal(backgroundIdFor(30.004), undefined);
+    assert.equal(backgroundIdFor(10.004), 'statusBarItem.warningBackground');
   });
 
   test('statusBarSettings: defaults, thresholds clamped to 0..100, unknown values fall back', () => {
@@ -180,6 +182,7 @@ describe('pure helpers', () => {
   });
 
   test('lowestWindow picks the general window with the least left, the shorter one on a tie', () => {
+    assert.equal(lowestWindow([{ windowMinutes: 300, usedPercent: 69.6 }, { windowMinutes: 10080, usedPercent: 69.7 }])?.windowMinutes, 10080, 'display rounding must not create a duration tie');
     assert.equal(lowestWindow<ClaudeUsageWindow>([]), undefined);
     assert.equal(lowestWindow([{ windowMinutes: 300, usedPercent: 4 }, { windowMinutes: 10080, usedPercent: 98 }])?.windowMinutes, 10080);
     assert.equal(lowestWindow([{ windowMinutes: 300, usedPercent: 92 }, { windowMinutes: 10080, usedPercent: 40 }])?.windowMinutes, 300);
@@ -195,6 +198,7 @@ describe('pure helpers', () => {
     assert.deepEqual(productPart('Claude', [], 'remaining', t(30)), { product: 'Claude' });
     assert.deepEqual(productPart('Claude', w(4, 40), 'remaining', t(30)), { product: 'Claude', percent: 96, window: undefined }, 'a lower but healthy 7d window stays implied');
     assert.deepEqual(productPart('Claude', w(4, 70), 'remaining', t(30)), { product: 'Claude', percent: 30, window: '7d' }, 'at the threshold');
+    assert.deepEqual(productPart('Claude', w(4, 69.996), 'remaining', t(30)), { product: 'Claude', percent: 96, window: undefined }, 'a rounded 30% does not cross the warning threshold');
     assert.deepEqual(productPart('Claude', w(4, 98), 'remaining', t(30)), { product: 'Claude', percent: 2, window: '7d' });
     assert.deepEqual(productPart('Claude', w(4, 98), 'used', t(30)), { product: 'Claude', percent: 98, window: '7d' });
     assert.deepEqual(productPart('Claude', w(92, 98), 'remaining', t(30)), { product: 'Claude', percent: 2, window: '7d' }, 'both low: the lowest');
@@ -497,6 +501,29 @@ describe('both products in the status bar', LINUX_ONLY, () => {
       const tip = tooltipText(item.tooltip);
       assert.match(tip, /\| 7d \| ░░░░░░░░░░ \| 0% \$\(warning\) Used up \| \$\(clock\) 3d \|/);
     } finally { bar.dispose(); }
+  });
+
+  test('raw observations drive background thresholds while displayed percentages remain rounded', () => {
+    resetConfig();
+    writeClaude([session(3), weekly(40)]);
+    const { bar, item } = make();
+    try {
+      bar.setClaudeUsage({ checking: false });
+      for (const used of [69.6, 69.996]) {
+        bar.setCodexUsage(codexOk(used, 50));
+        assert.equal(color(item), undefined, `${100 - used}% is above warning`);
+        assert.match(item.text, /Codex 30%/);
+      }
+      bar.setCodexUsage(codexOk(70, 50));
+      assert.equal(color(item), 'statusBarItem.warningBackground');
+      for (const used of [89.6, 89.996]) {
+        bar.setCodexUsage(codexOk(used, 50));
+        assert.equal(color(item), 'statusBarItem.warningBackground', `${100 - used}% is above error`);
+        assert.match(item.text, /Codex 10%/);
+      }
+      bar.setCodexUsage(codexOk(90, 50));
+      assert.equal(color(item), 'statusBarItem.errorBackground');
+    } finally { bar.dispose(); resetConfig(); }
   });
 
   test('a Codex window drives the warning color across products', () => {

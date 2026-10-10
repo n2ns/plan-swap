@@ -56,8 +56,11 @@ const icon = (name: string): string => `<span class="codicon codicon-${name}"></
 
 /** Remaining percentage of a window, rounded down and clamped to 0..100. */
 export function remainingOf(w: { usedPercent: number }): number {
-  return Math.max(0, Math.min(100, Math.floor(100 - w.usedPercent)));
+  return Math.floor(unroundedRemainingOf(w));
 }
+
+// Color and window selection compare the observation before display rounding.
+const unroundedRemainingOf = (w: { usedPercent: number }): number => Math.max(0, Math.min(100, 100 - w.usedPercent));
 
 /** Setting planswap.usageDisplay, read on every update; anything but 'used' shows what is left. */
 export function usageDisplay(): UsageDisplay {
@@ -105,8 +108,8 @@ export function lowestWindow<W extends GeneralWindow>(windows: readonly W[]): W 
   let best: W | undefined;
   for (const w of windows) {
     if (w.scope) continue;
-    if (best === undefined || remainingOf(w) < remainingOf(best) ||
-      (remainingOf(w) === remainingOf(best) && (w.windowMinutes ?? Infinity) < (best.windowMinutes ?? Infinity))) best = w;
+    if (best === undefined || unroundedRemainingOf(w) < unroundedRemainingOf(best) ||
+      (unroundedRemainingOf(w) === unroundedRemainingOf(best) && (w.windowMinutes ?? Infinity) < (best.windowMinutes ?? Infinity))) best = w;
   }
   return best;
 }
@@ -121,7 +124,7 @@ export function productPart(product: string, windows: readonly GeneralWindow[] |
   const short = windows ? shortWindow(windows) : undefined;
   if (!short) return { product };
   const lowest = lowestWindow(windows!)!;
-  const colored = remainingOf(lowest) <= Math.max(thresholds.warningThreshold, thresholds.errorThreshold);
+  const colored = unroundedRemainingOf(lowest) <= Math.max(thresholds.warningThreshold, thresholds.errorThreshold);
   const w = lowest !== short && lowest.windowMinutes !== undefined && colored ? lowest : short;
   return { product, percent: shownPercent(w, display), window: w === short ? undefined : formatDuration(w.windowMinutes!) };
 }
@@ -352,7 +355,7 @@ interface Candidate { remaining: number; product: string; window: string }
 // The lowest remaining percentage among the general windows (model-specific ones never count)
 function candidatesOf(product: string, windows: ReadonlyArray<UsageWindow | ClaudeUsageWindow>): Candidate[] {
   return windows.flatMap((w, index) => ('scope' in w && w.scope) ? [] : [{
-    remaining: remainingOf(w), product, window: w.windowMinutes ? formatDuration(w.windowMinutes) : `#${index + 1}`,
+    remaining: unroundedRemainingOf(w), product, window: w.windowMinutes ? formatDuration(w.windowMinutes) : `#${index + 1}`,
   }]);
 }
 
