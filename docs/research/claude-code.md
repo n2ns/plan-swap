@@ -53,3 +53,13 @@ Read from the official [Claude directory documentation](https://code.claude.com/
 - `session-env` and `shell-snapshots` hold runtime data; cleanup of such data must not be interpreted as lost conversation history. Existing runtime links remain unchanged in PlanSwap because process detection and editor integration also depend on them.
 
 Temporary-directory filesystem tests cover target initialization and writes through shared links. They do not establish that a running official client survives target deletion without a subsequent PlanSwap refresh; real-editor task/attachment acceptance remains user-operated.
+
+## History storage recheck (2026-10-10)
+
+Inspected the embedded JavaScript in the installed Linux Claude Code 2.1.296 native binary without running the CLI or reading account files:
+
+- The exported `tryCreateV5Backend` implementation (`pSr`, byte offset 220398057) still returns `undefined` regardless of the feature flag. Extracting that function and running it with both flag values confirmed the result. The v5 symlink refusal text is not evidence that this build uses a functioning v5 backend; retain upgrade monitoring.
+- History retention invokes its pruning function only when the HIPAA condition and `tengu_hipaa_history_retention_prune` flag allow it. The function (`tt`, byte offset 225923285) uses `lstat`; a symlink fails the regular-file check and returns `entriesPruned: 0, errors: 1` with an error-level log. The [official directory guide](https://code.claude.com/docs/en/claude-directory#kept-until-you-delete-them) likewise limits automatic prompt-history pruning to HIPAA configurations.
+- An isolated Node experiment ran the extracted pruning function against temporary synthetic history paths: the named-account symlink never reached its downstream scanner, while the default account's regular file reached it once. The scanner was stubbed, so this proves the guard and reachability, not complete retention processing or real-client acceptance. It corrects the earlier claim that shared history can never be pruned: the default account's real file remains eligible when the HIPAA condition applies.
+
+The temporary fixture was removed. These results do not justify adding a new PlanSwap history warning or deleting shared history. The directory guide also records that `claude project purge` was renamed to `claude purge` in 2.1.288; earlier numbered facts retain the command name of the version they describe.

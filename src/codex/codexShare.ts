@@ -44,7 +44,8 @@ export const CODEX_CHILD_SHARED_DIRS: ReadonlyArray<{ dir: string; excludes: rea
   { dir: 'plugins/cache', excludes: ['openai-curated-remote'] },
 ];
 // config.toml is not linked (reported in `refused`, explained in `refusedNotes` when the account is left without one)
-// when the default config is unreadable or blockedConfigReason finds one of CODEX_IDENTITY_CONFIG_KEYS. Re-evaluated on
+// when the default config is unreadable or blockedConfigReason rejects one of CODEX_IDENTITY_CONFIG_KEYS
+// (account-local sqlite_home strings are allowed). Re-evaluated on
 // every link refresh: an existing account link to the default config.toml is then removed (no copy is made); a regular
 // file or a link elsewhere stays.
 export { CODEX_IDENTITY_CONFIG_KEYS };

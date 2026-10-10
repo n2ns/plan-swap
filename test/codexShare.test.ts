@@ -304,6 +304,23 @@ describe('ensureCodexLinks', SHARING, () => {
     assert.ok(!exists(path.join(acc, 'config.toml')));
   });
 
+  test('account-local sqlite_home permits linking, read-only checks and refresh of existing links', () => {
+    const cfg = path.join(def, 'config.toml');
+    const acc = newAccount('a');
+    write(cfg, 'model = "gpt"\n');
+    ensureCodexLinks(acc);
+    write(cfg, 'sqlite_home = "."\nmodel = "gpt"\n');
+    const before = snapshot(home);
+    assert.ok(!ensureCodexLinks(acc, { check: true }).refused.includes('config.toml'));
+    assert.deepEqual(snapshot(home), before, 'checking does not alter the config link or its target');
+    assert.ok(!ensureCodexLinks(acc).refused.includes('config.toml'));
+    assert.ok(isLinkTo(path.join(acc, 'config.toml'), cfg), 'refresh keeps the existing link');
+    const second = newAccount('b');
+    assert.ok(!ensureCodexLinks(second).refused.includes('config.toml'));
+    assert.ok(isLinkTo(path.join(second, 'config.toml'), cfg), 'a new account can link the same config');
+    assert.equal(read(cfg), 'sqlite_home = "."\nmodel = "gpt"\n');
+  });
+
   test('an existing config.toml link is removed when the default config later gains identity keys; other entries stay', () => {
     const acc = newAccount('a');
     const cfg = path.join(def, 'config.toml');

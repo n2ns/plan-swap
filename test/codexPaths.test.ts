@@ -201,6 +201,27 @@ describe('copyCodexSeed', () => {
     assert.equal(r.skipped[0].file, 'config.toml');
     assert.equal(r.skipped[0].reason, 'Contains a [sqlite_home.x] section; not copied');
   });
+  test('account-local sqlite_home strings allow independent configuration copies', () => {
+    for (const value of ['"."', "'./' # account-local", '"././"', '"\\u002e"']) {
+      const cfg = `sqlite_home = ${value}\nmodel = "gpt"\n`;
+      assert.equal(blockedConfigReason(cfg), undefined, value);
+      const { src, dst } = fresh(cfg);
+      assert.deepEqual(copyCodexSeed(src, dst), { copied: ['config.toml'], skipped: [] }, value);
+      assert.equal(read(path.join(dst, 'config.toml')), cfg);
+    }
+    const windowsRelative = "sqlite_home = '.\\'\n";
+    assert.equal(blockedConfigReason(windowsRelative) === undefined, onWindows);
+  });
+  test('sqlite_home redirects and unrecognized values remain blocked', () => {
+    for (const value of ['""', '"/srv/codex"', '"../.codex"', '"db"', '".."', '"child/.."',
+      '".\\n"', '"." trailing', '"""."""', "'''\n.\n'''", '{ path = "." }', 'false']) {
+      assert.equal(blockedConfigReason(`sqlite_home = ${value}\n`), 'Contains top-level key sqlite_home', value);
+    }
+    assert.equal(blockedConfigReason('sqlite_home.path = "."\n'), 'Contains top-level key sqlite_home');
+    for (const key of ['forced_login_method', 'forced_chatgpt_workspace_id']) {
+      assert.equal(blockedConfigReason(`sqlite_home = "."\n${key} = "x"\n`), `Contains top-level key ${key}`);
+    }
+  });
   const PARSER_ROOTS = ['model_provider', 'model_providers', 'log_dir', 'sqlite_home', 'forced_login_method'];
   for (const [label, cfg, reason] of [
     ['top-level dotted key', 'model = "x"\nmodel_providers.x.base_url = "http://x"\n', 'Contains top-level key model_providers'],

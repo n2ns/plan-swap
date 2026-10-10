@@ -7,32 +7,12 @@ is still missing. Remove an item once it is done or decided.
 
 - **Claude optional shared targets and scoped Repair (2026-10-10).** Verify in a real editor that switching initializes missing task/attachment targets, task lists and Remote Control attachments remain usable across accounts, and cleanup during an already-running session does not prevent first writes. Automated checks use temporary HOME directories and filesystem writes, not a signed-in Claude client; the current VSIX is not installed by these checks.
 
-- **Claude prompt history "storage v5" (watch on upgrades).** Claude Code has a history storage backend behind the
-  remote feature flag `tengu_hover_rest` (env override `CLAUDE_CODE_HOVER_REST`, cached per account in
-  `.claude.json` under `cachedGrowthBookFeatures`) whose code opens `history.jsonl` with `O_NOFOLLOW`. In the public
-  builds 2.1.274, 2.1.284 and 2.1.287 (Linux and Windows) its factory `tryCreateV5Backend` is an empty stub that always
-  returns `undefined`, so even with the flag on prompt history takes the old path and reads and appends through the
-  link (checked in the npm packages on 2026-10-02; no changelog entry or issue about it). The `claude project purge`
-  refusal text ("history.jsonl is a symlink or not a regular file…") belongs to the same unreachable branch. Nothing to
-  detect today; after each Claude Code upgrade, check whether the factory still returns nothing. Detecting the flag
-  would need reading named accounts' `.claude.json` beyond the current contract.
-- **History retention pruning skips the link.** Independent of the flag, Claude Code's old history path skips its
-  retention pruning when `history.jsonl` is not a regular file (only a debug log line), so the shared history is never
-  pruned by Claude Code.
-- **Codex schema-versioned databases.** `state_5.sqlite`, `thread_history_1.sqlite`, `goals_1.sqlite`, `queue_1.sqlite`
-  carry a version in their names. A Codex upgrade that bumps one creates a real file in each shared account, reported as a
-  conflict; `CODEX_SHARED_ENTRIES` must be updated by hand. Codex corruption recovery also renames the link away.
-- **Codex `plugins/cache` sharing** is based on low-to-medium-confidence research (the remote marketplace is synced per
-  account). Verify plugins still install and load in a shared account.
-- **Codex memories stay per account** ([Codex research, fact 17](docs/research/codex.md#facts)). Revisit
-  if Codex adds a memory location option.
-- **Is `sqlite_home` in the default `config.toml` really unsafe to share?** It is still on the `config.toml` refusal
-  list ([Codex design 8.6](docs/codex-design.md#86-shared-and-independent-accounts)) because, read from the source only
-  ([fact 27](docs/research/codex.md#facts)), every linked account would then use one `memories_1.sqlite` (and
-  `logs_2.sqlite`) while each keeps its own `memories/` folder (fact 17). Not checked at runtime. Run Codex in temporary
-  `CODEX_HOME`s with test accounts (never real ones) sharing one `sqlite_home`, and see whether memories stay consistent
-  and Codex reports errors; then keep the refusal or drop `sqlite_home` from `CODEX_IDENTITY_CONFIG_KEYS`. A refusal
-  leaves the account without any `config.toml`, so a needless one is costly.
+- **Claude prompt history "storage v5" (watch on upgrades).** The factory still returns `undefined` in Linux 2.1.296, including with the flag enabled. Recheck after upgrades; no new sharing check is needed for this build. See [the dated history recheck](docs/research/claude-code.md#history-storage-recheck-2026-10-10).
+- **History retention pruning skips named-account links under HIPAA conditions.** The named account's history symlink fails the regular-file guard; the default account's real history file remains eligible. Ordinary configurations do not automatically prune prompt history. This is an upstream limitation, not a request to add PlanSwap deletion; [source and isolated-function evidence](docs/research/claude-code.md#history-storage-recheck-2026-10-10) do not replace real-client acceptance.
+- **Codex schema-versioned databases (watch on upgrades).** The four shared database names still match standalone 0.162.1 and the editor's 0.162.0-alpha.17.2. Recheck future filename changes and corruption recovery that replaces a link; no current whitelist update is needed. See [the sharing recheck](docs/research/codex.md#sharing-recheck-2026-10-10).
+- **Codex `plugins/cache` real-client acceptance.** The shared marketplace layout passed isolated filesystem installation, upgrade, manifest-read and MCP-path checks; the remote marketplace cache stays per account. Still verify actual plugin installation and loading in a shared account. [Evidence boundaries](docs/research/codex.md#sharing-recheck-2026-10-10).
+- **Codex memories stay per account (watch on upgrades).** This includes `memories_v2/` and `memories_v2_1.sqlite`. The current source still refuses a symlinked memory root and offers no custom root setting. Revisit if that changes; see [the sharing recheck](docs/research/codex.md#sharing-recheck-2026-10-10).
+- **Codex `sqlite_home` real-client acceptance.** A common SQLite path shares memory job state despite separate output directories; upstream SQL isolation reproduced cross-account running/cooldown suppression. Preserve that protection. Official-client memory behavior remains unverified; [the sharing recheck](docs/research/codex.md#sharing-recheck-2026-10-10) distinguishes source, SQL and PlanSwap evidence.
 - **Codex usage limits** (per-account observations and the status bar) are not yet accepted with real accounts, on WSL or
   Windows (`codex.cmd` fallback, the binary bundled with the Codex extension when `codex` is not on PATH), including switches, editor restarts, reset/24-hour expiry and sign-in changes. Run
   [the usage checks](docs/manual-verification.md#usage-limits-sign-in-tip-and-duplicate-sign-ins); re-verify the

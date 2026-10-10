@@ -18,7 +18,7 @@ export interface CodexAccount { name: string; dir: string }
 const SEED_FILES = ['config.toml'];
 // Top-level keys that keep the default config.toml out of another account, copied (copyCodexSeed) or linked
 // (codexShare); the default `roots` of blockedConfigReason. The forced_* sign-in restrictions make Codex sign out every
-// account whose sign-in does not match them; sqlite_home would put every account's memories database in one place.
+// account whose sign-in does not match them; sqlite_home redirects databases unless it spells the account's own dir.
 // Other keys, provider and profile tables and the credential stores included, only choose how Codex runs, and
 // credentials stay per CODEX_HOME (Codex research fact 27).
 export const CODEX_IDENTITY_CONFIG_KEYS = ['forced_login_method', 'forced_chatgpt_workspace_id', 'sqlite_home'];
@@ -218,6 +218,21 @@ function scanValue(s: string, st: ValueState): void {
   }
 }
 
+// Codex resolves relative user-config paths against the account's config directory, even through a config symlink.
+// Accept only single-line strings made of '.' path components; other paths and unknown TOML forms stay blocked.
+function isAccountLocalSqliteHome(text: string): boolean {
+  const match = /^("(?:[^"\\]|\\.)*"|'[^']*')[ \t]*(?:#.*)?$/.exec(text.trim());
+  if (!match) return false;
+  let value: string;
+  try {
+    value = match[1].startsWith('"') ? JSON.parse(match[1]) as string : match[1].slice(1, -1);
+  } catch {
+    return false;
+  }
+  return value.startsWith('.') && value.split(isWindows() ? /[\\/]/ : /\//)
+    .every((part) => part === '.' || part === '');
+}
+
 /**
  * Returns the localized reason for the first blocked item in a config.toml text, or undefined if none.
  * Line-based scan (a leading BOM is ignored):
@@ -229,6 +244,8 @@ function scanValue(s: string, st: ValueState): void {
  * lines are ignored; keys after any other table header are not top-level. Lines inside a multi-line value (array,
  * inline table, """ or ''' string) are skipped, so they are never read as keys or headers; basic-string escapes are
  * respected when finding the closing delimiter, literal strings have none.
+ * The scalar sqlite_home key is allowed when a recognized single-line string spells only '.' path components
+ * and separators for this platform: it keeps databases under each account's own CODEX_HOME. Other values are blocked.
  * roots: the blocked first segments; default CODEX_IDENTITY_CONFIG_KEYS (codexShare passes one at a time).
  */
 export function blockedConfigReason(text: string, roots: readonly string[] = CODEX_IDENTITY_CONFIG_KEYS): string | undefined {
@@ -256,7 +273,9 @@ export function blockedConfigReason(text: string, roots: readonly string[] = COD
     const key = parseTomlKey(line);
     if (!key || !key.rest.startsWith('=')) continue;
     if (topLevel && roots.includes(key.segments[0])) {
-      return t('codex.seed.hasTopKey', { key: key.segments[0] });
+      const accountLocal = key.segments.length === 1 && key.segments[0] === 'sqlite_home'
+        && isAccountLocalSqliteHome(key.rest.slice(1));
+      if (!accountLocal) return t('codex.seed.hasTopKey', { key: key.segments[0] });
     }
     scanValue(key.rest.slice(1), st);
   }

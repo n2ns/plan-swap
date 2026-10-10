@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Allow single-line `sqlite_home = "."` and equivalent dot-only paths when linking or copying Codex configuration, using each account directory as the path base under the existing database sharing rules. Explain unsupported SQLite paths without incorrectly claiming that every value shares one memories database.
 - Detect broken shared skill and plugin links even when their entire default directory has disappeared, while keeping unused optional directories and expired plugin backups quiet.
 - Reconcile project MCP server enable/disable settings together during **Repair**, following the default account's explicit choices and preserving unrelated account settings. A server left in both lists no longer passes the check as synchronized.
 

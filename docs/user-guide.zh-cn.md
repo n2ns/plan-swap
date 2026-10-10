@@ -128,7 +128,7 @@ PlanSwap 让你同时保持多个 Claude Code 和 Codex 账号的登录状态，
 
 链接并不保证另一个账号能续接某个会话，尤其是跨不同的 ChatGPT 组织时。不要同时用两个账号打开同一个会话。
 
-有些设置永远不会链接。Claude：提供或限制登录方式的 `settings.json`（例如 API 密钥、API 密钥辅助程序或强制登录方式）不会链接；该账号会得到一份去掉该设置的副本，之后不再随默认设置更新。Codex：设置了 `forced_login_method` 或 `forced_chatgpt_workspace_id`（会让登录方式不同的账号被登出）或 `sqlite_home` 的 `config.toml` 不会链接，该账号会使用 Codex 的内置设置运行，直到你删除该设置并使用 **重新链接**。结果消息会列出该文件，Codex 还会列出该设置。
+有些设置永远不会链接。Claude：提供或限制登录方式的 `settings.json`（例如 API 密钥、API 密钥辅助程序或强制登录方式）不会链接；该账号会得到一份去掉该设置的副本，之后不再随默认设置更新。Codex：设置了 `forced_login_method` 或 `forced_chatgpt_workspace_id`（会让登录方式不同的账号被登出）或不支持的 `sqlite_home` 取值的 `config.toml` 不会链接，该账号会使用 Codex 的内置设置运行，直到你删除该设置并使用 **重新链接**。结果消息会列出该文件，Codex 还会列出该设置。 单行 `sqlite_home = "."`（或 `"./"` 等仅含点路径组件的等价写法）可以链接：每个账号使用自己的目录作为 SQLite 路径基准，数据库仍遵循原有共享规则。其他取值仍不支持；请删除该设置或改为 `"."`，再使用 **重新链接**。
 
 对于链接的 Claude 账号，PlanSwap 还会把默认账号的 MCP 服务器和各项目的信任设置复制到该账号中。账号登录后，还会复制默认账号的首次运行状态，使 Claude Code 不再重复首次设置。
 

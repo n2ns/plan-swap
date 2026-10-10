@@ -228,7 +228,7 @@ On WSL/Linux, enabling writes a never-localized [marker block](codex-design.md#4
 
 ### 10.12 Shared and independent Codex accounts
 
-Same model as section 5 with `~/.codex`; entries and rules in [Codex design 8.6](codex-design.md#86-shared-and-independent-accounts). Login, `memories/`, logs, daemon files and caches stay per account; thread databases are shared on Linux only. Link and Unlink are refused for the effective or selected account and while it is busy, need a modal confirmation and cannot be undone automatically. Linking moves data into `~/.codex` without overwriting and warns that another ChatGPT account's sessions may not resume; unlinking leaves shared sessions, history and databases in `~/.codex`.
+Same model as section 5 with `~/.codex`; entries and rules in [Codex design 8.6](codex-design.md#86-shared-and-independent-accounts). Login, memory directories (including `memories_v2/`), logs, daemon files and caches stay per account; thread databases are shared on Linux only. A single-line `sqlite_home = "."` (or a dot-only equivalent such as `"./"`) is allowed when linking or copying configuration; unsupported SQLite paths and forced sign-in restrictions still prevent the configuration from being linked or copied. Link and Unlink are refused for the effective or selected account and while it is busy, need a modal confirmation and cannot be undone automatically. Linking moves data into `~/.codex` without overwriting and warns that another ChatGPT account's sessions may not resume; unlinking leaves shared sessions, history and databases in `~/.codex`.
 
 ## 11. Language
 
