@@ -5,9 +5,6 @@ is still missing. Remove an item once it is done or decided.
 
 ## Known gaps
 
-- **Claude missing skill/plugin parent hides broken child links (2026-10-10, P2).** When the default `skills` or `plugins` directory disappears entirely, the read-only check skips the account's existing child links and can report no problems even though those links are dangling. Continue checking account children when the optional parent is absent, while keeping an unused missing parent and expired plugin backups non-actionable; add a regression for deleting the whole default parent after linking.
-- **Claude scoped MCP repair can retain contradictory server states (2026-10-10, P2).** If the default project enables a server that the account disables, scoped repair unions the arrays, leaving that server both enabled and disabled, then reports the project synchronized. Reconcile the enabled/disabled lists together so the default's explicit state wins without removing unrelated account entries, and verify that a subsequent check reflects the repaired state. This was reproduced with temporary account files; the client behavior was inspected statically, not exercised with a signed-in client.
-
 - **Claude optional shared targets and scoped Repair (2026-10-10).** Verify in a real editor that switching initializes missing task/attachment targets, task lists and Remote Control attachments remain usable across accounts, and cleanup during an already-running session does not prevent first writes. Automated checks use temporary HOME directories and filesystem writes, not a signed-in Claude client; the current VSIX is not installed by these checks.
 
 - **Claude prompt history "storage v5" (watch on upgrades).** Claude Code has a history storage backend behind the

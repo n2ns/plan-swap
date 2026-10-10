@@ -106,7 +106,9 @@ describe('Claude read-only link check', LINUX_ONLY, () => {
     { name: 'whole-folder skills link', breakIt: (acc, def) => { fs.rmSync(path.join(acc, 'skills'), { recursive: true }); fs.symlinkSync(path.join(def, 'skills'), path.join(acc, 'skills')); }, expect: ['missing', 'stale'] },
     { name: 'dangling child link', breakIt: (_acc, def) => fs.rmSync(path.join(def, 'plugins', 'p'), { recursive: true }), expect: ['stale'] },
     { name: 'default settings gained a sign-in key', breakIt: (_acc, def) => write(path.join(def, 'settings.json'), '{"apiKeyHelper":"x"}\n'), expect: ['stale'] },
-    { name: 'default folder deleted', breakIt: (_acc, def) => { for (const e of fs.readdirSync(def)) if (e !== '.claude.json') fs.rmSync(path.join(def, e), { recursive: true }); }, expect: ['defaultMissing'] },
+    { name: 'default child-sharing folders deleted', breakIt: (_acc, def) => { for (const name of ['skills', 'plugins']) fs.rmSync(path.join(def, name), { recursive: true }); }, expect: ['stale'] },
+    { name: 'default child-sharing folders deleted while busy', busy: true, breakIt: (_acc, def) => { for (const name of ['skills', 'plugins']) fs.rmSync(path.join(def, name), { recursive: true }); }, expect: ['busy'] },
+    { name: 'default folder deleted', breakIt: (_acc, def) => { for (const e of fs.readdirSync(def)) if (e !== '.claude.json') fs.rmSync(path.join(def, e), { recursive: true }); }, expect: ['defaultMissing', 'stale'] },
   ];
   for (const scenario of scenarios) {
     test(scenario.name, () => {
@@ -119,6 +121,21 @@ describe('Claude read-only link check', LINUX_ONLY, () => {
       }, acc, def, { CLAUDE_CONFIG_DIR: acc });
     });
   }
+
+  test('missing optional child-sharing folders with no linked children remain healthy', () => {
+    const { acc, def } = setup();
+    for (const name of ['skills', 'plugins']) {
+      fs.rmSync(path.join(def, name), { recursive: true });
+      fs.rmSync(path.join(acc, name), { recursive: true });
+    }
+    fs.mkdirSync(path.join(acc, 'skills'));
+    const proc = fakeProc();
+    const before = fullSnapshot(home);
+    const checked: AccountCheck = { dir: acc, label: 'a', vendor: 'claude', def, report: ensureClaudeLinks(acc, proc, { check: true }) };
+    assert.deepEqual(accountProblems(checked), []);
+    assert.deepEqual(announcementKeys([checked]), []);
+    assert.deepEqual(fullSnapshot(home), before);
+  });
 
   test('a refused settings.json missing in the account: the stripped copy is reported as missing', () => {
     const { acc, def } = setup();
@@ -295,6 +312,12 @@ describe('link problems', () => {
     fs.rmSync(path.join(def, 'skills', 'one'), { recursive: true });
     assert.deepEqual(accountProblems(checked()), [{ kind: 'stale', entries: ['skills/one', 'plugins/marketplaces'] }]);
     assert.equal(announcementKeys([checked()]).length, 2);
+    for (const name of ['skills', 'plugins']) fs.rmSync(path.join(def, name), { recursive: true });
+    const missingParentsSnapshot = fullSnapshot(home);
+    const missingParents = checked();
+    assert.deepEqual(accountProblems(missingParents), [{ kind: 'stale', entries: ['skills/one', 'plugins/marketplaces'] }]);
+    assert.equal(announcementKeys([missingParents]).length, 2);
+    assert.deepEqual(fullSnapshot(home), missingParentsSnapshot);
   });
 
   test('the backup cleanup exception is Claude-only and does not hide live-session blockers for other entries', () => {

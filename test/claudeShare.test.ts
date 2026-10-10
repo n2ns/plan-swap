@@ -608,6 +608,42 @@ describe('mirrorClaudeJson', () => {
     assert.deepEqual(mirrorClaudeJson(src(), acc, undefined, true, selected).changed, []);
   });
 
+  for (const desired of ['enabledMcpjsonServers', 'disabledMcpjsonServers']) {
+    const opposite = desired === 'enabledMcpjsonServers' ? 'disabledMcpjsonServers' : 'enabledMcpjsonServers';
+    for (const alreadyBoth of [false, true]) {
+      test(`scoped repair reconciles ${desired} when the account ${alreadyBoth ? 'lists both states' : 'has the opposite state'}`, () => {
+        const acc = accountDir('mcp-state');
+        const file = path.join(acc, '.claude.json');
+        write(src(), JSON.stringify({ projects: {
+          '/selected': { [desired]: ['shared'], ...(!alreadyBoth ? { [opposite]: [] } : {}) },
+        } }));
+        write(file, JSON.stringify({ projects: {
+          '/selected': {
+            [desired]: ['own-desired', ...(alreadyBoth ? ['shared'] : [])],
+            [opposite]: ['shared', 'own-opposite'],
+            lastCost: 1,
+          },
+          '/unselected': { [opposite]: ['shared'] },
+        } }));
+        const sourceBefore = read(src());
+        const accountBefore = read(file);
+        const selected = ['projects:/selected'];
+        assert.deepEqual(mirrorClaudeJson(src(), acc, undefined, true).changed, selected);
+        assert.equal(read(file), accountBefore);
+        assert.deepEqual(mirrorClaudeJson(src(), acc, undefined, false, selected).changed, selected);
+        assert.deepEqual(JSON.parse(read(file)).projects, {
+          '/selected': { [desired]: ['own-desired', 'shared'], [opposite]: ['own-opposite'], lastCost: 1 },
+          '/unselected': { [opposite]: ['shared'] },
+        });
+        assert.equal(read(src()), sourceBefore);
+        assert.deepEqual(mirrorClaudeJson(src(), acc, undefined, true).changed, []);
+        const repaired = read(file);
+        assert.deepEqual(mirrorClaudeJson(src(), acc, undefined, false, selected).changed, []);
+        assert.equal(read(file), repaired);
+      });
+    }
+  }
+
   test('an empty mirror repair selection does not read source or account files', (ctx) => {
     const readSpy = ctx.mock.method(fsModule, 'readFileSync', () => { throw new Error('unexpected read'); });
     assert.deepEqual(mirrorClaudeJson(src(), accountDir('empty'), undefined, false, []), { changed: [] });

@@ -414,9 +414,10 @@ export function ensureClaudeLinks(dir: string, procRoot = '/proc', options: Link
         report.conflicts.push(name);
         continue;
       }
-      if (check) continue;
+      // An unused optional parent is harmless, but an existing account folder can contain broken child links.
+      if (check && !st?.isDirectory()) continue;
     }
-    if (selected(name) && missingDefault(defFolder, 'dir')) report.created.push(name);
+    if (!check && selected(name) && missingDefault(defFolder, 'dir')) report.created.push(name);
     // Check: the account folder would be created (or re-created) empty, so every child would be linked
     let fresh = false;
     if (st?.isSymbolicLink() && linksTo(accFolder, defFolder)) {
@@ -521,7 +522,8 @@ function readSourceJson(file: string): Record<string, unknown> {
  *  lacks counts as empty / false (research fact 18), and what the account has beyond the default (its own MCP server,
  *  a project only it trusts) is not listed, although a full mirror would replace or remove it.
  *  repairKeys limits repairs to the changed groups returned by a check; only missing/different default values are
- *  applied, preserving account-only servers, array values, trust and unrelated groups. [] does not read or write. */
+ *  applied, preserving account-only servers, array values, trust and unrelated groups. Explicit default MCP enable /
+ *  disable states replace opposing account states. [] does not read or write. */
 export function mirrorClaudeJson(fromJson: string, dir: string, beforeCommit?: () => void, check = false, repairKeys?: readonly string[]): { changed: string[] } {
   const changed: string[] = [];
   if (repairKeys?.length === 0 || isDefault(dir)) return { changed };
@@ -571,6 +573,24 @@ export function mirrorClaudeJson(fromJson: string, dir: string, beforeCommit?: (
     const projects = data.projects as Record<string, unknown>;
     const proj = isPlainObject(projects[p]) ? (projects[p] as Record<string, unknown>) : {};
     let differs = !check && !repair && !isPlainObject(projects[p]);
+    if (check || repair) {
+      // The two lists express opposing states: merging each independently can keep a shared server disabled.
+      for (const [key, opposite] of [
+        ['enabledMcpjsonServers', 'disabledMcpjsonServers'],
+        ['disabledMcpjsonServers', 'enabledMcpjsonServers'],
+      ]) {
+        const sourceStates = Array.isArray(srcProj[key]) ? srcProj[key] as unknown[] : [];
+        const oppositeStates = Array.isArray(srcProj[opposite]) ? srcProj[opposite] as unknown[] : [];
+        if (!Array.isArray(proj[key])) continue;
+        const kept = (proj[key] as unknown[]).filter((value) =>
+          !oppositeStates.some((item) => isDeepStrictEqual(item, value))
+          || sourceStates.some((item) => isDeepStrictEqual(item, value)));
+        if (!isDeepStrictEqual(proj[key], kept)) {
+          proj[key] = kept;
+          differs = true;
+        }
+      }
+    }
     for (const k of PROJECT_KEYS) {
       if (!Object.hasOwn(srcProj, k) || isDeepStrictEqual(proj[k], srcProj[k])) continue;
       if ((check || repair) && holds(proj[k], srcProj[k])) continue;

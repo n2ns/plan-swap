@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- Detect broken shared skill and plugin links even when their entire default directory has disappeared, while keeping unused optional directories and expired plugin backups quiet.
+- Reconcile project MCP server enable/disable settings together during **Repair**, following the default account's explicit choices and preserving unrelated account settings. A server left in both lists no longer passes the check as synchronized.
+
 ## [0.3.8] - 2026-10-10
 
 ### Fixed
