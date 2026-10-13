@@ -8,7 +8,7 @@ import * as path from 'node:path';
 import { execFile } from 'node:child_process';
 import { currentDir, isExplicitConfigDir } from './claudeSettings';
 import { effectiveDir } from './codex/codexState';
-import { claudeJsonPath, defaultDir, syncMcpServers } from './paths';
+import { claudeJsonPath, defaultDir, sameRealPath, syncMcpServers } from './paths';
 import { ensureClaudeLinks, isSharedClaudeAccount, mirrorClaudeJson, type LinkOptions, type ShareReport } from './claudeShare';
 import { askCopyFallback } from './linkPolicy';
 import { describeShareReport, type ShareReportLike } from './shareReport';
@@ -149,7 +149,9 @@ const claudeShareOps: ShareOps = {
   check(dir, options) {
     const report = ensureClaudeLinks(dir, '/proc', { ...options, check: true });
     const def = defaultDir();
-    // Only shared accounts are checked, which mirrorClaudeJsonInto mirrors with mirrorClaudeJson
+    // Only shared accounts are checked, which mirrorClaudeJsonInto mirrors with mirrorClaudeJson. The current account
+    // holds the latest configuration and writes it back on the next switch, so its difference is not a problem
+    if (sameRealPath(dir, currentDir())) return { report, mirror: [] };
     return { report, mirror: mirrorClaudeJson(claudeJsonPath(def, isExplicitConfigDir(def)), dir, undefined, true).changed };
   },
   defaultDir,

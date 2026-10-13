@@ -97,6 +97,7 @@ Signing in to a new account never signs out the others. The [user guide](docs/us
 | Settings, rules and skills | The default account's | A copy, changed separately |
 | History and sessions | The default account's | Its own |
 | Sign-in | Its own | Its own |
+| Claude MCP servers and project trust | Kept in step with the default account (changes in the account in use are written back when you switch away) | A copy, changed separately |
 
 You can change an account's mode later, and **Re-link** in Tools checks linked accounts after you change the default setup and offers **Repair** for what it finds. PlanSwap also runs this check in the background and notifies you when something can be repaired ([user guide](docs/user-guide.md#change-an-existing-account-mode)).
 

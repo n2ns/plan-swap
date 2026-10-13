@@ -357,7 +357,7 @@ describe('panel message handlers (Claude)', () => {
     }
   });
 
-  test('switch to a shared account re-links and mirrors first; problems only warn and the switch proceeds', LINUX_ONLY, async (ctx) => {
+  test('switch to a shared account re-links and mirrors first; link problems only warn, a failed mirror cancels', LINUX_ONLY, async (ctx) => {
     const h = harness();
     const dir = await add(h, 's', true);
     // A link replaced by a real file is a conflict; a running session keeps a purged history from being merged
@@ -380,13 +380,16 @@ describe('panel message handlers (Claude)', () => {
       assert.equal(h.switchedTo, 's');
       assert.equal(fs.readFileSync(path.join(dir, 'history.jsonl'), 'utf8'), '{"a":1}\n');
 
-      // An exception of the mirroring step warns too
+      // An exception of the mirroring step cancels the switch: switching away later would write stale settings back
       setCurrent(undefined);
+      updates.length = 0;
+      const error = ctx.mock.method(window, 'showErrorMessage', async () => undefined);
       fs.writeFileSync(path.join(home, '.claude.json'), '[]');
       await h.handle({ type: 'switch', mode: 'claude', dir });
       assert.equal(warning.mock.callCount(), 2);
-      assert.equal(warning.mock.calls[1].arguments[0], t('share.refreshWarning', { label: 's', notes: t('share.badSource', { file: path.join(home, '.claude.json') }) }));
-      assert.equal(configured(), dir);
+      assert.deepEqual(error.mock.calls[0].arguments, [t('share.mirrorFailed', { label: 's', error: t('share.badSource', { file: path.join(home, '.claude.json') }) })]);
+      assert.equal(updates.length, 0);
+      fs.writeFileSync(path.join(home, '.claude.json'), '{}');
 
       // An independent account is not re-linked and gets no warning
       setCurrent(undefined);
@@ -394,6 +397,65 @@ describe('panel message handlers (Claude)', () => {
       await h.handle({ type: 'switch', mode: 'claude', dir: solo });
       assert.equal(warning.mock.callCount(), 2);
       assert.equal(configured(), solo);
+    } finally {
+      h.dispose();
+    }
+  });
+
+  test('switching away from a shared current account writes its MCP servers back first; a failure cancels the switch', LINUX_ONLY, async (ctx) => {
+    const h = harness();
+    const a = await add(h, 'a', true);
+    const b = await add(h, 'b', true);
+    const defJson = path.join(home, '.claude.json');
+    fs.writeFileSync(defJson, JSON.stringify({ oauthAccount: { emailAddress: 'def@x' }, mcpServers: { old: { command: 'old' } } }));
+    fs.writeFileSync(path.join(a, '.claude.json'), JSON.stringify({ oauthAccount: { emailAddress: 'a@x' }, mcpServers: { mine: { command: 'mine' } } }));
+    setCurrent(a);
+    ctx.mock.method(window, 'showInformationMessage', async () => t('claude.switchButton'));
+    const error = ctx.mock.method(window, 'showErrorMessage', async () => undefined);
+    try {
+      await h.handle({ type: 'switch', mode: 'claude', dir: b });
+      const def = JSON.parse(fs.readFileSync(defJson, 'utf8'));
+      assert.deepEqual(def.mcpServers, { mine: { command: 'mine' } });
+      assert.equal(def.oauthAccount.emailAddress, 'def@x');
+      assert.deepEqual(JSON.parse(fs.readFileSync(path.join(b, '.claude.json'), 'utf8')).mcpServers, { mine: { command: 'mine' } });
+      assert.equal(configured(), b);
+      assert.equal(error.mock.callCount(), 0);
+
+      // An unreadable current account file cancels the switch and leaves the default as it is
+      setCurrent(a);
+      updates.length = 0;
+      fs.writeFileSync(path.join(a, '.claude.json'), '{ half');
+      const before = fs.readFileSync(defJson, 'utf8');
+      await h.handle({ type: 'switch', mode: 'claude', dir: b });
+      assert.deepEqual(error.mock.calls[0].arguments, [t('share.writeBackFailed', { label: 'a', error: t('mcp.badTarget', { file: path.join(a, '.claude.json') }) })]);
+      assert.equal(updates.length, 0);
+      assert.equal(fs.readFileSync(defJson, 'utf8'), before);
+    } finally {
+      h.dispose();
+    }
+  });
+
+  test('adding the current external directory keeps its settings only when it already was linked', LINUX_ONLY, async () => {
+    const h = harness();
+    const defJson = path.join(home, '.claude.json');
+    fs.writeFileSync(defJson, JSON.stringify({ mcpServers: { def: { command: 'def' } } }));
+    const own = JSON.stringify({ mcpServers: { own: { command: 'own' } } });
+    try {
+      const linked = accountDir('linked');
+      fs.mkdirSync(linked, { mode: 0o700 });
+      ensureClaudeLinks(linked);
+      fs.writeFileSync(path.join(linked, '.claude.json'), own);
+      setCurrent(linked);
+      await h.handle({ type: 'add', mode: 'claude', name: 'linked', shared: true });
+      assert.equal(fs.readFileSync(path.join(linked, '.claude.json'), 'utf8'), own);
+
+      const solo = accountDir('solo');
+      fs.mkdirSync(solo, { mode: 0o700 });
+      fs.writeFileSync(path.join(solo, '.claude.json'), own);
+      setCurrent(solo);
+      await h.handle({ type: 'add', mode: 'claude', name: 'solo', shared: true });
+      assert.ok(isSharedClaudeAccount(solo));
+      assert.deepEqual(JSON.parse(fs.readFileSync(path.join(solo, '.claude.json'), 'utf8')).mcpServers, { def: { command: 'def' } });
     } finally {
       h.dispose();
     }

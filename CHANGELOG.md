@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Switching away from a linked Claude account now writes the MCP servers and project settings changed in it back to the default account, so an MCP server added, changed or removed in any linked account reaches every linked account. A failed write-back, or a failed copy of the default account's MCP servers and project settings into the account being switched to, cancels the switch (before, a failed copy only warned). **Re-link** no longer reports these differences for the account in use.
+
 ## [0.3.9] - 2026-10-10
 
 ### Fixed

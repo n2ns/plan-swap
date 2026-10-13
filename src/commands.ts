@@ -24,6 +24,7 @@ import {
   lstatOrUndefined,
   makeClaudeIndependent,
   migrateClaudeToShared,
+  writeBackClaudeJson,
 } from './claudeShare';
 import { describeShareReport } from './shareReport';
 import { currentDir, isExplicitConfigDir, setConfigDir } from './claudeSettings';
@@ -151,10 +152,30 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
       void vscode.window.showErrorMessage(t('account.dirMissing', { dir: account.dir }));
       return false;
     }
-    // A shared account is re-linked and mirrored first; a problem only warns, the switch still happens
+    // Only one account is in use at a time: a shared current account writes what it changed back to the default
+    // account first, so the incoming account gets it. A failure cancels the switch, since the mirror below would
+    // otherwise drop those changes the next time this account is switched to
+    const outgoing = currentDir();
+    try {
+      writeBackClaudeJson(outgoing, defaultJson());
+    } catch (err) {
+      const all = store.all();
+      const i = findSameDir(all.map((a) => a.dir), outgoing);
+      const label = i >= 0 ? labelOf(all[i]) : labelFor(EXTERNAL_NAME, labels);
+      void vscode.window.showErrorMessage(t('share.writeBackFailed', { label, error: errText(err) }));
+      return false;
+    }
+    // A shared account is re-linked and mirrored first. A linking problem only warns and the switch still happens; a
+    // failed mirror cancels it, since switching away would later write the account's stale settings back
     if (account.name !== DEFAULT_NAME && isSharedClaudeAccount(account.dir)) {
-      const warning = refreshShared(account);
+      const warning = relinkShared(account);
       if (warning) void vscode.window.showWarningMessage(t('share.refreshWarning', { label: labelOf(account), notes: warning }));
+      try {
+        mirrorClaudeJsonInto(defaultJson(), account.dir);
+      } catch (err) {
+        void vscode.window.showErrorMessage(t('share.mirrorFailed', { label: labelOf(account), error: errText(err) }));
+        return false;
+      }
     }
     try {
       await setConfigDir(account.name === DEFAULT_NAME ? undefined : account.dir);
@@ -199,9 +220,12 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
     try {
       if (shared) {
         // The folder may already exist (kept from an earlier removal, its terminal possibly still open)
+        const wasShared = isSharedClaudeAccount(account.dir);
         const report = ensureClaudeLinks(account.dir, '/proc', { ...linkOptions, busy: linkBusy(account) });
-        // An existing folder that could not be linked stays independent: it only gains the default MCP servers
-        mirrorClaudeJsonInto(defaultJson(), account.dir);
+        // An existing folder that could not be linked stays independent: it only gains the default MCP servers. A
+        // current directory that already was shared (an external linked account) keeps its own settings, which hold
+        // the latest configuration and are written back on the next switch
+        if (!wasShared || !sameRealPath(account.dir, currentDir())) mirrorClaudeJsonInto(defaultJson(), account.dir);
         const notes = describeShareReport(report);
         if (notes) void vscode.window.showWarningMessage(t(isSharedClaudeAccount(account.dir) ? 'share.addNotes' : 'share.addNotLinked', { name, notes }));
       } else {
@@ -215,11 +239,10 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
     return undefined;
   }
 
-  // Re-links a shared account and mirrors the default account's info file; returns a warning text or undefined
-  function refreshShared(account: Account): string | undefined {
+  // Re-links a shared account; returns a warning text or undefined
+  function relinkShared(account: Account): string | undefined {
     try {
       const notes = describeShareReport(ensureClaudeLinks(account.dir, procRoot, { busy: linkBusy(account) }));
-      mirrorClaudeJsonInto(defaultJson(), account.dir);
       return notes || undefined;
     } catch (err) {
       return errText(err);

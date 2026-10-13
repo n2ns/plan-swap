@@ -5,6 +5,8 @@ is still missing. Remove an item once it is done or decided.
 
 ## Known gaps
 
+- **Claude `.claude.json` write-back on switch (2026-10-13).** Verify with real accounts that MCP servers and project trust added, changed or removed in the current linked account reach the default account and the next linked account on a switch ([manual verification](docs/manual-verification.md) step 6), and that a session started before switching away is not written back. Automated checks use temporary HOME directories only.
+
 - **Claude optional shared targets and scoped Repair (2026-10-10).** Verify in a real editor that switching initializes missing task/attachment targets, task lists and Remote Control attachments remain usable across accounts, and cleanup during an already-running session does not prevent first writes. Automated checks use temporary HOME directories and filesystem writes, not a signed-in Claude client; the current VSIX is not installed by these checks.
 
 - **Claude prompt history "storage v5" (watch on upgrades).** The factory still returns `undefined` in Linux 2.1.296, including with the flag enabled. Recheck after upgrades; no new sharing check is needed for this build. See [the dated history recheck](docs/research/claude-code.md#history-storage-recheck-2026-10-10).

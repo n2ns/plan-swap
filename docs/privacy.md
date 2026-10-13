@@ -30,7 +30,7 @@ The CLI then contacts Anthropic's or OpenAI's service as it always does. Sign-in
 
 - **Switching** updates the settings that select an account.
 - **Enabling Codex switching** adds configuration to `~/.profile` and `~/.bashrc` after you confirm (on Windows it sets your user environment variable `CODEX_HOME` instead).
-- **Linking** shares settings and history, and writes a linked Claude account's MCP servers, project trust settings and first-run status into its own `.claude.json`. It never links or copies sign-in credential files.
+- **Linking** shares settings and history, and writes a linked Claude account's MCP servers, project trust settings and first-run status into its own `.claude.json`. When you switch away from a linked Claude account, it writes that account's MCP servers and project settings back into the default account's `.claude.json`; sign-in and other data there stay unchanged. It never links or copies sign-in credential files.
 - **Deleting accounts**: removing a row does not delete its files unless you separately confirm directory deletion. Deleting the directory permanently removes that account's sign-in and local data; linked data in the default account is kept.
 
 To remove what PlanSwap stored, follow the [uninstall steps](../README.md#uninstall).

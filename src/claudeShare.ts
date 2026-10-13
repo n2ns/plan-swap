@@ -3,7 +3,8 @@
 // Invariants of every write entry point (ensureClaudeLinks, mirrorClaudeJson, migrateClaudeToShared,
 // makeClaudeIndependent, copyClaudeIndependent): an account dir that contains the default dir after resolving links
 // throws t('account.containsDefaultDir', { dir, default }) before anything is written; existing content of the default
-// dir is never overwritten or deleted; links are absolute; report names use '/' on every platform.
+// dir is never overwritten or deleted, except that writeBackClaudeJson updates the mirrored keys of the default account's
+// info file; links are absolute; report names use '/' on every platform.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
@@ -612,6 +613,90 @@ export function mirrorClaudeJson(fromJson: string, dir: string, beforeCommit?: (
     beforeCommit?.();
     // Refuse to overwrite a write the CLI made in the meantime, checked again before every rename attempt
     if (!renameReplacing(tmp, real, undefined, undefined, () => target.validate() && unchangedSince(real, before))) throw new Error(t('mcp.changed', { file: real }));
+  } finally {
+    fs.rmSync(tmp, { force: true });
+  }
+  return { changed };
+}
+
+/** Writes the configuration a shared account changed while it was current back into the default account's info file
+ *  toJson, the reverse of a full mirrorClaudeJson: mcpServers becomes an exact copy of the account's (an absent list
+ *  empties it), and for every project of the account's `projects` the PROJECT_KEYS present there are copied (the entry
+ *  is created when missing; other project keys stay). Onboarding and every other key of toJson stay as they are.
+ *  Only one account is in use at a time, so the outgoing current account holds the latest configuration; a switch
+ *  calls this before mirroring the default into the incoming account. No-op for the default dir, an account that is
+ *  not shared or a missing account file. The account file is validated like a mirror target before it is read and a
+ *  dangling toJson link is refused (t('mcp.unsafeTarget')). An account file or toJson that is not a JSON object throws t('mcp.badTarget');
+ *  a write to toJson made between read and rename throws t('mcp.changed'). A missing toJson is created 0600; otherwise the write follows a symlink, keeps the mode and
+ *  replaces atomically. changed lists 'mcpServers' and 'projects:<path>'; no write when nothing changes.
+ *  beforeCommit runs between writing the temporary file and the change check (tests simulate a concurrent CLI write). */
+export function writeBackClaudeJson(dir: string, toJson: string, beforeCommit?: () => void): { changed: string[] } {
+  const changed: string[] = [];
+  if (!isSharedClaudeAccount(dir)) return { changed };
+  assertNotDefaultAncestor(dir);
+  const fromJson = path.join(path.resolve(dir), claudeJsonName());
+  if (!lstatOrUndefined(fromJson)) return { changed };
+  // The account file gets the same protection as a mirror target before it is read (credential aliases, default data,
+  // hardlinks, dangling links)
+  const sourceFile = accountInfoTarget(fromJson, dir, toJson).real;
+  let source: unknown;
+  try {
+    source = JSON.parse(stripBom(fs.readFileSync(sourceFile, 'utf8')));
+  } catch {
+    source = undefined;
+  }
+  if (!isPlainObject(source)) throw new Error(t('mcp.badTarget', { file: fromJson }));
+
+  const exists = fs.existsSync(toJson);
+  // A dangling link would otherwise be replaced by a file holding only the written keys
+  if (!exists && lstatOrUndefined(toJson)) throw new Error(t('mcp.unsafeTarget', { file: toJson }));
+  const real = exists ? realPath(toJson) : toJson;
+  const before = exists ? fs.readFileSync(real, 'utf8') : undefined;
+  const mode = exists ? fs.statSync(real).mode & 0o777 : 0o600;
+  let data: unknown = {};
+  if (before !== undefined) {
+    try {
+      data = JSON.parse(stripBom(before));
+    } catch {
+      data = undefined;
+    }
+  }
+  if (!isPlainObject(data)) throw new Error(t('mcp.badTarget', { file: real }));
+
+  const mcp = isPlainObject(source.mcpServers) ? source.mcpServers : {};
+  const currentMcp = data.mcpServers === undefined ? {} : data.mcpServers;
+  if (!isDeepStrictEqual(currentMcp, mcp)) {
+    data.mcpServers = mcp;
+    changed.push('mcpServers');
+  }
+
+  const srcProjects = isPlainObject(source.projects) ? source.projects : {};
+  for (const [p, srcProj] of Object.entries(srcProjects)) {
+    if (!isPlainObject(srcProj)) continue;
+    if (!isPlainObject(data.projects)) data.projects = {};
+    const projects = data.projects as Record<string, unknown>;
+    const proj = isPlainObject(projects[p]) ? (projects[p] as Record<string, unknown>) : {};
+    let differs = false;
+    for (const k of PROJECT_KEYS) {
+      if (!Object.hasOwn(srcProj, k) || isDeepStrictEqual(proj[k], srcProj[k])) continue;
+      proj[k] = srcProj[k];
+      differs = true;
+    }
+    if (differs) {
+      projects[p] = proj;
+      changed.push(`projects:${p}`);
+    }
+  }
+  if (changed.length === 0) return { changed };
+
+  const tmp = `${real}.planswap-${process.pid}.tmp`;
+  // A temporary file left by an interrupted run is replaced
+  fs.rmSync(tmp, { force: true });
+  try {
+    fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n', { mode, flag: 'wx' });
+    beforeCommit?.();
+    // Refuse to overwrite a write the CLI made in the meantime, checked again before every rename attempt
+    if (!renameReplacing(tmp, real, undefined, undefined, () => unchangedSince(real, before))) throw new Error(t('mcp.changed', { file: real }));
   } finally {
     fs.rmSync(tmp, { force: true });
   }

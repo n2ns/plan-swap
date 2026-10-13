@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { pidAlive } from '../src/platform';
 import {
   CLAUDE_SHARED_ENTRIES, claudeAccountBusy, copyClaudeIndependent, copyTree, ensureClaudeLinks, isSharedClaudeAccount, lstatOrUndefined,
-  makeClaudeIndependent, mergeEntry, migrateClaudeToShared, mirrorClaudeJson, moveEntry, type MigrateReport, windowsSessionsBusy,
+  makeClaudeIndependent, mergeEntry, migrateClaudeToShared, mirrorClaudeJson, moveEntry, type MigrateReport, windowsSessionsBusy, writeBackClaudeJson,
 } from '../src/claudeShare';
 import { accountDir, deleteAccountDir, realPath } from '../src/paths';
 import { assertTempHome, makeTempHome, assertMode, FILE_SYMLINKS, LINUX_ONLY, onWindows, SHARING, read, snapshot, withEnv, type TempHome } from './helpers';
@@ -805,6 +805,110 @@ function fakeProc(procs: Record<number, Record<string, string>>): string {
   }
   return root;
 }
+
+describe('writeBackClaudeJson', SHARING, () => {
+  const dst = (): string => path.join(home, '.claude.json');
+  // A shared account: its projects marker links to the default's projects
+  const shared = (name: string): string => {
+    const acc = accountDir(name);
+    fs.mkdirSync(path.join(def, 'projects'), { recursive: true });
+    fs.mkdirSync(acc, { recursive: true });
+    fs.symlinkSync(path.join(def, 'projects'), path.join(acc, 'projects'), 'junction');
+    return acc;
+  };
+
+  test('mcpServers exact copy into the default (add, change, remove), project keys copied, other keys and mode kept', () => {
+    write(dst(), JSON.stringify({
+      oauthAccount: { emailAddress: 'def@x' },
+      hasCompletedOnboarding: true,
+      lastOnboardingVersion: 'def',
+      mcpServers: { changed: { command: 'old' }, removed: { command: 'r' } },
+      projects: { '/p': { allowedTools: [], lastCost: 3 }, '/q': { allowedTools: ['Q'] } },
+    }));
+    fs.chmodSync(dst(), 0o640);
+    const acc = shared('a');
+    write(path.join(acc, '.claude.json'), JSON.stringify({
+      oauthAccount: { emailAddress: 'acc@x' },
+      lastOnboardingVersion: 'acc',
+      mcpServers: { changed: { command: 'new' }, added: { command: 'a' } },
+      projects: { '/p': { allowedTools: ['X'], hasTrustDialogAccepted: true, history: ['secret'] }, '/n': { hasTrustDialogAccepted: true } },
+    }));
+    const r = writeBackClaudeJson(acc, dst());
+    assert.deepEqual(r.changed, ['mcpServers', 'projects:/p', 'projects:/n']);
+    const data = JSON.parse(read(dst()));
+    assert.deepEqual(data.mcpServers, { changed: { command: 'new' }, added: { command: 'a' } });
+    assert.deepEqual(data.oauthAccount, { emailAddress: 'def@x' });
+    assert.equal(data.lastOnboardingVersion, 'def');
+    assert.deepEqual(data.projects['/p'], { allowedTools: ['X'], lastCost: 3, hasTrustDialogAccepted: true });
+    assert.deepEqual(data.projects['/q'], { allowedTools: ['Q'] });
+    assert.deepEqual(data.projects['/n'], { hasTrustDialogAccepted: true });
+    assertMode(dst(), '640');
+    // The account itself is only read
+    assert.equal(JSON.parse(read(path.join(acc, '.claude.json'))).oauthAccount.emailAddress, 'acc@x');
+
+    // Unchanged → no write
+    const text = read(dst());
+    const mtime = fs.statSync(dst()).mtimeMs;
+    assert.deepEqual(writeBackClaudeJson(acc, dst()).changed, []);
+    assert.equal(read(dst()), text);
+    assert.equal(fs.statSync(dst()).mtimeMs, mtime);
+  });
+
+  test('an account without mcpServers empties the default list', () => {
+    write(dst(), JSON.stringify({ mcpServers: { x: {} } }));
+    const acc = shared('a');
+    write(path.join(acc, '.claude.json'), JSON.stringify({ projects: {} }));
+    assert.deepEqual(writeBackClaudeJson(acc, dst()).changed, ['mcpServers']);
+    assert.deepEqual(JSON.parse(read(dst())).mcpServers, {});
+  });
+
+  test('independent account, missing account file and the default dir are no-ops', () => {
+    write(dst(), JSON.stringify({ mcpServers: { x: {} } }));
+    const text = read(dst());
+    const independent = accountDir('own');
+    write(path.join(independent, '.claude.json'), JSON.stringify({ mcpServers: { y: {} } }));
+    assert.deepEqual(writeBackClaudeJson(independent, dst()).changed, []);
+    assert.deepEqual(writeBackClaudeJson(shared('empty'), dst()).changed, []);
+    assert.deepEqual(writeBackClaudeJson(def, dst()).changed, []);
+    assert.equal(read(dst()), text);
+  });
+
+  test('a protected account file or a dangling default link is refused without reading or writing', FILE_SYMLINKS, () => {
+    const acc = shared('a');
+    write(dst(), JSON.stringify({ mcpServers: { keep: {} } }));
+    const credential = path.join(acc, '.credentials.json');
+    write(credential, JSON.stringify({ token: 'secret' }));
+    fs.symlinkSync(credential, path.join(acc, '.claude.json'));
+    assert.throws(() => writeBackClaudeJson(acc, dst()), { message: t('mcp.unsafeTarget', { file: path.join(acc, '.claude.json') }) });
+    assert.deepEqual(JSON.parse(read(dst())).mcpServers, { keep: {} });
+
+    fs.unlinkSync(path.join(acc, '.claude.json'));
+    write(path.join(acc, '.claude.json'), JSON.stringify({ mcpServers: { a: {} } }));
+    fs.rmSync(dst());
+    fs.symlinkSync(path.join(home, 'gone.json'), dst());
+    assert.throws(() => writeBackClaudeJson(acc, dst()), { message: t('mcp.unsafeTarget', { file: dst() }) });
+    assert.ok(fs.lstatSync(dst()).isSymbolicLink());
+  });
+
+  test('bad source, bad target or a concurrent write throws without writing', () => {
+    const acc = shared('a');
+    write(dst(), JSON.stringify({ mcpServers: {} }));
+    write(path.join(acc, '.claude.json'), '{ half');
+    assert.throws(() => writeBackClaudeJson(acc, dst()), /Not a valid JSON object/);
+    assert.equal(read(dst()), JSON.stringify({ mcpServers: {} }));
+
+    write(path.join(acc, '.claude.json'), JSON.stringify({ mcpServers: { a: {} } }));
+    write(dst(), '[1]');
+    assert.throws(() => writeBackClaudeJson(acc, dst()), /Not a valid JSON object/);
+    assert.equal(read(dst()), '[1]');
+
+    write(dst(), JSON.stringify({ mcpServers: {} }));
+    const rewritten = JSON.stringify({ mcpServers: {}, numStartups: 2 });
+    assert.throws(() => writeBackClaudeJson(acc, dst(), () => fs.writeFileSync(dst(), rewritten)), { message: t('mcp.changed', { file: realPath(dst()) }) });
+    assert.equal(read(dst()), rewritten);
+    assert.deepEqual(fs.readdirSync(home).filter((n) => n.includes('.planswap-')), []);
+  });
+});
 
 describe('claudeAccountBusy', () => {
   test('matches live pids by CLAUDE_CONFIG_DIR in environ', () => {

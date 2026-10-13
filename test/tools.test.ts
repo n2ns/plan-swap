@@ -7,7 +7,7 @@ import { LinkCheckNotices } from '../src/linkCheck';
 import { ensureClaudeLinks, mirrorClaudeJson } from '../src/claudeShare';
 import { ensureCodexLinks, isSharedCodexAccount } from '../src/codex/codexShare';
 import { setLocale, t } from '../src/i18n';
-import { commands, env, window } from './stubs/vscode';
+import { commands, env, resetConfig, setConfig, window } from './stubs/vscode';
 import { inLocale, LINUX_ONLY, makeTempHome, MemoryMemento } from './helpers';
 
 describe('Claude repair scope', LINUX_ONLY, () => {
@@ -91,6 +91,25 @@ describe('Claude repair scope', LINUX_ONLY, () => {
       assert.deepEqual(actual, { ...personal, mcpServers: { ...personal.mcpServers, shared: { command: 'shared' } } });
       assert.equal(fs.existsSync(path.join(def, 'uploads')), false);
     } finally { tmp.restore(); }
+  });
+
+  test('the current account is not reported for MCP differences; other linked accounts still are', async (ctx) => {
+    const { tmp, source, dirs } = fixture();
+    try {
+      fs.writeFileSync(source, JSON.stringify({ mcpServers: { shared: { command: 'shared' } } }));
+      for (const dir of dirs) fs.writeFileSync(path.join(dir, '.claude.json'), JSON.stringify({ mcpServers: { mine: { command: 'mine' } } }));
+      setConfig('claudeCode', 'environmentVariables', [{ name: 'CLAUDE_CONFIG_DIR', value: dirs[0] }]);
+      const warning = ctx.mock.method(window, 'showWarningMessage', async () => undefined);
+      await runTool('claude', 'sync', { claudeDirs: () => dirs });
+      const mirror = t('linkCheck.mirror', { list: '.claude.json (mcpServers)' });
+      assert.equal(warning.mock.calls[0].arguments[0], t('linkCheck.claudeFound', { list: t('sync.item', { name: 'b', notes: mirror }) }));
+
+      await runTool('claude', 'sync', { claudeDirs: () => [dirs[0]] });
+      assert.equal(warning.mock.callCount(), 1, 'only the current account: nothing to report');
+    } finally {
+      resetConfig();
+      tmp.restore();
+    }
   });
 
   test('an account added while the Repair notification is open is not refreshed', async (ctx) => {
