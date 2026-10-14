@@ -21,6 +21,8 @@ Los nombres de botones de esta guía son los de la interfaz en español. Pasa el
 - [Solucionar problemas comunes](#solucionar-problemas-comunes)
 - [Desactivar el cambio de cuenta o desinstalar](#desactivar-el-cambio-de-cuenta-o-desinstalar)
 
+Un icono de advertencia junto a la cuenta de Claude indica que se ha rechazado el acceso por suscripción. Pasa el cursor para ver los detalles o haz clic para comprobarlo de nuevo tras renovar o restaurar el acceso. El último plan identificado se atenúa, las cuotas anteriores se ocultan y la cuenta no se recomienda. Durante la comprobación aparece un indicador de carga. Si los datos de uso no están disponibles, PlanSwap puede enviar una solicitud mínima al modelo mediante la CLI, que puede consumir algo de cuota. Las cuentas confirmadas como no disponibles dejan de comprobarse automáticamente hasta una revisión manual o el reinicio de la extensión. Un fallo de red no indica que la suscripción haya caducado.
+
 ## Antes de empezar
 
 Necesitas:

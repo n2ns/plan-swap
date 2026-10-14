@@ -95,6 +95,16 @@ describe('recommend', () => {
     assert.equal(recommend([current, selected, reached, ok], 30), ok.dir);
   });
 
+  test('an unavailable subscription is not recommended even with a healthy historical observation', () => {
+    const current = row('default', [fiveHour(90)], { isCurrent: true });
+    const unavailable = row('expired', [fiveHour(0)], { subscriptionUnavailable: true });
+    const available = row('available', [fiveHour(40)]);
+    assert.equal(recommend([current, unavailable], 30), undefined);
+    assert.equal(recommend([current, unavailable, available], 30), available.dir);
+    unavailable.subscriptionUnavailable = false;
+    assert.equal(recommend([current, unavailable, available], 30), unavailable.dir);
+  });
+
   test('the current account is never recommended, even when it is the only observation', () => {
     assert.equal(recommend([row('default', [fiveHour(95)], { isCurrent: true }), row('x', [fiveHour(95)])], 30), undefined);
   });

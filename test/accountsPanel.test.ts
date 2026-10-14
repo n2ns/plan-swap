@@ -47,6 +47,17 @@ test('add account waits for the first document and sends state before focus', as
   } finally { h.panel.dispose(); }
 });
 
+test('the warning action dispatches a subscription check to the Claude handler', () => {
+  const h = harness();
+  const received: FromWebview[] = [];
+  h.panel.setHandler('claude', (msg) => { received.push(msg); });
+  const message: FromWebview = { type: 'subscriptionCheck', mode: 'claude', dir: '/h/.claude-work' };
+  try {
+    h.receive(message);
+    assert.deepEqual(received, [message]);
+  } finally { h.panel.dispose(); }
+});
+
 test('each tab carries the new-folder prefix in the platform spelling', () => {
   const h = harness();
   try {
@@ -107,6 +118,47 @@ test('Claude panel rows show the email but never carry the identity comparison k
     assert.equal(row?.email, 'dummy@example.com');
     assert.equal(row?.loggedIn, true);
     for (const r of rows) assert.ok(!('identity' in r), `row ${r.name} has no identity`);
+  } finally { tmp.restore(); }
+});
+
+test('Claude subscription state hides historical usage while retaining account identity and plan, then restores it', async () => {
+  const tmp = makeTempHome('panel-subscription');
+  try {
+    const dir = path.join(tmp.home, '.claude-work');
+    fs.mkdirSync(dir);
+    fs.writeFileSync(path.join(dir, '.claude.json'), JSON.stringify({
+      oauthAccount: {
+        emailAddress: 'dummy@example.com', accountUuid: 'dummy-account', organizationUuid: 'dummy-org',
+        organizationType: 'claude_max', organizationRateLimitTier: 'default_claude_max_5x',
+      },
+      cachedUsageUtilization: {
+        accountUuid: 'dummy-account', fetchedAtMs: Date.now(),
+        utilization: { five_hour: { utilization: 12 } },
+      },
+    }));
+    const memento = new MemoryMemento();
+    const store = new AccountStore(memento);
+    await memento.update('accounts', [{ name: 'work', dir }]);
+    let unavailable = false;
+    let checking = false;
+    const source = claudePanelSource(store, new LabelStore(memento, 'claude.labels'), undefined,
+      (accountDir) => ({ unavailable: accountDir === dir && unavailable, checking: accountDir === dir && checking }));
+    const row = () => source.accounts().find((r) => r.dir === dir)!;
+    assert.equal(row().usage?.windows[0].usedPercent, 12);
+    unavailable = true;
+    assert.equal(row().subscriptionUnavailable, true);
+    assert.equal(row().usage, undefined, 'a previously valid cache no longer appears usable');
+    assert.equal(row().plan, 'Max 5x');
+    assert.equal(row().loggedIn, true);
+    assert.equal(row().email, 'dummy@example.com');
+    checking = true;
+    assert.equal(row().subscriptionChecking, true);
+    assert.equal(row().subscriptionUnavailable, true, 'rechecking keeps the warning until recovery');
+    unavailable = false;
+    checking = false;
+    assert.ok(!row().subscriptionUnavailable);
+    assert.ok(!row().subscriptionChecking);
+    assert.equal(row().usage?.windows[0].usedPercent, 12);
   } finally { tmp.restore(); }
 });
 

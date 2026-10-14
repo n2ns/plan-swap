@@ -141,7 +141,7 @@ describe('panel message handlers (Claude)', () => {
     switchedTo: string | undefined;
     dispose(): void;
   }
-  function harness(): Harness {
+  function harness(checkSubscription?: (dir: string) => Promise<void>): Harness {
     const memento = new MemoryMemento();
     const store = new AccountStore(memento);
     const labels = new LabelStore(memento, 'claude.labels');
@@ -161,7 +161,7 @@ describe('panel message handlers (Claude)', () => {
     const statusBar = { update() {} } as unknown as StatusBar;
     const exclusions = new RecommendExclusions(memento, 'claude.recommendExcluded');
     h.exclusions = exclusions;
-    const disposables = registerCommands({ store, panel, statusBar, labels, exclusions, tools: {}, procRoot: procRoot() });
+    const disposables = registerCommands({ store, panel, statusBar, labels, exclusions, tools: {}, procRoot: procRoot(), checkSubscription });
     h.dispose = () => disposables.forEach((d) => d.dispose());
     return h;
   }
@@ -262,6 +262,18 @@ describe('panel message handlers (Claude)', () => {
     } finally {
       h.dispose();
     }
+  });
+
+  test('subscriptionCheck rechecks resolved accounts and ignores unknown directories', async () => {
+    const checked: string[] = [];
+    const h = harness(async (dir) => { checked.push(dir); });
+    const dir = await add(h, 'work', false);
+    try {
+      await h.handle({ type: 'subscriptionCheck', mode: 'claude', dir });
+      await h.handle({ type: 'subscriptionCheck', mode: 'claude', dir: path.join(home, '.claude') });
+      await h.handle({ type: 'subscriptionCheck', mode: 'claude', dir: path.join(home, '.claude-unknown') });
+      assert.deepEqual(checked, [dir, path.join(home, '.claude')]);
+    } finally { h.dispose(); }
   });
 
   test('recommendExclude marks and unmarks a registered account, ignores unknown directories, and remove clears the mark', async (ctx) => {

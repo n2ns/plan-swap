@@ -5,6 +5,8 @@ is still missing. Remove an item once it is done or decided.
 
 ## Known gaps
 
+- **Claude subscription availability (2026-10-15).** Unit tests and synthetic sidebar checks cover denial, identity changes, cooldown and recovery. Verify the implemented warning and recovery after renewal in a real editor, and the native Windows/claude.cmd probe with real accounts. Earlier Linux CLI denial evidence is recorded in [Claude usage research](docs/research/claude-usage.md#subscription-availability-evidence); it does not establish acceptance of the integrated feature.
+
 - **Claude `.claude.json` write-back on switch (2026-10-13).** Verify with real accounts that MCP servers and project trust added, changed or removed in the current linked account reach the default account and the next linked account on a switch ([manual verification](docs/manual-verification.md) step 6), and that a session started before switching away is not written back. Automated checks use temporary HOME directories only.
 
 - **Claude optional shared targets and scoped Repair (2026-10-10).** Verify in a real editor that switching initializes missing task/attachment targets, task lists and Remote Control attachments remain usable across accounts, and cleanup during an already-running session does not prevent first writes. Automated checks use temporary HOME directories and filesystem writes, not a signed-in Claude client; the current VSIX is not installed by these checks.

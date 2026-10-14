@@ -159,8 +159,8 @@ function avatar(a: AccountView): HTMLElement {
   return h('div', { class: 'avatar', style: `--avatar-color: var(--vscode-charts-${color})`, title: a.dirLabel }, letter);
 }
 
-function planPill(a: AccountView): HTMLElement | null {
-  return a.plan ? h('span', { class: 'pill plan' }, a.plan) : null;
+function planPill(a: AccountView, unavailable: boolean): HTMLElement | null {
+  return a.plan ? h('span', { class: unavailable ? 'pill plan is-stale' : 'pill plan', title: unavailable ? t('subscription.lastPlan') : undefined }, a.plan) : null;
 }
 
 // Plan string -> color class (frontend-only mapping, written to data-plan for CSS)
@@ -791,6 +791,8 @@ class Page {
       return row;
     }
 
+    const unavailable = this.mode === 'claude' && a.subscriptionUnavailable === true;
+    const checking = this.mode === 'claude' && a.subscriptionChecking === true;
     const editing = this.renamingDir === a.dir && !!this.renameField;
     const selected = this.mode === 'codex' && a.isSelected === true;
     const canSwitch = !a.isCurrent || (this.mode === 'codex' && a.isSelected === false);
@@ -873,19 +875,28 @@ class Page {
         h('button', { type: 'button', class: 'rename-btn', title: t('row.rename'), 'aria-label': t('row.renameAria', { name: a.label }), 'data-action': 'rename' }, h('vscode-icon', { name: 'edit', size: '12' })),
         (e) => this.startRename(a, (e.currentTarget as HTMLElement).closest('.row-title')?.getBoundingClientRect().height),
       );
+    const subscriptionButton = (unavailable || checking) && !editing && onClick(
+      h('button', {
+        type: 'button', class: 'subscription-btn', 'data-action': 'subscriptionCheck', disabled: checking,
+        title: t(checking ? 'subscription.checking' : 'subscription.unavailable'),
+        'aria-label': t(checking ? 'subscription.checking' : 'subscription.unavailable'),
+        'aria-busy': checking ? 'true' : undefined,
+      }, h('vscode-icon', { name: checking ? 'loading' : 'warning', size: '12', spin: checking })),
+      (e) => { if (!checking && e.detail <= 1) this.send({ type: 'subscriptionCheck', dir: a.dir }); },
+    );
     const title = editing
       ? withHeight(h('div', { class: 'row-title' }, this.renameField!, this.renameSaveButton()), this.renameTitleHeight)
       : h(
           'div',
           { class: 'row-title' },
-          h('span', { class: 'row-name' }, ...nameWithTail(a.label, sharedIcon, renameButton)),
+          h('span', { class: 'row-name' }, ...nameWithTail(a.label, subscriptionButton, sharedIcon, renameButton)),
         );
     // Tags (plan, not logged in) sit at the right end of the name line and wrap under it only when they do not fit; the
     // action buttons get their own line, except rows with no Switch / Log in, which join the name line before the tags
     const inlineActions = !textButtons.hasChildNodes();
     if (inlineActions) classes.push('inline-actions');
     const actions = h('div', { class: 'row-actions' }, textButtons.hasChildNodes() && textButtons, iconButtons.hasChildNodes() && iconButtons);
-    const tags = h('div', { class: 'row-tags' }, planPill(a), !a.loggedIn && h('span', { class: 'pill warn' }, t('account.notLoggedIn')));
+    const tags = h('div', { class: 'row-tags' }, planPill(a, unavailable), !a.loggedIn && h('span', { class: 'pill warn' }, t('account.notLoggedIn')));
 
     // .row-main is display: contents, so its lines land directly in the .row grid below the name line
     const row = h(
@@ -900,7 +911,7 @@ class Page {
         'div',
         { class: 'row-main' },
         loginStatus(a, this.tab.hideEmail),
-        usageHistory(a),
+        !unavailable && usageHistory(a),
         !inlineActions && actions,
         !a.loggedIn && !a.isCurrent && h('div', { class: 'row-hint' }, t(`${this.mode}.loginHint`)),
         editing && this.renameError && h('div', { class: 'row-error', role: 'alert' }, this.renameError),

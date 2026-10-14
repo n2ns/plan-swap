@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Detect unavailable Claude subscription access after unavailable usage data through a minimal official CLI probe. Show an inline warning icon with click-to-recheck, mute the last identified plan, hide stale quota and exclude the account from recommendations. Probes can consume a small amount of quota; unknown failures are not treated as subscription expiry.
+
 ## [0.3.10] - 2026-10-13
 
 ### Changed

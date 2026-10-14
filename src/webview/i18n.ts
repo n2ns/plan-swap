@@ -56,6 +56,9 @@ export const en = {
   'claude.syncTitle': 'Re-link linked accounts to the default account and sync its MCP servers',
   'codex.syncTitle': 'Re-link linked accounts to the default account',
 
+  'subscription.unavailable': 'Subscription unavailable; click to recheck',
+  'subscription.checking': 'Checking subscription…',
+  'subscription.lastPlan': 'Last identified plan',
   'account.default': 'Default account',
   'account.loggedIn': 'Logged in',
   'account.notLoggedIn': 'Not logged in',
@@ -182,6 +185,9 @@ export const zhCn: Record<MessageKey, string> = {
   'claude.syncTitle': '将链接账号重新链接到默认账号，并同步 MCP 服务器',
   'codex.syncTitle': '将链接账号重新链接到默认账号',
 
+  'subscription.unavailable': '订阅不可用，点击重新检查',
+  'subscription.checking': '正在检查订阅…',
+  'subscription.lastPlan': '上次识别的套餐',
   'account.default': '默认账号',
   'account.loggedIn': '已登录',
   'account.notLoggedIn': '未登录',
@@ -306,6 +312,9 @@ export const zhTw: Record<MessageKey, string> = {
   'claude.syncTitle': '將已連結帳號重新連結到預設帳號，並同步其 MCP 伺服器',
   'codex.syncTitle': '將已連結帳號重新連結到預設帳號',
 
+  'subscription.unavailable': '訂閱不可用，點擊重新檢查',
+  'subscription.checking': '正在檢查訂閱…',
+  'subscription.lastPlan': '上次識別的方案',
   'account.default': '預設帳號',
   'account.loggedIn': '已登入',
   'account.notLoggedIn': '未登入',
@@ -430,6 +439,9 @@ export const es: Record<MessageKey, string> = {
   'claude.syncTitle': 'Volver a vincular las cuentas vinculadas a la cuenta predeterminada y sincronizar sus servidores MCP',
   'codex.syncTitle': 'Volver a vincular las cuentas vinculadas a la cuenta predeterminada',
 
+  'subscription.unavailable': 'Suscripción no disponible; pulsa para volver a comprobar',
+  'subscription.checking': 'Comprobando suscripción…',
+  'subscription.lastPlan': 'Último plan identificado',
   'account.default': 'Cuenta predeterminada',
   'account.loggedIn': 'Sesión iniciada',
   'account.notLoggedIn': 'Sin sesión',
@@ -553,6 +565,9 @@ export const ja: Record<MessageKey, string> = {
   'claude.syncTitle': 'リンク済みアカウントを既定のアカウントに再リンクし、MCP サーバーを同期します',
   'codex.syncTitle': 'リンク済みアカウントを既定のアカウントに再リンクします',
 
+  'subscription.unavailable': 'サブスクリプションを利用できません。クリックして再確認',
+  'subscription.checking': 'サブスクリプションを確認中…',
+  'subscription.lastPlan': '最後に確認したプラン',
   'account.default': '既定のアカウント',
   'account.loggedIn': 'ログイン済み',
   'account.notLoggedIn': '未ログイン',

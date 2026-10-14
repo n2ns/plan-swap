@@ -15,6 +15,7 @@ import { registerCommands } from './commands';
 import { affectsSetting, currentDir, isExplicitConfigDir, settingEnv, settingEnvNames } from './claudeSettings';
 import { findBundledClaude, oneAtATime, queryClaudeUsage, queryEach, readClaudeUsage, readUsageFetchedAt, type ClaudeQueryResult } from './claudeUsage';
 import { ClaudeUsageMonitor, ClaudeUsageQueries } from './claudeUsageMonitor';
+import { ClaudeSubscriptionChecks, queryClaudeSubscription } from './claudeSubscription';
 import { CodexAccountStore } from './codex/codexStore';
 import { codexPanelSource, codexRunsInWsl, registerCodexCommands, restartServerInteractive } from './codex/codexCommands';
 import { checkSharedInBackground, registerToolCommands, runTool, type TerminalCheck, type ToolDeps } from './tools';
@@ -232,17 +233,33 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   const claudeCooldown = new UsageCooldown();
   // Claude Code's usage cache tells when any window or terminal last fetched the account's usage
   const claudeCooldownLeft = (dir: string): number => claudeCooldown.remaining(dir, readUsageFetchedAt(dir, isExplicitConfigDir(dir)));
-  // One query, marking its cooldown when it starts; claudeQuery runs it in the queue
-  const runClaudeQuery = (dir: string, signal?: AbortSignal) => {
+  // Usage reads and subscription probes share one process queue, including manual rechecks.
+  const claudeProcessQueue = oneAtATime();
+  const claudeAbort = new AbortController();
+  const claudeOptions = (signal?: AbortSignal) => ({
+    env: settingEnv(), signal: signal ? AbortSignal.any([signal, claudeAbort.signal]) : claudeAbort.signal,
+    timeoutMs: usageTimeoutMs('claude'),
+    fallback: () => {
+      const ext = vscode.extensions.getExtension(CLAUDE_EXTENSION_ID);
+      return ext && findBundledClaude(ext.extensionPath);
+    },
+  });
+  const subscription = new ClaudeSubscriptionChecks(
+    (dir, explicit, signal) => queryClaudeSubscription(dir, explicit, claudeOptions(signal)),
+    () => { panel.refresh(); statusBar.update(); },
+  );
+  const subscriptionState = (dir: string) => subscription.state(dir, isExplicitConfigDir(dir));
+  statusBar.setClaudeSubscriptionUnavailable((dir) => subscriptionState(dir).unavailable);
+  const runClaudeQuery = (dir: string, signal?: AbortSignal) => claudeProcessQueue(async () => {
     claudeCooldown.mark(dir);
-    return queryClaudeUsage(dir, isExplicitConfigDir(dir), {
-      env: settingEnv(), signal, timeoutMs: usageTimeoutMs('claude'),
-      fallback: () => {
-        const ext = vscode.extensions.getExtension(CLAUDE_EXTENSION_ID);
-        return ext && findBundledClaude(ext.extensionPath);
-      },
-    });
-  };
+    const explicit = isExplicitConfigDir(dir);
+    const result = await queryClaudeUsage(dir, explicit, claudeOptions(signal));
+    if (result.ok) subscription.acceptAvailable(dir, explicit);
+    else if (result.reason === 'noUsage' && !signal?.aborted && !claudeAbort.signal.aborted) {
+      await subscription.check(dir, explicit, false, signal);
+    }
+    return result;
+  });
   const claudeQueries = new ClaudeUsageQueries(runClaudeQuery, {
     cachedAt: (dir) => readUsageFetchedAt(dir, isExplicitConfigDir(dir)),
     staleMs: () => usageSchedule('claude').staleMs,
@@ -274,7 +291,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     if (!settings.enabled || !vscode.window.state.focused) return;
     const dir = currentDir();
     const explicit = isExplicitConfigDir(dir);
-    const claudeWindows = readAccountInfo(dir, explicit).identity !== undefined ? readClaudeUsage(dir, explicit)?.windows : undefined;
+    const claudeWindows = readAccountInfo(dir, explicit).identity !== undefined && !subscriptionState(dir).unavailable ? readClaudeUsage(dir, explicit)?.windows : undefined;
     if (claudeWindows) void announceLowUsage('claude', dir, claudeWindows, false, settings.threshold, store.all(), claudeLabels);
     const result = usage?.current().result;
     const codexUsage = codex && result?.ok && !codexRunsInWsl() ? liveCodexUsage(result.usage) : undefined;
@@ -288,8 +305,8 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     }
   }, {
     query: (dir) => claudeQuery(dir),
-    queryIfStale: (dir) => claudeQueries.queryIfStale(dir, () => readAccountInfo(dir, isExplicitConfigDir(dir)).identity !== undefined),
-    eligible: (dir) => readAccountInfo(dir, isExplicitConfigDir(dir)).identity !== undefined,
+    queryIfStale: (dir) => claudeQueries.queryIfStale(dir, () => readAccountInfo(dir, isExplicitConfigDir(dir)).identity !== undefined && !subscriptionState(dir).unavailable),
+    eligible: (dir) => readAccountInfo(dir, isExplicitConfigDir(dir)).identity !== undefined && !subscriptionState(dir).unavailable,
     cachedAt: (dir) => readUsageFetchedAt(dir, isExplicitConfigDir(dir)),
     staleMs: () => usageSchedule('claude').staleMs,
   });
@@ -460,7 +477,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     staleMs: () => usageSchedule('claude').staleMs,
     checkedAt: (dir) => latest(readUsageFetchedAt(dir, isExplicitConfigDir(dir)), claudeCooldown.lastQueried(dir)),
     query: async (dir) => {
-      const result = await claudeQueries.queryIfStale(dir, () => claudeOthersAllowed() && readAccountInfo(dir, isExplicitConfigDir(dir)).identity !== undefined);
+      const result = await claudeQueries.queryIfStale(dir, () => claudeOthersAllowed() && readAccountInfo(dir, isExplicitConfigDir(dir)).identity !== undefined && !subscriptionState(dir).unavailable);
       if (!result) return claudeOthersAllowed() ? 'skipped' : false;
       // The account may have become the current one meanwhile: the monitor then takes the result as its attempt
       claudeUsage.record(dir, result);
@@ -480,7 +497,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     }),
   });
   const otherClaudeDirs = (): string[] => store.all().map((a) => a.dir)
-    .filter((dir) => !samePath(dir, currentDir()) && readAccountInfo(dir, isExplicitConfigDir(dir)).identity !== undefined);
+    .filter((dir) => !samePath(dir, currentDir()) && readAccountInfo(dir, isExplicitConfigDir(dir)).identity !== undefined && !subscriptionState(dir).unavailable);
   const otherCodexDirs = (): string[] => (codex?.store.all() ?? []).map((a) => a.dir).filter((dir) => {
     if (samePath(dir, effectiveDir())) return false;
     const info = readCodexAccountInfo(dir);
@@ -555,7 +572,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   };
   checkLinks();
 
-  const panel = new AccountsPanel(ctx.extensionUri, { claude: claudePanelSource(store, claudeLabels, claudeExclusions), codex: codexSource }, ctx.globalState);
+  const panel = new AccountsPanel(ctx.extensionUri, { claude: claudePanelSource(store, claudeLabels, claudeExclusions, subscriptionState), codex: codexSource }, ctx.globalState);
   // A stored observation of the effective Codex account (another window, an earlier session) is shown from the start
   usage?.adoptCached();
   // Re-render expiry even when no query is due, including accounts other than the effective one.
@@ -574,7 +591,18 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     panel,
     vscode.window.registerWebviewViewProvider(VIEW_ID, panel),
     statusBar,
-    ...registerCommands({ store, panel, statusBar, labels: claudeLabels, exclusions: claudeExclusions, codex, tools, provideTerminalCheck: (check) => { terminalChecks.claude = check; } }),
+    ...registerCommands({ store, panel, statusBar, labels: claudeLabels, exclusions: claudeExclusions, codex, tools, checkSubscription: async (dir) => {
+      await manualRefresh('claude', () => claudeProcessQueue(async () => {
+        const explicit = isExplicitConfigDir(dir);
+        const result = await subscription.check(dir, explicit, true, claudeAbort.signal);
+        if (result === 'available' && !claudeAbort.signal.aborted) {
+          claudeCooldown.mark(dir);
+          const usageResult = await queryClaudeUsage(dir, explicit, claudeOptions());
+          claudeUsage.record(dir, usageResult);
+          panel.refresh();
+        }
+      }));
+    }, provideTerminalCheck: (check) => { terminalChecks.claude = check; } }),
     ...(codex
       ? registerCodexCommands({ store: codex.store, panel, labels: codexLabels, exclusions: codexExclusions, tools, provideTerminalCheck: (check) => { terminalChecks.codex = check; } })
       : []),
@@ -598,7 +626,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
       identityWarnings.check();
       checkLowUsage();
     }),
-    { dispose: () => { clearTimeout(firstUsageCheck); clearInterval(usageTick); clearInterval(historyTick); } },
+    { dispose: () => { claudeAbort.abort(); clearTimeout(firstUsageCheck); clearInterval(usageTick); clearInterval(historyTick); } },
     vscode.window.onDidChangeWindowState((e) => {
       if (!e.focused) return;
       checkUsage();

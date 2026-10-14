@@ -21,6 +21,8 @@ Button names below use the English UI. Hover an icon to see its name in your lan
 - [Troubleshoot common problems](#troubleshoot-common-problems)
 - [Disable switching or uninstall](#disable-switching-or-uninstall)
 
+A warning icon beside a Claude account means subscription access was rejected. Hover for details or click it to recheck after renewing or restoring access. The last identified plan is muted and old quota bars are hidden; the account is not recommended. A spinner appears during the check. After unavailable usage data, PlanSwap may automatically send a minimal CLI model request; this can consume a small amount of quota. Confirmed unavailable accounts stop automatic checks until you recheck or restart the extension. A failed network check does not mean subscription expiry.
+
 ## Before you start
 
 You need:

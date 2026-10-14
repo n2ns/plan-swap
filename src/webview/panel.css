@@ -325,7 +325,23 @@ body {
 .row-name { flex: 0 1 auto; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
 /* The shared badge and the pencil sit inline in the name's text flow, so they follow the last line of a wrapped name */
 .name-tail { white-space: nowrap; }
-.name-tail > .shared-icon, .name-tail > .rename-btn { display: inline-grid; vertical-align: middle; }
+.name-tail > .shared-icon, .name-tail > .rename-btn, .name-tail > .subscription-btn { display: inline-grid; vertical-align: middle; }
+.subscription-btn {
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin: -2px 0 0 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--warn-text);
+  cursor: pointer;
+}
+.subscription-btn vscode-icon { color: inherit; }
+.subscription-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 12%, transparent); }
+.subscription-btn:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 1px; }
+.subscription-btn:disabled { color: var(--muted); cursor: default; }
 /* Rename pencil: 16px, same size as the badges; hidden until the row is hovered or has focus */
 .rename-btn {
   place-items: center;
@@ -473,6 +489,8 @@ body {
   font-weight: 600;
   white-space: nowrap;
 }
+
+.pill.plan.is-stale { color: var(--muted); font-weight: 400; }
 
 /* ---------- Inline rename (not for the external directory row) ---------- */
 .row.is-editing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }

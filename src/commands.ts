@@ -52,6 +52,7 @@ export interface Deps {
   labels: LabelStore;
   // Accounts excluded from recommendations (claude.recommendExcluded); cleared with the account. Tests may leave it out
   exclusions?: RecommendExclusions;
+  checkSubscription?: (dir: string) => Promise<void>;
   // Codex-side store; the refresh command applies to both tabs
   codex?: { store: CodexAccountStore; labels: LabelStore; exclusions?: RecommendExclusions };
   // Panel 'tool' messages of the Claude page go to runTool('claude', tool, tools)
@@ -411,6 +412,11 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
       case 'terminal': {
         const a = panel.resolve(MODE, msg.dir);
         if (a) openTerminal(a);
+        return;
+      }
+      case 'subscriptionCheck': {
+        const a = panel.resolve(MODE, msg.dir);
+        if (a) await deps.checkSubscription?.(a.dir);
         return;
       }
       case 'remove': {

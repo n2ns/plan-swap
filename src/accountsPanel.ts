@@ -88,7 +88,7 @@ export interface PanelSource {
  * "external directory" row (EXTERNAL_NAME, kind 'external') when the current dir matches no registered account
  * (findSameDir). enabled is always true and pendingDir always undefined.
  */
-export function claudePanelSource(store: AccountStore, labels: LabelStore, exclusions?: RecommendExclusions): PanelSource {
+export function claudePanelSource(store: AccountStore, labels: LabelStore, exclusions?: RecommendExclusions, subscription?: (dir: string) => { unavailable: boolean; checking: boolean }): PanelSource {
   const accounts = (): AccountView[] => {
     const cur = currentDir();
     const all = store.all();
@@ -115,7 +115,11 @@ export function claudePanelSource(store: AccountStore, labels: LabelStore, exclu
         isCurrent: true,
       });
     }
-    return rows;
+    return rows.map((row) => {
+      const state = subscription?.(row.dir);
+      return state ? { ...row, subscriptionUnavailable: state.unavailable || undefined, subscriptionChecking: state.checking || undefined,
+        usage: state.unavailable ? undefined : row.usage } : row;
+    });
   };
   return {
     accounts,
@@ -376,6 +380,7 @@ const MESSAGE_FIELDS: Record<FromWebview['type'], readonly string[]> = {
   setTab: [],
   switch: ['dir'],
   terminal: ['dir'],
+  subscriptionCheck: ['dir'],
   remove: ['dir'],
   add: ['name'],
   share: ['dir'],

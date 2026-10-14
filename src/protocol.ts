@@ -23,6 +23,9 @@ export interface AccountView {
   // For display, formatted plan type (e.g. "Max 20x", "Plus", "API key")
   plan?: string;
   loggedIn: boolean;
+  // Claude only: confirmed subscription rejection and an in-flight availability probe.
+  subscriptionUnavailable?: boolean;
+  subscriptionChecking?: boolean;
   // True when the row's usage limits can be queried: Claude, a subscription sign-in; Codex, a ChatGPT sign-in outside WSL-run Codex (not API key)
   usageEligible?: boolean;
   isCurrent: boolean;
@@ -100,6 +103,7 @@ export type FromWebview =
   | { type: 'setTab'; mode: PanelMode }
   | { type: 'switch'; mode: PanelMode; dir: string }
   | { type: 'terminal'; mode: PanelMode; dir: string }
+  | { type: 'subscriptionCheck'; mode: PanelMode; dir: string }
   // Sent after the frontend's inline confirmation; the host only handles named rows
   | { type: 'remove'; mode: PanelMode; dir: string }
   // shared: the add section's checkbox; the host treats a missing value as true

@@ -390,6 +390,11 @@ export class StatusBar implements vscode.Disposable {
   });
   private codexUsage: CodexUsageState | undefined;
   private claudeUsage: ClaudeUsageState | undefined;
+  private claudeSubscriptionUnavailable: (dir: string) => boolean = () => false;
+
+  setClaudeSubscriptionUnavailable(read: (dir: string) => boolean): void {
+    this.claudeSubscriptionUnavailable = read;
+  }
 
   constructor(
     private readonly store: AccountStore,
@@ -438,7 +443,7 @@ export class StatusBar implements vscode.Disposable {
       const info = readAccountInfo(dir, explicit);
       // Usage limits exist only for a subscription sign-in (oauthAccount); signed-out accounts show none
       const showUsage = info.identity !== undefined;
-      const usage = showUsage ? readClaudeUsage(dir, explicit) : undefined;
+      const usage = showUsage && !this.claudeSubscriptionUnavailable(dir) ? readClaudeUsage(dir, explicit) : undefined;
       products.push(productPart('Claude', usage?.windows, display, settings));
       if (usage) candidates.push(...candidatesOf('Claude', usage.windows));
       blocks.push({

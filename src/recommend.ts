@@ -32,7 +32,7 @@ export function recommend(rows: readonly AccountView[], recommendationThreshold:
   if (currentLowest === undefined || currentLowest > recommendationThreshold) return undefined;
   let best: { dir: string; lowest: number; checkedAt: number } | undefined;
   for (const row of rows) {
-    if (row.kind === 'external' || row.isCurrent || row.isSelected || row.recommendExcluded || row.usage?.limitReached) continue;
+    if (row.kind === 'external' || row.isCurrent || row.isSelected || row.recommendExcluded || row.subscriptionUnavailable || row.usage?.limitReached) continue;
     const lowest = lowestRemaining(row.usage);
     if (lowest === undefined || lowest <= 0 || lowest <= currentLowest) continue;
     const checkedAt = row.usage!.checkedAt;
