@@ -6,6 +6,7 @@
 
 - Claude and Codex account terminals (sign-in and the terminal button) now fall back to the CLI bundled with the official Claude Code or Codex extension when `claude` / `codex` is not on PATH, on Windows and Linux, instead of failing with "command not found".
 - On native Windows with the Codex extension set to run Codex inside WSL, Codex account terminals are refused with the WSL-window guidance, like enable and switch, instead of signing in to a Windows directory that the WSL-side Codex never reads; the Codex page shows a banner saying so instead of the "Log in" and terminal buttons.
+- The account list no longer shows below the Codex enable card while Codex switching is off, or under the loading message before the first account data arrives.
 
 ## [0.3.11] - 2026-10-15
 

@@ -4,7 +4,15 @@ Purpose: acceptance procedures and expected observations for the sidebar and acc
 
 ## Preview verification
 
-Every frontend change must be checked in the preview page at sidebar/container widths **200, 240, 280, 340 and 420px**, in English, Simplified Chinese, Traditional Chinese, Spanish and Japanese, with screenshots and assertions in the report. `npm run test:ui` asserts the layout rules (no horizontal scroll, wrapping, tag group placement); review its artifacts, and check by eye anything a change adds that it does not assert.
+Which UI checks a change needs depends on what it can affect. `npm run typecheck`, `npm test` and `npm run build` are required before every commit regardless.
+
+| Change | `npm run test:ui` | Preview check (`preview-verify` skill) |
+|---|---|---|
+| Host only, no Webview effect: extension logic, notifications and other host strings (`src/i18n.ts`), docs | No | No |
+| Webview logic or styles without new or changed sidebar text: which elements render, CSS, message handling | Yes | A check of the changed UI at widths **200, 240, 280, 340 and 420px**, English only (`--locales=en`) |
+| New or changed sidebar text (`src/webview/i18n.ts`), or a layout that places text differently | Yes | The same check in English, Simplified Chinese, Traditional Chinese, Spanish and Japanese, since translation length and CJK line breaking change wrapping |
+
+Preview checks record screenshots and assertions in the report. `npm run test:ui` asserts the layout rules (no horizontal scroll, wrapping, tag group placement) on every width and locale; review its artifacts, and check by eye anything a change adds that it does not assert.
 
 Use a headless browser (the default of `npm run test:ui`, or a headless browser for manual preview checks); do not open a browser window on the user's display. Keep 100% zoom with a fixed viewport (a headed browser, only when explicitly requested, stays full-screen). Adjust the sidebar or preview container width, not the browser viewport or page zoom.
 

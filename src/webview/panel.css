@@ -203,6 +203,8 @@ body {
 
 /* ---------- Sections ---------- */
 .section { display: flex; flex-direction: column; gap: var(--gap); }
+/* The account list is hidden while loading and on the disabled page; the display rule above would override [hidden] */
+.section[hidden] { display: none; }
 /* Section headings and collapsible headers share one small label style (no uppercase or tracking for Chinese and Japanese) */
 .section-title {
   display: flex;

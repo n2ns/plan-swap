@@ -21,7 +21,7 @@ npm run preview     # Webview preview at http://127.0.0.1:8768/ with synthetic d
 ```
 
 - Before committing, `npm run typecheck`, `npm test` and `npm run build` must pass.
-- Every frontend change also needs `npm run test:ui` and the [preview verification](docs/manual-verification.md#preview-verification): every width and locale listed there, screenshots and assertions, a headless browser at 100% zoom with a fixed viewport (adjust the sidebar width, not the viewport), one browser tab per agent, reused and closed afterwards.
+- Sidebar (Webview) changes also need the UI checks their kind requires ([which checks](docs/manual-verification.md#preview-verification)): `npm run test:ui` for any Webview change, plus a preview check at every width, in every locale when sidebar text changes. Preview checks use a headless browser at 100% zoom with a fixed viewport (adjust the sidebar width, not the viewport), one browser tab per agent, reused and closed afterwards. Host-only changes need no UI checks.
 - Other commands (watch, integration, perf, package): [Development](docs/development.md#commands).
 
 ## Read the documents relevant to the task
@@ -39,7 +39,7 @@ Read the relevant sections before changing their behavior or contracts; a task d
 | Dependencies, building, packaging or editor troubleshooting | [Development](docs/development.md). |
 | Frontend verification or real-account acceptance | [Manual verification](docs/manual-verification.md); [TODO](TODO.md) for pending work. |
 | Sidebar checks in a real editor with fake accounts | The `devhost-test` skill ([SKILL.md](.agents/skills/devhost-test/SKILL.md)). |
-| Layout check of a frontend change at every width and locale | The `preview-verify` skill ([SKILL.md](.agents/skills/preview-verify/SKILL.md)). |
+| Layout check of a Webview change at the required widths and locales | The `preview-verify` skill ([SKILL.md](.agents/skills/preview-verify/SKILL.md)). |
 | Adding or changing a user-visible string | The `add-string` skill ([SKILL.md](.agents/skills/add-string/SKILL.md)). |
 | Releasing a version | The `release` skill ([SKILL.md](.agents/skills/release/SKILL.md)); the tag push needs explicit authorization. |
 | Upgrading official clients or editor integration | The numbered facts in [Claude Code research](docs/research/claude-code.md#facts) / [Codex research](docs/research/codex.md#facts) (Windows: [Windows research](docs/research/windows.md)); re-verify the affected facts. |
