@@ -1,12 +1,12 @@
 # Changelog
 
-## [Unreleased]
+## [0.3.12] - 2026-10-15
 
 ### Fixed
 
-- Claude and Codex account terminals (sign-in and the terminal button) now fall back to the CLI bundled with the official Claude Code or Codex extension when `claude` / `codex` is not on PATH, on Windows and Linux, instead of failing with "command not found".
-- On native Windows with the Codex extension set to run Codex inside WSL, Codex account terminals are refused with the WSL-window guidance, like enable and switch, instead of signing in to a Windows directory that the WSL-side Codex never reads; the Codex page shows a banner saying so instead of the "Log in" and terminal buttons.
-- The account list no longer shows below the Codex enable card while Codex switching is off, or under the loading message before the first account data arrives.
+- **Log in** and the terminal button now work without the `claude` or `codex` command installed: when it is not on PATH, the terminal uses the CLI bundled with the official Claude Code or Codex extension, on Windows and Linux, instead of failing with "command not found". An installed CLI is still used first.
+- On native Windows with the Codex extension set to run Codex inside WSL, Codex **Log in** and terminal buttons are replaced by a banner pointing to a WSL window, like switching, instead of signing in to a Windows folder that the WSL-side Codex never reads.
+- The account list no longer shows below the Codex enable card while Codex switching is off, or under the loading message.
 
 ## [0.3.11] - 2026-10-15
 

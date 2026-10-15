@@ -2,7 +2,7 @@
   "name": "planswap",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.3.11",
+  "version": "0.3.12",
   "publisher": "n2ns",
   "private": true,
   "license": "MIT",
