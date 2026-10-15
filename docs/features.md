@@ -77,7 +77,7 @@ Rows of signed-in ChatGPT accounts show each last-observed window (duration, tim
 
 ### Claude usage limits
 
-Usage checks try `claude` on PATH first (`claude.cmd` also on Windows), then the official Claude Code extension's bundled CLI if no command is found. Terminal sign-in still requires `claude` on PATH.
+Usage checks try `claude` on PATH first (`claude.cmd` also on Windows), then the official Claude Code extension's bundled CLI if no command is found. Account terminals append the bundled CLI's folder to their PATH, so terminal sign-in also works without `claude` on PATH.
 
 A refresh succeeds only when the CLI's structured usage report is valid and the account's official cache supports the result. A recent official cache hit counts as success even when its values and fetch time stay unchanged. Missing or unavailable report data causes a failed refresh, even if recent historical values remain visible; it neither triggers a second executable query nor implies an outdated CLI. A valid empty result shows no quota bars, including when old cache fields remain. Signing in as another account during the query prevents that query from succeeding.
 
@@ -119,7 +119,7 @@ From the row's inline confirmation or the palette (modal; named, non-current acc
 
 ### 4.4 Run claude in a terminal as an account `planswap.openTerminal`
 
-From the row's terminal or "Log in" button (every row, including the external directory) or the palette (registered accounts, plus the external directory when current). Opens `Claude (<label>)` running `claude` (must be on PATH) under that account; if it closes with a named account still signed out, a warning names the likely override ([Claude design 6.4](design.md#64-open-claude-in-a-terminal)).
+From the row's terminal or "Log in" button (every row, including the external directory) or the palette (registered accounts, plus the external directory when current). Opens `Claude (<label>)` running `claude` (on PATH, else the official Claude Code extension's bundled CLI) under that account; if it closes with a named account still signed out, a warning names the likely override ([Claude design 6.4](design.md#64-open-claude-in-a-terminal)).
 
 ### 4.5 Refresh `planswap.refresh`
 
@@ -193,13 +193,13 @@ Until switching is enabled (10.11) the page offers only an explanation of the re
 
 Category "Codex Account"; QuickPicks as in section 4, without email.
 
-- `planswap.codex.enable` (disabled-page button, Command Palette): on WSL/Linux runs the [pre-checks](codex-design.md#4-login-shell-configuration), writes the rc marker blocks after a modal confirmation and self-checks them; a failure reports every reason and removes only blocks written by this run. Native Windows manages the per-user `CODEX_HOME` instead and refuses enable and switch while Codex runs inside WSL ([Codex design 9a](codex-design.md#9a-native-windows)).
+- `planswap.codex.enable` (disabled-page button, Command Palette): on WSL/Linux runs the [pre-checks](codex-design.md#4-login-shell-configuration), writes the rc marker blocks after a modal confirmation and self-checks them; a failure reports every reason and removes only blocks written by this run. Native Windows manages the per-user `CODEX_HOME` instead and refuses enable, switch and account terminals while Codex runs inside WSL, where the Codex page shows a warning banner instead of the sign-in and terminal buttons ([Codex design 9a](codex-design.md#9a-native-windows)).
 - `planswap.codex.disable` (Command Palette): after confirmation removes both blocks and the state file, changing nothing when a block is damaged; open windows keep `CODEX_HOME` until restarted.
 - `planswap.codex.switchAccount` (switch button, double-click, Enter): 10.6.
 - `planswap.codex.addAccount`: focuses the add form; 10.7.
 - `planswap.codex.shareAccount` (row `link` button): 10.12.
 - `planswap.codex.removeAccount` (trash button): 10.8.
-- `planswap.codex.openTerminal` (terminal or sign-in button, also for an effective external directory): opens `Codex (<label>)` running `codex` as that account, or `codex login` with the sign-in tip when signed out ([Codex design 8.4](codex-design.md#84-terminal)); requires `codex` on PATH, not the extension's bundled binary.
+- `planswap.codex.openTerminal` (terminal or sign-in button, also for an effective external directory): opens `Codex (<label>)` running `codex` as that account, or `codex login` with the sign-in tip when signed out ([Codex design 8.4](codex-design.md#84-terminal)); refused on native Windows while Codex runs inside WSL; without `codex` on PATH the terminal runs the Codex extension's bundled binary.
 - `planswap.codex.refreshUsage` (refresh button, tooltip link): queries the effective account now, joining a running query; within the [manual refresh cooldown](#manual-refresh-cooldown) only the cooldown message.
 - `planswap.codex.refreshAllUsage` (layers button): 10.3.1.
 - `planswap.codex.restartServer`: in WSL Antigravity / VSCodium, a modal confirmation and the restart of 10.6; elsewhere only the manual instructions.

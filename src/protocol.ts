@@ -58,6 +58,9 @@ export interface TabState {
   pendingDir?: string;
   // codex only: restart context for the pending banner and disabled page
   restart?: RestartInfo;
+  // codex only: Codex runs inside WSL on native Windows (codexRunsInWsl): account terminals are refused, so the page
+  // shows a banner instead of the sign-in and terminal buttons and the sign-in hint
+  runsInWsl?: boolean;
   // Prefix of a new account folder for the add help, in the platform's spelling (~/.claude- / ~\.claude-); the
   // frontend falls back to its fixed ~/ prefix before the first state
   dirPrefix?: string;

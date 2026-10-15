@@ -259,7 +259,7 @@ describe('panel message handlers', () => {
     refreshes(): number;
     dispose(): void;
   }
-  const harness = async (accounts: CodexAccount[] = []): Promise<Harness> => {
+  const harness = async (accounts: CodexAccount[] = [], bundledCodex?: () => string | undefined): Promise<Harness> => {
     assertTempHome(fxHome);
     fs.mkdirSync(def, { recursive: true, mode: 0o700 });
     const state = new MemoryMemento();
@@ -282,7 +282,7 @@ describe('panel message handlers', () => {
       post(message: ToWebview) { posted.push(message); },
     } as unknown as AccountsPanel;
     const exclusions = new RecommendExclusions(state, 'codex.recommendExcluded');
-    const disposables = registerCodexCommands({ store, labels, exclusions, panel, tools: {} });
+    const disposables = registerCodexCommands({ store, labels, exclusions, panel, tools: {}, bundledCodex });
     return { store, labels, exclusions, handle: (m) => handle(m), posted, refreshes: () => refreshes, dispose: () => disposables.forEach((d) => d.dispose()) };
   };
   const named = (name: string): CodexAccount => ({ name, dir: codexAccountDir(name) });
@@ -878,6 +878,29 @@ describe('panel message handlers', () => {
     }
   });
 
+  test('terminal: the bundled CLI folder is appended to PATH in the Linux command line', LINUX_ONLY, async (ctx) => {
+    const a = named('bundled');
+    const bundled = path.join(fxHome, 'ext', 'bin', 'linux-x86_64', 'codex');
+    const h = await harness([a], () => bundled);
+    const created: StubTerminal[] = [];
+    ctx.mock.method(window, 'createTerminal', (options: { name: string }) => {
+      const terminal: StubTerminal = { name: options.name, sent: [], shown: 0, sendText(text) { terminal.sent.push(text); }, show() { terminal.shown++; } };
+      created.push(terminal);
+      return terminal;
+    });
+    try {
+      await h.handle({ type: 'terminal', mode: 'codex', dir: a.dir });
+      await h.handle({ type: 'terminal', mode: 'codex', dir: def });
+      const folder = `'${path.dirname(bundled)}'`;
+      assert.deepEqual(created.map((c) => c.sent), [
+        [`env CODEX_HOME='${a.dir}' PATH="$PATH":${folder} codex login`],
+        [`env -u CODEX_HOME PATH="$PATH":${folder} codex login`],
+      ]);
+    } finally {
+      h.dispose();
+    }
+  });
+
   test('terminal: a sign-in tip is shown only when the account still has to sign in', async (ctx) => {
     const a = named('tip');
     const h = await harness([a]);
@@ -893,10 +916,11 @@ describe('panel message handlers', () => {
     }
   });
 
-  test('Windows with Codex run inside WSL: enable and switch are refused with guidance, nothing is written', async (ctx) => {
+  test('Windows with Codex run inside WSL: enable, switch and terminals are refused with guidance, nothing is written', async (ctx) => {
     const a = named('wslrun');
     const h = await harness([a]);
     const warnings = modal(ctx, () => t('codex.saveSelectionButton'));
+    const created = ctx.mock.method(window, 'createTerminal');
     const realPlatform = Object.getOwnPropertyDescriptor(process, 'platform') as PropertyDescriptor;
     const stateBefore = fs.existsSync(STATE_FILE()) ? read(STATE_FILE()) : undefined;
     setConfig('chatgpt', 'runCodexInWindowsSubsystemForLinux', true);
@@ -904,7 +928,11 @@ describe('panel message handlers', () => {
     try {
       await h.handle({ type: 'enable', mode: 'codex' });
       await h.handle({ type: 'switch', mode: 'codex', dir: a.dir });
-      assert.deepEqual(warnings.mock.calls.map((c) => c.arguments[0]), [t('codex.win.runsInWsl'), t('codex.win.runsInWsl')]);
+      await h.handle({ type: 'terminal', mode: 'codex', dir: a.dir });
+      await commands.registered['planswap.codex.openTerminal']();
+      assert.deepEqual(warnings.mock.calls.map((c) => c.arguments[0]), Array(4).fill(t('codex.win.runsInWsl')));
+      assert.equal(created.mock.callCount(), 0, 'no Windows terminal signs in where the WSL-side Codex cannot see it');
+      assert.equal(codexPanelSource(h.store, h.labels).runsInWsl?.(), true, 'the panel hides the terminal buttons');
       assert.equal(fs.existsSync(STATE_FILE()) ? read(STATE_FILE()) : undefined, stateBefore);
     } finally {
       Object.defineProperty(process, 'platform', realPlatform);

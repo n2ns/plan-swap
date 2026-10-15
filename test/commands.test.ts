@@ -14,7 +14,7 @@ import { LabelStore } from '../src/labels';
 import { accountDir, defaultDir } from '../src/paths';
 import type { FromWebview, ToWebview } from '../src/protocol';
 import type { StatusBar } from '../src/statusBar';
-import { commands, resetConfig, setConfig, updates, window } from './stubs/vscode';
+import { commands, resetConfig, setConfig, updates, window, type StubTerminal } from './stubs/vscode';
 import { LINUX_ONLY, makeTempHome, MemoryMemento, snapshot, type TempHome } from './helpers';
 
 let tmp: TempHome;
@@ -141,7 +141,7 @@ describe('panel message handlers (Claude)', () => {
     switchedTo: string | undefined;
     dispose(): void;
   }
-  function harness(checkSubscription?: (dir: string) => Promise<void>): Harness {
+  function harness(checkSubscription?: (dir: string) => Promise<void>, bundledClaude?: () => string | undefined): Harness {
     const memento = new MemoryMemento();
     const store = new AccountStore(memento);
     const labels = new LabelStore(memento, 'claude.labels');
@@ -161,7 +161,7 @@ describe('panel message handlers (Claude)', () => {
     const statusBar = { update() {} } as unknown as StatusBar;
     const exclusions = new RecommendExclusions(memento, 'claude.recommendExcluded');
     h.exclusions = exclusions;
-    const disposables = registerCommands({ store, panel, statusBar, labels, exclusions, tools: {}, procRoot: procRoot(), checkSubscription });
+    const disposables = registerCommands({ store, panel, statusBar, labels, exclusions, tools: {}, procRoot: procRoot(), checkSubscription, bundledClaude });
     h.dispose = () => disposables.forEach((d) => d.dispose());
     return h;
   }
@@ -503,6 +503,29 @@ describe('panel message handlers (Claude)', () => {
       fs.writeFileSync(path.join(dir, '.claude.json'), JSON.stringify({ oauthAccount: { emailAddress: 'tip@example.com' } }));
       await h.handle({ type: 'terminal', mode: 'claude', dir });
       assert.equal(infos.mock.callCount(), 1);
+    } finally {
+      h.dispose();
+    }
+  });
+
+  test('terminal: on Linux the bundled CLI folder is appended to PATH in the command line', { skip: process.platform === 'win32' }, async (ctx) => {
+    const bundled = path.join(tmp.home, 'ext', 'resources', 'native-binary', 'claude');
+    const h = harness(undefined, () => bundled);
+    const dir = await add(h, 'path', false);
+    ctx.mock.method(window, 'showInformationMessage', async () => undefined);
+    const created = ctx.mock.method(window, 'createTerminal');
+    try {
+      await h.handle({ type: 'terminal', mode: 'claude', dir });
+      await h.handle({ type: 'terminal', mode: 'claude', dir: defaultDir() });
+      const opened = created.mock.calls.map((c) => ({
+        env: (c.arguments[0] as { env?: Record<string, string> }).env,
+        sent: (c.result as StubTerminal).sent,
+      }));
+      const folder = `'${path.dirname(bundled)}'`;
+      assert.deepEqual(opened, [
+        { env: { CLAUDE_CONFIG_DIR: dir }, sent: [`env CLAUDE_CONFIG_DIR='${dir}' PATH="$PATH":${folder} claude`] },
+        { env: undefined, sent: [`env PATH="$PATH":${folder} claude`] },
+      ]);
     } finally {
       h.dispose();
     }

@@ -35,7 +35,7 @@ import { UsageCooldown } from './usageCooldown';
 import { OtherAccountChecks } from './usageOthers';
 import { LowUsageNotices, type NoticeProduct, type NoticeWindow } from './usageNotices';
 
-// Official extensions whose bundled binaries answer usage queries when the CLI is not on PATH
+// Official extensions whose bundled binaries answer usage queries (and start account terminals) when the CLI is not on PATH
 const CLAUDE_EXTENSION_ID = 'anthropic.claude-code';
 const CODEX_EXTENSION_ID = 'openai.chatgpt';
 // Re-render interval for usage values that expire, independent of the checks
@@ -196,12 +196,13 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   // queries, so several open windows do not all start codex; nothing runs when Codex runs inside WSL (Windows)
   const version = String(ctx.extension.packageJSON.version ?? '0');
   // API-key accounts have no ChatGPT usage limits (and the tooltip hides them): nothing is started for them
+  const bundledCodex = (): string | undefined => {
+    const ext = vscode.extensions.getExtension(CODEX_EXTENSION_ID);
+    return ext && findBundledCodex(ext.extensionPath);
+  };
   const readCodex = async (dir: string, signal?: AbortSignal): Promise<UsageResult> => readCodexAccountInfo(dir).plan === 'API key'
     ? { ok: false, reason: 'notLoggedIn' }
-    : readCodexUsageWithFallback(dir, () => {
-      const ext = vscode.extensions.getExtension(CODEX_EXTENSION_ID);
-      return ext && findBundledCodex(ext.extensionPath);
-    }, { clientVersion: version, signal, timeoutMs: usageTimeoutMs('codex') });
+    : readCodexUsageWithFallback(dir, bundledCodex, { clientVersion: version, signal, timeoutMs: usageTimeoutMs('codex') });
   // Every query of an account (scheduled, manual, refresh-all) starts its manual-refresh cooldown
   const codexCooldown = new UsageCooldown();
   // Every codex usage process of this window (effective account, other accounts, refresh-all) runs after the previous one ended
@@ -236,13 +237,13 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   // Usage reads and subscription probes share one process queue, including manual rechecks.
   const claudeProcessQueue = oneAtATime();
   const claudeAbort = new AbortController();
+  const bundledClaude = (): string | undefined => {
+    const ext = vscode.extensions.getExtension(CLAUDE_EXTENSION_ID);
+    return ext && findBundledClaude(ext.extensionPath);
+  };
   const claudeOptions = (signal?: AbortSignal) => ({
     env: settingEnv(), signal: signal ? AbortSignal.any([signal, claudeAbort.signal]) : claudeAbort.signal,
-    timeoutMs: usageTimeoutMs('claude'),
-    fallback: () => {
-      const ext = vscode.extensions.getExtension(CLAUDE_EXTENSION_ID);
-      return ext && findBundledClaude(ext.extensionPath);
-    },
+    timeoutMs: usageTimeoutMs('claude'), fallback: bundledClaude,
   });
   const subscription = new ClaudeSubscriptionChecks(
     (dir, explicit, signal) => queryClaudeSubscription(dir, explicit, claudeOptions(signal)),
@@ -602,9 +603,9 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
           panel.refresh();
         }
       }));
-    }, provideTerminalCheck: (check) => { terminalChecks.claude = check; } }),
+    }, bundledClaude, provideTerminalCheck: (check) => { terminalChecks.claude = check; } }),
     ...(codex
-      ? registerCodexCommands({ store: codex.store, panel, labels: codexLabels, exclusions: codexExclusions, tools, provideTerminalCheck: (check) => { terminalChecks.codex = check; } })
+      ? registerCodexCommands({ store: codex.store, panel, labels: codexLabels, exclusions: codexExclusions, tools, bundledCodex, provideTerminalCheck: (check) => { terminalChecks.codex = check; } })
       : []),
     ...registerToolCommands(tools),
     registerDiagnosticsCommand({ store, codexStore: codex?.store, extensionVersion: version }),

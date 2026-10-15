@@ -29,7 +29,7 @@ Claude 账号名旁的警告图标表示订阅访问被拒绝。悬浮查看提�
 
 - 兼容 VS Code 1.107 及以上版本的编辑器（VS Code、Antigravity IDE 或 VSCodium）。PlanSwap 可在 WSL 远程窗口、原生 Windows、本地 Linux 桌面或其他远程窗口中运行。不支持 macOS。
 - 在该窗口运行的环境中安装 PlanSwap，以及官方 Claude Code 和/或 Codex 插件。
-- 该环境的 PATH 中有 `claude` 和/或 `codex` 命令，用于在终端登录。查询用量额度时，如果该命令不可用，也可以使用对应官方插件内置的 CLI。
+- 可选：该环境的 PATH 中有 `claude` 和/或 `codex` 命令。该命令不可用时，在终端登录和查询用量额度都会使用对应官方插件内置的 CLI。
 - 在原生 Windows 以外的环境中切换 Codex：登录 shell 须为 Bash。
 
 安装步骤以及各编辑器的测试程度，请参阅[安装说明](../README.md#install)和[支持的编辑器](../README.md#supported-editors)。
@@ -285,7 +285,7 @@ PlanSwap 启动或刷新时，会把在你的主目录中找到的、名称有�
 | 无法启用 Codex 切换 | 查看列出的 shell 或 `CODEX_HOME` 冲突。在 Windows 上，检查 Codex 是否设置为在 WSL 中运行。 |
 | 某个账号仍显示 **未登录** | 用该行的 **登录** 按钮登录，然后刷新。仅保存在操作系统密钥环中的 Codex 登录无法检测到，因为 PlanSwap 查找的是该账号的 `auth.json`。 |
 | 两个账号触发重复登录警告 | 两者登录的是同一账号和工作区，因此在它们之间切换不会得到独立的额度。请在其中一个里登录你想要的身份。 |
-| 没有用量条，或查询失败 | 检查该账号是否以订阅（Claude）或 ChatGPT（Codex）方式登录，以及是否已安装 `claude` 命令（Claude）。手动刷新并阅读失败消息；如果提示冷却中，请稍等再重试。如果提示未能及时响应，可调大 `planswap.claude.usageTimeoutSeconds` 或 `planswap.codex.usageTimeoutSeconds`。 |
+| 没有用量条，或查询失败 | 检查该账号是否以订阅（Claude）或 ChatGPT（Codex）方式登录，以及是否已安装 `claude` 命令或官方 Claude Code 插件（Claude）。手动刷新并阅读失败消息；如果提示冷却中，请稍等再重试。如果提示未能及时响应，可调大 `planswap.claude.usageTimeoutSeconds` 或 `planswap.codex.usageTimeoutSeconds`。 |
 | 设置或历史没有按预期共享 | 检查链接标记，以及转换或重新链接的结果。有些文件会保持独立或需要手动合并；在 Windows 上，检查是否能创建文件链接。 |
 | 列表看起来过时了 | 点击面板标题栏中的刷新按钮。在其他窗口中所做的更改要刷新后才会显示。 |
 

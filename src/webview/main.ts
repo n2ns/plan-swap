@@ -696,6 +696,16 @@ class Page {
     );
   }
 
+  // Codex run inside WSL on native Windows: account terminals are refused, so say where to manage the accounts
+  private renderRunsInWsl(): HTMLElement | null {
+    if (this.mode !== 'codex' || !this.tab.runsInWsl) return null;
+    return h(
+      'div',
+      { class: 'banner', role: 'status' },
+      h('div', { class: 'banner-body' }, bannerTitle('warning', t('wsl.title')), h('div', { class: 'banner-text' }, t('wsl.text'))),
+    );
+  }
+
   // Claude: reload banner
   private renderBanner(): HTMLElement | null {
     if (this.mode !== 'claude' || !this.tab.switchedTo) return null;
@@ -819,8 +829,10 @@ class Page {
           ),
         );
       }
-      // Not logged in: a "Log in" text button; logged in: a terminal icon to run the CLI with this account
-      if (!a.loggedIn) {
+      // Not logged in: a "Log in" text button; logged in: a terminal icon to run the CLI with this account (neither while
+      // the host refuses Codex terminals, runsInWsl)
+      const terminals = !this.tab.runsInWsl;
+      if (!a.loggedIn && terminals) {
         textButtons.append(
           onClick(
             h('vscode-button', { class: 'row-btn', title: t(`${this.mode}.loginTitle`), 'data-action': 'terminal' }, t('row.login')),
@@ -836,7 +848,7 @@ class Page {
       if (convertible && a.shared === true) {
         iconButtons.append(withAction(toolbarButton('debug-disconnect', t('row.unshare'), () => this.send({ type: 'unshare', dir: a.dir })), 'unshare'));
       }
-      if (a.loggedIn) {
+      if (a.loggedIn && terminals) {
         iconButtons.append(withAction(toolbarButton('terminal', t(`${this.mode}.terminalTitle`), () => this.send({ type: 'terminal', dir: a.dir })), 'terminal'));
       }
       // Registered accounts with usage limits can be left out of recommendations (the host keeps the mark)
@@ -913,7 +925,7 @@ class Page {
         loginStatus(a, this.tab.hideEmail),
         !unavailable && usageHistory(a),
         !inlineActions && actions,
-        !a.loggedIn && !a.isCurrent && h('div', { class: 'row-hint' }, t(`${this.mode}.loginHint`)),
+        !a.loggedIn && !a.isCurrent && !this.tab.runsInWsl && h('div', { class: 'row-hint' }, t(`${this.mode}.loginHint`)),
         editing && this.renameError && h('div', { class: 'row-error', role: 'alert' }, this.renameError),
       ),
     );
@@ -1020,12 +1032,12 @@ class Page {
         return;
       }
       if (!this.tab.enabled) {
-        this.top.replaceChildren(this.renderDisabled());
+        this.top.replaceChildren(...[this.renderRunsInWsl(), this.renderDisabled()].filter((n): n is HTMLElement => !!n));
         this.listSection.hidden = true;
         return;
       }
       this.listSection.hidden = false;
-      this.top.replaceChildren(...[this.renderPending(), this.renderBanner(), this.renderRecommendation()].filter((n): n is HTMLElement => !!n));
+      this.top.replaceChildren(...[this.renderRunsInWsl(), this.renderPending(), this.renderBanner(), this.renderRecommendation()].filter((n): n is HTMLElement => !!n));
       this.renderList();
       this.updateAddHelp();
     } finally {

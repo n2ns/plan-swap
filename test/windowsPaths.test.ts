@@ -4,7 +4,9 @@ import assert from 'node:assert/strict';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { tildify } from '../src/accountsPanel';
-import { isWslProfile } from '../src/terminalShell';
+import { isWslProfile, windowsAccountEnv } from '../src/terminalShell';
+import { linuxClaudeCommand } from '../src/commands';
+import { linuxCodexCommand } from '../src/codex/codexCommands';
 import { makeTempHome, type TempHome } from './helpers';
 
 let tmp: TempHome;
@@ -47,5 +49,42 @@ describe('isWslProfile', () => {
     assert.equal(isWslProfile('Old', profiles), true);
     assert.equal(isWslProfile('Git Bash', profiles), false);
     assert.equal(isWslProfile('Gone', profiles), false);
+  });
+});
+
+describe('windowsAccountEnv', () => {
+  const exe = 'C:\\Users\\a\\.vscode\\extensions\\anthropic.claude-code-2.1.300-win32-x64\\resources\\native-binary\\claude.exe';
+  const folder = exe.slice(0, exe.lastIndexOf('\\'));
+  test('appends the bundled CLI folder to the host Path under its own spelling; nothing to set gives undefined', () => {
+    assert.deepEqual(windowsAccountEnv({ CLAUDE_CONFIG_DIR: 'C:\\Users\\a\\.claude-w' }, exe, {}, { Path: 'C:\\Windows' }),
+      { CLAUDE_CONFIG_DIR: 'C:\\Users\\a\\.claude-w', Path: `C:\\Windows;${folder}` });
+    assert.deepEqual(windowsAccountEnv({ CODEX_HOME: null }, exe, {}, {}), { CODEX_HOME: null, Path: folder });
+    assert.deepEqual(windowsAccountEnv({ CLAUDE_CONFIG_DIR: 'C:\\a' }, undefined, {}, { Path: 'C:\\Windows' }), { CLAUDE_CONFIG_DIR: 'C:\\a' });
+    assert.equal(windowsAccountEnv({}, undefined, {}, { Path: 'C:\\Windows' }), undefined);
+  });
+  test('keeps a PATH from terminal.integrated.env.windows, resolving its ${env:NAME} references from the host', () => {
+    const env = { Path: 'C:\\Windows', TOOLS: 'D:\\t' };
+    assert.deepEqual(windowsAccountEnv({}, exe, { PATH: '${env:path};${env:TOOLS};D:\\x;${env:NONE}' }, env),
+      { Path: `C:\\Windows;D:\\t;D:\\x;;${folder}` });
+    assert.deepEqual(windowsAccountEnv({}, exe, { path: null }, env), { Path: folder });
+  });
+});
+
+describe('linuxClaudeCommand', () => {
+  test('sets the account folder and appends the bundled CLI folder through env; plain claude otherwise', () => {
+    assert.equal(linuxClaudeCommand("/h/.claude-it's", '/x/native-binary/claude'),
+      `env CLAUDE_CONFIG_DIR='/h/.claude-it'\\''s' PATH="$PATH":'/x/native-binary' claude`);
+    assert.equal(linuxClaudeCommand(undefined, '/x/native-binary/claude'), `env PATH="$PATH":'/x/native-binary' claude`);
+    assert.equal(linuxClaudeCommand('/h/.claude-a', undefined), `env CLAUDE_CONFIG_DIR='/h/.claude-a' claude`);
+    assert.equal(linuxClaudeCommand(undefined, undefined), 'claude');
+  });
+});
+
+describe('linuxCodexCommand', () => {
+  test('sets or removes CODEX_HOME and appends the bundled CLI folder through env', () => {
+    assert.equal(linuxCodexCommand('/h/.codex-a', '/x/bin/linux-x86_64/codex'), `env CODEX_HOME='/h/.codex-a' PATH="$PATH":'/x/bin/linux-x86_64' codex`);
+    assert.equal(linuxCodexCommand(undefined, '/x/bin/linux-x86_64/codex'), `env -u CODEX_HOME PATH="$PATH":'/x/bin/linux-x86_64' codex`);
+    assert.equal(linuxCodexCommand('/h/.codex-a', undefined), `env CODEX_HOME='/h/.codex-a' codex`);
+    assert.equal(linuxCodexCommand(undefined, undefined), 'env -u CODEX_HOME codex');
   });
 });

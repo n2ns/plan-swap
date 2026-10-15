@@ -1,4 +1,5 @@
 import * as fs from 'node:fs';
+import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
   DEFAULT_NAME,
@@ -39,7 +40,7 @@ import { mirrorClaudeJsonInto, runTool, type TerminalCheck, type ToolDeps } from
 import { t } from './i18n';
 import { isWindows } from './platform';
 import { askCopyFallback } from './linkPolicy';
-import { accountTerminalShell } from './terminalShell';
+import { accountTerminalShell, windowsAccountEnv, windowsTerminalEnvSetting } from './terminalShell';
 
 // planswap.claude.confirmSwitch: whether a switch from the panel asks a modal first (default on)
 export const CONFIRM_SWITCH_SETTING = 'claude.confirmSwitch';
@@ -59,6 +60,8 @@ export interface Deps {
   tools: ToolDeps;
   // Root of the process tree for the busy checks; tests pass a fake, product code leaves the default /proc
   procRoot?: string;
+  // The Claude extension's bundled CLI (findBundledClaude), the account terminals' fallback when `claude` is not on PATH
+  bundledClaude?: () => string | undefined;
   // Receives this module's "account terminal open" check, so the toolbar's Re-link can treat such an account as busy
   provideTerminalCheck?: (check: TerminalCheck) => void;
 }
@@ -84,7 +87,8 @@ export interface Deps {
  * - Rename: named rows only; always answers renameResult.
  * - recommendExclude: registered rows only (the external row is ignored); sets or clears the recommendation mark and
  *   refreshes the panel. The mark is cleared with the account (remove, or a pruned directory on sync).
- * - Terminals: on Linux a non-default folder with a control character is refused; closing a PlanSwap terminal refreshes
+ * - Terminals: on Linux a non-default folder with a control character is refused; the bundled CLI's folder is appended
+ *   to the terminal's PATH (windowsAccountEnv / linuxClaudeCommand), so `claude` still starts without an installed CLI; closing a PlanSwap terminal refreshes
  *   the UI and warns when a still-registered named account is still signed out.
  * - planswap.refresh re-syncs both stores with the disk and refreshes the panel and status bar.
  */
@@ -379,14 +383,18 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
       void vscode.window.showErrorMessage(t('terminal.badDir', { dir: JSON.stringify(account.dir) }));
       return;
     }
+    const dir = isDefault ? undefined : account.dir;
+    const bundled = deps.bundledClaude?.();
     const terminal = vscode.window.createTerminal({
       name: `Claude (${labelOf(account)})`,
       shellPath: accountTerminalShell(),
-      env: isDefault ? undefined : { CLAUDE_CONFIG_DIR: account.dir },
+      env: isWindows()
+        ? windowsAccountEnv(dir === undefined ? {} : { CLAUDE_CONFIG_DIR: dir }, bundled, windowsTerminalEnvSetting())
+        : dir === undefined ? undefined : { CLAUDE_CONFIG_DIR: dir },
     });
     terminals.set(terminal, account);
-    // The terminal environment carries CLAUDE_CONFIG_DIR; Windows shells have no `env` command
-    terminal.sendText(isDefault || isWindows() ? 'claude' : `env CLAUDE_CONFIG_DIR=${shQuote(account.dir)} claude`);
+    // Windows shells have no `env` command: the terminal environment carries CLAUDE_CONFIG_DIR and PATH there
+    terminal.sendText(isWindows() ? 'claude' : linuxClaudeCommand(dir, bundled));
     terminal.show();
     if (!readAccountInfo(account.dir, isExplicitConfigDir(account.dir)).loggedIn) {
       void vscode.window.showInformationMessage(t('account.loginTip', { vendor: 'Claude' }));
@@ -551,6 +559,28 @@ export function validateName(name: string, store: AccountStore, labels: LabelSto
   // scanAccountDirs skips symlinks, so a linked directory must not be registered by adding its name either
   if (lstatOrUndefined(accountDir(name))?.isSymbolicLink()) return t('name.dirIsSymlink');
   return undefined;
+}
+
+/**
+ * Linux: the `env` assignment that appends the folder of an official extension's bundled CLI to PATH in an account
+ * terminal's command line, so the command falls back to it only when no installed CLI comes earlier. It is expanded by
+ * the shell after its rc and profile files ran, so a login profile that resets PATH cannot drop it (bash, zsh and
+ * fish 3 all join "$PATH" with colons).
+ */
+export function bundledPathAssignment(bundled: string): string {
+  return `PATH="$PATH":${shQuote(path.posix.dirname(bundled))}`;
+}
+
+/**
+ * Linux: the command line of a Claude account terminal: `env CLAUDE_CONFIG_DIR='<dir>'` for a named account (bypassing an
+ * export in rc files) plus bundledPathAssignment when the Claude extension bundles a CLI. Plain `claude` when there is
+ * nothing to set.
+ */
+export function linuxClaudeCommand(dir: string | undefined, bundled: string | undefined): string {
+  const vars: string[] = [];
+  if (dir !== undefined) vars.push(`CLAUDE_CONFIG_DIR=${shQuote(dir)}`);
+  if (bundled) vars.push(bundledPathAssignment(bundled));
+  return vars.length ? `env ${vars.join(' ')} claude` : 'claude';
 }
 
 // Wrap in single quotes; inner ' becomes '\''

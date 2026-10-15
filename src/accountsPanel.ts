@@ -80,6 +80,8 @@ export interface PanelSource {
   watchTargets(): string[];
   // codex only; copied into TabState.restart on every push
   restart?(): RestartInfo;
+  // codex only; copied into TabState.runsInWsl on every push
+  runsInWsl?(): boolean;
 }
 
 /**
@@ -300,6 +302,7 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
       switchedTo,
       pendingDir,
       restart: source.restart?.(),
+      runsInWsl: source.runsInWsl?.() || undefined,
       // New account folders as the platform writes them: ~/.claude- on Linux, ~\.claude- on Windows
       dirPrefix: tildify(path.join(os.homedir(), mode === 'claude' ? '.claude-' : '.codex-')),
     };

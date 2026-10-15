@@ -3,8 +3,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { NAME_RE, caseVariantOf, findSameDir, realPathInside, samePath, sameRealPath } from '../paths';
 import { lstatOrUndefined } from '../claudeShare';
-import { hasControlChars, shQuote } from '../commands';
-import { accountTerminalShell } from '../terminalShell';
+import { bundledPathAssignment, hasControlChars, shQuote } from '../commands';
+import { accountTerminalShell, windowsAccountEnv, windowsTerminalEnvSetting } from '../terminalShell';
 import { type AccountsPanel, type PanelSource, tildify, viewInfo } from '../accountsPanel';
 import { labelFor, sameName, type LabelStore, EXTERNAL_NAME } from '../labels';
 import type { RecommendExclusions } from '../recommend';
@@ -58,8 +58,20 @@ export interface CodexDeps {
   exclusions?: RecommendExclusions;
   // Passed to runTool for Codex page tool messages
   tools: ToolDeps;
+  // The Codex extension's bundled CLI (findBundledCodex), the account terminals' fallback when `codex` is not on PATH
+  bundledCodex?: () => string | undefined;
   // Receives this module's "account terminal open" check, so the toolbar's Re-link can treat such an account as busy
   provideTerminalCheck?: (check: TerminalCheck) => void;
+}
+
+/**
+ * Linux: the command line of a Codex account terminal: `env CODEX_HOME='<dir>'` for a named account, `env -u CODEX_HOME`
+ * for the default one (the rc block re-exports CODEX_HOME), plus bundledPathAssignment when the Codex extension bundles
+ * a CLI.
+ */
+export function linuxCodexCommand(dir: string | undefined, bundled: string | undefined): string {
+  const home = dir === undefined ? '-u CODEX_HOME' : `CODEX_HOME=${shQuote(dir)}`;
+  return `env ${home}${bundled ? ` ${bundledPathAssignment(bundled)}` : ''} codex`;
 }
 
 const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
@@ -223,6 +235,7 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, h
   };
   return {
     accounts,
+    runsInWsl: () => codexRunsInWsl(),
     // Treat errors such as unreadable rc files as not enabled so panel rendering is not interrupted; a broken block
     // (start marker without end marker) counts as not enabled so the Enable button leads to preCheck's repair guidance
     enabled: () => {
@@ -252,7 +265,7 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, h
 
 /**
  * Registers the Codex commands and the panel's 'codex' message handler.
- * - enable / switch: refused with codex.win.runsInWsl while codexRunsInWsl(); switching also requires isEnabled().
+ * - enable / switch / terminal: refused with codex.win.runsInWsl while codexRunsInWsl(); switching also requires isEnabled().
  * - switch: concurrent requests are ignored; a target already effective only realigns the state file; otherwise a
  *   modal (codex.switchAndRestartButton for automatic WSL editors, codex.saveSelectionButton with manual instructions
  *   elsewhere), then re-checks the dir and its registration, re-links a shared target (problems only warn), writes the
@@ -269,7 +282,8 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, h
  *   apply to its final link repair).
  * - remove: one blocked() guard for effective, selected and busy, before the flow and after every modal, including
  *   right before deleteCodexDir; a successful deletion calls store.unignore.
- * - terminal: a non-default Linux account whose dir has a C0 or DEL control character is refused; a sign-in terminal
+ * - terminal: a non-default Linux account whose dir has a C0 or DEL control character is refused; the bundled CLI's
+ *   folder is appended to the terminal's PATH (windowsAccountEnv / linuxCodexCommand); a sign-in terminal
  *   shows the account login tip. Tool messages go through runTool('codex', …).
  */
 export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
@@ -676,6 +690,11 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
   }
 
   function openTerminal(account: CodexAccount, login: boolean): void {
+    // A Windows terminal would sign in to the Windows-side directory, which the WSL-side Codex never reads
+    if (codexRunsInWsl()) {
+      void vscode.window.showWarningMessage(t('codex.win.runsInWsl'));
+      return;
+    }
     const isDefault = account.name === CODEX_DEFAULT_NAME;
     // Linux types the folder into the shell (the env prefix is needed: the rc block re-exports CODEX_HOME); a control
     // character (a newline) would end the command line early
@@ -683,14 +702,15 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       void vscode.window.showErrorMessage(t('terminal.badDir', { dir: JSON.stringify(account.dir) }));
       return;
     }
+    const bundled = deps.bundledCodex?.();
     // Windows shells have no `env` command: the terminal environment carries the variable instead (null removes it)
     const terminal = vscode.window.createTerminal({
       name: `Codex (${labelOf(account)})`,
       shellPath: accountTerminalShell(),
-      env: isWindows() ? { CODEX_HOME: isDefault ? null : account.dir } : undefined,
+      env: isWindows() ? windowsAccountEnv({ CODEX_HOME: isDefault ? null : account.dir }, bundled, windowsTerminalEnvSetting()) : undefined,
     });
     terminals.set(terminal, account);
-    const cmd = isWindows() ? 'codex' : isDefault ? 'env -u CODEX_HOME codex' : `env CODEX_HOME=${shQuote(account.dir)} codex`;
+    const cmd = isWindows() ? 'codex' : linuxCodexCommand(isDefault ? undefined : account.dir, bundled);
     terminal.sendText(login ? `${cmd} login` : cmd);
     terminal.show();
     if (login) void vscode.window.showInformationMessage(t('account.loginTip', { vendor: 'Codex' }));
@@ -795,6 +815,10 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       if (a) await removeAccount(a, false);
     }),
     vscode.commands.registerCommand('planswap.codex.openTerminal', async () => {
+      if (codexRunsInWsl()) {
+        void vscode.window.showWarningMessage(t('codex.win.runsInWsl'));
+        return;
+      }
       const a = await pickAccount(allWithExternal(), t('codex.pick.terminal'));
       if (a) openTerminal(a, !codexLoggedIn(a.dir));
     }),

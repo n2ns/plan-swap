@@ -29,7 +29,7 @@ You need:
 
 - A VS Code 1.107+ compatible editor (VS Code, Antigravity IDE or VSCodium). PlanSwap runs in a WSL remote window, on native Windows, on a local Linux desktop or in another remote window. macOS is not supported.
 - PlanSwap and the official Claude Code and/or Codex extension installed where that window runs.
-- The `claude` and/or `codex` command on the PATH there to sign in from the terminal. Usage checks can also use the CLI bundled with the corresponding official extension when the command is unavailable.
+- Optional: the `claude` and/or `codex` command on the PATH there. When the command is unavailable, signing in from the terminal and usage checks use the CLI bundled with the corresponding official extension.
 - For Codex switching outside native Windows: Bash as your login shell.
 
 See the [installation instructions](../README.md#install) and [supported editors](../README.md#supported-editors) for setup and how well each editor has been tested.
@@ -285,7 +285,7 @@ With automatic checks off, the refresh icons and commands still work. The email 
 | Codex switching cannot be enabled | Read the listed shell or `CODEX_HOME` conflict. On Windows, check whether Codex is set to run inside WSL. |
 | An account still says **Not logged in** | Sign in with that row's **Log in** button, then refresh. A Codex sign-in kept only in the operating system's keyring cannot be detected, because PlanSwap looks for the account's `auth.json`. |
 | Two accounts trigger a duplicate sign-in warning | Both are signed in to the same account and workspace, so switching between them does not give you separate limits. Sign in to the intended identity in one of them. |
-| No usage bars, or a check failed | Check that the account has a subscription (Claude) or ChatGPT (Codex) sign-in and that the `claude` command is installed (Claude). Refresh by hand and read the failure message; if it reports a cooldown, wait before retrying. If it says the CLI did not answer in time, raise `planswap.claude.usageTimeoutSeconds` or `planswap.codex.usageTimeoutSeconds`. |
+| No usage bars, or a check failed | Check that the account has a subscription (Claude) or ChatGPT (Codex) sign-in and that the `claude` command or the official Claude Code extension is installed (Claude). Refresh by hand and read the failure message; if it reports a cooldown, wait before retrying. If it says the CLI did not answer in time, raise `planswap.claude.usageTimeoutSeconds` or `planswap.codex.usageTimeoutSeconds`. |
 | Settings or history are not shared as expected | Check the link badge and the conversion or Re-link result. Some files stay separate or need merging by hand; on Windows, check whether file links are available. |
 | A list looks outdated | Click the refresh button in the panel title bar. Changes made in another window appear after a refresh. |
 
