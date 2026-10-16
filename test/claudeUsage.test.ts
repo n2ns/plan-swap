@@ -747,8 +747,8 @@ test('a cache refreshed elsewhere after a failed attempt clears that failure wit
   });
   await m.refresh();
   assert.equal(m.current().failure?.reason, 'timeout');
-  now = 1500;
-  cached = 1400;
+  now = 500;
+  cached = 400;
   await m.refreshIfStale();
   assert.equal(calls, 1);
   assert.equal(m.current().failure, undefined);

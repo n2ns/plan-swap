@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- Preserve the current Claude account's latest configuration when accepting a **Repair** notification opened before switching to it.
+- Clear an old Claude usage-query failure when a newer valid cache arrives, even within the automatic refresh interval.
+- Hide the recommendation lightbulb button for Claude accounts with unavailable subscription access. Restore it after recovery when the usual display conditions are met, preserving the user's recommendation preference.
+
 ## [0.3.12] - 2026-10-15
 
 ### Fixed

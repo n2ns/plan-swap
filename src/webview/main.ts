@@ -852,7 +852,7 @@ class Page {
         iconButtons.append(withAction(toolbarButton('terminal', t(`${this.mode}.terminalTitle`), () => this.send({ type: 'terminal', dir: a.dir })), 'terminal'));
       }
       // Registered accounts with usage limits can be left out of recommendations (the host keeps the mark)
-      if (this.tab.accounts.length > 1 && a.kind !== 'external' && a.usageEligible && !this.tab.hideRecommendation) {
+      if (this.tab.accounts.length > 1 && a.kind !== 'external' && a.usageEligible && !unavailable && !this.tab.hideRecommendation) {
         const excluded = a.recommendExcluded === true;
         // A toggle button (role switch); the host's answer re-renders it, so the component's own flip is overridden
         const toggle = toolbarButton(excluded ? 'lightbulb-empty' : 'lightbulb', t(excluded ? 'row.recommendInclude' : 'row.recommendExclude'), () => this.send({ type: 'recommendExclude', dir: a.dir, excluded: !excluded }));

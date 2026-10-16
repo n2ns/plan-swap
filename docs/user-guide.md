@@ -188,6 +188,8 @@ When the current account’s lowest general remaining percentage is at or below 
 
 To keep an account out of the recommendations, for example a work account, click the lightbulb icon on its card; click it again to include it. Turn off `planswap.sidebar.showRecommendation` in [settings](#change-language-and-display-settings) to hide the card and the lightbulb icons.
 
+For a Claude account with unavailable subscription access, the lightbulb icon is hidden without changing your inclusion or exclusion preference. After access is restored, it reappears when the usual display conditions are met.
+
 ### Status bar
 
 The status bar shows each product's short limit, for example `Claude 97% · Codex 82%`: what is left, or what is used when `planswap.usageDisplay` is `used`. When a longer limit is the one running low, the item shows that one with its length instead, for example `Claude 2% (7d)`, since that figure only recovers days later. Its background turns to the theme's warning color when any general limit, including longer ones, is at 30% or less, and to the error color at 10% or less. You can change these thresholds, show only one product, move the item to the left or hide it ([Change language and display settings](#change-language-and-display-settings)).

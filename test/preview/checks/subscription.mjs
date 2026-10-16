@@ -9,6 +9,8 @@ export async function run(ctx) {
   }, 'claude');
   const row = page.locator(selector);
   const button = row.locator('.subscription-btn');
+  const recommendationToggle = row.locator('[data-action="recommendExclude"]');
+  await step('Unavailable: recommendation toggle hidden', await recommendationToggle.count() === 0);
   await step('Unavailable: one accessible warning icon', await button.count() === 1 && !!await button.getAttribute('aria-label') && await button.locator('vscode-icon').getAttribute('name') === 'warning');
   await step('Unavailable: cached quota hidden and plan marked historical', await row.locator('.row-usage').count() === 0 && await row.locator('.plan.is-stale[title]').count() === 1);
   const layout = await row.evaluate((el) => {
@@ -46,6 +48,7 @@ export async function run(ctx) {
     window.preview.post({ type: 'state', state });
   });
   await step('Recovered: warning removed and normal quota restored', await button.count() === 0 && await row.locator('.plan.is-stale').count() === 0 && await row.locator('.row-usage').count() === 1);
+  await step('Recovered: recommendation toggle restored', await recommendationToggle.count() === 1);
   await shot(`${locale}-${width}-recovered.png`);
   await ctx.apply((state) => {
     const row = state.claude.accounts.find((a) => a.name === 'work');

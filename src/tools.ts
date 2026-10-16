@@ -243,7 +243,7 @@ async function repairClaudeChecks(deps: ToolDeps, offered: AccountCheck[]): Prom
     try {
       const scope = claudeRepairScope(check);
       const report = ensureClaudeLinks(check.dir, '/proc', { ...options, busy: accounts.busyOf(check.dir), entries: scope.entries });
-      if (scope.mirror.length) {
+      if (scope.mirror.length && !sameRealPath(check.dir, currentDir())) {
         const def = defaultDir();
         mirrorClaudeJson(claudeJsonPath(def, isExplicitConfigDir(def)), check.dir, undefined, false, scope.mirror);
       }

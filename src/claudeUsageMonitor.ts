@@ -90,7 +90,6 @@ export class ClaudeUsageMonitor {
     if (!this.eligible(dir)) return Promise.resolve();
     const now = this.now();
     const staleMs = this.staleMs();
-    if (this.last && samePath(this.last.dir, dir) && now - this.last.at < staleMs) return Promise.resolve();
     const cached = this.cachedAt(dir);
     if (cached !== undefined && cached <= now + FUTURE_TOLERANCE_MS && now - cached < staleMs) {
       // Refreshed elsewhere after this window's failed attempt: that failure no longer describes the shown values
@@ -98,6 +97,7 @@ export class ClaudeUsageMonitor {
       if (failure && samePath(failure.dir, dir) && this.last && samePath(this.last.dir, dir) && cached > this.last.at) this.set({ checking: false });
       return Promise.resolve();
     }
+    if (this.last && samePath(this.last.dir, dir) && now - this.last.at < staleMs) return Promise.resolve();
     return this.start(false);
   }
 

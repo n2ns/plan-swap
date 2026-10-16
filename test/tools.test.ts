@@ -112,6 +112,28 @@ describe('Claude repair scope', LINUX_ONLY, () => {
     }
   });
 
+  test('an account made current while Repair is open keeps its latest MCP configuration', async (ctx) => {
+    const { tmp, source, dirs } = fixture();
+    try {
+      fs.writeFileSync(source, JSON.stringify({ mcpServers: { shared: { command: 'default-old' } } }));
+      const file = path.join(dirs[0], '.claude.json');
+      const currentInfo = JSON.stringify({ mcpServers: { shared: { command: 'current-new' } } });
+      const warning = ctx.mock.method(window, 'showWarningMessage', async (_m: string, ...items: string[]) => {
+        mirrorClaudeJson(source, dirs[0]);
+        setConfig('claudeCode', 'environmentVariables', [{ name: 'CLAUDE_CONFIG_DIR', value: dirs[0] }]);
+        fs.writeFileSync(file, currentInfo);
+        return items.find((i) => i === t('linkCheck.repair'));
+      });
+      ctx.mock.method(window, 'showInformationMessage', async () => undefined);
+      await runTool('claude', 'sync', { claudeDirs: () => [dirs[0]] });
+      assert.equal(warning.mock.callCount(), 1);
+      assert.equal(fs.readFileSync(file, 'utf8'), currentInfo);
+    } finally {
+      resetConfig();
+      tmp.restore();
+    }
+  });
+
   test('an account added while the Repair notification is open is not refreshed', async (ctx) => {
     const { tmp, def, dirs } = fixture();
     try {
