@@ -3,9 +3,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { NAME_RE, caseVariantOf, findSameDir, realPathInside, samePath, sameRealPath } from '../paths';
 import { lstatOrUndefined } from '../claudeShare';
-import { bundledPathAssignment, hasControlChars, shQuote } from '../commands';
-import { accountTerminalShell, windowsAccountEnv, windowsTerminalEnvSetting } from '../terminalShell';
-import { type AccountsPanel, type PanelSource, tildify, viewInfo } from '../accountsPanel';
+import { accountTerminalShell, bundledPathAssignment, hasControlChars, shQuote, windowsAccountEnv, windowsTerminalEnvSetting } from '../terminalShell';
+import { type AccountsPanel, type PanelSource, viewInfo } from '../accountsPanel';
 import { labelFor, sameName, type LabelStore, EXTERNAL_NAME } from '../labels';
 import type { RecommendExclusions } from '../recommend';
 import type { AccountView, FromWebview, RestartInfo } from '../protocol';
@@ -38,10 +37,11 @@ import {
   selfCheck,
   writeSelection,
 } from './codexState';
-import { isWindows } from '../platform';
+import { isWindows, tildify } from '../platform';
 import { askCopyFallback } from '../linkPolicy';
 import { type ServerKind, canAutoRestart, detectServerKind, executeRestart, planRestart } from './codexServer';
 import type { CodexAccountStore } from './codexStore';
+import { codexRunsInWsl } from './codexSettings';
 import { runTool, type TerminalCheck, type ToolDeps } from '../tools';
 import { t } from '../i18n';
 import type { CodexUsageHistory } from './codexUsageHistory';
@@ -84,15 +84,6 @@ const EDITOR_NAMES: Record<ServerKind, string> = {
   unknown: '', // unused: the unknown kind never names an editor
 };
 const editorName = (kind: ServerKind): string => EDITOR_NAMES[kind];
-
-/**
- * Native Windows only: the Codex extension can run its CLI inside WSL (chatgpt.runCodexInWindowsSubsystemForLinux).
- * That Codex reads the WSL-side ~/.codex and never sees the Windows user variable, so switching here would not reach
- * it; accounts are then managed from a WSL window instead.
- */
-export function codexRunsInWsl(windows: boolean = isWindows()): boolean {
-  return windows && vscode.workspace.getConfiguration('chatgpt').get<boolean>('runCodexInWindowsSubsystemForLinux', false) === true;
-}
 
 /** Pure localized guidance selector (hint, the "restart required" warning and the switch confirmation): native Windows
  *  local window → quit and relaunch the editor; other local → restart the editor; non-WSL remote → remote guidance;
@@ -722,9 +713,6 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     switch (msg.type) {
       case 'enable':
         await enable();
-        return;
-      case 'restartServer':
-        await restartServerInteractive();
         return;
       case 'switch': {
         const a = panel.resolve(MODE, msg.dir);

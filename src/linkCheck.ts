@@ -85,7 +85,7 @@ export function isFixable(kind: ProblemKind): boolean {
 }
 
 /** A note on an entry kept as it is (a link elsewhere, the account's own entry), not a problem. */
-export function isNote(kind: ProblemKind): boolean {
+function isNote(kind: ProblemKind): boolean {
   return (NOTE_KINDS as readonly string[]).includes(kind);
 }
 

@@ -31,9 +31,6 @@ export interface ShareOps {
 }
 
 export interface ToolDeps {
-  // "Restart WSL server" provided by codexCommands (with modal confirmation and planRestart checks for Antigravity /
-  // VSCodium; manual-restart guidance only for other editors); undefined when Codex is not initialized
-  codexRestart?: () => Promise<void>;
   // Panel entry: push version info to the sidebar (the editor's quick input position is not under extension control, so no QuickPick);
   // the Command Palette entry passes undefined and gets a read-only QuickPick instead
   postVersions?: (items: Array<{ label: string; value: string }>) => void;
@@ -76,7 +73,6 @@ function userGuideUrl(): string {
  *   exclusive) after a modal confirmation; for a dangling same-name symlink its target is created instead.
  * - openSettings: the editor settings filtered to `claudeCode.` or `chatgpt.`.
  * - reloadWindow / restartExtHost: the editor commands, without confirmation.
- * - restartServer: deps.codexRestart, or a "not initialized" warning.
  * - refreshUsage / refreshAllUsage: the vendor's own refresh command, so both entry points share one path.
  * - cliVersions: collectVersions, pushed to the panel through deps.postVersions or shown in a QuickPick.
  * - sync: checks every shared account of the vendor read only and offers to repair them (syncShared).
@@ -102,13 +98,6 @@ export async function runTool(mode: PanelMode, tool: ToolId, deps: ToolDeps): Pr
       return;
     case 'restartExtHost':
       await vscode.commands.executeCommand('workbench.action.restartExtensionHost');
-      return;
-    case 'restartServer':
-      if (!deps.codexRestart) {
-        void vscode.window.showWarningMessage(t('tools.codexNotInit'));
-        return;
-      }
-      await deps.codexRestart();
       return;
     // Panel buttons next to "Add": the product's own refresh command, so the Command Palette and the panel share one path
     case 'refreshUsage':

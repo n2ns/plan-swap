@@ -335,7 +335,6 @@ export const en = {
 
   // tools.ts
   'tools.updateCli': 'Update {vendor} CLI',
-  'tools.codexNotInit': 'The Codex part is not initialized; cannot restart.',
   'tools.syncNotInit': 'The {vendor} part is not initialized; cannot re-link linked accounts.',
   'tools.pick.sync': 'Select the vendor whose linked accounts to re-link',
   'sync.none': 'No linked {vendor} accounts to re-link.',
@@ -692,7 +691,6 @@ export const zhCn: Record<MessageKey, string> = {
   'del.daemonAlive': '该账号的 codex 守护进程仍在运行，拒绝删除：{dir}',
 
   'tools.updateCli': '更新 {vendor} CLI',
-  'tools.codexNotInit': 'Codex 部分未初始化，无法重启。',
   'tools.syncNotInit': '{vendor} 部分未初始化，无法重新链接账号。',
   'tools.pick.sync': '选择要重新链接账号的厂家',
   'sync.none': '没有可重新链接的 {vendor} 链接账号。',
@@ -1047,7 +1045,6 @@ export const zhTw: Record<MessageKey, string> = {
   'del.daemonAlive': '此帳號的 codex 常駐程式仍在執行，拒絕刪除：{dir}',
 
   'tools.updateCli': '更新 {vendor} CLI',
-  'tools.codexNotInit': 'Codex 部分尚未初始化，無法重新啟動。',
   'tools.syncNotInit': '{vendor} 部分尚未初始化，無法重新連結已連結帳號。',
   'tools.pick.sync': '選擇要重新連結已連結帳號的廠商',
   'sync.none': '沒有可重新連結的已連結 {vendor} 帳號。',
@@ -1386,7 +1383,6 @@ export const es: Record<MessageKey, string> = {
   'share.busyCodex': 'La cuenta {name} aún tiene Codex o una terminal de PlanSwap abierta. Cierra sus sesiones de Codex (incluidas las del panel del editor) y pestañas de terminal de PlanSwap y vuelve a intentarlo.',
   'del.daemonAlive': 'El daemon de codex de esta cuenta sigue activo; no se eliminará: {dir}',
   'tools.updateCli': 'Actualizar {vendor} CLI',
-  'tools.codexNotInit': 'Codex no está inicializado; no se puede reiniciar.',
   'tools.syncNotInit': '{vendor} no está inicializado; no se pueden revincular las cuentas.',
   'tools.pick.sync': 'Elige el proveedor cuyas cuentas quieres revincular',
   'sync.none': 'No hay cuentas vinculadas de {vendor} para revincular.',
@@ -1725,7 +1721,6 @@ export const ja: Record<MessageKey, string> = {
   'share.busyCodex': 'アカウント {name} の Codex または PlanSwap ターミナルが開いています。エディターのパネル内を含むこのアカウントの Codex セッションと PlanSwap のターミナルタブを閉じてから再試行してください。',
   'del.daemonAlive': 'このアカウントの codex daemon が動作中のため削除しません: {dir}',
   'tools.updateCli': '{vendor} CLI を更新',
-  'tools.codexNotInit': 'Codex が初期化されていないため再起動できません。',
   'tools.syncNotInit': '{vendor} が初期化されていないためアカウントを再リンクできません。',
   'tools.pick.sync': 'アカウントを再リンクするプロバイダーを選択',
   'sync.none': '再リンクできる {vendor} アカウントがありません。',

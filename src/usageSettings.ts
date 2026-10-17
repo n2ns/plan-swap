@@ -1,8 +1,9 @@
 // Shared usage colors and percentage validation. Settings are read on each update; no migration or writes.
 import * as vscode from 'vscode';
+import type { UsageDisplay } from './protocol';
 
-export const USAGE_WARNING_SETTING = 'usageWarningThreshold';
-export const USAGE_ERROR_SETTING = 'usageErrorThreshold';
+const USAGE_WARNING_SETTING = 'usageWarningThreshold';
+const USAGE_ERROR_SETTING = 'usageErrorThreshold';
 
 /** Clamp a finite percentage to 0..100; invalid values use the supplied default. */
 export function threshold(value: unknown, fallback: number): number {
@@ -13,6 +14,11 @@ export function threshold(value: unknown, fallback: number): number {
 export function usageThresholds(): { warning: number; error: number } {
   const config = vscode.workspace.getConfiguration('planswap');
   return { warning: threshold(config.get(USAGE_WARNING_SETTING), 30), error: threshold(config.get(USAGE_ERROR_SETTING), 10) };
+}
+
+/** Setting planswap.usageDisplay, read on every update; anything but 'used' shows what is left. */
+export function usageDisplay(): UsageDisplay {
+  return vscode.workspace.getConfiguration('planswap').get<string>('usageDisplay', 'remaining') === 'used' ? 'used' : 'remaining';
 }
 
 export function usageColorsChanged(event: Pick<vscode.ConfigurationChangeEvent, 'affectsConfiguration'>): boolean {

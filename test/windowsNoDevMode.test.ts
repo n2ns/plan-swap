@@ -9,7 +9,7 @@ import { setLocale } from '../src/i18n';
 import { copyClaudeIndependent, ensureClaudeLinks, isSharedClaudeAccount, migrateClaudeToShared, moveEntry } from '../src/claudeShare';
 import { ensureCodexLinks, migrateCodexToShared } from '../src/codex/codexShare';
 import { describeShareReport } from '../src/shareReport';
-import { LinkPrivilegeError, copyLink, createLink, fileLinksAvailable } from '../src/platform';
+import { LinkPrivilegeError, createLink, fileLinksAvailable } from '../src/platform';
 import { deleteAccountDir } from '../src/paths';
 import { askCopyFallback } from '../src/linkPolicy';
 import { env, window } from './stubs/vscode';
@@ -285,7 +285,7 @@ describe('Windows without Developer Mode', () => {
     assert.throws(() => createLink(path.join(home, 'f'), path.join(home, 'l2'), 'win32'), LinkPrivilegeError);
   });
 
-  test('createLink uses junctions for folders and file symlinks for files; copyLink resolves relative targets', FILE_SYMLINKS, () => {
+  test('createLink uses junctions for folders and file symlinks for files', FILE_SYMLINKS, () => {
     Object.defineProperty(process, 'platform', { value: 'win32' });
     const types: Array<string | undefined> = [];
     mock.method(fsModule, 'symlinkSync', ((target: fs.PathLike, link: fs.PathLike, type?: string) => {
@@ -298,10 +298,6 @@ describe('Windows without Developer Mode', () => {
     createLink(dir, path.join(home, 'ld'), 'win32');
     createLink(path.join(home, 'f'), path.join(home, 'lf'), 'win32');
     assert.deepEqual(types, ['junction', 'file']);
-    fs.mkdirSync(path.join(home, 'sub'));
-    realSymlink('../f', path.join(home, 'sub', 'rel'));
-    copyLink(path.join(home, 'sub', 'rel'), path.join(home, 'copied'), 'win32');
-    assert.equal(fs.readlinkSync(path.join(home, 'copied')), path.join(home, 'f'));
   });
 
   test('deleting an account never descends through links into the default account', FILE_SYMLINKS, async () => {

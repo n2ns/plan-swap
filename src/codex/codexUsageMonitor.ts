@@ -49,7 +49,7 @@ function sameAuth(a: AuthSnapshot, b: AuthSnapshot): boolean {
   return a.stamp === b.stamp;
 }
 
-export const USAGE_STALE_MS = 15 * 60_000;
+const USAGE_STALE_MS = 15 * 60_000;
 
 /** `${mtimeMs}:${size}` of <dir>/auth.json, or 'missing'; only stat is used, the file is never opened. */
 export function authFileStamp(dir: string): string {

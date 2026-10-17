@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import * as path from 'node:path';
 import { setLocale } from '../src/i18n';
 import {
-  comparablePath, copyLink, createLink, isSupportedPlatform, parseStartTimes, pidAlive, renameReplacing, stripBom, windowsStartTimes,
+  comparablePath, createLink, isSupportedPlatform, parseStartTimes, pidAlive, renameReplacing, stripBom, windowsStartTimes,
 } from '../src/platform';
 import { decodeEnvOutput, getUserCodexHome, getUserEnv, setUserCodexHome, setUserEnv } from '../src/codex/codexWindows';
 import { manualRestartMessages } from '../src/codex/codexCommands';
@@ -31,15 +31,12 @@ describe('platform', () => {
     assert.equal(comparablePath('/A/b', 'win32'), path.resolve('/A/b').toLowerCase());
   });
 
-  test('createLink and copyLink create symlinks on Linux', LINUX_ONLY, () => {
+  test('createLink creates a symlink on Linux', LINUX_ONLY, () => {
     const target = path.join(tmp.home, 'target');
     fs.mkdirSync(target);
     const link = path.join(tmp.home, 'link');
     createLink(target, link, 'linux');
     assert.equal(fs.readlinkSync(link), target);
-    const copy = path.join(tmp.home, 'copy');
-    copyLink(link, copy, 'linux');
-    assert.equal(fs.readlinkSync(copy), target);
   });
 
   test('pidAlive probes without signalling', () => {

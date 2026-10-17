@@ -32,8 +32,8 @@ const CORE_SHARED_ENTRIES = new Set(['history.jsonl', 'projects', 'file-history'
 // Retired entries are only detached on unshare; refresh never creates, migrates or deletes their data.
 const LEGACY_SHARED_ENTRIES = ['todos'];
 // Dirs shared per child: every child of the default dir's folder is linked, except these names
-export const CLAUDE_CHILD_SHARED_DIRS = ['skills', 'plugins'] as const;
-export const CLAUDE_CHILD_EXCLUDES = ['synced', '.trash'] as const;   // per-account cloud-synced buckets
+const CLAUDE_CHILD_SHARED_DIRS = ['skills', 'plugins'] as const;
+const CLAUDE_CHILD_EXCLUDES = ['synced', '.trash'] as const;   // per-account cloud-synced buckets
 // Per-project keys of .claude.json mirrored from the default account
 const PROJECT_KEYS = [
   'allowedTools', 'mcpServers', 'enabledMcpjsonServers', 'disabledMcpjsonServers', 'mcpContextUris',

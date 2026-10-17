@@ -39,7 +39,7 @@ export const CODEX_SHARED_ENTRIES: ReadonlyArray<{ name: string; kind: 'file' | 
   { name: 'shell_snapshots', kind: 'dir' }, { name: 'tui-thread-reference-capabilities', kind: 'dir' },
 ];
 // Nested entries ('.tmp/…') need a real parent dir in the account (created 0700); '.tmp' itself is never linked.
-export const CODEX_CHILD_SHARED_DIRS: ReadonlyArray<{ dir: string; excludes: readonly string[] }> = [
+const CODEX_CHILD_SHARED_DIRS: ReadonlyArray<{ dir: string; excludes: readonly string[] }> = [
   { dir: 'skills', excludes: ['.system'] },
   { dir: 'plugins/cache', excludes: ['openai-curated-remote'] },
 ];
@@ -329,7 +329,7 @@ export function codexAccountBusy(dir: string, procRoot = '/proc'): boolean {
  * on win32 ('busy' → t('share.busyCodex')); migrateCodexToShared keeps the account's databases there instead of
  * backing them up.
  */
-export function removeWindowsSqliteLink(link: string, target: string): 'removed' | 'busy' | 'none' {
+function removeWindowsSqliteLink(link: string, target: string): 'removed' | 'busy' | 'none' {
   if (!linksTo(link, target)) return 'none';
   const moved: Array<[string, string]> = [];
   try {

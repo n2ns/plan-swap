@@ -13,7 +13,7 @@ import { renameReplacing, stripBom } from './platform';
 export const STATE_JSON = () => path.join(os.homedir(), '.config', 'planswap', 'state.json');
 
 // Keys copied once from globalState by importOnce (the panel tab stays in globalState)
-export const STATE_KEYS = ['accounts', 'ignoredDirs', 'claude.labels', 'codex.accounts', 'codex.ignoredDirs', 'codex.labels'] as const;
+const STATE_KEYS = ['accounts', 'ignoredDirs', 'claude.labels', 'codex.accounts', 'codex.ignoredDirs', 'codex.labels'] as const;
 
 type State = Record<string, unknown>;
 

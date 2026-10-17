@@ -9,14 +9,14 @@ import { getLocale, LOCALE_INFO, t, type MessageKey } from './i18n';
 import type { CodexAccountStore } from './codex/codexStore';
 import { codexDefaultDir, readCodexAccountInfo } from './codex/codexPaths';
 import { effectiveDir, isEnabled, readSelectedDir } from './codex/codexState';
-import { codexRunsInWsl } from './codex/codexCommands';
+import { codexRunsInWsl } from './codex/codexSettings';
 import type { CodexUsageState } from './codex/codexUsageMonitor';
 import { usageAsOf, type CodexUsage, type UsageFailure, type UsageWindow } from './codex/codexUsage';
 import { USAGE_HISTORY_MAX_AGE_MS } from './codex/codexUsageHistory';
 import { readClaudeUsage, type ClaudeUsage, type ClaudeUsageFailure, type ClaudeUsageWindow } from './claudeUsage';
 import type { ClaudeUsageState } from './claudeUsageMonitor';
 import type { UsageDisplay } from './protocol';
-import { usageColorsChanged, usageThresholds } from './usageSettings';
+import { usageColorsChanged, usageThresholds, usageDisplay } from './usageSettings';
 
 // Refresh commands; only the two single-account ones are trusted command links in the tooltip (buildTooltip)
 export const REFRESH_USAGE_COMMAND = 'planswap.codex.refreshUsage';
@@ -63,13 +63,8 @@ export function remainingOf(w: { usedPercent: number }): number {
 // Color and window selection compare the observation before display rounding.
 const unroundedRemainingOf = (w: { usedPercent: number }): number => Math.max(0, Math.min(100, 100 - w.usedPercent));
 
-/** Setting planswap.usageDisplay, read on every update; anything but 'used' shows what is left. */
-export function usageDisplay(): UsageDisplay {
-  return vscode.workspace.getConfiguration('planswap').get<string>('usageDisplay', 'remaining') === 'used' ? 'used' : 'remaining';
-}
-
 /** The percentage a window shows: remainingOf, or what is used (100 minus it, so both add up to 100). */
-export function shownPercent(w: { usedPercent: number }, display: UsageDisplay): number {
+function shownPercent(w: { usedPercent: number }, display: UsageDisplay): number {
   const remaining = remainingOf(w);
   return display === 'used' ? 100 - remaining : remaining;
 }
@@ -347,13 +342,9 @@ interface Block {
 
 /** One product of the status bar text: name, the shown percentage and, when it is not the short window's, that window's duration. */
 export interface Product { product: string; percent?: number; window?: string }
-interface Candidate { remaining: number; product: string; window: string }
-
 // The lowest remaining percentage among the general windows (model-specific ones never count)
-function candidatesOf(product: string, windows: ReadonlyArray<UsageWindow | ClaudeUsageWindow>): Candidate[] {
-  return windows.flatMap((w, index) => ('scope' in w && w.scope) ? [] : [{
-    remaining: unroundedRemainingOf(w), product, window: w.windowMinutes ? formatDuration(w.windowMinutes) : `#${index + 1}`,
-  }]);
+function candidatesOf(windows: ReadonlyArray<UsageWindow | ClaudeUsageWindow>): number[] {
+  return windows.flatMap((w) => ('scope' in w && w.scope) ? [] : [unroundedRemainingOf(w)]);
 }
 
 /**
@@ -432,7 +423,7 @@ export class StatusBar implements vscode.Disposable {
     const now = Date.now();
     const products: Product[] = [];
     const blocks: Block[] = [];
-    const candidates: Candidate[] = [];
+    const candidates: number[] = [];
     const dir = currentDir();
     const explicit = isExplicitConfigDir(dir);
     const hasClaude = settings.claude && (fs.existsSync(dir) || fs.existsSync(claudeJsonPath(dir, explicit)) ||
@@ -445,7 +436,7 @@ export class StatusBar implements vscode.Disposable {
       const showUsage = info.identity !== undefined;
       const usage = showUsage && !this.claudeSubscriptionUnavailable(dir) ? readClaudeUsage(dir, explicit) : undefined;
       products.push(productPart('Claude', usage?.windows, display, settings));
-      if (usage) candidates.push(...candidatesOf('Claude', usage.windows));
+      if (usage) candidates.push(...candidatesOf(usage.windows));
       blocks.push({
         identity: (showEmail ? info.email : undefined) ?? (info.loggedIn ? label : t('common.notLoggedIn')),
         plan: info.plan,
@@ -480,7 +471,7 @@ export class StatusBar implements vscode.Disposable {
         usage.notes.push(...shown.notes);
         const windows = codexWindows(this.codexUsage, now);
         part = productPart('Codex', windows, display, settings);
-        if (windows) candidates.push(...candidatesOf('Codex', windows));
+        if (windows) candidates.push(...candidatesOf(windows));
       }
       products.push(part);
       blocks.push({
@@ -491,9 +482,7 @@ export class StatusBar implements vscode.Disposable {
       });
     }
     // The color follows the window that runs out first over both products; a product's text states that window once it is low
-    let lowest: Candidate | undefined;
-    for (const c of candidates) if (!lowest || c.remaining < lowest.remaining) lowest = c;
-    const background = backgroundIdFor(lowest?.remaining, settings);
+    const background = backgroundIdFor(candidates.length ? Math.min(...candidates) : undefined, settings);
     this.item.text = products.length ? `$(dashboard) ${statusText(products)}` : '';
     this.item.accessibilityInformation = products.length ? { label: statusAccessibilityLabel(products, display), role: 'button' } : undefined;
     this.item.backgroundColor = background ? new vscode.ThemeColor(background) : undefined;

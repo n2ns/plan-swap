@@ -3,7 +3,7 @@ import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { tildify } from '../src/accountsPanel';
+import { tildify } from '../src/platform';
 import { isWslProfile, windowsAccountEnv } from '../src/terminalShell';
 import { linuxClaudeCommand } from '../src/commands';
 import { linuxCodexCommand } from '../src/codex/codexCommands';

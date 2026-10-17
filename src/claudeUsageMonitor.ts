@@ -24,7 +24,7 @@ export interface ClaudeUsageMonitorOptions {
   staleMs?: number | (() => number);
 }
 
-export const CLAUDE_USAGE_STALE_MS = 15 * 60_000;
+const CLAUDE_USAGE_STALE_MS = 15 * 60_000;
 // A cache time further in the future than this (clock moved back) does not count as fresh
 const FUTURE_TOLERANCE_MS = 2 * 60_000;
 

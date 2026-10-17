@@ -9,21 +9,20 @@ import { EXTERNAL_NAME, labelFor, type LabelStore } from './labels';
 import type { AccountView, FromWebview, PanelMode, PanelState, RestartInfo, TabState, ToWebview } from './protocol';
 import { isSharedClaudeAccount } from './claudeShare';
 import { readClaudeUsage } from './claudeUsage';
-import { usageDisplay } from './statusBar';
-import { threshold, usageThresholds } from './usageSettings';
+import { threshold, usageDisplay, usageThresholds } from './usageSettings';
 import { recommend, type RecommendExclusions } from './recommend';
 import { getLocale, intlLocale, t } from './i18n';
-import { comparablePath, isWindows } from './platform';
+import { comparablePath, isWindows, tildify } from './platform';
 
 // planswap.sidebar.* display settings; extension.ts refreshes the panel when any of them changes. Model-specific
 // (scoped) Claude windows are sent only while showModelLimits is on (off by default)
 export const SHOW_MODEL_LIMITS_SETTING = 'sidebar.showModelLimits';
-export const SHOW_EMAIL_SETTING = 'sidebar.showEmail';
-export const SHOW_FIVE_HOUR_SETTING = 'sidebar.showFiveHourLimit';
-export const SHOW_WEEKLY_SETTING = 'sidebar.showWeeklyLimit';
+const SHOW_EMAIL_SETTING = 'sidebar.showEmail';
+const SHOW_FIVE_HOUR_SETTING = 'sidebar.showFiveHourLimit';
+const SHOW_WEEKLY_SETTING = 'sidebar.showWeeklyLimit';
 // Off: no recommendation card and no per-row exclude buttons
-export const SHOW_RECOMMENDATION_SETTING = 'sidebar.showRecommendation';
-export const RECOMMENDATION_THRESHOLD_SETTING = 'sidebar.recommendationThreshold';
+const SHOW_RECOMMENDATION_SETTING = 'sidebar.showRecommendation';
+const RECOMMENDATION_THRESHOLD_SETTING = 'sidebar.recommendationThreshold';
 
 const FIVE_HOURS = 300;
 const SEVEN_DAYS = 7 * 1440;
@@ -397,7 +396,6 @@ const MESSAGE_FIELDS: Record<FromWebview['type'], readonly string[]> = {
   reload: [],
   dismissBanner: [],
   enable: [],
-  restartServer: [],
   tool: ['tool'],
 };
 
@@ -433,12 +431,4 @@ function claudeRowInfo(dir: string): Pick<AccountView, 'email' | 'plan' | 'logge
  */
 export function viewInfo(info: { email?: string; plan?: string; loggedIn: boolean }): Pick<AccountView, 'email' | 'plan' | 'loggedIn'> {
   return { email: info.email, plan: info.plan, loggedIn: info.loggedIn };
-}
-
-/** Replaces the home directory with ~ (case-insensitive on Windows); other paths are returned unchanged. */
-export function tildify(dir: string): string {
-  const home = os.homedir();
-  // Windows paths are case-insensitive (a drive letter or folder may differ only in case); the rest keeps its spelling
-  const [d, h] = isWindows() ? [dir.toLowerCase(), home.toLowerCase()] : [dir, home];
-  return d === h || d.startsWith(h + path.sep) ? '~' + dir.slice(home.length) : dir;
 }

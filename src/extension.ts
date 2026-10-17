@@ -17,7 +17,8 @@ import { findBundledClaude, oneAtATime, queryClaudeUsage, queryEach, readClaudeU
 import { ClaudeUsageMonitor, ClaudeUsageQueries } from './claudeUsageMonitor';
 import { ClaudeSubscriptionChecks, queryClaudeSubscription } from './claudeSubscription';
 import { CodexAccountStore } from './codex/codexStore';
-import { codexPanelSource, codexRunsInWsl, registerCodexCommands, restartServerInteractive } from './codex/codexCommands';
+import { codexPanelSource, registerCodexCommands } from './codex/codexCommands';
+import { codexRunsInWsl } from './codex/codexSettings';
 import { checkSharedInBackground, registerToolCommands, runTool, type TerminalCheck, type ToolDeps } from './tools';
 import { LinkCheckNotices } from './linkCheck';
 import { registerDiagnosticsCommand } from './diagnosticsCommand';
@@ -543,10 +544,9 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
 
   // "Account terminal open" checks of the two command modules (Windows busy signal), filled in when they register
   const terminalChecks: Partial<Record<PanelMode, TerminalCheck>> = {};
-  // Toolbar dependencies: no restart entry when Codex is not initialized
+  // Toolbar dependencies
   const tools: ToolDeps = {
     accountBusy: (mode, dir) => terminalChecks[mode]?.(dir) ?? false,
-    codexRestart: codex ? restartServerInteractive : undefined,
     postVersions: (items) => panel.post({ type: 'versions', items }),
     claudeDirs: () => store.named().map((a) => a.dir),
     codexDirs: codex ? () => codex.store.named().map((a) => a.dir) : undefined,
@@ -581,7 +581,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   // On init failure, Codex actions in the panel and Command Palette show a clear message instead of silently doing nothing
   if (codexInitError) {
     const notify = () => void vscode.window.showErrorMessage(t('ext.codexUnavailable', { error: codexInitError ?? '' }));
-    // Toolbar messages are handled as usual (runTool reports "not initialized" for restartServer)
+    // Toolbar messages are handled as usual
     panel.setHandler('codex', (msg) => (msg.type === 'tool' ? runTool('codex', msg.tool, tools) : notify()));
     for (const id of ['enable', 'disable', 'switchAccount', 'addAccount', 'shareAccount', 'removeAccount', 'openTerminal', 'restartServer', 'refreshUsage', 'refreshAllUsage']) {
       ctx.subscriptions.push(vscode.commands.registerCommand(`planswap.codex.${id}`, notify));

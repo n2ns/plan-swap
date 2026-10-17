@@ -62,3 +62,23 @@ export function windowsAccountEnv(
 export function windowsTerminalEnvSetting(): Record<string, string | null | undefined> | undefined {
   return vscode.workspace.getConfiguration('terminal.integrated').get('env.windows');
 }
+
+// Wrap in single quotes; inner ' becomes '\''
+export function shQuote(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
+/** Whether a path holds a control character, which must never be typed into a terminal (a newline runs the line). */
+export function hasControlChars(s: string): boolean {
+  return /[\x00-\x1f\x7f]/.test(s);
+}
+
+/**
+ * Linux: the `env` assignment that appends the folder of an official extension's bundled CLI to PATH in an account
+ * terminal's command line, so the command falls back to it only when no installed CLI comes earlier. It is expanded by
+ * the shell after its rc and profile files ran, so a login profile that resets PATH cannot drop it (bash, zsh and
+ * fish 3 all join "$PATH" with colons).
+ */
+export function bundledPathAssignment(bundled: string): string {
+  return `PATH="$PATH":${shQuote(path.posix.dirname(bundled))}`;
+}

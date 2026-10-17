@@ -8,10 +8,10 @@ import { t } from './i18n';
 const FILES = { Claude: 'settings.json, CLAUDE.md', Codex: 'config.toml, AGENTS.md, hooks.json' } as const;
 
 /** The "For developers" page of Windows Settings (Developer Mode), the same URI on Windows 10 and 11. */
-export const DEVELOPER_SETTINGS_URI = 'ms-settings:developers';
+const DEVELOPER_SETTINGS_URI = 'ms-settings:developers';
 
 /** Opens Windows Settings > For developers; when the editor cannot, says where to find it. */
-export async function openDeveloperSettings(): Promise<void> {
+async function openDeveloperSettings(): Promise<void> {
   let opened = false;
   try {
     opened = await vscode.env.openExternal(vscode.Uri.parse(DEVELOPER_SETTINGS_URI));

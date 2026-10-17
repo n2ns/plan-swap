@@ -1,5 +1,4 @@
 import * as fs from 'node:fs';
-import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
   DEFAULT_NAME,
@@ -41,7 +40,7 @@ import { mirrorClaudeJsonInto, runTool, type TerminalCheck, type ToolDeps } from
 import { t } from './i18n';
 import { isWindows } from './platform';
 import { askCopyFallback } from './linkPolicy';
-import { accountTerminalShell, windowsAccountEnv, windowsTerminalEnvSetting } from './terminalShell';
+import { accountTerminalShell, bundledPathAssignment, hasControlChars, shQuote, windowsAccountEnv, windowsTerminalEnvSetting } from './terminalShell';
 
 // planswap.claude.confirmSwitch: whether a switch from the panel asks a modal first (default on)
 export const CONFIRM_SWITCH_SETTING = 'claude.confirmSwitch';
@@ -565,16 +564,6 @@ export function validateName(name: string, store: AccountStore, labels: LabelSto
 }
 
 /**
- * Linux: the `env` assignment that appends the folder of an official extension's bundled CLI to PATH in an account
- * terminal's command line, so the command falls back to it only when no installed CLI comes earlier. It is expanded by
- * the shell after its rc and profile files ran, so a login profile that resets PATH cannot drop it (bash, zsh and
- * fish 3 all join "$PATH" with colons).
- */
-export function bundledPathAssignment(bundled: string): string {
-  return `PATH="$PATH":${shQuote(path.posix.dirname(bundled))}`;
-}
-
-/**
  * Linux: the command line of a Claude account terminal: `env CLAUDE_CONFIG_DIR='<dir>'`, or `env -u CLAUDE_CONFIG_DIR`
  * without a folder (the default account when the host has none), so an export in rc files cannot redirect the account;
  * plus bundledPathAssignment when the Claude extension bundles a CLI.
@@ -582,14 +571,4 @@ export function bundledPathAssignment(bundled: string): string {
 export function linuxClaudeCommand(dir: string | undefined, bundled: string | undefined): string {
   const home = dir === undefined ? '-u CLAUDE_CONFIG_DIR' : `CLAUDE_CONFIG_DIR=${shQuote(dir)}`;
   return `env ${home}${bundled ? ` ${bundledPathAssignment(bundled)}` : ''} claude`;
-}
-
-// Wrap in single quotes; inner ' becomes '\''
-export function shQuote(s: string): string {
-  return `'${s.replace(/'/g, `'\\''`)}'`;
-}
-
-/** Whether a path holds a control character, which must never be typed into a terminal (a newline runs the line). */
-export function hasControlChars(s: string): boolean {
-  return /[\x00-\x1f\x7f]/.test(s);
 }

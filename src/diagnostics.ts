@@ -32,15 +32,14 @@ const CLI_VERSION = new RegExp(`^(?:claude(?: code)?|codex(?:-cli)?)\\s+v?(${SEM
 const CLAUDE_VERSION = new RegExp(`^v?(${SEMVER})\\s+\\(Claude Code\\)$`);
 
 function version(value: string, cli = false): string {
-  if (typeof value !== 'string') return t('diagnostics.unknown');
   const match = value.trim().match(VERSION) ?? (cli ? value.trim().match(CLI_VERSION) ?? value.trim().match(CLAUDE_VERSION) : null);
   return match ? match[1] : t('diagnostics.unknown');
 }
 
 function account(value: DiagnosticAccount): string {
-  if (value?.kind === 'default') return t('diagnostics.default');
-  if (value?.kind === 'external') return t('diagnostics.external');
-  if (value?.kind === 'named' && Number.isSafeInteger(value.number) && value.number! > 0) {
+  if (value.kind === 'default') return t('diagnostics.default');
+  if (value.kind === 'external') return t('diagnostics.external');
+  if (value.kind === 'named' && Number.isSafeInteger(value.number) && value.number! > 0) {
     return t('diagnostics.named', { number: value.number! });
   }
   return t('diagnostics.unknown');

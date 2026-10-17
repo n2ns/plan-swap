@@ -9,7 +9,7 @@ import { comparablePath, isWindows, renameReplacing, stripBom, unlinkLinks } fro
 
 export const DEFAULT_NAME = 'default';
 export const NAME_RE = /^[A-Za-z0-9_-]+$/;
-export const DIR_BASENAME_RE = /^\.claude-[A-Za-z0-9_-]+$/;
+const DIR_BASENAME_RE = /^\.claude-[A-Za-z0-9_-]+$/;
 
 // dir is always absolute (path.resolve: no '~', no trailing separator)
 export interface Account { name: string; dir: string }
@@ -23,7 +23,7 @@ export interface AccountInfo { email?: string; plan?: string; loggedIn: boolean;
 // copies for another account drop them. The credentials outrank the account's own /login; forceLoginMethod restricts
 // how accounts sign in; the two directories, applied from env, would point every account at one location.
 // forceLoginOrgUUID is not one: outside managed settings it only pre-selects an organization at login.
-export const CLAUDE_IDENTITY_SETTING_KEYS = {
+const CLAUDE_IDENTITY_SETTING_KEYS = {
   top: ['apiKeyHelper', 'forceLoginMethod'],
   env: ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_PROFILE', 'CLAUDE_CONFIG_DIR', 'CLAUDE_SECURESTORAGE_CONFIG_DIR'],
   // Workload Identity Federation outranks /login only with both set

@@ -209,7 +209,4 @@ export class ClaudeSubscriptionChecks {
     const entry = this.entry(dir, explicit);
     if (entry) entry.unavailable = false;
   }
-  clear(dir: string, explicit = false): void {
-    this.entries.delete(path.resolve(claudeJsonPath(dir, explicit)));
-  }
 }

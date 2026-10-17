@@ -1,6 +1,7 @@
 // Platform helpers shared by the Claude and Codex modules: Windows path comparison, link creation and process
 // probes. No vscode import.
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
@@ -90,14 +91,6 @@ export function fileLinksAvailable(dir: string, platform: string = process.platf
     fs.rmSync(link, { force: true });
     fs.rmSync(target, { force: true });
   }
-}
-
-/** Recreates the link `src` at `dst` (target copied verbatim; on Windows a relative target is resolved against src's
- *  folder and the link made through createLink). */
-export function copyLink(src: string, dst: string, platform: string = process.platform): void {
-  const raw = fs.readlinkSync(src);
-  if (platform === 'win32') createLink(path.resolve(path.dirname(src), raw), dst, platform);
-  else fs.symlinkSync(raw, dst);
 }
 
 /** Whether a process with this pid exists (signal 0 only probes; it never terminates anything, also on Windows). */
@@ -241,4 +234,12 @@ export function fsyncDir(dir: string): void {
   } finally {
     fs.closeSync(fd);
   }
+}
+
+/** Replaces the home directory with ~ (case-insensitive on Windows); other paths are returned unchanged. */
+export function tildify(dir: string): string {
+  const home = os.homedir();
+  // Windows paths are case-insensitive (a drive letter or folder may differ only in case); the rest keeps its spelling
+  const [d, h] = isWindows() ? [dir.toLowerCase(), home.toLowerCase()] : [dir, home];
+  return d === h || d.startsWith(h + path.sep) ? '~' + dir.slice(home.length) : dir;
 }

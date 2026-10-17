@@ -7,7 +7,7 @@ export type AccountKind = 'default' | 'named' | 'external';
 export type PanelMode = 'claude' | 'codex';
 // Setting planswap.usageDisplay: usage bars and percentages show what is left (the default) or what is used
 export type UsageDisplay = 'remaining' | 'used';
-export type ToolId = 'openGlobalMd' | 'openSettings' | 'reloadWindow' | 'restartExtHost' | 'restartServer' | 'cliVersions' | 'sync' | 'updateCli' | 'openHelp' | 'openStar' | 'refreshUsage' | 'refreshAllUsage';
+export type ToolId = 'openGlobalMd' | 'openSettings' | 'reloadWindow' | 'restartExtHost' | 'cliVersions' | 'sync' | 'updateCli' | 'openHelp' | 'openStar' | 'refreshUsage' | 'refreshAllUsage';
 
 export interface AccountView {
   kind: AccountKind;
@@ -35,7 +35,8 @@ export interface AccountView {
   shared?: boolean;
   // A historical observation, never a live quota or a prediction after a reset. Codex: the last query result; Claude:
   // the usage cache in the account's own info file. scope names a model-specific limit (e.g. "Fable"), Claude only;
-  // limitReached: the service reported the limit as reached (Codex only; the windows may still be below 100%)
+  // limitReached: the service reported the limit as reached (Codex only; the windows may still be below 100%); read by
+  // the host's recommend() only, the Webview does not show it
   usage?: { windows: Array<{ usedPercent: number; windowMinutes?: number; resetsAt?: number; scope?: string }>; checkedAt: number; limitReached?: boolean };
   // Registered rows only: true when the user excluded the account from recommendations (src/recommend.ts)
   recommendExcluded?: boolean;
@@ -124,8 +125,7 @@ export type FromWebview =
   // reload / dismissBanner: the Codex host ignores them
   | { type: 'reload'; mode: PanelMode }
   | { type: 'dismissBanner'; mode: PanelMode }
-  // enable / restartServer: handled by the Codex host only
+  // enable: handled by the Codex host only
   | { type: 'enable'; mode: PanelMode }
-  | { type: 'restartServer'; mode: PanelMode }
   // Per-page Tools buttons, footer toolbar buttons (mode = the current tab) and the usage refresh buttons
   | { type: 'tool'; mode: PanelMode; tool: ToolId };
