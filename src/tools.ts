@@ -16,7 +16,7 @@ import { accountProblems, announcementKeys, describeLinkCheck, isFixable, type A
 import type { PanelMode, ToolId } from './protocol';
 import { getLocale, LOCALE_INFO, t } from './i18n';
 import { CLAUDE_REFRESH_ALL_USAGE_COMMAND, CLAUDE_REFRESH_USAGE_COMMAND, CODEX_REFRESH_ALL_USAGE_COMMAND, REFRESH_USAGE_COMMAND } from './statusBar';
-import { isWindows } from './platform';
+import { isWindows, errText } from './platform';
 import { accountTerminalShell } from './terminalShell';
 
 export interface ShareOps {
@@ -59,7 +59,6 @@ export function mirrorClaudeJsonInto(fromJson: string, dir: string): void {
   else syncMcpServers(fromJson, dir);
 }
 
-const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
 // The user guide on GitHub in the UI language (LOCALE_INFO userGuide); English is the source and has no suffix
 function userGuideUrl(): string {

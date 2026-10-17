@@ -12,7 +12,7 @@ import { t } from './i18n';
 import { accountInfoTarget, claudeIdentitySetting, claudeJsonName, copySettingsStripped, defaultDir, realPath, realPathInside, samePath, sameRealPath, strippedSettings, syncMcpServers, unchangedSince } from './paths';
 import {
   comparablePath, isOpaqueReparseDir, JunctionError, LinkPrivilegeError, createLink, fileLinksAvailable, isWindows, pidAlive, renameReplacing, type StartTimeProbe,
-  stripBom, unlinkLinks, windowsStartTimes,
+  stripBom, unlinkLinks, windowsStartTimes, isPlainObject,
 } from './platform';
 
 // Whole-entry links (kind: file needs an empty-file default, dir needs an empty dir). 'projects' is the marker entry
@@ -99,9 +99,6 @@ export interface MigrateReport extends ShareReport {
   backups: string[];      // account-only files replaced by a link, kept as '<entry>.independent-backup' in the account dir
 }
 
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v);
-}
 
 export function lstatOrUndefined(p: string): fs.Stats | undefined {
   try {

@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { t } from './i18n';
-import { comparablePath, isWindows, renameReplacing, stripBom, unlinkLinks } from './platform';
+import { comparablePath, isWindows, renameReplacing, stripBom, unlinkLinks, isPlainObject } from './platform';
 
 export const DEFAULT_NAME = 'default';
 export const NAME_RE = /^[A-Za-z0-9_-]+$/;
@@ -32,9 +32,6 @@ const CLAUDE_IDENTITY_SETTING_KEYS = {
 // Plugin keys also stay out of an independent account's copy
 const STRIP_TOP_KEYS = [...CLAUDE_IDENTITY_SETTING_KEYS.top, 'enabledPlugins', 'extraKnownMarketplaces', 'additionalMarketplaces'];
 
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v);
-}
 
 /** The first identity key a parsed settings.json sets (CLAUDE_IDENTITY_SETTING_KEYS), named as written: a top-level key
  *  as is, one under env as `env.<NAME>` (the federation pair as its first variable); undefined when there is none. */

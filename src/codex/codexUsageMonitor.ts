@@ -14,6 +14,7 @@ import * as path from 'node:path';
 import { samePath } from '../paths';
 import { readCodexAccountInfo } from './codexPaths';
 import { readCodexUsage, type CodexUsage, type UsageResult } from './codexUsage';
+import { FUTURE_TOLERANCE_MS } from '../usageTime';
 
 export interface CodexUsageState {
   // A query is running (a previous result stays visible only for the same known identity)
@@ -41,7 +42,6 @@ export interface UsageMonitorOptions {
 interface AuthSnapshot { dir: string; stamp: string; identity?: string }
 
 // An observation dated further in the future than this (clock moved back) does not count as fresh
-const FUTURE_TOLERANCE_MS = 2 * 60_000;
 
 function sameAuth(a: AuthSnapshot, b: AuthSnapshot): boolean {
   if (!samePath(a.dir, b.dir)) return false;

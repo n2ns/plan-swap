@@ -37,7 +37,7 @@ import {
   selfCheck,
   writeSelection,
 } from './codexState';
-import { isWindows, tildify } from '../platform';
+import { isWindows, tildify, errText } from '../platform';
 import { askCopyFallback } from '../linkPolicy';
 import { type ServerKind, canAutoRestart, detectServerKind, executeRestart, planRestart } from './codexServer';
 import type { CodexAccountStore } from './codexStore';
@@ -74,7 +74,6 @@ export function linuxCodexCommand(dir: string | undefined, bundled: string | und
   return `env ${home}${bundled ? ` ${bundledPathAssignment(bundled)}` : ''} codex`;
 }
 
-const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
 // Editor display names (not localized); a Record so that a new kind cannot be left out
 const EDITOR_NAMES: Record<ServerKind, string> = {

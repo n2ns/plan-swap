@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { realPathInside, samePath, sameRealPath } from '../paths';
-import { isWindows, pidAlive, stripBom, unlinkLinks } from '../platform';
+import { isWindows, pidAlive, stripBom, unlinkLinks, isPlainObject } from '../platform';
 import { t } from '../i18n';
 // Codex account directories, read-only account info from auth.json, the config.toml seed copy and deletion safety.
 // No vscode import. Credential rules (auth.json read-only, identity never displayed, logged, persisted or sent to the
@@ -24,9 +24,6 @@ const SEED_FILES = ['config.toml'];
 export const CODEX_IDENTITY_CONFIG_KEYS = ['forced_login_method', 'forced_chatgpt_workspace_id', 'sqlite_home'];
 const DAEMON_PID_FILES = ['daemon.pid', 'app-server.pid', 'daemon-updater.pid', 'app-server-updater.pid'];
 
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v);
-}
 
 // The default dir is always path.resolve(~/.codex) regardless of CODEX_HOME or any other environment variable
 // (this window's effective dir is codexState.effectiveDir)

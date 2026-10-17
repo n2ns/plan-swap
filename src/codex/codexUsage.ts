@@ -6,6 +6,7 @@ import type { EventEmitter } from 'node:events';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { Readable, Writable } from 'node:stream';
+import { isPlainObject, onPath, taskkillTree, truncateDetail } from '../platform';
 
 export interface UsageWindow { usedPercent: number; windowMinutes?: number; resetsAt?: number /* unix seconds */ }
 
@@ -76,23 +77,13 @@ export interface UsageOptions {
   signal?: AbortSignal;
 }
 
-// kill() on a child started through cmd.exe ends only cmd.exe; taskkill /T also ends the codex it started. Only the
-// pid of the child this module started is ever passed
-function taskkillTree(pid: number): void {
-  childProcess.execFile('taskkill', ['/T', '/F', '/PID', String(pid)], { windowsHide: true }, () => undefined);
-}
-
 const DEFAULT_COMMAND = 'codex';
 const ARGS = ['app-server'];
-const DETAIL_MAX = 200;
 // A protocol line longer than this without a newline means something is wrong; stop buffering
 const MAX_BUFFER = 1024 * 1024;
 const INIT_ID = 1;
 const LIMITS_ID = 2;
 
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v);
-}
 
 // First finite number among the given keys (camelCase first, snake_case tolerated)
 function num(o: Record<string, unknown>, ...keys: string[]): number | undefined {
@@ -143,8 +134,6 @@ export function parseRateLimits(result: unknown, now: number): CodexUsage | unde
   return bucket ?? parseSnapshot(pick(result, 'rateLimits', 'rate_limits'), now);
 }
 
-const truncate = (s: string): string => (s.length > DETAIL_MAX ? s.slice(0, DETAIL_MAX - 1) + '…' : s);
-
 // A signed-out account is recognized by its message ("authentication required"); -32600 alone is the generic
 // invalid-request code and would misreport other failures as signed out
 function isAuthError(e: Record<string, unknown>): boolean {
@@ -170,7 +159,7 @@ export function findBundledCodex(extensionPath: string, platform: NodeJS.Platfor
 }
 
 function errorMessage(message: string, code: unknown): string {
-  return truncate(typeof code === 'number' ? `${message} (${code})` : message);
+  return truncateDetail(typeof code === 'number' ? `${message} (${code})` : message);
 }
 
 function comparable(p: string, platform: NodeJS.Platform): string {
@@ -181,19 +170,6 @@ function comparable(p: string, platform: NodeJS.Platform): string {
     // keep the resolved path when it cannot be canonicalized
   }
   return platform === 'win32' ? r.toLowerCase() : r;
-}
-
-// Whether a file of that name exists in a PATH directory (Windows fallback only)
-function onPath(file: string): boolean {
-  // Windows PATH entries may be quoted ("C:\Program Files\nodejs"); cmd.exe accepts that, so the check must too
-  const dirs = (process.env.PATH ?? '').split(path.delimiter).map((d) => d.replace(/^"(.*)"$/, '$1')).filter(Boolean);
-  return dirs.some((d) => {
-    try {
-      return fs.statSync(path.join(d, file)).isFile();
-    } catch {
-      return false;
-    }
-  });
 }
 
 type Attempt = { kind: 'done'; result: UsageResult } | { kind: 'enoent' };
@@ -256,7 +232,7 @@ function attempt(
       child = spawnOptions.shell ? spawn([command, ...ARGS].join(' '), [], spawnOptions) : spawn(command, ARGS, spawnOptions);
     } catch (e) {
       const err = e as NodeJS.ErrnoException;
-      resolve(err.code === 'ENOENT' ? { kind: 'enoent' } : { kind: 'done', result: { ok: false, reason: 'failed', detail: truncate(String(err.message)) } });
+      resolve(err.code === 'ENOENT' ? { kind: 'enoent' } : { kind: 'done', result: { ok: false, reason: 'failed', detail: truncateDetail(String(err.message)) } });
       return;
     }
     let settled = false;
@@ -291,7 +267,7 @@ function attempt(
         // Proves which account the server serves before asking it anything
         const reported = isPlainObject(result) ? result.codexHome : undefined;
         if (typeof reported === 'string' && comparable(reported, platform) !== comparable(home, platform)) {
-          finish({ ok: false, reason: 'homeMismatch', detail: truncate(reported) });
+          finish({ ok: false, reason: 'homeMismatch', detail: truncateDetail(reported) });
           return;
         }
         send({ method: 'initialized' });
@@ -315,7 +291,7 @@ function attempt(
 
     const onError = (e: NodeJS.ErrnoException): void => {
       if (e.code === 'ENOENT') finishWith({ kind: 'enoent' });
-      else finish({ ok: false, reason: 'failed', detail: truncate(e.message) });
+      else finish({ ok: false, reason: 'failed', detail: truncateDetail(e.message) });
     };
 
     const onExit = (code: number | null, signal: NodeJS.Signals | null): void => {

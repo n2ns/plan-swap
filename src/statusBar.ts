@@ -17,6 +17,7 @@ import { readClaudeUsage, type ClaudeUsage, type ClaudeUsageFailure, type Claude
 import type { ClaudeUsageState } from './claudeUsageMonitor';
 import type { UsageDisplay } from './protocol';
 import { usageColorsChanged, usageThresholds, usageDisplay } from './usageSettings';
+import { FUTURE_TOLERANCE_MS } from './usageTime';
 
 // Refresh commands; only the two single-account ones are trusted command links in the tooltip (buildTooltip)
 export const REFRESH_USAGE_COMMAND = 'planswap.codex.refreshUsage';
@@ -255,7 +256,7 @@ export interface UsageParts { rows: string[]; notes: string[] }
  */
 export function liveCodexUsage(usage: CodexUsage, now: number = Date.now()): CodexUsage | undefined {
   const age = now - usage.checkedAt;
-  if (age >= USAGE_HISTORY_MAX_AGE_MS || age < -2 * 60_000) return undefined;
+  if (age >= USAGE_HISTORY_MAX_AGE_MS || age < -FUTURE_TOLERANCE_MS) return undefined;
   return usageAsOf(usage, now);
 }
 

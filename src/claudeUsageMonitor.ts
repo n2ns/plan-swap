@@ -3,6 +3,7 @@
 // how the last one failed. One query at a time; the caller decides when to ask. No vscode import.
 import { samePath } from './paths';
 import { oneAtATime, type ClaudeQueryResult, type ClaudeUsageFailure } from './claudeUsage';
+import { FUTURE_TOLERANCE_MS } from './usageTime';
 
 export interface ClaudeUsageState {
   checking: boolean;
@@ -26,7 +27,6 @@ export interface ClaudeUsageMonitorOptions {
 
 const CLAUDE_USAGE_STALE_MS = 15 * 60_000;
 // A cache time further in the future than this (clock moved back) does not count as fresh
-const FUTURE_TOLERANCE_MS = 2 * 60_000;
 
 export class ClaudeUsageMonitor {
   private state: ClaudeUsageState = { checking: false };

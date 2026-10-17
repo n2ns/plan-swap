@@ -38,7 +38,7 @@ import type { FromWebview } from './protocol';
 import type { CodexAccountStore } from './codex/codexStore';
 import { mirrorClaudeJsonInto, runTool, type TerminalCheck, type ToolDeps } from './tools';
 import { t } from './i18n';
-import { isWindows } from './platform';
+import { isWindows, errText } from './platform';
 import { askCopyFallback } from './linkPolicy';
 import { accountTerminalShell, bundledPathAssignment, hasControlChars, shQuote, windowsAccountEnv, windowsTerminalEnvSetting } from './terminalShell';
 
@@ -109,7 +109,6 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
   const inUse = (a: Account): boolean => isCurrent(a) || sameRealPath(a.dir, currentDir());
   // Display name: the alias if set, otherwise the name
   const labelOf = (a: Account): string => labelFor(a.name, labels);
-  const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
   // Windows cannot attribute a running Claude process to an account (see windowsSessionsBusy), so an open terminal of
   // the account also counts; on Linux the /proc check covers terminals
   const terminalOpen: TerminalCheck = (dir) => isWindows() && [...terminals.values()].some((x) => samePath(x.dir, dir));

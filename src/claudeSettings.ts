@@ -3,7 +3,7 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { defaultDir, samePath, sameRealPath } from './paths';
-import { isWindows } from './platform';
+import { isWindows, isPlainObject } from './platform';
 
 const SECTION = 'claudeCode';
 const KEY = 'environmentVariables';
@@ -11,9 +11,6 @@ const ENV_NAME = 'CLAUDE_CONFIG_DIR';
 
 type EnvEntry = { name: string; value: unknown };
 
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v);
-}
 
 // Normalize to an entry array (also accepts the object form {K: v}); returns a new array, never mutates get()'s result
 function readEntries(): EnvEntry[] {

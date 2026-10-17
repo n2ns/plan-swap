@@ -10,7 +10,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import type { Readable } from 'node:stream';
 import { claudeJsonPath } from './paths';
-import { stripBom } from './platform';
+import { stripBom, isPlainObject, onPath, taskkillTree, truncateDetail } from './platform';
+import { FUTURE_TOLERANCE_MS } from './usageTime';
 
 export interface ClaudeUsageWindow { usedPercent: number; windowMinutes?: number; resetsAt?: number /* unix seconds */; scope?: string }
 
@@ -62,16 +63,10 @@ export const CLAUDE_USAGE_MAX_AGE_MS = 24 * 60 * 60_000;
 const REFRESH_TOLERANCE_MS = 2 * 60_000;
 // Only user settings are loaded (no project settings of the working directory), and the run leaves no session transcript
 const ARGS = ['-p', '/usage', '--output-format', 'json', '--verbose', '--no-session-persistence', '--setting-sources', 'user'];
-const DETAIL_MAX = 200;
 const MAX_OUTPUT = 1024 * 1024;
 const SESSION_MINUTES = 300;
 const WEEK_MINUTES = 7 * 1440;
 
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v);
-}
-
-const truncate = (s: string): string => (s.length > DETAIL_MAX ? s.slice(0, DETAIL_MAX - 1) + '…' : s);
 
 function resetSeconds(v: unknown): number | undefined {
   if (typeof v !== 'string') return undefined;
@@ -139,7 +134,7 @@ export function parseUsageCache(data: unknown, now: number): ClaudeUsage | undef
   if (!own) return undefined;
   const { cache, checkedAt } = own;
   const age = now - checkedAt;
-  if (age >= CLAUDE_USAGE_MAX_AGE_MS || age < -REFRESH_TOLERANCE_MS) return undefined;
+  if (age >= CLAUDE_USAGE_MAX_AGE_MS || age < -FUTURE_TOLERANCE_MS) return undefined;
   if (!isPlainObject(cache.utilization)) return undefined;
   const windows = windowsOf(cache.utilization).filter((w) => w.resetsAt === undefined || w.resetsAt * 1000 > now);
   return windows.length ? { windows, checkedAt } : undefined;
@@ -164,11 +159,6 @@ export function readClaudeUsage(dir: string, explicit = false, now: number = Dat
   return parseUsageCache(readInfo(dir, explicit), now);
 }
 
-// kill() on a child started through cmd.exe ends only cmd.exe; taskkill /T also ends the claude it started
-function taskkillTree(pid: number): void {
-  childProcess.execFile('taskkill', ['/T', '/F', '/PID', String(pid)], { windowsHide: true }, () => undefined);
-}
-
 /** The official extension's native binary, using its platform-specific layout before its single-platform layout.
  * Windows ARM64 also supports the extension's x64 fallback. Only this extension host's installation is searched. */
 export function findBundledClaude(extensionPath: string, platform: NodeJS.Platform = process.platform, arch: string = process.arch): string | undefined {
@@ -182,18 +172,6 @@ export function findBundledClaude(extensionPath: string, platform: NodeJS.Platfo
   return candidates.find((file) => {
     try {
       return fs.statSync(file).isFile();
-    } catch {
-      return false;
-    }
-  });
-}
-
-// Whether a file of that name exists in a PATH directory (Windows fallback only)
-function onPath(file: string): boolean {
-  const dirs = (process.env.PATH ?? '').split(path.delimiter).map((d) => d.replace(/^"(.*)"$/, '$1')).filter(Boolean);
-  return dirs.some((d) => {
-    try {
-      return fs.statSync(path.join(d, file)).isFile();
     } catch {
       return false;
     }
@@ -400,7 +378,7 @@ function attempt<T>(
       child = spawnOptions.shell ? spawn([command, ...args.map(shellArg)].join(' '), [], spawnOptions) : spawn(command, [...args], spawnOptions);
     } catch (e) {
       const err = e as NodeJS.ErrnoException;
-      resolve(err.code === 'ENOENT' ? { kind: 'enoent' } : { kind: 'done', result: outcomes.failure(truncate(String(err.message))) });
+      resolve(err.code === 'ENOENT' ? { kind: 'enoent' } : { kind: 'done', result: outcomes.failure(truncateDetail(String(err.message))) });
       return;
     }
     let settled = false;
@@ -430,7 +408,7 @@ function attempt<T>(
       else out += chunk;
     };
     const onError = (e: NodeJS.ErrnoException): void => {
-      finish(e.code === 'ENOENT' ? { kind: 'enoent' } : { kind: 'done', result: outcomes.failure(truncate(e.message)) });
+      finish(e.code === 'ENOENT' ? { kind: 'enoent' } : { kind: 'done', result: outcomes.failure(truncateDetail(e.message)) });
     };
     // 'exit' can arrive before the last stdout chunk; 'close' would wait for every stdio stream, so read what is left first
     const onExit = (code: number | null, signal: NodeJS.Signals | null): void => {

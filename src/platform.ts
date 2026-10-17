@@ -1,9 +1,9 @@
-// Platform helpers shared by the Claude and Codex modules: Windows path comparison, link creation and process
-// probes. No vscode import.
+// Platform helpers shared by the Claude and Codex modules: Windows path comparison, link creation, process probes and
+// the small helpers both vendors' modules repeat (JSON object check, error text, PATH lookup). No vscode import.
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 
 /** A file symlink cannot be created: Windows without Developer Mode or elevation. */
 export class LinkPrivilegeError extends Error {}
@@ -242,4 +242,34 @@ export function tildify(dir: string): string {
   // Windows paths are case-insensitive (a drive letter or folder may differ only in case); the rest keeps its spelling
   const [d, h] = isWindows() ? [dir.toLowerCase(), home.toLowerCase()] : [dir, home];
   return d === h || d.startsWith(h + path.sep) ? '~' + dir.slice(home.length) : dir;
+}
+
+export function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+/** The message of an Error, or the string form of anything else thrown. */
+export const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+
+const DETAIL_MAX = 200;
+/** A failure detail cut to 200 characters, so a message never carries a long tail of output. */
+export const truncateDetail = (s: string): string => (s.length > DETAIL_MAX ? s.slice(0, DETAIL_MAX - 1) + '…' : s);
+
+/** Ends the process tree of a child started through cmd.exe (a .cmd shim): kill() would end only cmd.exe, taskkill /T
+ *  also ends the CLI it started. Callers pass only the pid of a child they started themselves. */
+export function taskkillTree(pid: number): void {
+  execFile('taskkill', ['/T', '/F', '/PID', String(pid)], { windowsHide: true }, () => undefined);
+}
+
+/** Whether a file of that name exists in a PATH directory (Windows .cmd fallback only). Windows PATH entries may be
+ *  quoted ("C:\Program Files\nodejs"); cmd.exe accepts that, so the check must too. */
+export function onPath(file: string): boolean {
+  const dirs = (process.env.PATH ?? '').split(path.delimiter).map((d) => d.replace(/^"(.*)"$/, '$1')).filter(Boolean);
+  return dirs.some((d) => {
+    try {
+      return fs.statSync(path.join(d, file)).isFile();
+    } catch {
+      return false;
+    }
+  });
 }

@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { claudeJsonPath, readAccountInfo } from './paths';
-import { stripBom } from './platform';
+import { stripBom, isPlainObject } from './platform';
 import { runClaudeCli, usageEnv, type ClaudeQueryOptions } from './claudeUsage';
 import { claudeCredentialOverrides } from './environmentWarnings';
 
@@ -14,9 +14,6 @@ export interface ClaudeSubscriptionState { unavailable: boolean; checking: boole
 const ARGS = ['-p', 'Reply with OK.', '--output-format', 'json', '--verbose', '--no-session-persistence',
   '--system-prompt', 'Reply with OK.', '--disable-slash-commands', '--setting-sources', 'user', '--settings', '{"disableAllHooks":true}', '--tools', '', '--strict-mcp-config', '--max-turns', '1'];
 const COOLDOWN_MS = 60 * 60_000;
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v);
-}
 // The in-memory identity comparison key of the sign-in (readAccountInfo; never displayed, logged or persisted)
 const identity = (dir: string, explicit: boolean): string | undefined => readAccountInfo(dir, explicit).identity;
 

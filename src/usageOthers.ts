@@ -1,5 +1,6 @@
 // Automatic usage checks of the registered accounts other than the current Claude / effective Codex one (whose own
 // checks belong to the usage monitors). One instance per product; in memory only. No vscode import.
+import { FUTURE_TOLERANCE_MS } from './usageTime';
 
 export interface OtherAccountChecksOptions {
   // Whether the run may go on (window focused, automatic checks on, no manual refresh waiting or running); asked before
@@ -18,7 +19,6 @@ export interface OtherAccountChecksOptions {
 }
 
 // A check time further in the future than this (clock moved back) does not count
-const FUTURE_TOLERANCE_MS = 2 * 60_000;
 
 export class OtherAccountChecks {
   private readonly attempts = new Map<string, number>();
