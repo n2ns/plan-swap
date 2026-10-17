@@ -256,7 +256,19 @@ export async function queryEach<R = ClaudeQueryResult>(
 }
 
 type QueryOutcome = { ok: true; empty: boolean } | Extract<ClaudeQueryResult, { ok: false }>;
-type Attempt = { kind: 'done'; result: QueryOutcome } | { kind: 'enoent' };
+
+/** One run of the CLI: done with the caller's outcome, or ENOENT for every command tried. */
+export type ClaudeCliAttempt<T> = { kind: 'done'; result: T } | { kind: 'enoent' };
+
+/** How a caller of runClaudeCli turns what happened to the process into its own result type. */
+export interface ClaudeCliOutcomes<T> {
+  /** A spawn error other than ENOENT, output over 1 MiB or cancellation; detail is short and never raw output */
+  failure(detail: string): T;
+  /** The whole run exceeded timeoutMs */
+  timeout(): T;
+  /** The process ended; stdout is complete (at most 1 MiB) */
+  exit(stdout: string, code: number | null, signal: NodeJS.Signals | null): T;
+}
 
 // Used only within one query; neither the identity nor the verbose report leaves this module.
 function queryIdentity(data: unknown): string | undefined {
@@ -279,10 +291,7 @@ function queryIdentity(data: unknown): string | undefined {
  * Recent official cache hits need not advance fetchedAtMs (see ClaudeUsageFailure).
  */
 export async function queryClaudeUsage(dir: string, explicit: boolean, options: ClaudeQueryOptions = {}): Promise<ClaudeQueryResult> {
-  const spawn: ClaudeUsageSpawn = options.spawn ?? ((c, a, o) => childProcess.spawn(c, a, o));
-  const platform = options.platform ?? process.platform;
   const now = options.now ?? Date.now;
-  const timeoutMs = options.timeoutMs ?? 30000;
   const startedAt = now();
   const identity = queryIdentity(readInfo(dir, explicit));
   const base: childProcess.SpawnOptions = {
@@ -291,19 +300,11 @@ export async function queryClaudeUsage(dir: string, explicit: boolean, options: 
     windowsHide: true,
     stdio: ['ignore', 'pipe', 'ignore'],
   };
-  const run = (command: string, extra: childProcess.SpawnOptions = {}): Promise<Attempt> => {
-    if (options.signal?.aborted) return Promise.resolve({ kind: 'done', result: { ok: false, reason: 'failed', detail: 'cancelled' } });
-    const remaining = startedAt + timeoutMs - now();
-    if (remaining <= 0) return Promise.resolve({ kind: 'done', result: { ok: false, reason: 'timeout' } });
-    return attempt(spawn, command, { ...base, ...extra }, platform, remaining, options);
-  };
-  let a = await run('claude');
-  // npm installs a claude.cmd shim, which spawn without a shell can neither find nor start; the command line is a fixed literal
-  if (a.kind === 'enoent' && platform === 'win32' && onPath('claude.cmd')) a = await run('claude.cmd', { shell: true });
-  if (a.kind === 'enoent') {
-    const bundled = options.fallback?.();
-    if (bundled) a = await run(bundled);
-  }
+  const a = await runClaudeCli<QueryOutcome>(ARGS, base, startedAt, options, {
+    failure: (detail) => ({ ok: false, reason: 'failed', detail }),
+    timeout: () => ({ ok: false, reason: 'timeout' }),
+    exit: (out, code, signal) => (code !== 0 || signal !== null ? { ok: false, reason: 'failed', detail: String(code ?? signal) } : outcome(out)),
+  });
   if (a.kind === 'enoent') return { ok: false, reason: 'cliMissing' };
   if (!a.result.ok) return a.result;
   const info = readInfo(dir, explicit);
@@ -355,17 +356,51 @@ function outcome(stdout: string): QueryOutcome {
   return { ok: true, empty: limits.length === 0 };
 }
 
-function attempt(
-  spawn: ClaudeUsageSpawn, command: string, spawnOptions: childProcess.SpawnOptions,
-  platform: NodeJS.Platform, timeoutMs: number, options: ClaudeQueryOptions,
-): Promise<Attempt> {
-  return new Promise<Attempt>((resolve) => {
+/**
+ * Runs the claude CLI with args for one caller (usage query, subscription probe): `claude` with the spawn options base,
+ * on ENOENT on Windows `claude.cmd` through the shell as a fixed command line when it is on PATH, then options.fallback's
+ * binary directly. All attempts share options.timeoutMs (default 30000, counted from startedAt) and the abort signal;
+ * cancellation or an exhausted deadline starts no further child. Only a child it started and still running is ever
+ * signalled (the shell fallback's tree through options.killTree). Stdout is limited to 1 MiB of bytes. What happened is
+ * mapped through outcomes; raw output reaches only outcomes.exit.
+ */
+export async function runClaudeCli<T>(
+  args: readonly string[], base: childProcess.SpawnOptions, startedAt: number, options: ClaudeQueryOptions, outcomes: ClaudeCliOutcomes<T>,
+): Promise<ClaudeCliAttempt<T>> {
+  const spawn: ClaudeUsageSpawn = options.spawn ?? ((c, a, o) => childProcess.spawn(c, a, o));
+  const platform = options.platform ?? process.platform;
+  const now = options.now ?? Date.now;
+  const timeoutMs = options.timeoutMs ?? 30000;
+  const run = (command: string, extra: childProcess.SpawnOptions = {}): Promise<ClaudeCliAttempt<T>> => {
+    if (options.signal?.aborted) return Promise.resolve({ kind: 'done', result: outcomes.failure('cancelled') });
+    const remaining = startedAt + timeoutMs - now();
+    if (remaining <= 0) return Promise.resolve({ kind: 'done', result: outcomes.timeout() });
+    return attempt(spawn, command, args, { ...base, ...extra }, platform, remaining, options, outcomes);
+  };
+  let a = await run('claude');
+  // npm installs a claude.cmd shim, which spawn without a shell can neither find nor start; the command line is a fixed literal
+  if (a.kind === 'enoent' && platform === 'win32' && onPath('claude.cmd')) a = await run('claude.cmd', { shell: true });
+  if (a.kind === 'enoent') {
+    const bundled = options.fallback?.();
+    if (bundled) a = await run(bundled);
+  }
+  return a;
+}
+
+// An argument of the shell command line: quoted (inner quotes escaped) when empty or holding a space or a quote
+const shellArg = (a: string): string => (a === '' || /[\s"]/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a);
+
+function attempt<T>(
+  spawn: ClaudeUsageSpawn, command: string, args: readonly string[], spawnOptions: childProcess.SpawnOptions,
+  platform: NodeJS.Platform, timeoutMs: number, options: ClaudeQueryOptions, outcomes: ClaudeCliOutcomes<T>,
+): Promise<ClaudeCliAttempt<T>> {
+  return new Promise<ClaudeCliAttempt<T>>((resolve) => {
     let child: ClaudeUsageChild;
     try {
-      child = spawnOptions.shell ? spawn([command, ...ARGS.map((a) => (a.includes(' ') ? `"${a}"` : a))].join(' '), [], spawnOptions) : spawn(command, ARGS, spawnOptions);
+      child = spawnOptions.shell ? spawn([command, ...args.map(shellArg)].join(' '), [], spawnOptions) : spawn(command, [...args], spawnOptions);
     } catch (e) {
       const err = e as NodeJS.ErrnoException;
-      resolve(err.code === 'ENOENT' ? { kind: 'enoent' } : { kind: 'done', result: { ok: false, reason: 'failed', detail: truncate(String(err.message)) } });
+      resolve(err.code === 'ENOENT' ? { kind: 'enoent' } : { kind: 'done', result: outcomes.failure(truncate(String(err.message))) });
       return;
     }
     let settled = false;
@@ -373,7 +408,7 @@ function attempt(
     let outputBytes = 0;
     const stdout = child.stdout;
 
-    const finish = (a: Attempt): void => {
+    const finish = (a: ClaudeCliAttempt<T>): void => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
@@ -391,23 +426,20 @@ function attempt(
     };
     const onData = (chunk: string): void => {
       outputBytes += Buffer.byteLength(chunk, 'utf8');
-      if (outputBytes > MAX_OUTPUT) finish({ kind: 'done', result: { ok: false, reason: 'failed', detail: 'output too long' } });
+      if (outputBytes > MAX_OUTPUT) finish({ kind: 'done', result: outcomes.failure('output too long') });
       else out += chunk;
     };
     const onError = (e: NodeJS.ErrnoException): void => {
-      finish(e.code === 'ENOENT' ? { kind: 'enoent' } : { kind: 'done', result: { ok: false, reason: 'failed', detail: truncate(e.message) } });
+      finish(e.code === 'ENOENT' ? { kind: 'enoent' } : { kind: 'done', result: outcomes.failure(truncate(e.message)) });
     };
     // 'exit' can arrive before the last stdout chunk; 'close' would wait for every stdio stream, so read what is left first
     const onExit = (code: number | null, signal: NodeJS.Signals | null): void => {
-      const done = (): void => {
-        if (code !== 0 || signal !== null) finish({ kind: 'done', result: { ok: false, reason: 'failed', detail: String(code ?? signal) } });
-        else finish({ kind: 'done', result: outcome(out) });
-      };
+      const done = (): void => finish({ kind: 'done', result: outcomes.exit(out, code, signal) });
       if (stdout && !stdout.readableEnded) stdout.once('end', done);
       else done();
     };
-    const timer = setTimeout(() => finish({ kind: 'done', result: { ok: false, reason: 'timeout' } }), timeoutMs);
-    const onAbort = (): void => finish({ kind: 'done', result: { ok: false, reason: 'failed', detail: 'cancelled' } });
+    const timer = setTimeout(() => finish({ kind: 'done', result: outcomes.timeout() }), timeoutMs);
+    const onAbort = (): void => finish({ kind: 'done', result: outcomes.failure('cancelled') });
     if (options.signal?.aborted) onAbort();
     else options.signal?.addEventListener('abort', onAbort, { once: true });
 

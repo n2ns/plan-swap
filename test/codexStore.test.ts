@@ -45,6 +45,13 @@ describe('CodexAccountStore', () => {
     assert.deepEqual(memento.get('codex.ignoredDirs'), ['/other']);
   });
 
+  test('add replaces an entry whose name differs only in case', async () => {
+    const store = new CodexAccountStore(new MemoryMemento());
+    await store.add({ name: 'work', dir: path.join(home, '.codex-work') });
+    await store.add({ name: 'Work', dir: path.join(home, '.codex-Work') });
+    assert.deepEqual(store.named(), [{ name: 'Work', dir: path.join(home, '.codex-Work') }]);
+  });
+
   test('remove keeps the directory ignored; unignore lets syncWithDisk register it again', async () => {
     const dir = path.join(home, '.codex-a');
     fs.mkdirSync(dir);

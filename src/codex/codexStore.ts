@@ -1,106 +1,12 @@
-import * as fs from 'node:fs';
+// Registered Codex accounts in the FileMemento (keys codex.accounts and codex.ignoredDirs); the default account
+// { CODEX_DEFAULT_NAME, codexDefaultDir() } is implicit. The behavior is AccountStoreBase's (src/accountStore.ts).
 import type { Memento } from 'vscode';
-import { samePath } from '../paths';
-import { labelFor, sameName, type LabelStore } from '../labels';
-import type { RecommendExclusions } from '../recommend';
+import { AccountStoreBase } from '../accountStore';
 import type { CodexAccount } from './codexPaths';
 import { CODEX_DEFAULT_NAME, codexDefaultDir, scanCodexDirs } from './codexPaths';
 
-const STATE_KEY = 'codex.accounts';
-// Accounts deleted but whose directories were kept; skipped by the auto scan
-const IGNORED_KEY = 'codex.ignoredDirs';
-
-/**
- * Registered Codex accounts in the FileMemento (keys codex.accounts and codex.ignoredDirs); same shape as
- * AccountStore in src/accounts.ts. The default account { CODEX_DEFAULT_NAME, codexDefaultDir() } is implicit and
- * always first in all(); named() is sorted by name. Directories are compared with samePath.
- */
-export class CodexAccountStore {
-  constructor(private readonly state: Memento) {}
-
-  private load(): CodexAccount[] {
-    return this.state.get<CodexAccount[]>(STATE_KEY, []);
-  }
-
-  private save(list: CodexAccount[]): Thenable<void> {
-    return this.state.update(STATE_KEY, list);
-  }
-
-  named(): CodexAccount[] {
-    return this.load()
-      .filter((a) => a.name !== CODEX_DEFAULT_NAME)
-      .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-  }
-
-  all(): CodexAccount[] {
-    return [{ name: CODEX_DEFAULT_NAME, dir: codexDefaultDir() }, ...this.named()];
-  }
-
-  find(name: string): CodexAccount | undefined {
-    return this.all().find((a) => a.name === name);
-  }
-
-  findByDir(dir: string): CodexAccount | undefined {
-    return this.all().find((a) => samePath(a.dir, dir));
-  }
-
-  private ignored(): string[] {
-    return this.state.get<string[]>(IGNORED_KEY, []);
-  }
-
-  /** Replaces an entry of the same name and takes its directory off the ignore list. */
-  async add(account: CodexAccount): Promise<void> {
-    await this.state.update(IGNORED_KEY, this.ignored().filter((d) => !samePath(d, account.dir)));
-    await this.save([...this.load().filter((a) => a.name !== account.name), account]);
-  }
-
-  /** Unregisters the account and records its directory in codex.ignoredDirs, so the scan does not re-add a kept
-   *  directory. The caller clears the alias (labels.remove). */
-  async remove(name: string): Promise<void> {
-    const removed = this.load().find((a) => a.name === name);
-    if (removed && !this.ignored().some((d) => samePath(d, removed.dir))) {
-      await this.state.update(IGNORED_KEY, [...this.ignored(), removed.dir]);
-    }
-    await this.save(this.load().filter((a) => a.name !== name));
-  }
-
-  // Called after deleteCodexDir succeeds, so a recreated directory is auto-discovered again
-  async unignore(dir: string): Promise<void> {
-    await this.state.update(IGNORED_KEY, this.ignored().filter((d) => !samePath(d, dir)));
-  }
-
-  // Prunes named entries whose directory no longer exists (alias and recommendation mark cleared, not added to the
-  // ignore list), then
-  // registers scanned directories (scanCodexDirs) that are neither ignored nor registered; a scanned name equal
-  // (sameName, case-insensitive) to 'default', a remaining account's name or, with labels (callers pass the Codex
-  // LabelStore), its display name is skipped until that alias changes. Saves only when something changed
-  async syncWithDisk(labels?: LabelStore, exclusions?: RecommendExclusions): Promise<void> {
-    const stored = this.load();
-    const list = stored.filter((a) => fs.existsSync(a.dir));
-    for (const a of stored) {
-      if (list.includes(a)) continue;
-      await labels?.remove(a.name);
-      await exclusions?.remove(a.name);
-    }
-    const ignored = this.ignored();
-    const taken = [CODEX_DEFAULT_NAME, ...list.map((a) => a.name)];
-    if (labels) taken.push(...list.map((a) => labelFor(a.name, labels)));
-    const missing: CodexAccount[] = [];
-    for (const s of scanCodexDirs()) {
-      if (ignored.some((d) => samePath(d, s.dir)) || list.some((a) => samePath(a.dir, s.dir))) continue;
-      if (taken.some((n) => sameName(n, s.name))) continue;
-      // Also reserves the name against another scanned directory differing only in case
-      taken.push(s.name);
-      missing.push(s);
-    }
-    const pruned = stored.filter((a) => !list.includes(a));
-    if (!missing.length && !pruned.length) return;
-    // Another window may have added, removed or ignored accounts while the disk was scanned (and the aliases cleared):
-    // apply only the deltas to the list as it is now, so its changes are kept
-    const current = this.load().filter((a) => !pruned.some((p) => p.name === a.name && samePath(p.dir, a.dir)));
-    const ignoredNow = this.ignored();
-    const added = missing.filter((s) => !ignoredNow.some((d) => samePath(d, s.dir))
-      && !current.some((a) => samePath(a.dir, s.dir) || sameName(a.name, s.name)));
-    await this.save([...current, ...added]);
+export class CodexAccountStore extends AccountStoreBase<CodexAccount> {
+  constructor(state: Memento) {
+    super(state, { stateKey: 'codex.accounts', ignoredKey: 'codex.ignoredDirs', defaultName: CODEX_DEFAULT_NAME, defaultDir: codexDefaultDir, scan: scanCodexDirs });
   }
 }
