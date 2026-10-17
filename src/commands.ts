@@ -16,6 +16,7 @@ import {
   samePath,
   sameRealPath,
   caseVariantOf,
+  configDirFromEnv,
 } from './paths';
 import {
   claudeAccountBusy,
@@ -87,7 +88,7 @@ export interface Deps {
  * - Rename: named rows only; always answers renameResult.
  * - recommendExclude: registered rows only (the external row is ignored); sets or clears the recommendation mark and
  *   refreshes the panel. The mark is cleared with the account (remove, or a pruned directory on sync).
- * - Terminals: on Linux a non-default folder with a control character is refused; the bundled CLI's folder is appended
+ * - Terminals: on Linux a folder with a control character is refused; the bundled CLI's folder is appended
  *   to the terminal's PATH (windowsAccountEnv / linuxClaudeCommand), so `claude` still starts without an installed CLI; closing a PlanSwap terminal refreshes
  *   the UI and warns when a still-registered named account is still signed out.
  * - planswap.refresh re-syncs both stores with the disk and refreshes the panel and status bar.
@@ -378,12 +379,14 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
 
   function openTerminal(account: Account): void {
     const isDefault = account.name === DEFAULT_NAME;
+    const dir = isDefault ? undefined : account.dir;
+    // Linux: the default account gets the host's CLAUDE_CONFIG_DIR (or none), so an rc export cannot redirect its sign-in
+    const linuxDir = isDefault ? configDirFromEnv() : account.dir;
     // Linux types the folder into the shell; a control character (a newline) would end the command line early
-    if (!isDefault && !isWindows() && hasControlChars(account.dir)) {
-      void vscode.window.showErrorMessage(t('terminal.badDir', { dir: JSON.stringify(account.dir) }));
+    if (!isWindows() && linuxDir !== undefined && hasControlChars(linuxDir)) {
+      void vscode.window.showErrorMessage(t('terminal.badDir', { dir: JSON.stringify(linuxDir) }));
       return;
     }
-    const dir = isDefault ? undefined : account.dir;
     const bundled = deps.bundledClaude?.();
     const terminal = vscode.window.createTerminal({
       name: `Claude (${labelOf(account)})`,
@@ -394,7 +397,7 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
     });
     terminals.set(terminal, account);
     // Windows shells have no `env` command: the terminal environment carries CLAUDE_CONFIG_DIR and PATH there
-    terminal.sendText(isWindows() ? 'claude' : linuxClaudeCommand(dir, bundled));
+    terminal.sendText(isWindows() ? 'claude' : linuxClaudeCommand(linuxDir, bundled));
     terminal.show();
     if (!readAccountInfo(account.dir, isExplicitConfigDir(account.dir)).loggedIn) {
       void vscode.window.showInformationMessage(t('account.loginTip', { vendor: 'Claude' }));
@@ -572,15 +575,13 @@ export function bundledPathAssignment(bundled: string): string {
 }
 
 /**
- * Linux: the command line of a Claude account terminal: `env CLAUDE_CONFIG_DIR='<dir>'` for a named account (bypassing an
- * export in rc files) plus bundledPathAssignment when the Claude extension bundles a CLI. Plain `claude` when there is
- * nothing to set.
+ * Linux: the command line of a Claude account terminal: `env CLAUDE_CONFIG_DIR='<dir>'`, or `env -u CLAUDE_CONFIG_DIR`
+ * without a folder (the default account when the host has none), so an export in rc files cannot redirect the account;
+ * plus bundledPathAssignment when the Claude extension bundles a CLI.
  */
 export function linuxClaudeCommand(dir: string | undefined, bundled: string | undefined): string {
-  const vars: string[] = [];
-  if (dir !== undefined) vars.push(`CLAUDE_CONFIG_DIR=${shQuote(dir)}`);
-  if (bundled) vars.push(bundledPathAssignment(bundled));
-  return vars.length ? `env ${vars.join(' ')} claude` : 'claude';
+  const home = dir === undefined ? '-u CLAUDE_CONFIG_DIR' : `CLAUDE_CONFIG_DIR=${shQuote(dir)}`;
+  return `env ${home}${bundled ? ` ${bundledPathAssignment(bundled)}` : ''} claude`;
 }
 
 // Wrap in single quotes; inner ' becomes '\''

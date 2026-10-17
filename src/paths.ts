@@ -56,7 +56,7 @@ export function defaultDir(): string {
 
 // CLAUDE_CONFIG_DIR of the extension host, used as is like Claude Code does (surrounding spaces included; they are warned
 // about at activation); blank counts as unset (Claude Code would resolve it against its own working folder)
-function configDirFromEnv(): string | undefined {
+export function configDirFromEnv(): string | undefined {
   const v = process.env.CLAUDE_CONFIG_DIR;
   return v && v.trim() ? v : undefined;
 }

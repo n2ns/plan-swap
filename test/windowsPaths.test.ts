@@ -71,12 +71,12 @@ describe('windowsAccountEnv', () => {
 });
 
 describe('linuxClaudeCommand', () => {
-  test('sets the account folder and appends the bundled CLI folder through env; plain claude otherwise', () => {
+  test('sets the account folder, or unsets it without one, and appends the bundled CLI folder through env', () => {
     assert.equal(linuxClaudeCommand("/h/.claude-it's", '/x/native-binary/claude'),
       `env CLAUDE_CONFIG_DIR='/h/.claude-it'\\''s' PATH="$PATH":'/x/native-binary' claude`);
-    assert.equal(linuxClaudeCommand(undefined, '/x/native-binary/claude'), `env PATH="$PATH":'/x/native-binary' claude`);
+    assert.equal(linuxClaudeCommand(undefined, '/x/native-binary/claude'), `env -u CLAUDE_CONFIG_DIR PATH="$PATH":'/x/native-binary' claude`);
     assert.equal(linuxClaudeCommand('/h/.claude-a', undefined), `env CLAUDE_CONFIG_DIR='/h/.claude-a' claude`);
-    assert.equal(linuxClaudeCommand(undefined, undefined), 'claude');
+    assert.equal(linuxClaudeCommand(undefined, undefined), 'env -u CLAUDE_CONFIG_DIR claude');
   });
 });
 

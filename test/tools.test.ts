@@ -58,6 +58,23 @@ describe('Claude repair scope', LINUX_ONLY, () => {
     } finally { tmp.restore(); }
   });
 
+  test('a project trusted only by the default is listed by Re-link but not announced in the background', async (ctx) => {
+    const { tmp, source, dirs } = fixture();
+    try {
+      fs.writeFileSync(source, JSON.stringify({ projects: { '/p': { hasTrustDialogAccepted: true, hasClaudeMdExternalIncludesApproved: true } } }));
+      const warning = ctx.mock.method(window, 'showWarningMessage', async () => undefined);
+      await checkSharedInBackground('claude', { claudeDirs: () => dirs, linkNotices: new LinkCheckNotices(new MemoryMemento()) });
+      assert.equal(warning.mock.callCount(), 0);
+      await runTool('claude', 'sync', { claudeDirs: () => dirs });
+      assert.equal(warning.mock.callCount(), 1);
+      assert.match(String(warning.mock.calls[0].arguments[0]), /\.claude\.json \(projects:\/p\)/);
+      // An MCP difference in the same project is still announced
+      fs.writeFileSync(source, JSON.stringify({ projects: { '/p': { hasTrustDialogAccepted: true, enabledMcpjsonServers: ['s'] } } }));
+      await checkSharedInBackground('claude', { claudeDirs: () => dirs, linkNotices: new LinkCheckNotices(new MemoryMemento()) });
+      assert.equal(warning.mock.callCount(), 2);
+    } finally { tmp.restore(); }
+  });
+
   test('repairs only the listed account and entry, preserving optional absence and account-only MCP data', async (ctx) => {
     const { tmp, def, dirs } = fixture();
     try {

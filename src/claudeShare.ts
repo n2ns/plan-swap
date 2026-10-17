@@ -39,6 +39,8 @@ const PROJECT_KEYS = [
   'allowedTools', 'mcpServers', 'enabledMcpjsonServers', 'disabledMcpjsonServers', 'mcpContextUris',
   'hasTrustDialogAccepted', 'hasClaudeMdExternalIncludesApproved', 'hasClaudeMdExternalIncludesWarningShown',
 ];
+// Per-project keys whose lack only makes Claude Code ask once more (trust, external CLAUDE.md includes)
+const PROMPT_KEYS = ['hasTrustDialogAccepted', 'hasClaudeMdExternalIncludesApproved', 'hasClaudeMdExternalIncludesWarningShown'];
 // Read-only mirror check: whether the account value acc already holds everything of the default value src. true needs
 // true; false is held by anything; every array element and object key (deep) of src must be in acc. A missing account
 // value holds only empty / false values, which is what Claude Code reads for a missing project key (research fact 18).
@@ -521,12 +523,14 @@ function readSourceJson(file: string): Record<string, unknown> {
  *  check: read only, nothing is written (the same errors are thrown); changed lists only what the account lacks of the
  *  default (holds): a server or project setting the default adds or changes, a project it trusts. A key the account
  *  lacks counts as empty / false (research fact 18), and what the account has beyond the default (its own MCP server,
- *  a project only it trusts) is not listed, although a full mirror would replace or remove it.
+ *  a project only it trusts) is not listed, although a full mirror would replace or remove it. promptOnly (check only)
+ *  lists the changed project groups that differ in PROMPT_KEYS only.
  *  repairKeys limits repairs to the changed groups returned by a check; only missing/different default values are
  *  applied, preserving account-only servers, array values, trust and unrelated groups. Explicit default MCP enable /
  *  disable states replace opposing account states. [] does not read or write. */
-export function mirrorClaudeJson(fromJson: string, dir: string, beforeCommit?: () => void, check = false, repairKeys?: readonly string[]): { changed: string[] } {
+export function mirrorClaudeJson(fromJson: string, dir: string, beforeCommit?: () => void, check = false, repairKeys?: readonly string[]): { changed: string[]; promptOnly?: string[] } {
   const changed: string[] = [];
+  const promptOnly: string[] = [];
   if (repairKeys?.length === 0 || isDefault(dir)) return { changed };
   const repair = repairKeys !== undefined;
   const selected = (key: string): boolean => !repairKeys || repairKeys.includes(key);
@@ -574,6 +578,7 @@ export function mirrorClaudeJson(fromJson: string, dir: string, beforeCommit?: (
     const projects = data.projects as Record<string, unknown>;
     const proj = isPlainObject(projects[p]) ? (projects[p] as Record<string, unknown>) : {};
     let differs = !check && !repair && !isPlainObject(projects[p]);
+    let prompting = true;
     if (check || repair) {
       // The two lists express opposing states: merging each independently can keep a shared server disabled.
       for (const [key, opposite] of [
@@ -589,6 +594,7 @@ export function mirrorClaudeJson(fromJson: string, dir: string, beforeCommit?: (
         if (!isDeepStrictEqual(proj[key], kept)) {
           proj[key] = kept;
           differs = true;
+          prompting = false;
         }
       }
     }
@@ -597,13 +603,16 @@ export function mirrorClaudeJson(fromJson: string, dir: string, beforeCommit?: (
       if ((check || repair) && holds(proj[k], srcProj[k])) continue;
       proj[k] = repair ? repairValue(proj[k], srcProj[k]) : srcProj[k];
       differs = true;
+      if (!PROMPT_KEYS.includes(k)) prompting = false;
     }
     if (differs) {
       projects[p] = proj;
       changed.push(`projects:${p}`);
+      if (prompting) promptOnly.push(`projects:${p}`);
     }
   }
-  if (changed.length === 0 || check) return { changed };
+  if (check) return { changed, promptOnly };
+  if (changed.length === 0) return { changed };
 
   const tmp = `${real}.planswap-${process.pid}.tmp`;
   // A temporary file left by an interrupted run is replaced

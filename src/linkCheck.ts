@@ -19,6 +19,7 @@ export interface AccountCheck {
   def?: string;   // the vendor's default dir (the link targets), to tell plugin cache files and folders apart
   report?: ShareReport;
   mirror?: string[];
+  mirrorQuiet?: string[];  // mirror groups that differ in prompt keys only (trust); the background check leaves them out
   error?: string;
 }
 

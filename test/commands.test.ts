@@ -524,10 +524,27 @@ describe('panel message handlers (Claude)', () => {
       const folder = `'${path.dirname(bundled)}'`;
       assert.deepEqual(opened, [
         { env: { CLAUDE_CONFIG_DIR: dir }, sent: [`env CLAUDE_CONFIG_DIR='${dir}' PATH="$PATH":${folder} claude`] },
-        { env: undefined, sent: [`env PATH="$PATH":${folder} claude`] },
+        { env: undefined, sent: [`env -u CLAUDE_CONFIG_DIR PATH="$PATH":${folder} claude`] },
       ]);
     } finally {
       h.dispose();
+    }
+  });
+
+  test('terminal: on Linux the default account follows the host CLAUDE_CONFIG_DIR, not an rc export', { skip: process.platform === 'win32' }, async (ctx) => {
+    const saved = process.env.CLAUDE_CONFIG_DIR;
+    const hostDir = path.join(tmp.home, 'host-config');
+    process.env.CLAUDE_CONFIG_DIR = hostDir;
+    const h = harness();
+    ctx.mock.method(window, 'showInformationMessage', async () => undefined);
+    const created = ctx.mock.method(window, 'createTerminal');
+    try {
+      await h.handle({ type: 'terminal', mode: 'claude', dir: defaultDir() });
+      assert.deepEqual(created.mock.calls.map((c) => (c.result as StubTerminal).sent), [[`env CLAUDE_CONFIG_DIR='${hostDir}' claude`]]);
+    } finally {
+      h.dispose();
+      if (saved === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+      else process.env.CLAUDE_CONFIG_DIR = saved;
     }
   });
 

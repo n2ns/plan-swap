@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- On Linux and WSL, **Log in** and the terminal button of the Claude `default` account now always use the default folder shown in the sidebar, even when `~/.bashrc` exports a different `CLAUDE_CONFIG_DIR`, instead of silently signing in to that folder.
+- The background check of linked Claude accounts no longer asks to repair a project that is trusted only in the default account (for example after signing out there). Switching to the account copies the trust as before, and **Re-link** still lists it.
+
 ## [0.3.13] - 2026-10-17
 
 ### Fixed

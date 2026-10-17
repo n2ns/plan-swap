@@ -25,7 +25,7 @@ export interface ShareOps {
   refresh(dir: string, options?: LinkOptions): ShareReportLike;
   // Read-only actionable repairs (Claude skips absent optional targets) and what the account lacks of the default
   // .claude.json (Claude only); writes nothing
-  check(dir: string, options?: LinkOptions): { report: ShareReport; mirror?: string[] };
+  check(dir: string, options?: LinkOptions): { report: ShareReport; mirror?: string[]; mirrorQuiet?: string[] };
   // The vendor's default dir, where the links point
   defaultDir(): string;
 }
@@ -152,7 +152,8 @@ const claudeShareOps: ShareOps = {
     // Only shared accounts are checked, which mirrorClaudeJsonInto mirrors with mirrorClaudeJson. The current account
     // holds the latest configuration and writes it back on the next switch, so its difference is not a problem
     if (sameRealPath(dir, currentDir())) return { report, mirror: [] };
-    return { report, mirror: mirrorClaudeJson(claudeJsonPath(def, isExplicitConfigDir(def)), dir, undefined, true).changed };
+    const { changed, promptOnly } = mirrorClaudeJson(claudeJsonPath(def, isExplicitConfigDir(def)), dir, undefined, true);
+    return { report, mirror: changed, mirrorQuiet: promptOnly };
   },
   defaultDir,
 };
@@ -187,14 +188,17 @@ function sharedAccounts(mode: PanelMode, deps: ToolDeps): SharedAccounts | undef
 }
 
 // Read-only check of every shared account; a failing account becomes an error entry and the next one continues.
-// keys: what the background check announces (announcementKeys; Windows file links count as unknown before a probe)
-function checkShared(accounts: SharedAccounts, deps: ToolDeps): { checks: AccountCheck[]; keys: string[] } {
+// keys: what the background check announces (announcementKeys; Windows file links count as unknown before a probe).
+// background: mirror groups that differ in prompt keys only are left out; a switch mirrors them and their lack only
+// makes Claude Code ask once more
+function checkShared(accounts: SharedAccounts, deps: ToolDeps, background = false): { checks: AccountCheck[]; keys: string[] } {
   const fileLinks = deps.linkNotices?.fileLinks();
   const def = accounts.ops.defaultDir();
   const checks = accounts.dirs.map((dir): AccountCheck => {
     const label = accounts.nameOf(dir);
     try {
-      return { dir, label, def, vendor: accounts.vendor === 'Claude' ? 'claude' : 'codex', ...accounts.ops.check(dir, { busy: accounts.busyOf(dir), fileLinks }) };
+      const check: AccountCheck = { dir, label, def, vendor: accounts.vendor === 'Claude' ? 'claude' : 'codex', ...accounts.ops.check(dir, { busy: accounts.busyOf(dir), fileLinks }) };
+      return background ? { ...check, mirror: check.mirror?.filter((key) => !check.mirrorQuiet?.includes(key)) } : check;
     } catch (err) {
       return { dir, label, error: errText(err) };
     }
@@ -268,7 +272,7 @@ export async function checkSharedInBackground(mode: PanelMode, deps: ToolDeps): 
   const accounts = sharedAccounts(mode, deps);
   const notices = deps.linkNotices;
   if (!accounts || !notices) return;
-  const { checks, keys } = checkShared(accounts, deps);
+  const { checks, keys } = checkShared(accounts, deps, true);
   if (await notices.take(mode, keys)) await offerRepair(mode, deps, accounts, checks);
 }
 
