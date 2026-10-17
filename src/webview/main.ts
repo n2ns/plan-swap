@@ -135,14 +135,13 @@ function graphemes(text: string): string[] {
 }
 
 /**
- * The name text followed by its inline icons: the last character and the icons share a nowrap span, so the icons
- * never wrap onto a line of their own and always follow the last line of a wrapped name
+ * The name text followed by its inline icons in one nowrap span, with a line break opportunity between them: the
+ * icons follow the last line of the name when they fit and wrap together otherwise, so a name that fits its line is
+ * never split to keep them beside it (overflow-wrap breaks a name only when it does not fit on its own)
  */
 function nameWithTail(label: string, ...icons: Child[]): Child[] {
   if (!icons.some(Boolean)) return [label];
-  const chars = graphemes(label);
-  const last = chars.pop() ?? '';
-  return [chars.join(''), h('span', { class: 'name-tail' }, last, ...icons)];
+  return [label, h('wbr'), h('span', { class: 'name-tail' }, ...icons)];
 }
 
 // Avatar color: a theme chart color picked stably from the account name; the directory is the avatar's hover hint

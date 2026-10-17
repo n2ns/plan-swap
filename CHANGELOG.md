@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- A short account name in the sidebar is no longer split across two lines to keep its warning, link or rename icon beside it; the icons move to the next line together instead.
+
 ## [0.3.14] - 2026-10-18
 
 ### Fixed
