@@ -44,8 +44,8 @@ export function codexLoggedIn(dir: string): boolean {
   return fs.existsSync(path.join(dir, 'auth.json'));
 }
 
-// identity: opaque comparison key (user + workspace) for detecting duplicate sign-ins and attributing usage results;
-// never displayed, logged, persisted or sent to the Webview
+// identity: opaque comparison key (user + workspace) for detecting duplicate sign-ins (warning, recommendations) and
+// attributing usage results; never displayed, logged, persisted or sent to the Webview
 export interface CodexAccountInfo { email?: string; plan?: string; loggedIn: boolean; identity?: string }
 
 // Decodes the second JWT segment (base64url) without verifying the signature; any error returns undefined

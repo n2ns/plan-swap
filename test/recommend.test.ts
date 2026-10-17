@@ -29,6 +29,18 @@ describe('lowestRemaining', () => {
 });
 
 describe('recommend', () => {
+  test('never recommends a row signed in to the current row\'s identity', () => {
+    const current = row('default', [fiveHour(95)], { isCurrent: true });
+    const same = row('same', [fiveHour(10)]);
+    const other = row('other', [fiveHour(50)]);
+    const ids: Record<string, string | undefined> = { [current.dir]: 'id-a', [same.dir]: 'id-a', [other.dir]: 'id-b' };
+    const identityOf = (dir: string) => ids[dir];
+    assert.equal(recommend([current, same, other], 30, identityOf), other.dir);
+    assert.equal(recommend([current, same], 30, identityOf), undefined);
+    // Without an identity (signed out, API key) nothing matches
+    ids[current.dir] = undefined;
+    assert.equal(recommend([current, same, other], 30, identityOf), same.dir);
+  });
   test('warning comparisons and candidate ranking use unrounded observations', () => {
     const other = row('other', [fiveHour(10)]);
     for (const used of [69.6, 69.996]) {

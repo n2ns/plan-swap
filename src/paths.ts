@@ -14,7 +14,7 @@ export const DIR_BASENAME_RE = /^\.claude-[A-Za-z0-9_-]+$/;
 // dir is always absolute (path.resolve: no '~', no trailing separator)
 export interface Account { name: string; dir: string }
 // plan: formatted plan text (formatClaudePlan, e.g. "Max 20x"). identity: opaque comparison key (account + organization)
-// for detecting duplicate sign-ins; never displayed, logged, persisted or sent to the Webview (panel rows copy only
+// for detecting duplicate sign-ins (warning, recommendations); never displayed, logged, persisted or sent to the Webview (panel rows copy only
 // email, plan and sign-in state)
 export interface AccountInfo { email?: string; plan?: string; loggedIn: boolean; identity?: string }
 

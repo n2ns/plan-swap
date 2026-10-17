@@ -82,6 +82,9 @@ export interface PanelSource {
   restart?(): RestartInfo;
   // codex only; copied into TabState.runsInWsl on every push
   runsInWsl?(): boolean;
+  // In-memory identity comparison key of a dir (never sent to the Webview): rows signed in to the current row's identity
+  // are not recommended
+  identityOf?(dir: string): string | undefined;
 }
 
 /**
@@ -127,6 +130,7 @@ export function claudePanelSource(store: AccountStore, labels: LabelStore, exclu
     accounts,
     enabled: () => true,
     pendingDir: () => undefined,
+    identityOf: (dir) => readAccountInfo(dir, isExplicitConfigDir(dir)).identity,
     // Same directories as accounts() (registered ones plus the external current dir) without reading any .claude.json
     watchTargets: () => {
       const cur = currentDir();
@@ -297,7 +301,7 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
       enabled: source.enabled(),
       accounts: applySidebarDisplay(rows, display),
       hideEmail: display.email ? undefined : true,
-      recommended: showRecommendation && !pendingDir && !switchedTo ? recommend(rows, recommendationThreshold()) : undefined,
+      recommended: showRecommendation && !pendingDir && !switchedTo ? recommend(rows, recommendationThreshold(), source.identityOf) : undefined,
       hideRecommendation: showRecommendation ? undefined : true,
       switchedTo,
       pendingDir,

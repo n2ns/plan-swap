@@ -235,6 +235,7 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, h
   };
   return {
     accounts,
+    identityOf: (dir) => readCodexAccountInfo(dir).identity,
     runsInWsl: () => codexRunsInWsl(),
     // Treat errors such as unreadable rc files as not enabled so panel rendering is not interrupted; a broken block
     // (start marker without end marker) counts as not enabled so the Enable button leads to preCheck's repair guidance

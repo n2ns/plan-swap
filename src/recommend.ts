@@ -24,17 +24,23 @@ export function lowestRemaining(usage: AccountView['usage']): number | undefined
  * are not excluded, not already selected (Codex, pending restart) and have a general window observation with nothing
  * used up (lowest remaining > 0, no limitReached). The candidate with the highest lowest-remaining wins, a fresher
  * observation (checkedAt) breaking ties, and only when it is strictly better than the current account; so the current
- * account is never recommended.
+ * account is never recommended. identityOf (in-memory comparison key, as for the duplicate sign-in warning): a row signed
+ * in to the current row's identity is never recommended, since switching to it gives no separate limits.
  */
-export function recommend(rows: readonly AccountView[], recommendationThreshold: number): string | undefined {
+export function recommend(rows: readonly AccountView[], recommendationThreshold: number, identityOf?: (dir: string) => string | undefined): string | undefined {
   const current = rows.find((r) => r.isCurrent);
   const currentLowest = lowestRemaining(current?.usage);
   if (currentLowest === undefined || currentLowest > recommendationThreshold) return undefined;
   let best: { dir: string; lowest: number; checkedAt: number } | undefined;
+  let currentIdentity: string | undefined | null = null;
   for (const row of rows) {
     if (row.kind === 'external' || row.isCurrent || row.isSelected || row.recommendExcluded || row.subscriptionUnavailable || row.usage?.limitReached) continue;
     const lowest = lowestRemaining(row.usage);
     if (lowest === undefined || lowest <= 0 || lowest <= currentLowest) continue;
+    if (identityOf) {
+      if (currentIdentity === null) currentIdentity = identityOf(current!.dir);
+      if (currentIdentity !== undefined && identityOf(row.dir) === currentIdentity) continue;
+    }
     const checkedAt = row.usage!.checkedAt;
     if (!best || lowest > best.lowest || (lowest === best.lowest && checkedAt > best.checkedAt)) best = { dir: row.dir, lowest, checkedAt };
   }
