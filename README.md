@@ -110,7 +110,7 @@ You can change an account's mode later, and **Re-link** in Tools checks linked a
 - **Continuing another account's session can fail**, especially between Codex accounts in different ChatGPT organizations.
 - **Some sign-ins apply to every account**, such as an `ANTHROPIC_API_KEY` in the environment; PlanSwap warns you ([details](docs/user-guide.md#sign-ins-that-apply-to-every-account)).
 - **On Windows**, linking single files needs Developer Mode, and Codex thread databases stay per account ([details](docs/user-guide.md#linking-on-windows)). While the Codex extension runs Codex inside WSL (`chatgpt.runCodexInWindowsSubsystemForLinux`), manage Codex accounts from a WSL window ([details](docs/user-guide.md#enable-once)).
-- **Not yet verified everywhere**: switching and usage limits have been tested end to end with real accounts in Antigravity IDE, VS Code and VSCodium in WSL and on native Windows. Local Linux desktops and other remote windows have not been tested with real accounts.
+- **Not yet verified everywhere**: switching and usage limits have been tested end to end with real accounts in Antigravity IDE, VS Code and VSCodium in WSL, on native Windows and on a local Linux desktop. Other remote windows have not been tested with real accounts.
 
 ## Privacy
 
