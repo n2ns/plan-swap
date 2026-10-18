@@ -94,25 +94,25 @@ The `release` skill (`.agents/skills/release/`) walks through the steps below; t
 
 English is the source of every visible string; the translations live in `src/i18n.ts` (host messages), `src/webview/i18n.ts` (sidebar) and `package.nls.<locale>.json` (Command Palette titles and settings). Use the terms below whenever you add or change a string in any of them, and in the translated user guides (`docs/user-guide.<locale>.md`), which quote the UI labels exactly. If a term must change, change it everywhere in the same commit and update this table. The "Avoid" column lists variants that were used before.
 
-| Concept | English | 简体中文 | 繁體中文 | Español | 日本語 | Avoid |
-| --- | --- | --- | --- | --- | --- | --- |
-| The `default` account | default account | 默认账号 | 預設帳號 | cuenta predeterminada | 既定のアカウント | ja デフォルトアカウント |
-| The account in use (Claude) | current account | 当前账号 | 目前帳號 | cuenta actual | 現在のアカウント | |
-| Codex account in effect in this window | effective account | 当前生效账号 / 生效账号 | 目前生效帳號 / 生效帳號 | cuenta efectiva | 現在有効なアカウント / 有効なアカウント | |
-| Codex account applied after restart | selected account | 已选择账号 | 已選擇帳號 | cuenta seleccionada | 選択されたアカウント | |
-| Account list heading | All accounts | 全部账号 | 全部帳號 | Todas las cuentas | すべてのアカウント | |
-| Link (verb, mode) | link, linked account | 链接，已链接账号 | 連結，已連結帳號 | vincular, cuenta vinculada | リンク、リンク済みアカウント | es enlazar / enlazada |
-| Unlink | unlink | 拆分（与默认账号拆分） | 拆分（與預設帳號拆分） | desvincular | リンク解除 | |
-| Re-link tool | Re-link | 重新链接 | 重新連結 | Revincular | 再リンク | es Volver a enlazar |
-| Independent mode | independent | 独立 | 獨立 | independiente | 独立 | |
-| General limit (not model-specific) | general limit | 通用额度 | 一般額度 | límite general | 一般的な上限 | ja 共通の上限 |
-| Usage limits | usage limits | 用量额度 | 用量額度 | límites de uso | 使用量の上限 | zh 用量限额; ja 使用上限, 使用量上限 |
-| One limit window label | 5-hour limit, 7-day limit | 5 小时额度，7 天额度 | 5 小時額度，7 天額度 | Límite de 5 h, Límite de 7 días | 5 時間の上限、7 日間の上限 | zh 小时限额 / 天限额 |
-| Sign-in action | sign in (button: Log in) | 登录 | 登入 | iniciar sesión (button: Acceder) | サインイン (button: ログイン) | |
-| Signed-out state | Not logged in | 未登录 | 未登入 | Sin sesión | 未ログイン | |
-| Switch accounts | Switch | 切换 | 切換 | Cambiar | 切り替え | |
+| Concept | English | 简体中文 | 繁體中文 | Español | 日本語 | 한국어 | Avoid |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| The `default` account | default account | 默认账号 | 預設帳號 | cuenta predeterminada | 既定のアカウント | 기본 계정 | ja デフォルトアカウント |
+| The account in use (Claude) | current account | 当前账号 | 目前帳號 | cuenta actual | 現在のアカウント | 현재 계정 | |
+| Codex account in effect in this window | effective account | 当前生效账号 / 生效账号 | 目前生效帳號 / 生效帳號 | cuenta efectiva | 現在有効なアカウント / 有効なアカウント | 현재 적용된 계정 / 적용된 계정 | |
+| Codex account applied after restart | selected account | 已选择账号 | 已選擇帳號 | cuenta seleccionada | 選択されたアカウント | 선택된 계정 | |
+| Account list heading | All accounts | 全部账号 | 全部帳號 | Todas las cuentas | すべてのアカウント | 모든 계정 | |
+| Link (verb, mode) | link, linked account | 链接，已链接账号 | 連結，已連結帳號 | vincular, cuenta vinculada | リンク、リンク済みアカウント | 연결, 연결된 계정 | es enlazar / enlazada |
+| Unlink | unlink | 拆分（与默认账号拆分） | 拆分（與預設帳號拆分） | desvincular | リンク解除 | 연결 해제 | |
+| Re-link tool | Re-link | 重新链接 | 重新連結 | Revincular | 再リンク | 다시 연결 | es Volver a enlazar |
+| Independent mode | independent | 独立 | 獨立 | independiente | 独立 | 독립 | |
+| General limit (not model-specific) | general limit | 通用额度 | 一般額度 | límite general | 一般的な上限 | 일반 한도 | ja 共通の上限 |
+| Usage limits | usage limits | 用量额度 | 用量額度 | límites de uso | 使用量の上限 | 사용량 한도 | zh 用量限额; ja 使用上限, 使用量上限 |
+| One limit window label | 5-hour limit, 7-day limit | 5 小时额度，7 天额度 | 5 小時額度，7 天額度 | Límite de 5 h, Límite de 7 días | 5 時間の上限、7 日間の上限 | 5시간 한도, 7일 한도 | zh 小时限额 / 天限额 |
+| Sign-in action | sign in (button: Log in) | 登录 | 登入 | iniciar sesión (button: Acceder) | サインイン (button: ログイン) | 로그인 (button: 로그인) | |
+| Signed-out state | Not logged in | 未登录 | 未登入 | Sin sesión | 未ログイン | 로그인 안 됨 | |
+| Switch accounts | Switch | 切换 | 切換 | Cambiar | 切り替え | 전환 | |
 
-Counts use ICU plural blocks in `src/i18n.ts` and `src/webview/i18n.ts` (not in `package.nls*.json`), e.g. `{n, plural, one {# account} other {# accounts}}`; the supported syntax is documented on `formatMessage`. Use only the CLDR categories of the locale: English and Spanish `one` / `other` (Spanish `many`, for millions, falls back to `other` and may be left out). Chinese (Simplified and Traditional) and Japanese have only `other` for whole numbers, so they write plain text with `{n}` instead of a block. Do not write `account(s)` / `cuenta(s)`. `test/i18n.test.ts` checks every block.
+Counts use ICU plural blocks in `src/i18n.ts` and `src/webview/i18n.ts` (not in `package.nls*.json`), e.g. `{n, plural, one {# account} other {# accounts}}`; the supported syntax is documented on `formatMessage`. Use only the CLDR categories of the locale: English and Spanish `one` / `other` (Spanish `many`, for millions, falls back to `other` and may be left out). Chinese (Simplified and Traditional), Japanese and Korean have only `other` for whole numbers, so they write plain text with `{n}` instead of a block. Do not write `account(s)` / `cuenta(s)`. `test/i18n.test.ts` checks every block.
 
 A file or folder link as an object (a symbolic link or junction) is not the account mode: Spanish keeps `enlace` there ("enlaces de archivo"). Product names, rc marker text, shell commands, file names, setting ids, command ids and account terminal names are never translated (see [AGENTS.md](../AGENTS.md#implementation-boundaries)).
 
