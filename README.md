@@ -36,6 +36,7 @@ See how much is left on each Claude Code and Codex subscription account you own 
 ### Manage your accounts
 
 - **One sidebar, two tabs**: Claude and Codex accounts side by side, each with its email and plan.
+- **Your own order**: drag the cards into the order you want (the current account stays first); it is kept for every editor on the machine.
 - **Stay signed in everywhere**: sign in once per account, then switch with one click.
 - **Linked or independent accounts**: share the default account's setup and history, or keep them separate.
 - **Tools**: open your rules file and the official extension's settings, update the CLI, check linked accounts and repair their links.
