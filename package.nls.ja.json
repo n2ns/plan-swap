@@ -42,6 +42,7 @@
   "config.language.zhTw": "繁體中文",
   "config.language.es": "Español",
   "config.language.ja": "日本語",
+  "config.language.ko": "한국어",
   "config.language.description": "サイドバー、ステータスバー、メッセージの言語。コマンド名はエディターの言語に従います。",
   "config.usageDisplay.description": "サイドバーとステータスバーに残りか使用済みの割合を表示します。色は常に残りの量で判断します。",
   "config.usageDisplay.remaining": "残りの量",

@@ -208,7 +208,8 @@
               "zh-cn",
               "zh-tw",
               "es",
-              "ja"
+              "ja",
+              "ko"
             ],
             "default": "auto",
             "scope": "application",
@@ -218,7 +219,8 @@
               "%config.language.zhCn%",
               "%config.language.zhTw%",
               "%config.language.es%",
-              "%config.language.ja%"
+              "%config.language.ja%",
+              "%config.language.ko%"
             ],
             "description": "%config.language.description%",
             "order": 0

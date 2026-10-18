@@ -42,6 +42,7 @@
   "config.language.zhTw": "繁體中文",
   "config.language.es": "Español",
   "config.language.ja": "日本語",
+  "config.language.ko": "한국어",
   "config.language.description": "Language for the sidebar, status bar and messages. Command titles follow the editor language.",
   "config.usageDisplay.description": "Show remaining or used percentages in the sidebar and status bar. Colors always follow what is left.",
   "config.usageDisplay.remaining": "What is left",
