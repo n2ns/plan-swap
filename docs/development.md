@@ -14,7 +14,7 @@ Purpose: repository layout, build, test and release mechanics, localization term
 | `resources/` | Marketplace, activity-bar and README artwork. |
 | `docs/` | Claude/Codex design (rationale, verified external facts), `features.md` (user-visible behavior), `manual-verification.md`, this file, and the user guides (`user-guide*.md`). Agent rules and the document routing table are in [AGENTS.md](../AGENTS.md#read-the-documents-relevant-to-the-task). |
 | `docs/research/` | Dated upstream evidence and reproducible measurements. |
-| `docs/branding/candidates/` | Image-generation prompts and candidate designs; not runtime behavior or coding rules. |
+| `docs/plans/` | Proposals not yet implemented; removed once implemented or abandoned ([document map](doc-map.md#rules)). |
 | `.vscode/` | F5 launch configuration and its pre-launch build task. |
 | `.github/workflows/` | `test.yml` (every push and pull request) and `publish.yml` (`v*` tags); see [CI](#ci). |
 | `package.json`, `package.nls*.json` | Extension manifest and localized static strings. |

@@ -245,7 +245,7 @@ Listed in [Features §8](features.md#8-refresh-triggers). Each shown account dir
 
 ## 8. Platform guard
 
-Only `linux` and `win32` are supported (`isSupportedPlatform()`); elsewhere activation warns once and registers nothing ([Features §11](features.md#11-platform-guard)). `package.json` declares `extensionKind: ["workspace"]`, so in a WSL window the extension is installed and runs on the WSL side.
+`activate` resolves the display language first, so the `ext.linuxOnly` warning is localized, then returns before registering anything unless `isSupportedPlatform()` (`linux` or `win32`) holds; observable behavior: [Features §11](features.md#11-platform-guard). `package.json` declares `extensionKind: ["workspace"]`, so in a WSL window the extension is installed and runs on the WSL side.
 
 ### Windows support
 
