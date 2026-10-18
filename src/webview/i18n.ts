@@ -1,4 +1,4 @@
-// Webview string tables (English, Simplified Chinese, Traditional Chinese, Spanish and Japanese). The host picks the locale and sends it in PanelState.locale.
+// Webview string tables (English, Simplified Chinese, Traditional Chinese, Spanish, Japanese and Korean). The host picks the locale and sends it in PanelState.locale.
 // Every Webview string goes through t(). The Webview cannot import host code, so WEB_LOCALE_INFO, matchLocale and
 // formatMessage duplicate src/i18n.ts (do not merge them); test/i18n.test.ts asserts the shared LOCALE_INFO fields match, the table set
 // equals LOCALES and both formatMessage copies behave the same.
@@ -665,7 +665,138 @@ export const ja: Record<MessageKey, string> = {
   'versions.close': '閉じる',
 };
 
-const TABLES: Record<Locale, Record<MessageKey, string>> = { en, 'zh-cn': zhCn, 'zh-tw': zhTw, es, ja };
+export const ko: Record<MessageKey, string> = {
+  'usage.barTitle': '{remaining}% 남음 ({used}% 사용)',
+  'usage.remaining': '{percent}% 남음',
+  'usage.barTitleUsed': '{used}% 사용 ({remaining}% 남음)',
+  'usage.used': '{percent}% 사용',
+  'usage.window': '한도',
+  'usage.days': '{n}일 한도',
+  'usage.hours': '{n}시간 한도',
+  'usage.minutes': '{n}분 한도',
+  'usage.shortDays': '{n}일',
+  'usage.shortHours': '{n}시간',
+  'usage.shortMinutes': '{n}분',
+  'usage.scoped': '{limit} · {scope}',
+  'usage.resetsIn': '{time} 후 초기화 ({date})',
+  'usage.exhausted': '모두 사용함',
+  'usage.refreshTitle': '현재 계정의 사용량 한도 새로 고침',
+  'usage.refreshAllTitle': '모든 계정의 사용량 한도 새로 고침',
+  'recommend.title': '추천: {name}',
+  'recommend.updated': '{time} 업데이트됨',
+  'recommend.updatedNow': '방금 업데이트됨',
+  'recommend.switch': '전환',
+  'recommend.terminal': '터미널',
+  'panel.loading': '계정을 불러오는 중…',
+  'tab.claude': 'Claude',
+  'tab.codex': 'Codex',
+  'tabs.ariaLabel': '계정 유형',
+
+  'claude.loginTitle': '터미널에서 claude를 실행하여 로그인',
+  'codex.loginTitle': '터미널에서 codex login 실행',
+  'claude.terminalTitle': '이 계정으로 터미널에서 claude 실행',
+  'codex.terminalTitle': '이 계정으로 터미널에서 codex 실행',
+  'claude.recommendSwitchTitle': 'Claude Code를 {name}(으)로 전환합니다. 이어서 평소와 같은 확인 절차가 진행됩니다',
+  'codex.recommendSwitchTitle': 'Codex용으로 {name}을(를) 선택합니다. 다시 시작한 후 적용됩니다',
+  'claude.recommendTerminalTitle': '{name}(으)로 claude를 실행하는 터미널 열기 (계정은 전환하지 않음)',
+  'codex.recommendTerminalTitle': '{name}(으)로 codex를 실행하는 터미널 열기 (계정은 전환하지 않음)',
+  'claude.loginHint': '"로그인"을 클릭해 터미널에서 로그인하거나, 계정을 전환한 후 Claude 패널에서 로그인하세요',
+  'codex.loginHint': '"로그인"을 클릭해 터미널에서 로그인하거나, 계정을 전환한 후 Codex 패널에서 로그인하세요',
+  'wsl.title': '여기서는 Codex가 WSL 내부에서 실행됩니다',
+  'wsl.text': 'WSL 창에서 Codex 계정을 관리하고 로그인하거나, chatgpt.runCodexInWindowsSubsystemForLinux 설정을 끄세요.',
+  'wsl.openSetting': '설정 열기',
+  'claude.mdTitle': '전역 CLAUDE.md 열기',
+  'codex.mdTitle': '전역 AGENTS.md 열기',
+  'claude.settingsTitle': 'Claude Code 확장 설정 열기',
+  'codex.settingsTitle': 'Codex 확장 설정 열기',
+  'claude.settingsLabel': 'Claude 설정',
+  'codex.settingsLabel': 'Codex 설정',
+  'claude.syncTitle': '연결된 계정을 기본 계정에 다시 연결하고 MCP 서버를 동기화합니다',
+  'codex.syncTitle': '연결된 계정을 기본 계정에 다시 연결합니다',
+
+  'subscription.unavailable': '구독을 사용할 수 없습니다. 클릭하여 다시 확인',
+  'subscription.checking': '구독 확인 중…',
+  'subscription.lastPlan': '마지막으로 확인된 플랜',
+  'account.default': '기본 계정',
+  'account.loggedIn': '로그인됨',
+  'account.notLoggedIn': '로그인 안 됨',
+  'account.sharedBadge': '연결된 콘텐츠를 기본 계정과 공유합니다. 일부 파일은 독립적으로 유지될 수 있습니다',
+
+  'list.title': '모든 계정',
+  'row.rename': '이름 바꾸기',
+  'row.renameAria': '{name} 이름 바꾸기',
+  'row.switch': '이 계정으로 전환',
+  'row.login': '로그인',
+  'row.share': '기본 계정에 연결: 설정, 규칙, Skills, 기록, 세션이 기본 계정으로 옮겨지고 이후에는 연결되어 함께 사용됩니다. 로그인은 별도로 유지됩니다',
+  'row.unshare': '기본 계정과 연결 해제: 링크가 제거되고 계정이 기본 구성의 자체 복사본을 갖게 됩니다. 기록과 세션은 기본 계정에 남습니다',
+  'row.remove': '계정 제거',
+  'row.recommendExclude': '추천에서 제외',
+  'row.recommendInclude': '추천에 포함',
+  'row.dragHint': '드래그하여 순서 변경 (키보드: Alt+↑ / Alt+↓)',
+  'rename.ariaLabel': '표시 이름',
+  'rename.save': '저장 (Enter)',
+  'confirm.text': '목록에서 {name}을(를) 제거하시겠습니까?',
+  'confirm.hint': '계정 디렉터리를 삭제할지는 별도로 확인합니다.',
+  'confirm.remove': '제거',
+  'confirm.cancel': '취소',
+
+  'validate.labelEmpty': '표시 이름을 입력하세요',
+  'validate.labelTooLong': '표시 이름은 최대 {max}자까지 입력할 수 있습니다',
+  'validate.labelNewline': '표시 이름에는 줄 바꿈을 사용할 수 없습니다',
+  'validate.labelDuplicate': '다른 계정의 이름과 같습니다',
+  'validate.nameChars': 'A-Z, a-z, 0-9, 밑줄(_), 하이픈(-)만 사용할 수 있습니다',
+  'validate.nameReserved': '예약된 이름 default는 사용할 수 없습니다',
+  'validate.nameExists': '같은 이름의 계정이 이미 있습니다',
+
+  'add.title': '계정 추가',
+  'add.placeholder': '계정 이름 (예: work)',
+  'add.ariaLabel': '새 계정 이름',
+  'add.button': '추가',
+  'add.mode.linked': '기본 계정에 연결 (추천): 같은 작업을 이어서 하며 로그인만 분리됩니다',
+  'add.mode.independent': '독립: 업무와 개인 작업을 분리하며 현재 설정의 복사본으로 시작합니다',
+  'add.mode.ariaLabel': '계정 모드',
+  'claude.addHelpShared': '{dir}을(를) 만들고 기본 계정의 설정, 규칙, Skills, 기록, 세션에 연결합니다',
+  'codex.addHelpShared': '{dir}을(를) 만들고 기본 계정의 설정, 규칙, Skills, 기록, 세션, 스레드 데이터베이스에 연결합니다 (Memories는 계정별로 독립)',
+  'codex.addHelpSharedWin': '{dir}을(를) 만들고 기본 계정의 설정, 규칙, Skills, 기록, 세션에 연결합니다 (Memories와 스레드 데이터베이스는 계정별로 독립)',
+  'add.help.independent': '{dir}을(를) 만들고 기본 구성을 복사합니다. 이후에는 독립적으로 사용됩니다',
+  'add.helpIdle': '각 계정은 자체 구성 디렉터리 {prefix}<name>을(를) 사용합니다',
+
+  'disabled.title': 'Codex 계정 전환이 활성화되지 않음',
+  'disabled.text':
+    '활성화하면 각 계정이 자체 CODEX_HOME 디렉터리를 사용합니다(기본값 ~/.codex, 그 외 ~/.codex-<name>). 확장이 ~/.profile과 ~/.bashrc에 상태 파일에서 선택된 디렉터리를 읽는 마커 블록을 기록합니다.',
+  'disabled.textWin': '활성화하면 각 계정이 자체 CODEX_HOME 디렉터리를 사용합니다(기본값 ~/.codex, 그 외 ~/.codex-<name>). 확장이 사용자 환경 변수 CODEX_HOME을 선택된 디렉터리로 설정합니다(기본 계정에서는 제거).',
+  'disabled.restartWsl': '계정을 전환하려면 편집기의 WSL 서버를 다시 시작해야 하며, 모든 WSL 창의 연결이 끊어집니다.',
+  'disabled.restartLocal': '계정을 전환하려면 이 편집기를 다시 시작해야 하며, 모든 창이 닫히고 통합 터미널이 종료됩니다.',
+  'disabled.restartRemote': '계정을 전환하려면 원격 환경에서 편집기 서버를 다시 시작해야 합니다.',
+  'disabled.enable': 'Codex 전환 활성화',
+
+  'pending.title': '{name} 선택됨. 서버를 다시 시작하면 적용됩니다',
+  'pending.titleLocal': '{name} 선택됨. 편집기를 다시 시작하면 적용됩니다',
+  'pending.text': '서버를 다시 시작하면 모든 WSL 창의 연결이 끊어지고(창을 다시 로드하거나 다시 여세요) 통합 터미널이 닫힙니다.',
+  'pending.textLocalManual': '이 편집기를 완전히 종료한 후 다시 시작하세요. 창을 다시 로드하는 것만으로는 충분하지 않습니다.',
+  'pending.textRemote': '원격 환경에서 편집기 서버를 다시 시작한 후 재연결하세요.',
+
+  'banner.title': '{name}(으)로 전환됨',
+  'banner.text': '새 세션은 새 계정을 사용하고, 열려 있는 세션은 계속 이전 계정을 사용합니다. 다시 로드하면 모든 패널이 새 계정으로 새로 시작됩니다.',
+  'banner.dismiss': '알림 닫기',
+
+  'tools.title': '도구',
+  'tools.sync': '다시 연결',
+  'tools.updateCli': 'CLI 업데이트',
+  'tools.updateCliTitle': '터미널에서 CLI 업데이트',
+
+  'footer.versions': 'CLI 및 확장 버전 표시',
+  'common.reloadWindow': '창 다시 로드',
+  'footer.restartExtHost': '확장 호스트 다시 시작',
+  'footer.help': '사용 설명서',
+  'footer.star': 'Star',
+  'footer.version': 'v{version}',
+
+  'versions.title': 'CLI 및 확장 버전',
+  'versions.close': '닫기',
+};
+
+const TABLES: Record<Locale, Record<MessageKey, string>> = { en, 'zh-cn': zhCn, 'zh-tw': zhTw, es, ja, ko };
 
 // Per-locale metadata the Webview needs; the LOCALE_INFO rows of src/i18n.ts without userGuide (keep both in step)
 export const WEB_LOCALE_INFO: Record<Locale, {
@@ -680,6 +811,7 @@ export const WEB_LOCALE_INFO: Record<Locale, {
   'zh-tw': { intl: 'zh-TW', match: ['zh-tw', 'zh-hk', 'zh-mo'], sentenceSeparator: '', durationStyle: 'short', durationUnitSeparator: ' ' },
   es: { intl: 'es', match: ['es'], sentenceSeparator: ' ', durationStyle: 'narrow', durationUnitSeparator: ' ' },
   ja: { intl: 'ja', match: ['ja'], sentenceSeparator: '', durationStyle: 'short', durationUnitSeparator: ' ' },
+  ko: { intl: 'ko', match: ['ko'], sentenceSeparator: ' ', durationStyle: 'narrow', durationUnitSeparator: ' ' },
 };
 
 const LOCALE_IDS = Object.keys(WEB_LOCALE_INFO) as Locale[];
