@@ -94,7 +94,10 @@ function windowsOf(u: Record<string, unknown>): ClaudeUsageWindow[] {
       if (!isPlainObject(l)) continue;
       const kind = typeof l.kind === 'string' ? l.kind : '';
       const minutes = kind === 'session' ? SESSION_MINUTES : kind.startsWith('weekly') ? WEEK_MINUTES : undefined;
-      const model = isPlainObject(l.scope) && isPlainObject(l.scope.model) ? l.scope.model.display_name : undefined;
+      const scope = isPlainObject(l.scope) ? l.scope : undefined;
+      const model = scope && isPlainObject(scope.model) ? scope.model.display_name : undefined;
+      // A limit scoped to something other than a named model (a surface, say) is never a general window: skip it
+      if (typeof model !== 'string' && scope && Object.values(scope).some((v) => v !== null && v !== undefined)) continue;
       const w = window(l.percent, minutes, l.resets_at, typeof model === 'string' ? model : undefined);
       if (w) out.push(w);
     }
@@ -125,7 +128,8 @@ function ownCache(data: unknown): { cache: Record<string, unknown>; checkedAt: n
  * Pure: the usage cache of a parsed account info file, or undefined when there is none worth showing. The cache must
  * belong to the signed-in account (cachedUsageUtilization.accountUuid equals a non-empty oauthAccount.accountUuid),
  * be younger than CLAUDE_USAGE_MAX_AGE_MS and not more than 2 minutes in the future. Windows come from
- * utilization.limits[] (kind session → 300 min, weekly* → 10080, otherwise none; scope.model.display_name → scope) or,
+ * utilization.limits[] (kind session → 300 min, weekly* → 10080, otherwise none; scope.model.display_name → scope; an
+ * entry with any other non-null scope is skipped, never shown as a general window) or,
  * when limits is absent, five_hour / seven_day; an entry without a finite percentage is skipped and windows
  * past their reset time are dropped. No window left → undefined, never a 0% window.
  */

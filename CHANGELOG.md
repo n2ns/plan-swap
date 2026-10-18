@@ -10,6 +10,10 @@
 
 - The confirmation of **Disable Codex Account Switching** now also names the blocks in each editor's `server-env-setup`, which it has removed since 0.4.0.
 
+### Fixed
+
+- A Claude usage limit scoped to something other than a model (for example a single surface) is no longer shown, counted in the status bar or used for recommendations and notices as if it were the general 5-hour or 7-day limit.
+
 ## [0.4.1] - 2026-10-18
 
 ### Added

@@ -56,6 +56,15 @@ test('parseUsageCache reads the limits list with model scopes, clamps percentage
   assert.ok(!JSON.stringify(u).includes('acct-1'), 'the account UUID is never returned');
 });
 
+test('parseUsageCache never turns a limit scoped to something other than a model into a general window', () => {
+  const limits = [
+    { kind: 'session', percent: 42, resets_at: iso(NOW + 2 * HOUR), scope: { model: null, surface: null } },
+    { kind: 'weekly_scoped', percent: 95, resets_at: iso(NOW + 49 * HOUR), scope: { surface: { display_name: 'Desktop' } } },
+  ];
+  const u = parseUsageCache(cache({ utilization: { limits } }), NOW);
+  assert.deepEqual(u?.windows, [{ usedPercent: 42, windowMinutes: 300, resetsAt: (NOW + 2 * HOUR) / 1000 }]);
+});
+
 test('parseUsageCache falls back to five_hour / seven_day without a limits list', () => {
   const data = cache();
   const util = (data.cachedUsageUtilization as { utilization: Record<string, unknown> }).utilization;
