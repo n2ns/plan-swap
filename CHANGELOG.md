@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Changed
+
+- In a VS Code or VSCodium WSL window the Codex account selection is now per editor: it is kept in `~/.config/planswap/codex-home.vscode` / `codex-home.vscodium` and applied by a PlanSwap block in that editor's `server-env-setup`, which its WSL server reads before it starts (Microsoft's Remote - WSL for VS Code, wsl-remote for VSCodium). Switching in one editor no longer changes the account of the other in the same distribution; each editor's integrated terminals follow their editor. Antigravity, unrecognized editors and terminals outside an editor keep using the shared `codex-home`.
+- The rc marker block no longer unsets or overrides a `CODEX_HOME` the shell inherited (from the editor's server hook, a Windows user variable through WSLENV or your own profile); it only fills in the shared selection when the variable is unset. Existing blocks are updated in place on activation. **Disable Codex Account Switching** also removes the `server-env-setup` blocks and the per-editor files.
+
 ### Fixed
 
 - A short account name in the sidebar is no longer split across two lines to keep its warning, link or rename icon beside it; the icons move to the next line together instead.

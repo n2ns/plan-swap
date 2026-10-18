@@ -93,7 +93,7 @@ Cambiar de cuenta modifica un ajuste del editor compartido por las demás ventan
 
 Abre la pestaña **Codex** y haz clic en **Activar cambio de cuenta de Codex**. Revisa y confirma los cambios que propone:
 
-- **WSL, Linux local y otras ventanas remotas:** PlanSwap añade bloques delimitados a `~/.profile` y `~/.bashrc` y comprueba que un shell de inicio de sesión de Bash recoge la cuenta seleccionada. Si informa de una asignación de `CODEX_HOME` o una configuración de shell en conflicto, corrige lo que indica y vuelve a intentarlo.
+- **WSL, Linux local y otras ventanas remotas:** PlanSwap añade bloques delimitados a `~/.profile` y `~/.bashrc` y comprueba que un shell de inicio de sesión de Bash recoge la cuenta seleccionada. Si informa de una asignación de `CODEX_HOME` o una configuración de shell en conflicto, corrige lo que indica y vuelve a intentarlo. En una ventana WSL de VS Code o VSCodium, el primer cambio de cuenta añade además un bloque delimitado al `~/.vscode-server/server-env-setup` o `~/.vscodium-server/server-env-setup` de ese editor, que su servidor WSL lee antes de iniciarse.
 - **Windows nativo:** PlanSwap gestiona tu variable de entorno de usuario `CODEX_HOME`. Si tú mismo definiste `CODEX_HOME` con otro valor, se rechaza la activación. Si ya apunta a un directorio de cuenta de PlanSwap (`~/.codex-<name>`), PlanSwap pasa a gestionarla.
 
 Si la extensión de Codex de Windows está configurada para ejecutarse dentro de WSL, gestiona sus cuentas desde una ventana de WSL, o desactiva `chatgpt.runCodexInWindowsSubsystemForLinux` antes de gestionar cuentas de Windows.
@@ -111,6 +111,8 @@ Si la extensión de Codex de Windows está configurada para ejecutarse dentro de
 | Otros editores en WSL | Confirma con **Guardar selección** y sigue las instrucciones de reinicio manual del diálogo. |
 | Windows nativo | Confirma con **Guardar selección**, cierra por completo el editor y vuelve a abrirlo desde el menú Inicio o la barra de tareas. Un terminal abierto antes del cambio sigue teniendo la cuenta anterior. |
 | Linux local u otra ventana remota | Confirma con **Guardar selección**. Después sigue el diálogo: reinicia el editor, o el servidor remoto, para que arranque con el `CODEX_HOME` seleccionado. |
+
+En WSL, VS Code y VSCodium guardan cada uno su propia selección para la misma distribución: cambiar de cuenta en un editor no cambia la cuenta del otro, y sus terminales integrados siguen a su editor. Antigravity y los terminales abiertos fuera de un editor usan la selección compartida, que solo cambia al cambiar de cuenta en Antigravity o en un editor no reconocido.
 
 Reiniciar un servidor WSL desconecta sus ventanas del editor y cierra sus terminales integrados y sesiones de CLI. **Recargar ventana** o **Reiniciar Extension Host** por sí solos no aplican una selección de cuenta de Codex.
 

@@ -7,29 +7,71 @@ import { samePath } from '../paths';
 import { t } from '../i18n';
 import { fsyncDir, isWindows, renameReplacing } from '../platform';
 import { SELF_CHECK_NAME, type Runner, getUserCodexHome, getUserEnv, setUserCodexHome, setUserEnv } from './codexWindows';
-// Codex selection state: the state file ~/.config/planswap/codex-home (the selected dir), the rc marker blocks in
-// ~/.profile and ~/.bashrc that export it, the native Windows user variable branch, enable pre-/self-checks and the
-// ai-switcher migration. Design: codex-design.md sections 4 and 9a. No vscode import.
+import { type ServerKind, detectServerKind } from './codexServer';
+// Codex selection state: the shared state file ~/.config/planswap/codex-home and the per-editor files
+// codex-home.<kind> (the selected dir), the rc marker blocks in ~/.profile and ~/.bashrc that export the shared
+// selection, the hook block in an editor's server-env-setup that exports its own selection before its WSL server
+// starts, the native Windows user variable branch, enable pre-/self-checks and the ai-switcher migration. Design:
+// codex-design.md sections 4, 4a and 9a. No vscode import.
 
-/** The selected-directory state file; the only place the selection is stored (empty or missing = default). */
+/** The shared state file: the selection of terminals outside an editor and of editors without a server-env-setup
+ *  hook, and the fallback of a hook editor that has not switched yet (empty or missing = default). */
 export const STATE_FILE = () => path.join(os.homedir(), '.config', 'planswap', 'codex-home');
 
-/** Trimmed state-file content, path.resolve'd; missing, unreadable or empty → undefined (the default account). */
-export function readSelectedDir(): string | undefined {
-  let raw: string;
+/** Editor kinds whose WSL server sources `~/<data dir>/server-env-setup` before it starts (VS Code: Microsoft's
+ *  Remote - WSL; VSCodium: wsl-remote) and therefore keep their own selection in `codex-home.<kind>`
+ *  (codex-design.md section 4a). Antigravity's hook support is not verified, so it stays on the shared file. */
+export const HOOK_KINDS = ['vscodium', 'vscode'] as const;
+export type HookKind = (typeof HOOK_KINDS)[number];
+const HOOK_DATA_DIRS: Record<HookKind, string> = { vscodium: '.vscodium-server', vscode: '.vscode-server' };
+
+export function isHookKind(kind: ServerKind): kind is HookKind {
+  return (HOOK_KINDS as readonly string[]).includes(kind);
+}
+
+/** The state file of an editor kind: `codex-home.<kind>` for HOOK_KINDS, STATE_FILE() otherwise. */
+export function stateFileFor(kind: ServerKind): string {
+  return isHookKind(kind) ? `${STATE_FILE()}.${kind}` : STATE_FILE();
+}
+
+/** `~/<data dir>/server-env-setup` of a hook kind, sourced by that editor's WSL server before it starts. */
+export function hookFileFor(kind: HookKind): string {
+  return path.join(os.homedir(), HOOK_DATA_DIRS[kind], 'server-env-setup');
+}
+
+let cachedKind: ServerKind | undefined;
+/** The kind of the WSL server hosting this extension host, detected once (detectServerKind; a process cannot change
+ *  its parent): 'unknown' on Windows, outside a WSL server and in tests. */
+export function currentServerKind(): ServerKind {
+  cachedKind ??= isWindows() ? 'unknown' : detectServerKind();
+  return cachedKind;
+}
+
+/** The state files whose change means a new selection for an editor kind: its own file and the shared one. */
+export function watchedStateFiles(kind: ServerKind = currentServerKind()): string[] {
+  return isHookKind(kind) ? [stateFileFor(kind), STATE_FILE()] : [STATE_FILE()];
+}
+
+function readStateText(file: string): string | undefined {
   try {
-    raw = fs.readFileSync(STATE_FILE(), 'utf8');
+    return fs.readFileSync(file, 'utf8');
   } catch {
     return undefined;
   }
-  const s = raw.trim();
+}
+
+/** The selection of an editor kind: the content of its own state file when that can be read (empty = default), else
+ *  of the shared one. Trimmed and path.resolve'd; missing, unreadable or empty → undefined (the default account). */
+export function readSelectedDir(kind: ServerKind = currentServerKind()): string | undefined {
+  const raw = readStateText(stateFileFor(kind)) ?? (isHookKind(kind) ? readStateText(STATE_FILE()) : undefined);
+  const s = raw?.trim();
   return s ? path.resolve(s) : undefined;
 }
 
-/** Atomic write of the state file: folder 0700, exclusive temp file 0600 + fsync + rename + folder fsync.
- *  undefined writes an empty file (the default account). */
-export function writeSelectedDir(dir: string | undefined): void {
-  const file = STATE_FILE();
+/** Atomic write of an editor kind's state file (stateFileFor): folder 0700, exclusive temp file 0600 + fsync + rename
+ *  + folder fsync. undefined writes an empty file (the default account). */
+export function writeSelectedDir(dir: string | undefined, kind: ServerKind = currentServerKind()): void {
+  const file = stateFileFor(kind);
   const dirName = path.dirname(file);
   fs.mkdirSync(dirName, { recursive: true, mode: 0o700 });
   const tmp = path.join(dirName, `.codex-home.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`);
@@ -51,14 +93,17 @@ export function writeSelectedDir(dir: string | undefined): void {
 }
 
 /**
- * The only selection writer the commands use. Writes the selected directory and, on Windows when management is enabled (the state file existed), mirrors it into
- * the user-level CODEX_HOME so a freshly started editor picks it up. Elsewhere the rc blocks read the state file.
- * Windows: throws t('codex.notEnabled') without the state file; reads the previous variable strictly, sets the
- * variable first, then writes the state file and restores the variable if that write fails.
+ * The only selection writer the commands use. Linux: a hook kind first gets its hook block into the editor's
+ * server-env-setup (installHookBlock; a hook that cannot be written would leave the new selection without effect),
+ * then its own state file is written; any other kind writes the shared file, which the rc blocks read. Windows, when
+ * management is enabled (the state file existed): mirrors the selection into the user-level CODEX_HOME so a freshly
+ * started editor picks it up; throws t('codex.notEnabled') without the state file; reads the previous variable
+ * strictly, sets the variable first, then writes the state file and restores the variable if that write fails.
  */
-export function writeSelection(dir: string | undefined, run?: Runner): void {
+export function writeSelection(dir: string | undefined, run?: Runner, kind: ServerKind = currentServerKind()): void {
   if (!isWindows()) {
-    writeSelectedDir(dir);
+    if (isHookKind(kind)) installHookBlock(kind);
+    writeSelectedDir(dir, kind);
     return;
   }
   // Windows: the state file marks management; without it nothing is written (a stray file would look like "enabled")
@@ -126,17 +171,39 @@ export function effectiveDir(): string {
 export const RC_BEGIN = '# >>> planswap codex >>>';
 export const RC_END = '# <<< planswap codex <<<';
 
-/** The marker block written to both rc files (both markers, trailing newline). Never localized; it must stay
- *  byte-stable, since removal and migration match it line by line. */
+/** The marker block written to both rc files (both markers, trailing newline). It only fills in CODEX_HOME when the
+ *  shell did not inherit one, so a value set before the editor's server started (the server-env-setup hook, section
+ *  4a) or by the user survives into the extension host and the integrated terminals. Never localized; byte-stable,
+ *  since removal, migration and upgradeRcBlocks match it line by line. */
 export function rcBlock(): string {
   return [
     RC_BEGIN,
-    'if [ -r "$HOME/.config/planswap/codex-home" ]; then',
+    'if [ -z "${CODEX_HOME:-}" ] && [ -r "$HOME/.config/planswap/codex-home" ]; then',
     '  _planswap_codex_home="$(cat "$HOME/.config/planswap/codex-home" 2>/dev/null)"',
     '  if [ -n "$_planswap_codex_home" ] && [ -d "$_planswap_codex_home" ]; then',
     '    export CODEX_HOME="$_planswap_codex_home"',
+    '  fi',
+    '  unset _planswap_codex_home',
+    'fi',
+    RC_END,
+    '',
+  ].join('\n');
+}
+
+/** The block installed into a hook kind's server-env-setup (same markers as the rc block): the editor's own state
+ *  file selects CODEX_HOME before its WSL server starts. An empty file selects ~/.codex explicitly, so the rc block
+ *  does not fall back to the shared selection; a missing file leaves the variable alone (the rc block then applies
+ *  the shared selection). Never localized; byte-stable. */
+export function hookBlock(kind: HookKind): string {
+  const file = `$HOME/.config/planswap/codex-home.${kind}`;
+  return [
+    RC_BEGIN,
+    `if [ -r "${file}" ]; then`,
+    `  _planswap_codex_home="$(cat "${file}" 2>/dev/null)"`,
+    '  if [ -n "$_planswap_codex_home" ] && [ -d "$_planswap_codex_home" ]; then',
+    '    export CODEX_HOME="$_planswap_codex_home"',
     '  else',
-    '    unset CODEX_HOME',
+    '    export CODEX_HOME="$HOME/.codex"',
     '  fi',
     '  unset _planswap_codex_home',
     'fi',
@@ -166,8 +233,8 @@ function readText(file: string): string | undefined {
 }
 
 /** Returns lines outside marker blocks; if the last BEGIN has no END, lines from that BEGIN count as outside (except
- *  lines of the block itself) and broken is set. */
-function scanBlocks(text: string): { outside: string[]; broken: boolean } {
+ *  lines of the block itself, `block`) and broken is set. */
+function scanBlocks(text: string, block: string): { outside: string[]; broken: boolean } {
   const lines = text.split('\n');
   const outside: string[] = [];
   let blockStart = -1;
@@ -182,18 +249,18 @@ function scanBlocks(text: string): { outside: string[]; broken: boolean } {
   }
   if (blockStart >= 0) {
     // The unterminated block's own lines (its export among them) are not the user's; anything else after it is
-    const own = new Set(rcBlock().split('\n').map((l) => l.trim()));
+    const own = new Set(block.split('\n').map((l) => l.trim()));
     outside.push(...lines.slice(blockStart).filter((l) => !own.has(l.trim())));
     return { outside, broken: true };
   }
   return { outside, broken: false };
 }
 
-function statusOf(file: string): RcFileStatus {
+function statusOf(file: string, block: string = rcBlock()): RcFileStatus {
   const text = readText(file);
   if (text === undefined) return { file, hasBlock: false, broken: false, hasUserExport: false };
   const hasBlock = text.split('\n').some((l) => l.trim() === RC_BEGIN);
-  const { outside, broken } = scanBlocks(text);
+  const { outside, broken } = scanBlocks(text, block);
   const hasUserExport = outside.some((l) => USER_EXPORT_RE.test(l));
   return { file, hasBlock, broken, hasUserExport };
 }
@@ -208,11 +275,12 @@ export interface PreCheck { ok: boolean; reasons: string[] }
 /**
  * Enable pre-checks; reasons are localized, nothing is written and no modal is shown.
  * Linux: SHELL is bash; ~/.bash_profile and ~/.bash_login are missing or mention `.bashrc` on a non-comment line;
- * no rc file has a broken block (manual fix required) or a user export of CODEX_HOME.
+ * no rc file, nor the server-env-setup of a hook kind, has a broken block (manual fix required) or a user export of
+ * CODEX_HOME.
  * Windows: unless the state file exists, a user-level CODEX_HOME that is not an adoptable ~/.codex-<name> is refused;
  * the read is strict, so a failed read throws instead of passing.
  */
-export function preCheck(run?: Runner): PreCheck {
+export function preCheck(run?: Runner, kind: ServerKind = currentServerKind()): PreCheck {
   const reasons: string[] = [];
   if (isWindows()) {
     // An existing state file means PlanSwap already owns the variable. Strict read: a failure throws (the caller refuses
@@ -236,7 +304,10 @@ export function preCheck(run?: Runner): PreCheck {
       reasons.push(t('codex.pre.bashProfile', { file }));
     }
   }
-  for (const st of rcStatus()) {
+  const files = rcStatus();
+  // The hook file this editor's server sources (section 4a): the same conflicts as in an rc file
+  if (isHookKind(kind)) files.push(statusOf(hookFileFor(kind), hookBlock(kind)));
+  for (const st of files) {
     if (st.broken) {
       reasons.push(t('codex.pre.broken', { file: st.file }));
     }
@@ -286,11 +357,10 @@ function writeRc(file: string, content: string, mode: number | undefined): void 
   }
 }
 
-function installInto(file: string, beforeGuard: boolean): void {
+function installInto(file: string, beforeGuard: boolean, block: string = rcBlock()): void {
   const text = readText(file);
   const mode = text === undefined ? undefined : statMode(file);
   if (text !== undefined && text.split('\n').some((l) => l.trim() === RC_BEGIN)) return;
-  const block = rcBlock();
   if (text === undefined) {
     writeRc(file, block, undefined);
     return;
@@ -324,6 +394,14 @@ function installInto(file: string, beforeGuard: boolean): void {
 export function installRcBlocks(): void {
   installInto(bashrcPath(), true);
   installInto(profilePath(), false);
+}
+
+/** Writes hookBlock(kind) into the editor's server-env-setup unless the file already has a block: appended like the
+ *  ~/.profile block, a missing file created with 0644 (and its folder when needed), written by writeRc. */
+export function installHookBlock(kind: HookKind): void {
+  const file = hookFileFor(kind);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  installInto(file, false, hookBlock(kind));
 }
 
 /**
@@ -362,13 +440,14 @@ export function removeRcBlockFrom(file: string): void {
   if (content !== undefined) writeRc(file, content, statMode(file));
 }
 
-/** Removes every block from both files, including the blank line or missing newline added on installation (a file
- *  created by the installation is left empty); no block → no write. Checks both files first; if any BEGIN lacks an
- *  END, throws (all localized reasons combined) without changing either file. Written like removeRcBlockFrom. */
+/** Removes every block from both rc files and from the server-env-setup of every hook kind, including the blank line
+ *  or missing newline added on installation (a file created by the installation is left empty); no block → no write.
+ *  Checks all files first; if any BEGIN lacks an END, throws (all localized reasons combined) without changing any
+ *  file. Written like removeRcBlockFrom. */
 export function removeRcBlocks(): void {
   const errors: Error[] = [];
   const writes: Array<{ file: string; content: string }> = [];
-  for (const file of [bashrcPath(), profilePath()]) {
+  for (const file of [bashrcPath(), profilePath(), ...HOOK_KINDS.map(hookFileFor)]) {
     try {
       const content = withoutBlocks(file);
       if (content !== undefined) writes.push({ file, content });
@@ -379,6 +458,55 @@ export function removeRcBlocks(): void {
   if (errors.length === 1) throw errors[0];
   if (errors.length > 1) throw new Error(errors.map((e) => e.message).join(t('common.listSep')));
   for (const { file, content } of writes) writeRc(file, content, statMode(file));
+}
+
+/** Deletes the shared state file and every per-editor one (disable); a missing file is fine. */
+export function removeLinuxState(): void {
+  for (const file of [STATE_FILE(), ...HOOK_KINDS.map(stateFileFor)]) {
+    try {
+      fs.unlinkSync(file);
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+    }
+  }
+}
+
+/**
+ * Brings the marker blocks of both rc files to the current rcBlock() content: a block whose lines differ (written
+ * by an earlier version, e.g. the one that unset an inherited CODEX_HOME) is replaced in place; lines outside the
+ * blocks are kept byte for byte. Both files are checked first; a BEGIN without its END throws and nothing is written.
+ * Returns true when a file was rewritten. Runs on every activation after migrateLegacyCodex.
+ */
+export function upgradeRcBlocks(): boolean {
+  const current = rcBlock().split('\n').slice(0, -1);
+  const errors: Error[] = [];
+  const writes: Array<{ file: string; content: string }> = [];
+  for (const file of [bashrcPath(), profilePath()]) {
+    const text = readText(file);
+    if (text === undefined) continue;
+    const lines = text.split('\n');
+    let changed = false;
+    let from = 0;
+    for (;;) {
+      const begin = lines.findIndex((l, i) => i >= from && l.trim() === RC_BEGIN);
+      if (begin < 0) break;
+      const end = lines.findIndex((l, i) => i > begin && l.trim() === RC_END);
+      if (end < 0) {
+        errors.push(new Error(t('codex.rc.missingEnd', { file })));
+        break;
+      }
+      if (lines.slice(begin, end + 1).join('\n') !== current.join('\n')) {
+        lines.splice(begin, end - begin + 1, ...current);
+        changed = true;
+      }
+      from = begin + current.length;
+    }
+    if (changed) writes.push({ file, content: lines.join('\n') });
+  }
+  if (errors.length === 1) throw errors[0];
+  if (errors.length > 1) throw new Error(errors.map((e) => e.message).join(t('common.listSep')));
+  for (const { file, content } of writes) writeRc(file, content, statMode(file));
+  return writes.length > 0;
 }
 
 // Before the rename to PlanSwap (0.1.0 - 0.1.3) the state file and the rc marker block used the name "ai-switcher".
@@ -484,11 +612,12 @@ export function selfCheckWindows(run?: Runner): { ok: boolean; detail: string } 
 }
 
 /**
- * Enable self-check. Linux: creates a scratch dir (SELF_CHECK_DIR_PREFIX) beside STATE_FILE, temporarily selects it,
- * runs `bash -i -l -c` printing SELF_CHECK_MARK + $CODEX_HOME and compares only that marked line. Cleanup restores the
- * previous state (or deletes a newly created state file) only while the state file still selects the scratch dir, so
- * a concurrent switch by another window is kept, and removes the scratch with non-recursive rmdir so unexpected
- * contents stay. Never throws; failures are returned as a localized detail. Windows: selfCheckWindows().
+ * Enable self-check. Linux: creates a scratch dir (SELF_CHECK_DIR_PREFIX) beside STATE_FILE, temporarily selects it
+ * in the shared state file (the one the rc blocks read), runs `bash -i -l -c` without this host's own CODEX_HOME
+ * (the block only fills in an unset one) printing SELF_CHECK_MARK + $CODEX_HOME and compares only that marked line.
+ * Cleanup restores the previous state (or deletes a newly created state file) only while the state file still selects
+ * the scratch dir, so a concurrent switch by another window is kept, and removes the scratch with non-recursive rmdir
+ * so unexpected contents stay. Never throws; failures are returned as a localized detail. Windows: selfCheckWindows().
  */
 export function selfCheck(): { ok: boolean; detail: string } {
   if (isWindows()) return selfCheckWindows();
@@ -499,8 +628,11 @@ export function selfCheck(): { ok: boolean; detail: string } {
     // The scratch directory lives next to the state file (user-owned, 0700), not in the world-writable temp directory
     fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
     tmpDir = fs.mkdtempSync(path.join(path.dirname(file), SELF_CHECK_DIR_PREFIX));
-    writeSelectedDir(tmpDir);
+    writeSelectedDir(tmpDir, 'unknown');
+    const env = { ...process.env };
+    delete env.CODEX_HOME;
     const r = spawnSync('bash', ['-i', '-l', '-c', `printf '\\n${SELF_CHECK_MARK}%s\\n' "$CODEX_HOME"`], {
+      env,
       timeout: 10000,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -526,13 +658,13 @@ export function selfCheck(): { ok: boolean; detail: string } {
   } finally {
     // Compare and restore: only while the state file still names the scratch directory, so a switch another window
     // made in the meantime is kept
-    if (tmpDir !== undefined && readSelectedDir() === path.resolve(tmpDir)) {
+    if (tmpDir !== undefined && readSelectedDir('unknown') === path.resolve(tmpDir)) {
       try {
         if (backup === undefined) {
           try { fs.unlinkSync(file); } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e; }
         } else {
           const s = backup.trim();
-          writeSelectedDir(s ? s : undefined);
+          writeSelectedDir(s ? s : undefined, 'unknown');
         }
       } catch { /* ignore */ }
     }

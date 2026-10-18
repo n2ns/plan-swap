@@ -111,12 +111,10 @@ describe('Windows user environment', () => {
 describe('rcBlock', () => {
   test('exact content', () => {
     const expect = `# >>> planswap codex >>>
-if [ -r "$HOME/.config/planswap/codex-home" ]; then
+if [ -z "\${CODEX_HOME:-}" ] && [ -r "$HOME/.config/planswap/codex-home" ]; then
   _planswap_codex_home="$(cat "$HOME/.config/planswap/codex-home" 2>/dev/null)"
   if [ -n "$_planswap_codex_home" ] && [ -d "$_planswap_codex_home" ]; then
     export CODEX_HOME="$_planswap_codex_home"
-  else
-    unset CODEX_HOME
   fi
   unset _planswap_codex_home
 fi

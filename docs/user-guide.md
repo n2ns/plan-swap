@@ -93,7 +93,7 @@ Switching changes an editor setting shared by other windows on the same machine,
 
 Open the **Codex** tab and click **Enable Codex switching**. Review and confirm the changes it proposes:
 
-- **WSL, local Linux and other remote windows:** PlanSwap adds marked blocks to `~/.profile` and `~/.bashrc`, then checks that a Bash login shell picks up the selected account. If it reports a conflicting `CODEX_HOME` assignment or shell configuration, fix what it names and try again.
+- **WSL, local Linux and other remote windows:** PlanSwap adds marked blocks to `~/.profile` and `~/.bashrc`, then checks that a Bash login shell picks up the selected account. If it reports a conflicting `CODEX_HOME` assignment or shell configuration, fix what it names and try again. In a VS Code or VSCodium WSL window, the first switch also adds a marked block to that editor's `~/.vscode-server/server-env-setup` or `~/.vscodium-server/server-env-setup`, which its WSL server reads before it starts.
 - **Native Windows:** PlanSwap manages your user-level `CODEX_HOME` environment variable. If you set `CODEX_HOME` yourself to another value, enabling is refused. If it already points to a PlanSwap account directory (`~/.codex-<name>`), PlanSwap takes it over.
 
 If the Windows Codex extension is set to run inside WSL, manage its accounts from a WSL window, or turn off `chatgpt.runCodexInWindowsSubsystemForLinux` before managing Windows accounts.
@@ -111,6 +111,8 @@ If the Windows Codex extension is set to run inside WSL, manage its accounts fro
 | Other editors in WSL | Confirm **Save selection** and follow the manual restart instructions in the dialog. |
 | Native Windows | Confirm **Save selection**, fully quit the editor, then start it again from the Start menu or taskbar. A terminal opened before switching still has the old account. |
 | Local Linux or another remote window | Confirm **Save selection**. Then follow the dialog: restart the editor, or the remote server, so it starts with the selected `CODEX_HOME`. |
+
+In WSL, VS Code and VSCodium each keep their own selection for the same distribution, so switching in one editor does not change the other's account; their integrated terminals follow their editor. Antigravity and terminals opened outside an editor use the shared selection, which only a switch made in Antigravity or in an unrecognized editor changes.
 
 Restarting a WSL server disconnects its editor windows and closes their integrated terminals and CLI sessions. **Reload Window** or **Restart Extension Host** alone does not apply a Codex account selection.
 

@@ -23,12 +23,15 @@ This design rests on facts about Codex, the official Codex extension, VS Code an
 The WSL flow:
 
 ```
-~/.profile and ~/.bashrc each have a marker block: read CODEX_HOME from the state file and export / unset
+~/.profile and ~/.bashrc each have a marker block: export CODEX_HOME from the shared state file when the shell inherited none
+VS Code / VSCodium: the editor's server-env-setup has a marker block: export CODEX_HOME from that editor's own state file (4a)
 User clicks "Switch" on the Codex page
-  → the extension writes the target directory to the state file ~/.config/planswap/codex-home (atomic write + fsync)
+  → the extension writes the target directory to this editor's state file (~/.config/planswap/codex-home.<kind>, or the
+    shared codex-home for other editors; atomic write + fsync)
   → the extension terminates the WSL-side server and its leftover children (section 5)
-  → every WSL window shows "Cannot reconnect"; the user clicks "Reload Window"
-  → the new server resolves the environment through a login shell; CODEX_HOME points to the new directory
+  → every WSL window of that editor shows "Cannot reconnect"; the user clicks "Reload Window"
+  → the new server sources server-env-setup (hook editors), then resolves the environment through a login shell;
+    CODEX_HOME points to the new directory
   → the Codex extension in the new extension host and its codex processes use the new directory
 ```
 
@@ -36,24 +39,22 @@ An account is a directory: the default account is `~/.codex` (always exists, can
 
 ## 4. Login shell configuration
 
-- State file: `~/.config/planswap/codex-home`, content is the absolute path of the target directory, or empty (default account). Mode 0600, directory 0700, atomic write (temporary file + fsync + rename + directory fsync).
+- State file: `~/.config/planswap/codex-home`, content is the absolute path of the target directory, or empty (default account). Mode 0600, directory 0700, atomic write (temporary file + fsync + rename + directory fsync). VS Code and VSCodium WSL windows keep their own selection in `codex-home.<kind>` next to it (4a); the rc blocks read only the shared file.
 - Content of the marker block, written in two places, `~/.profile` and `~/.bashrc` (login shells use the former, non-login interactive terminals the latter; when `~/.profile` sources `~/.bashrc` the block runs twice, which is idempotent and harmless). The block is never localized; it is byte-identical whatever the UI language:
 
 ```bash
 # >>> planswap codex >>>
-if [ -r "$HOME/.config/planswap/codex-home" ]; then
+if [ -z "${CODEX_HOME:-}" ] && [ -r "$HOME/.config/planswap/codex-home" ]; then
   _planswap_codex_home="$(cat "$HOME/.config/planswap/codex-home" 2>/dev/null)"
   if [ -n "$_planswap_codex_home" ] && [ -d "$_planswap_codex_home" ]; then
     export CODEX_HOME="$_planswap_codex_home"
-  else
-    unset CODEX_HOME
   fi
   unset _planswap_codex_home
 fi
 # <<< planswap codex <<<
 ```
 
-- When the state file is empty or the directory does not exist, the block runs `unset` instead of doing nothing: after switching back to the default account, newly opened terminals do not inherit the old value cached by the server. Once enabled, this extension owns the variable exclusively.
+- The block only fills in `CODEX_HOME` when the shell inherited none. A value that was already in the environment (the editor's server-env-setup hook of 4a, a Windows user variable passed through WSLENV, the user's own profile) is kept, in the server's login-shell resolution as well as in integrated terminals. Versions 0.1.4 - 0.3.12 ran `unset` when the state file was empty; that turned every terminal of an editor whose server had the variable from its hook back to the default account. `upgradeRcBlocks` replaces such a block in place on every activation (the markers are unchanged, so removal still restores the original bytes). After switching back to the default account a new server starts without the variable, so nothing stale is inherited.
 - In `~/.bashrc` the block is inserted before the interactive guard (`case $- in *i*) ;; *) return;; esac`); if no guard is found it is appended to the end of the file. This way non-interactive login shells such as `bash -lc` also see it.
 - Pre-checks before writing (`planswap.codex.enable`):
   1. The extension host's `process.env.SHELL` is bash. For zsh only a snippet is shown for the user to add to `~/.zprofile` and `~/.zshrc`; fish is not supported.
@@ -67,6 +68,16 @@ fi
 - Pre-check reasons, the modal texts and the self-check result are localized; the block written to the files is not.
 - **Migrating the pre-rename setup** (`migrateLegacyCodex`, run on every activation before the Codex store is created): versions 0.1.0 - 0.1.3 used the name `ai-switcher` (state file `~/.config/ai-switcher/codex-home`, markers `# >>> ai-switcher codex >>>` / `# <<< ai-switcher codex <<<`, variable `_ai_switcher_codex_home`; otherwise the same block). Without migration an upgraded installation shows the disabled page, and enabling again is refused because the old block's `export CODEX_HOME=` counts as the user's own. The migration replaces each legacy block in place so the file is byte-identical to a fresh installation and removal still restores the original bytes; the algorithm is documented on `migrateLegacyCodex`. The selected directory stays the same, so the server's cached environment still matches and no restart is needed. An older extension version still running in another editor on the same distro sees its block gone and shows its disabled page until it is upgraded.
 
+## 4a. Per-editor selection and the server-env-setup hook
+
+Two editors connected to the same distribution (VS Code and VSCodium) can use different Codex accounts. The decisive fact is that the Codex extension starts its app-server in `activate()` with the `CODEX_HOME` the extension host was born with, and no extension can order its own activation before it (fact 28); the only point that is guaranteed to run earlier is the start of the WSL server itself. Microsoft's Remote - WSL sources `~/.vscode-server/server-env-setup` before it starts the server, and wsl-remote does the same with `~/.vscodium-server/server-env-setup` for VSCodium (fact 29).
+
+- State files: a hook kind (`HOOK_KINDS`: `vscodium`, `vscode`, from `detectServerKind`) keeps its selection in `~/.config/planswap/codex-home.<kind>`, written like the shared file. Reading falls back to the shared `codex-home` while the own file does not exist, so an upgraded installation keeps its selection in every editor until one of them switches; an empty own file is the default account. Antigravity (fact 31), unrecognized editors, native Windows and terminals outside an editor keep using the shared file, which only a switch in one of those changes (`readSelectedDir`, `writeSelectedDir`, `writeSelection`).
+- Hook block: the first switch in a hook editor appends a marker block (`hookBlock`, same markers as the rc block) to that editor's `server-env-setup`, keeping the user's content; later switches only write the state file. The block exports the own selection; an empty file exports `~/.codex` explicitly, so the rc block of the server's login shell (section 4) does not fall back to the shared selection; a missing file leaves the variable alone. `preCheck` applies the rc-file rules (broken block, user export) to the current editor's hook file; disable removes the hook blocks and every state file.
+- Rc block: it fills in `CODEX_HOME` from the shared file only when the shell inherited none, so the value the hook put into the server environment survives the server's login-shell resolution (fact 30) and reaches the integrated terminals.
+- Effect: a switch in VSCodium writes `codex-home.vscodium` and restarts the server (section 5); wsl-remote starts a new server that sources the hook. A switch in VS Code writes `codex-home.vscode`; the user closes and reopens the VS Code windows (fact 13) and Remote - WSL sources the hook. Neither touches the other editor's windows, terminals or selection.
+- Not done: setting `process.env.CODEX_HOME` in PlanSwap's own extension host. It would make `effectiveDir()` report a selection as effective while the Codex processes still use the old directory, and it cannot win the activation race anyway.
+
 ## 5. Restarting the WSL-side server
 
 - Editor kind (whitelist, not generic parsing): the server root comes from the argv of the extension host's parent (`/proc/<ppid>/cmdline`), its data directory must be exactly one of these directories directly under `$HOME` (symlinks resolved before comparing; see `classifyDataDir`):
@@ -79,6 +90,7 @@ fi
 | anything else, or detection failure | `unknown` | generic manual guidance only |
 
 - Manual kinds (`vscode`, `unknown`) are never signaled; the switch still writes the state file, and the user restarts the server by hand.
+- VSCodium connected through wsl-remote keeps the automatic restart: wsl-remote starts the server with `--start-server`, writes the same pid file (fact 29) and starts a new server, which sources the hook of 4a, when the window reloads.
 - Locating (automatic kinds): server = the extension host's parent process `process.ppid`. Only act when every check of `planRestart` passes (parent pid, `server-main.js --start-server` argv of an automatic kind, the `product.json` commit, the root directory name, and the pid file `<dataDir>/.<commit>.pid` naming the server's parent wrapper); otherwise refuse and show the manual method.
 - Order:
   1. Finish writing the state file first (including fsync).
@@ -111,7 +123,7 @@ Subsequent cold starts (source-derived, pending user verification):
 ## 6. Data model
 
 - `~/.config/planswap/state.json` (the `FileMemento`, not `globalState`, which is client-side and shared by every WSL distribution) holds `codex.accounts`, `codex.recommendExcluded` (accounts excluded from the recommended-account card, [Claude design 3](design.md#persisted-state)), `codex.ignoredDirs` (directories of accounts removed while keeping the directory; auto-discovery skips them), `codex.labels` (aliases) and `codex.usageHistory` (8.7); see [Claude design §4](design.md#4-data-model). Codex aliases follow the same `LabelStore` rules as Claude's but are validated only against Codex accounts; the same name is allowed on both sides.
-- The selected account is whatever the state file says (shared across windows, the last writer wins).
+- The selected account is whatever this editor's state file says (4a): `codex-home.<kind>` in a VS Code or VSCodium WSL window, the shared `codex-home` elsewhere; shared across the windows of that editor, the last writer wins.
 - The directory actually effective in this window = the extension host's own `process.env.CODEX_HOME`, or `~/.codex` when empty. With remote type `wsl` the Codex extension does not rewrite it. When it differs from the state file, the panel shows the selection as pending ([Features 10.2](features.md#102-codex-tab-in-the-sidebar)).
 - Signed-in state: whether `<dir>/auth.json` exists. Email and plan come from the decoded `id_token` payload (`email`, `https://api.openai.com/auth`.`chatgpt_plan_type`), or "API key" for API key mode (`auth_mode === 'apikey'`, or no `auth_mode`, a non-empty `OPENAI_API_KEY` and no `tokens`); a parse failure means unknown but still signed in ([Features 10.1](features.md#101-accounts-and-directories)).
 - Identity (`CodexAccountInfo.identity`): an opaque comparison key from the same decoded payload, user id (`https://api.openai.com/auth`.`chatgpt_user_id`, else `.user_id`, else top-level `sub`) plus workspace (`.chatgpt_account_id`); only when both exist, never in API key mode, and never from the email (one email can belong to several workspaces, and a false warning is worse than none). It is never displayed, logged, persisted or sent to the Webview. Registered accounts (default + named) that share one produce the duplicate sign-in warning of [Claude design 6.8](design.md#68-accounts-signed-in-to-the-same-identity).
@@ -212,7 +224,7 @@ The self-check, server/terminal shutdown observations, reconnect environment che
 ## 12. Known limitations
 
 1. In a WSL window a Codex account switch restarts the WSL-side server: all WSL windows disconnect and each needs one "Reload Window" click; integrated terminals close. The restart is automatic only in Antigravity and VSCodium; in VS Code and unrecognized editors the user closes and reopens the windows. A local desktop editor (5.1), native Windows (9a) and other remote windows need a manual restart.
-2. The state file is global and the last writer wins; other windows switch as well after the server restarts.
+2. A state file is shared by the windows of its editor and the last writer wins; those windows switch as well after the server restarts. VS Code and VSCodium have their own file (4a), so a switch in one is not seen by the other; Antigravity, unrecognized editors and terminals outside an editor share one file.
 3. Independent accounts keep all local data (sessions, skills, prompts, memories, approval rules, etc.) separate. Shared accounts share sessions, history, configuration, rules and skills with `~/.codex`; thread databases are shared on Linux and kept independent on Windows (9a), while memories stay per account (fact 17), so each account rebuilds memories from the shared sessions with its own quota; logs, caches and the daemon state also stay per account.
 4. Relies on two behaviors: Antigravity resolves the extension host environment through a login shell, and the server is started again automatically after it dies. Both come from the upstream VS Code implementation and must be re-verified after upgrades.
 5. `~/.profile` and `~/.bashrc` carry a marker block maintained by this extension; only bash is supported, and a hand-damaged block makes enable and disable refuse (section 4).
@@ -224,3 +236,4 @@ The self-check, server/terminal shutdown observations, reconnect environment che
 11. MCP servers in the shared `config.toml` are shared, but MCP OAuth credentials are never linked or copied, so OAuth-based servers must be authorized in each account; for independent accounts, `env` values of MCP servers are copied in plain text with `config.toml`.
 12. Local desktop switching (5.1) has no automatic quit/relaunch, and cold starts depend on the launch route; installed-build acceptance of the guidance is pending.
 13. Usage limits (8.7) depend on the `codex app-server` protocol (facts 24-26) and a `codex` binary; each query starts a short-lived CLI process that contacts OpenAI's service as the CLI itself does.
+14. Whether Antigravity's WSL server sources a `server-env-setup` file is not verified (fact 31), so Antigravity stays on the shared selection and cannot be given an account of its own next to VS Code or VSCodium.

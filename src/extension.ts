@@ -26,7 +26,7 @@ import type { PanelMode } from './protocol';
 import { setLocale, t } from './i18n';
 import { isSupportedPlatform } from './platform';
 import { migrateLegacyLanguage, resolveLocale, watchLocale } from './i18nVscode';
-import { effectiveDir, migrateLegacyCodex } from './codex/codexState';
+import { effectiveDir, migrateLegacyCodex, upgradeRcBlocks } from './codex/codexState';
 import { CodexUsageMonitor, queryCodexAccount } from './codex/codexUsageMonitor';
 import { CodexUsageHistory } from './codex/codexUsageHistory';
 import { findBundledCodex, readCodexUsageWithFallback, type UsageResult } from './codex/codexUsage';
@@ -121,7 +121,8 @@ const cooldownSeconds = (ms: number): number => Math.max(1, Math.ceil(ms / 1000)
 /**
  * Activation order matters: the UI locale is resolved first so every later string is localized; an unsupported
  * platform (not linux / win32) only warns once and returns. Then the FileMemento state (with its one-time globalState
- * import), the Claude store, migrateLegacyCodex in its own try/catch (an error only warns), and the Codex store. A
+ * import), the Claude store, migrateLegacyCodex and upgradeRcBlocks each in their own try/catch (an error only
+ * warns), and the Codex store. A
  * Codex initialization failure is logged and degrades the Codex page to an empty, disabled source: Claude is not
  * affected, Codex 'tool' messages still run, and every other Codex panel action and planswap.codex.* command shows the
  * error. Everything created here is disposed through ctx.subscriptions.
@@ -172,6 +173,12 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     migrateLegacyCodex();
   } catch (err) {
     void vscode.window.showWarningMessage(t('ext.codexLegacyFailed', { error: err instanceof Error ? err.message : String(err) }));
+  }
+  // Marker blocks written by an earlier version are brought to the current content; a failure only warns
+  try {
+    upgradeRcBlocks();
+  } catch (err) {
+    void vscode.window.showWarningMessage(t('ext.codexRcUpgradeFailed', { error: err instanceof Error ? err.message : String(err) }));
   }
   try {
     const codexStore = new CodexAccountStore(state);

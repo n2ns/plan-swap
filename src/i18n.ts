@@ -194,6 +194,7 @@ export const en = {
   'usage.low': '{product} account {label} has {percent}% of its {window} limit left. It resets in {reset}.',
   'usage.lowOpen': 'Open PlanSwap',
   'ext.codexLegacyFailed': 'Cannot migrate the Codex switching setup of an earlier version (ai-switcher): {error}',
+  'ext.codexRcUpgradeFailed': 'Cannot update the PlanSwap marker blocks in ~/.profile and ~/.bashrc: {error}',
 
   // Account name validation (add account)
   'name.empty': 'Enter an account name',
@@ -571,6 +572,7 @@ export const zhCn: Record<MessageKey, string> = {
   'usage.low': '{product} 账号 {label} 的 {window}额度仅剩 {percent}%，{reset}后重置。',
   'usage.lowOpen': '打开 PlanSwap',
   'ext.codexLegacyFailed': '无法迁移旧版本（ai-switcher）的 Codex 切换配置：{error}',
+  'ext.codexRcUpgradeFailed': '无法更新 ~/.profile 与 ~/.bashrc 中的 PlanSwap 标记块：{error}',
 
   'name.empty': '请输入账号名',
   'name.invalid': '只能包含 A-Z、a-z、0-9、下划线（_）和连字符（-）',
@@ -925,6 +927,7 @@ export const zhTw: Record<MessageKey, string> = {
   'usage.low': '{product} 帳號 {label} 的 {window}額度僅剩 {percent}%，{reset}後重設。',
   'usage.lowOpen': '開啟 PlanSwap',
   'ext.codexLegacyFailed': '無法移轉舊版（ai-switcher）的 Codex 切換設定：{error}',
+  'ext.codexRcUpgradeFailed': '無法更新 ~/.profile 與 ~/.bashrc 中的 PlanSwap 標記區塊：{error}',
 
   'name.empty': '請輸入帳號名稱',
   'name.invalid': '只能包含 A-Z、a-z、0-9、底線（_）和連字號（-）',
@@ -1278,6 +1281,7 @@ export const es: Record<MessageKey, string> = {
   'usage.low': 'A la cuenta de {product} {label} le queda un {percent}% de su límite de {window}. Se restablece en {reset}.',
   'usage.lowOpen': 'Abrir PlanSwap',
   'ext.codexLegacyFailed': 'No se pudo migrar la configuración de cambio de cuenta de Codex de una versión anterior (ai-switcher): {error}',
+  'ext.codexRcUpgradeFailed': 'No se pudieron actualizar los bloques delimitados de PlanSwap en ~/.profile y ~/.bashrc: {error}',
   'name.empty': 'Introduce un nombre de cuenta',
   'name.invalid': 'Solo se admiten A-Z, a-z, 0-9, guiones bajos (_) y guiones (-)',
   'name.reserved': 'El nombre {name} está reservado',
@@ -1616,6 +1620,7 @@ export const ja: Record<MessageKey, string> = {
   'usage.low': '{product} アカウント {label} の {window}の上限は残り {percent}% です。{reset}後にリセットされます。',
   'usage.lowOpen': 'PlanSwap を開く',
   'ext.codexLegacyFailed': '旧バージョン（ai-switcher）の Codex 切り替え設定を移行できません: {error}',
+  'ext.codexRcUpgradeFailed': '~/.profile と ~/.bashrc の PlanSwap マーカーブロックを更新できません: {error}',
   'name.empty': 'アカウント名を入力してください',
   'name.invalid': '使用できるのは A-Z、a-z、0-9、アンダースコア（_）、ハイフン（-）のみです',
   'name.reserved': '{name} は予約名のため使用できません',

@@ -31,10 +31,12 @@ import {
   rcBlock,
   rcStatus,
   readSelectedDir,
+  removeLinuxState,
   removeRcBlockFrom,
   removeRcBlocks,
   removeWindowsState,
   selfCheck,
+  watchedStateFiles,
   writeSelection,
 } from './codexState';
 import { isWindows, tildify, errText } from '../platform';
@@ -180,7 +182,7 @@ export async function restartServerInteractive(): Promise<void> {
  * - enabled(): isEnabled(); errors count as not enabled.
  * - pendingDir(): when the selected dir (default when unset) differs from effectiveDir(), the account's display name,
  *   or the path for an unregistered dir; display text only.
- * - watchTargets(): auth.json of each row's dir plus STATE_FILE().
+ * - watchTargets(): auth.json of each row's dir plus this editor's state files (watchedStateFiles).
  */
 export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, history?: CodexUsageHistory, exclusions?: RecommendExclusions): PanelSource {
   const accounts = (): AccountView[] => {
@@ -248,7 +250,7 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, h
       const cur = effectiveDir();
       const dirs = store.all().map((a) => a.dir);
       if (!dirs.some((d) => samePath(d, cur))) dirs.push(cur);
-      return [...dirs.map((d) => path.join(d, 'auth.json')), STATE_FILE()];
+      return [...dirs.map((d) => path.join(d, 'auth.json')), ...watchedStateFiles()];
     },
     restart: () => restartInfo(),
   };
@@ -407,11 +409,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
         disableWindows();
       } else {
         removeRcBlocks();
-        try {
-          fs.unlinkSync(STATE_FILE());
-        } catch (e) {
-          if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
-        }
+        removeLinuxState();
       }
     } catch (err) {
       void vscode.window.showErrorMessage(t('codex.disableFailed', { error: errText(err) }));

@@ -183,7 +183,7 @@ Independent of Claude switching ([Codex design](codex-design.md)). `auth.json` i
 ### 10.1 Accounts and directories
 
 - `default` is `~/.codex` (never removable); named accounts are `~/.codex-<name>`, added or auto-discovered as in section 5, with their own list, ignore list and aliases.
-- The **selected account** is what `~/.config/planswap/codex-home` names (empty: default), shared by all windows, last writer wins. A window's **effective account** is its extension host's `CODEX_HOME` (else `~/.codex`); an unregistered one appears as an external row.
+- The **selected account** is what this editor's state file names ([Codex design 4a](codex-design.md#4a-per-editor-selection-and-the-server-env-setup-hook)): `~/.config/planswap/codex-home.vscode` / `codex-home.vscodium` in a VS Code / VSCodium WSL window (falling back to the shared file until that editor's first switch), otherwise the shared `~/.config/planswap/codex-home`; empty: default; shared by the windows of that editor, last writer wins. A window's **effective account** is its extension host's `CODEX_HOME` (else `~/.codex`); an unregistered one appears as an external row.
 - Signed in means `auth.json` exists; a damaged file shows unknown email and plan but still counts as signed in, and API key mode shows "API key". The same-sign-in warning (section 1) compares user id plus workspace, never the email, and is skipped in API key mode.
 
 ### 10.2 Codex tab in the sidebar
@@ -195,7 +195,7 @@ Until switching is enabled (10.11) the page offers only an explanation of the re
 Category "Codex Account"; QuickPicks as in section 4, without email.
 
 - `planswap.codex.enable` (disabled-page button, Command Palette): on WSL/Linux runs the [pre-checks](codex-design.md#4-login-shell-configuration), writes the rc marker blocks after a modal confirmation and self-checks them; a failure reports every reason and removes only blocks written by this run. Native Windows manages the per-user `CODEX_HOME` instead and refuses enable, switch and account terminals while Codex runs inside WSL, where the Codex page shows a warning banner instead of the sign-in and terminal buttons ([Codex design 9a](codex-design.md#9a-native-windows)).
-- `planswap.codex.disable` (Command Palette): after confirmation removes both blocks and the state file, changing nothing when a block is damaged; open windows keep `CODEX_HOME` until restarted.
+- `planswap.codex.disable` (Command Palette): after confirmation removes the rc blocks, the `server-env-setup` blocks and every state file, changing nothing when a block is damaged; open windows keep `CODEX_HOME` until restarted.
 - `planswap.codex.switchAccount` (switch button, double-click, Enter): 10.6.
 - `planswap.codex.addAccount`: focuses the add form; 10.7.
 - `planswap.codex.shareAccount` (row `link` button): 10.12.
@@ -216,6 +216,7 @@ As [4.9](#49-refresh-usage-limits-of-all-accounts-planswapclauderefreshallusage)
 - Refused until enabled; requests during a switch are ignored. A target already effective in this window only resets the state file, without confirmation or restart.
 - Otherwise a modal confirmation matching the [connection](codex-design.md#5-restarting-the-wsl-side-server): **Switch and restart** for WSL Antigravity / VSCodium, **Save selection** with manual restart instructions elsewhere. Cancelling, a missing target directory or the account disappearing meanwhile changes nothing.
 - A shared target is re-linked first (problems only warn), then the selection is saved; if saving fails nothing restarts. Antigravity / VSCodium then restart the verified WSL server (else the manual alternative): every WSL window needs one Reload Window and integrated terminals close.
+- In a VS Code or VSCodium WSL window the first switch also writes the PlanSwap block into that editor's `server-env-setup` ([Codex design 4a](codex-design.md#4a-per-editor-selection-and-the-server-env-setup-hook)); the other editor's selection, windows and terminals are untouched.
 
 ### 10.7 Add
 
@@ -231,7 +232,7 @@ The Codex page and status bar refresh when an account's `auth.json` or the state
 
 ### 10.11 State file and rc marker block
 
-On WSL/Linux, enabling writes a never-localized [marker block](codex-design.md#4-login-shell-configuration) into `~/.profile` and `~/.bashrc` that sets `CODEX_HOME` from the state file. Enabled means both files carry an intact block (Linux) or the state file exists (Windows); PlanSwap then owns `CODEX_HOME`. Activation migrates the ai-switcher 0.1.0–0.1.3 setup.
+On WSL/Linux, enabling writes a never-localized [marker block](codex-design.md#4-login-shell-configuration) into `~/.profile` and `~/.bashrc` that sets `CODEX_HOME` from the shared state file when the shell inherited none. Enabled means both files carry an intact block (Linux) or the state file exists (Windows); PlanSwap then owns `CODEX_HOME`. In a VS Code or VSCodium WSL window the first switch adds the same kind of block to `~/.vscode-server/server-env-setup` or `~/.vscodium-server/server-env-setup`, read by that editor's WSL server before it starts ([Codex design 4a](codex-design.md#4a-per-editor-selection-and-the-server-env-setup-hook)). Activation migrates the ai-switcher 0.1.0–0.1.3 setup and updates marker blocks of earlier versions in place.
 
 ### 10.12 Shared and independent Codex accounts
 

@@ -93,7 +93,7 @@ Claude 账号名旁的警告图标表示订阅访问被拒绝。悬浮查看提�
 
 打开 **Codex** 标签页，点击 **启用 Codex 切换**。查看并确认它提出的修改：
 
-- **WSL、本地 Linux 和其他远程窗口**：PlanSwap 会在 `~/.profile` 和 `~/.bashrc` 中添加带标记的代码块，然后检查 Bash 登录 shell 能否读到所选账号。如果它报告存在冲突的 `CODEX_HOME` 赋值或 shell 配置，请按提示修正后重试。
+- **WSL、本地 Linux 和其他远程窗口**：PlanSwap 会在 `~/.profile` 和 `~/.bashrc` 中添加带标记的代码块，然后检查 Bash 登录 shell 能否读到所选账号。如果它报告存在冲突的 `CODEX_HOME` 赋值或 shell 配置，请按提示修正后重试。在 VS Code 或 VSCodium 的 WSL 窗口里，第一次切换还会在该编辑器的 `~/.vscode-server/server-env-setup` 或 `~/.vscodium-server/server-env-setup` 中添加带标记的代码块，其 WSL 服务端会在启动前读取它。
 - **原生 Windows**：PlanSwap 管理你的用户级 `CODEX_HOME` 环境变量。如果你自己把 `CODEX_HOME` 设成了其他值，启用会被拒绝。如果它已指向某个 PlanSwap 账号目录（`~/.codex-<name>`），PlanSwap 会接管它。
 
 如果 Windows 上的 Codex 插件设置为在 WSL 中运行，请在 WSL 窗口中管理其账号，或者先关闭 `chatgpt.runCodexInWindowsSubsystemForLinux`，再管理 Windows 账号。
@@ -111,6 +111,8 @@ Claude 账号名旁的警告图标表示订阅访问被拒绝。悬浮查看提�
 | WSL 中的其他编辑器 | 确认 **保存选择**，并按对话框中的手动重启说明操作。 |
 | 原生 Windows | 确认 **保存选择**，完全退出编辑器，然后从开始菜单或任务栏重新启动。切换之前打开的终端仍使用旧账号。 |
 | 本地 Linux 或其他远程窗口 | 确认 **保存选择**。然后按对话框操作：重启编辑器或远程服务端，使其以所选的 `CODEX_HOME` 启动。 |
+
+在 WSL 中，VS Code 与 VSCodium 在同一个发行版里各自保存自己的选择：在一个编辑器里切换不会改变另一个编辑器的账号，它们的集成终端跟随各自的编辑器。Antigravity 和在编辑器之外打开的终端使用共享的选择，只有在 Antigravity 或无法识别的编辑器中切换才会改变它。
 
 重启 WSL 服务端会断开其编辑器窗口，并关闭这些窗口的集成终端和 CLI 会话。仅 **重新加载窗口** 或 **重启扩展宿主** 不会应用 Codex 账号选择。
 

@@ -93,7 +93,7 @@ Claude 帳號名稱旁的警告圖示表示訂閱存取遭拒。懸停查看提�
 
 開啟 **Codex** 索引標籤，按一下 **啟用 Codex 切換**。檢閱並確認它提出的變更：
 
-- **WSL、本機 Linux 和其他遠端視窗**：PlanSwap 會在 `~/.profile` 和 `~/.bashrc` 中加入帶有標記的區塊，然後檢查 Bash 登入 shell 能否讀到所選帳號。如果它回報有衝突的 `CODEX_HOME` 指派或 shell 設定，請依照提示修正後再試一次。
+- **WSL、本機 Linux 和其他遠端視窗**：PlanSwap 會在 `~/.profile` 和 `~/.bashrc` 中加入帶有標記的區塊，然後檢查 Bash 登入 shell 能否讀到所選帳號。如果它回報有衝突的 `CODEX_HOME` 指派或 shell 設定，請依照提示修正後再試一次。在 VS Code 或 VSCodium 的 WSL 視窗中，第一次切換還會在該編輯器的 `~/.vscode-server/server-env-setup` 或 `~/.vscodium-server/server-env-setup` 中加入帶有標記的區塊，其 WSL 伺服器會在啟動前讀取它。
 - **原生 Windows**：PlanSwap 會管理你的使用者層級 `CODEX_HOME` 環境變數。如果你自己把 `CODEX_HOME` 設成了其他值，啟用會被拒絕。如果它已指向某個 PlanSwap 帳號目錄（`~/.codex-<name>`），PlanSwap 會接管它。
 
 如果 Windows 上的 Codex 擴充功能設定為在 WSL 中執行，請在 WSL 視窗中管理其帳號，或先關閉 `chatgpt.runCodexInWindowsSubsystemForLinux`，再管理 Windows 帳號。
@@ -111,6 +111,8 @@ Claude 帳號名稱旁的警告圖示表示訂閱存取遭拒。懸停查看提�
 | WSL 中的其他編輯器 | 確認 **儲存選擇**，並依照對話方塊中的手動重新啟動說明操作。 |
 | 原生 Windows | 確認 **儲存選擇**，完全結束編輯器，然後從開始功能表或工作列重新啟動。切換之前開啟的終端機仍使用舊帳號。 |
 | 本機 Linux 或其他遠端視窗 | 確認 **儲存選擇**。然後依照對話方塊操作：重新啟動編輯器或遠端伺服器，使其以所選的 `CODEX_HOME` 啟動。 |
+
+在 WSL 中，VS Code 與 VSCodium 在同一個發行版裡各自保存自己的選擇：在其中一個編輯器切換不會改變另一個編輯器的帳號，它們的整合終端機跟隨各自的編輯器。Antigravity 和在編輯器之外開啟的終端機使用共用的選擇，只有在 Antigravity 或無法辨識的編輯器中切換才會改變它。
 
 重新啟動 WSL 伺服器會中斷其編輯器視窗的連線，並關閉這些視窗的整合式終端機和 CLI 工作階段。僅 **重新載入視窗** 或 **重新啟動擴充功能主機** 並不會套用 Codex 帳號選擇。
 
