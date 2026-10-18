@@ -170,7 +170,7 @@ Only a real, existing `~/.claude-<name>` directly under home that neither is nor
 
 - A switch applies to new sessions and official panel headers in every window of the WSL distribution (or Windows profile); only the switching window shows the reload banner.
 - Other windows' sidebar and status bar follow the setting change; Refresh is the fallback.
-- The account list is shared through `~/.config/planswap/state.json`, so other windows and editors see additions on their next refresh.
+- The account list is shared through `~/.config/planswap/state.json`, so other windows and editors see additions on their next refresh; writes from several windows are serialized through `state.json.lock`, so none is lost.
 
 ## 9. Platform guard
 

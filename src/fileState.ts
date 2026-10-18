@@ -2,13 +2,14 @@
 // WSL distribution (a workspace extension's globalState is stored on the Windows client and shared by every distro).
 // Besides STATE_KEYS the file holds warnings.dismissed (extension.ts), codex.usageHistory (codexUsageHistory.ts),
 // usage.lowNotified (usageNotices.ts) and links.announced / links.fileLinks (linkCheck.ts).
-// No cross-process lock: update re-reads the file, but two hosts writing at the same moment can still lose one write.
+// Every update is a read-modify-write under a cross-process lock (the directory <file>.lock, see withLock), so two
+// extension hosts of the same distribution (VS Code and VSCodium side by side) cannot lose each other's writes.
 // Depends only on vscode's Memento type
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { Memento } from 'vscode';
-import { renameReplacing, stripBom } from './platform';
+import { pidAlive, renameReplacing, stripBom } from './platform';
 
 export const STATE_JSON = () => path.join(os.homedir(), '.config', 'planswap', 'state.json');
 
@@ -17,8 +18,20 @@ const STATE_KEYS = ['accounts', 'ignoredDirs', 'claude.labels', 'codex.accounts'
 
 type State = Record<string, unknown>;
 
+/** How long an update waits for another process to release the lock before it fails. */
+export const LOCK_WAIT_MS = 5000;
+/** A lock without a readable owner that is older than this was left behind (a crash between mkdir and the owner note). */
+export const LOCK_STALE_MS = 10_000;
+
 export class FileMemento implements Memento {
-  constructor(private readonly file: string = STATE_JSON()) {}
+  /** lockWaitMs: how long update waits for the lock (tests shorten it). */
+  constructor(private readonly file: string = STATE_JSON(), private readonly lockWaitMs: number = LOCK_WAIT_MS) {}
+
+  /** The lock directory next to the file. mkdir is atomic on every file system, so whoever creates it owns the
+   *  read-modify-write; it holds an `owner` file with the pid. */
+  get lockDir(): string {
+    return `${this.file}.lock`;
+  }
 
   /** A missing or empty file is an empty state; any other read error (permissions, a locked file, a directory at the
    *  path, I/O) and content that is not a JSON object (a syntax error left by a hand edit) is thrown, so an update never
@@ -70,13 +83,75 @@ export class FileMemento implements Memento {
     return Object.hasOwn(state, key) ? (state[key] as T) : defaultValue;
   }
 
-  /** undefined deletes the key; re-reads the file, then rewrites the whole object atomically (pretty JSON; temp file
-   *  0600 + rename, directory 0700). Rejects without writing when the file exists but cannot be read or is not a JSON
-   *  object */
+  /** undefined deletes the key; under the lock, re-reads the file, then rewrites the whole object atomically (pretty
+   *  JSON; temp file 0600 + rename, directory 0700). Rejects without writing when the file exists but cannot be read
+   *  or is not a JSON object, or when the lock is not released within lockWaitMs */
   async update(key: string, value: unknown): Promise<void> {
-    const entries = Object.entries(this.readOrThrow()).filter(([k]) => k !== key);
-    if (value !== undefined) entries.push([key, value]);
-    this.write(Object.fromEntries(entries));
+    await this.withLock(() => {
+      const entries = Object.entries(this.readOrThrow()).filter(([k]) => k !== key);
+      if (value !== undefined) entries.push([key, value]);
+      this.write(Object.fromEntries(entries));
+    });
+  }
+
+  /**
+   * Runs fn while holding <file>.lock. Acquire: mkdir, retried with a short backoff until lockWaitMs passed; a lock
+   * whose owner process is gone, or that has no owner note and is older than LOCK_STALE_MS, is taken over (renamed
+   * away first, so only one waiter takes it). Release: the directory is removed, also when fn throws.
+   */
+  private async withLock<T>(fn: () => T): Promise<T> {
+    const lockDir = this.lockDir;
+    fs.mkdirSync(path.dirname(this.file), { recursive: true, mode: 0o700 });
+    const deadline = Date.now() + this.lockWaitMs;
+    let delay = 5;
+    for (;;) {
+      try {
+        fs.mkdirSync(lockDir);
+        break;
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+      }
+      if (this.takeOverStaleLock(lockDir)) continue;
+      if (Date.now() >= deadline) throw new Error(`another PlanSwap window holds the state file lock (${lockDir})`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      delay = Math.min(delay * 2, 100);
+    }
+    try {
+      fs.writeFileSync(path.join(lockDir, 'owner'), String(process.pid));
+    } catch {
+      // The lock holds without the note; a waiter then relies on its age
+    }
+    try {
+      return fn();
+    } finally {
+      fs.rmSync(lockDir, { recursive: true, force: true });
+    }
+  }
+
+  /** Removes a lock left behind by a process that is gone (owner pid not alive) or, without an owner note, one older
+   *  than LOCK_STALE_MS. Returns true when the caller should try mkdir again at once. The directory is renamed before
+   *  it is removed: only one of several waiters succeeds, the others see it gone and retry. */
+  private takeOverStaleLock(lockDir: string): boolean {
+    let stale: boolean;
+    try {
+      const owner = Number(fs.readFileSync(path.join(lockDir, 'owner'), 'utf8').trim());
+      stale = Number.isInteger(owner) && owner > 0 ? !pidAlive(owner) : true;
+    } catch {
+      try {
+        stale = Date.now() - fs.statSync(lockDir).mtimeMs > LOCK_STALE_MS;
+      } catch {
+        return true; // released meanwhile
+      }
+    }
+    if (!stale) return false;
+    const away = `${lockDir}.stale.${process.pid}.${Date.now()}`;
+    try {
+      fs.renameSync(lockDir, away);
+    } catch {
+      return true; // another waiter took it, or it was released
+    }
+    fs.rmSync(away, { recursive: true, force: true });
+    return true;
   }
 
   /** True when the state file exists (used to decide whether a one-time import from globalState is needed) */
@@ -91,12 +166,15 @@ export class FileMemento implements Memento {
    */
   async importOnce(source: Memento): Promise<void> {
     if (this.exists()) return;
-    const state: State = {};
-    for (const key of STATE_KEYS) {
-      const value = source.get<unknown>(key);
-      if (value !== undefined) state[key] = value;
-    }
-    this.write(state);
+    await this.withLock(() => {
+      if (this.exists()) return;
+      const state: State = {};
+      for (const key of STATE_KEYS) {
+        const value = source.get<unknown>(key);
+        if (value !== undefined) state[key] = value;
+      }
+      this.write(state);
+    });
   }
 
   private write(state: State): void {

@@ -9,6 +9,7 @@
 
 ### Fixed
 
+- Writes to `~/.config/planswap/state.json` from several windows (for example VS Code and VSCodium on the same distribution) are serialized through a `state.json.lock` directory, so a usage record or alias saved by one window can no longer be lost to a write from another. A lock left behind by a crashed process is taken over.
 - A short account name in the sidebar is no longer split across two lines to keep its warning, link or rename icon beside it; the icons move to the next line together instead.
 
 ## [0.3.14] - 2026-10-18
