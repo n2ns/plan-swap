@@ -121,7 +121,7 @@ Not exercised with real accounts: server-generated 429s, expired/revoked sign-in
 
 ## Implementation verification
 
-Checked on 2026-10-05 after implementing the [agreed validation scope](../plans/claude-usage-report-validation.md). This is a separate verification of the changed `src/claudeUsage.ts`, not a claim that the preceding feasibility probes tested the implementation.
+Checked on 2026-10-05 after implementing the structured-report validation now described in [Claude design 6.9](../design.md#69-claude-usage-limits). This is a separate verification of the changed `src/claudeUsage.ts`, not a claim that the preceding feasibility probes tested the implementation.
 
 - Four initial regression tests failed against the previous implementation: verbose-report cache hits, unavailable rows with an 80-second-old cache, missing reports with a successful final result, and empty limits with leftover older cache fields. They passed after the query/parser and empty-cache changes.
 - Windows validation: typecheck and build passed; the full unit suite passed 622 tests with 60 platform-specific skips and zero failures. The focused Claude usage suite passed 36 tests with seven Linux-only skips. Running the same focused suite inside WSL passed all 43 tests with zero skips, including existing monitor, status-bar and panel tests.

@@ -1,4 +1,4 @@
-// Display settings and language (Features 2, 11): language switch without reload, usage display, hidden email and
+// Display settings and language (Features 2, 13): language switch without reload, usage display, hidden email and
 // windows, model-specific windows, sidebar thresholds. Each change is applied through the settings file.
 import * as sb from '../sidebar.mjs';
 

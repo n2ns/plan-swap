@@ -1,4 +1,4 @@
-// Codex selection (Features 10.2, 10.6): the switch asks a modal, a pending selection shows the banner with the
+// Codex selection (Features 12.2, 12.5): the switch asks a modal, a pending selection shows the banner with the
 // local-editor wording and marks the selected row, clearing the state file removes it.
 import * as fs from 'node:fs';
 import * as path from 'node:path';

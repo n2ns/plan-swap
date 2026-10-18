@@ -5,7 +5,7 @@ is still missing. Remove an item once it is done or decided.
 
 ## Known gaps
 
-- **Per-editor Codex selection (2026-10-18).** VS Code and VSCodium in one distribution keep separate selections through their `server-env-setup` hooks ([Codex design 4a](docs/codex-design.md#4a-per-editor-selection-and-the-server-env-setup-hook)). Automated checks cover the state files, hook block, rc block and block upgrade in temporary HOMEs. Checked on 2026-10-18 with the real VS Code and VSCodium profiles on one distribution (selections written through `writeSelection`, servers restarted by closing and reopening the windows): each editor's server, extension host, pty host and `codex app-server` carried its own `CODEX_HOME`, terminals followed their editor, the shared file stayed untouched, and switching both back to default gave `~/.codex`. The VSCodium sidebar flow was also driven on 2026-10-18 in the real editor (CDP): **Switch** on the Naidou row, the `codex.switchConfirm` modal naming VSCodium, the automatic restart, the "Cannot reconnect" dialog, and after **Reload Window** the panel showed the new account as current without a banner; the same back to `default`. The VS Code sidebar flow likewise: **Save selection** with the VS Code hint, the pending banner, then after closing and reopening the windows the new account current and `CODEX_HOME` from `~/.vscode-server/server-env-setup`; both editors back to `default` the same way. Pending: whether Antigravity sources such a file ([fact 31](docs/research/codex.md#facts)); if it does, `HOOK_KINDS` can gain `antigravity` with its data directory.
+- **Per-editor Codex selection (2026-10-18).** VS Code and VSCodium in one distribution keep separate selections through their `server-env-setup` hooks ([Codex design 4a](docs/codex-design.md#4a-per-editor-selection-and-the-server-env-setup-hook)); Antigravity still uses the shared selection. Pending: whether Antigravity sources such a file ([fact 31](docs/research/codex.md#facts)); if it does, `HOOK_KINDS` can gain `antigravity` with its data directory.
 
 - **Claude subscription availability (2026-10-15).** Unit tests and synthetic sidebar checks cover denial, identity changes, cooldown and recovery. Verify the implemented warning and recovery after renewal in a real editor, and the native Windows/claude.cmd probe with real accounts. Earlier Linux CLI denial evidence is recorded in [Claude usage research](docs/research/claude-usage.md#subscription-availability-evidence); it does not establish acceptance of the integrated feature.
 
@@ -25,7 +25,7 @@ is still missing. Remove an item once it is done or decided.
   the status bar. Look at them in a real editor in light, dark and high-contrast themes and in every UI language
   ([Claude usage checks](docs/manual-verification.md#claude-usage-limits), step 8).
 - **Claude usage limits** ([Claude design 6.9](docs/design.md#69-claude-usage-limits)) are accepted with real default and
-  named accounts. Not covered yet: API-key sign-ins and a non-English locale and time zone. The endpoint's own rate
+  named accounts. Not covered yet: API-key sign-ins, a non-English locale and time zone, a PATH-installed `claude` or `claude.cmd`, cancellation or re-login during a query, and native Linux outside WSL ([implementation verification](docs/research/claude-usage.md#implementation-verification)). The endpoint's own rate
   limits stay unobserved ([research](docs/research/claude-usage.md#rate-limiting)).
 
 ## UI polish
@@ -38,6 +38,6 @@ is still missing. Remove an item once it is done or decided.
   and a UI test asserting Tools stays visible with many cards.
 - **Consistent card height.** The current card shows usage while cards without an observation show nothing. A
   placeholder (for example "Show usage") was not added: a missing observation must not read as 0% (see
-  [Features](docs/features.md#codex-account-usage-observations)), so the wording needs a decision first.
+  [Features](docs/features.md#41-codex-account-usage-observations)), so the wording needs a decision first.
 - **Spacing.** Tightening card padding and line spacing, and grouping with whitespace instead of lines, were not part of
   the last pass.

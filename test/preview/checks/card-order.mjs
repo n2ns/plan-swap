@@ -1,4 +1,4 @@
-// Card order (Features 2.3): every card but the current one can be dragged and carries a grip inside its left edge;
+// Card order (Features 2.1): every card but the current one can be dragged and carries a grip inside its left edge;
 // Alt+Down moves the focused card at once and sends the order, Alt+Up at the top of the movable cards does nothing,
 // a mouse drag moves a card and sends the order, and a state push in another order rebuilds the list in that order.
 export async function run(ctx) {

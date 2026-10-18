@@ -43,7 +43,7 @@ Haz clic en **PlanSwap** en la barra de actividad y elige la pestaña **Claude**
 - **Cuentas con nombre:** cuentas como `work` o `personal`, cada una en su propio directorio, por ejemplo `~/.claude-work` o `~/.codex-work`.
 - **Directorio externo:** un directorio que el editor está usando y que no está en la lista de cuentas de PlanSwap. No se puede renombrar ni quitar en PlanSwap.
 - **Primera fila resaltada:** la cuenta actual. En Codex es la cuenta en vigor en esta ventana, que puede ser distinta de una cuenta que seleccionaste y que espera un reinicio.
-- **Orden de las tarjetas:** arrastra cualquier otra tarjeta hacia arriba o hacia abajo para cambiar el orden, o pulsa Alt+Arriba / Alt+Abajo mientras la tarjeta tiene el foco. La cuenta actual siempre queda primera. El orden se conserva para todos los editores de la misma máquina o distribución de WSL.
+- **Orden de las tarjetas:** arrastra cualquier otra tarjeta hacia arriba o hacia abajo para cambiar el orden, o pulsa Alt+Arriba / Alt+Abajo mientras la tarjeta tiene el foco. La cuenta actual siempre queda primera. El orden se conserva para todos los editores de la misma máquina o distribución de WSL, y los selectores de cuenta de la paleta de comandos también lo usan.
 - **Insignia de enlace:** una cuenta vinculada, que usa los ajustes, reglas, Skills, historial y sesiones de la cuenta predeterminada. Su inicio de sesión sigue siendo independiente.
 
 Términos usados en esta guía:
@@ -314,7 +314,7 @@ Para otras limitaciones, como continuar la sesión de otra cuenta, consulta las 
 ## Desactivar el cambio de cuenta o desinstalar
 
 1. Vuelve a cambiar Claude a `default` y recarga la ventana.
-2. Si el cambio de cuenta de Codex está activado, ejecuta **Desactivar el cambio de cuentas de Codex** (Disable Codex Account Switching; en **Cuenta de Codex** en la paleta de comandos) y confirma. Esto quita los bloques de shell de PlanSwap (o, en Windows, su `CODEX_HOME` de usuario) y borra la selección. Las ventanas abiertas conservan la cuenta anterior hasta que las reinicies como se describe en [Seleccionar una cuenta y aplicarla](#seleccionar-una-cuenta-y-aplicarla).
+2. Si el cambio de cuenta de Codex está activado, ejecuta **Desactivar el cambio de cuentas de Codex** (Disable Codex Account Switching; en **Cuenta de Codex** en la paleta de comandos) y confirma. Esto quita los bloques delimitados de PlanSwap de `~/.profile`, `~/.bashrc` y del `server-env-setup` de cada editor (o, en Windows, su `CODEX_HOME` de usuario) y borra la selección. Las ventanas abiertas conservan la cuenta anterior hasta que las reinicies como se describe en [Seleccionar una cuenta y aplicarla](#seleccionar-una-cuenta-y-aplicarla).
 3. Si quieres, desinstala PlanSwap desde la vista Extensiones.
 
 Los directorios de las cuentas se conservan. Para borrar también las listas de cuentas, los nombres visibles y los registros de uso guardados por PlanSwap, consulta las [instrucciones de desinstalación](../README.md#uninstall). Esto no toca los archivos propios de las cuentas.

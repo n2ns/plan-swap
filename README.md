@@ -36,7 +36,7 @@ See how much is left on each Claude Code and Codex subscription account you own 
 ### Manage your accounts
 
 - **One sidebar, two tabs**: Claude and Codex accounts side by side, each with its email and plan.
-- **Your own order**: drag the cards into the order you want (the current account stays first); it is kept for every editor on the machine.
+- **Your own order**: drag the cards into the order you want (the current account stays first); it is kept for every editor on the same machine or WSL distribution.
 - **Stay signed in everywhere**: sign in once per account, then switch with one click.
 - **Linked or independent accounts**: share the default account's setup and history, or keep them separate.
 - **Tools**: open your rules file and the official extension's settings, update the CLI, check linked accounts and repair their links.
@@ -109,8 +109,8 @@ You can change an account's mode later, and **Re-link** in Tools checks linked a
 - **Switching is not per window**: other windows of the same editor switch too.
 - **Continuing another account's session can fail**, especially between Codex accounts in different ChatGPT organizations.
 - **Some sign-ins apply to every account**, such as an `ANTHROPIC_API_KEY` in the environment; PlanSwap warns you ([details](docs/user-guide.md#sign-ins-that-apply-to-every-account)).
-- **On Windows**, linking single files needs Developer Mode, and Codex thread databases stay per account ([details](docs/user-guide.md#linking-on-windows)).
-- **Not yet verified everywhere**: switching and usage limits have been tested end to end with real accounts only in Antigravity IDE in WSL and on native Windows.
+- **On Windows**, linking single files needs Developer Mode, and Codex thread databases stay per account ([details](docs/user-guide.md#linking-on-windows)). While the Codex extension runs Codex inside WSL (`chatgpt.runCodexInWindowsSubsystemForLinux`), manage Codex accounts from a WSL window ([details](docs/user-guide.md#enable-once)).
+- **Not yet verified everywhere**: switching and usage limits have been tested end to end with real accounts in Antigravity IDE, VS Code and VSCodium in WSL and on native Windows. Local Linux desktops and other remote windows have not been tested with real accounts.
 
 ## Privacy
 
@@ -121,7 +121,7 @@ PlanSwap has no telemetry and makes no network requests of its own. Usage limits
 Before uninstalling PlanSwap:
 
 1. Switch Claude back to `default` and reload the window.
-2. If you enabled Codex switching, run **Codex Account: Disable Codex Account Switching** from the Command Palette to remove its shell configuration (on Windows, the user environment variable `CODEX_HOME`).
+2. If you enabled Codex switching, run **Codex Account: Disable Codex Account Switching** from the Command Palette to remove its shell configuration and the blocks in each editor's `server-env-setup` (on Windows, the user environment variable `CODEX_HOME`).
 3. Uninstall PlanSwap from the Extensions view in the window where you installed it (WSL or Windows).
 
 Your account directories (`~/.claude-<name>` and `~/.codex-<name>`) are kept. To clear PlanSwap's saved account list, display names and usage records as well, delete `~/.config/planswap/state.json`. This does not delete the accounts' own files.
@@ -135,7 +135,7 @@ Your account directories (`~/.claude-<name>` and `~/.codex-<name>`) are kept. To
 
 ## Contributing
 
-The [feature reference](docs/features.md) describes the detailed behavior of accounts, switching and panel tools.
+The [feature reference](docs/features.md) describes the detailed behavior of accounts, switching and panel tools. Building, testing and packaging are covered in [development](docs/development.md).
 
 ## Disclaimer
 

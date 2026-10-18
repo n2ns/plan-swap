@@ -43,7 +43,7 @@ Click **PlanSwap** in the activity bar, then choose the **Claude** or **Codex** 
 - **Named accounts:** accounts such as `work` or `personal`, each in its own directory, for example `~/.claude-work` or `~/.codex-work`.
 - **External directory:** a directory the editor is currently using that is not in PlanSwap's account list. It cannot be renamed or removed in PlanSwap.
 - **Highlighted first row:** the current account. For Codex, this is the account in effect in this window, which can differ from an account you selected that waits for a restart.
-- **Card order:** drag any other card up or down to change the order, or press Alt+Up / Alt+Down while the card has the focus. The current account always stays first. The order is kept for every editor on the same machine or WSL distribution.
+- **Card order:** drag any other card up or down to change the order, or press Alt+Up / Alt+Down while the card has the focus. The current account always stays first. The order is kept for every editor on the same machine or WSL distribution, and the Command Palette account pickers use it too.
 - **Link badge:** a linked account, which uses the default account's settings, rules, skills, history and sessions. Its sign-in stays separate.
 
 Terms used in this guide:
@@ -314,7 +314,7 @@ For other limits, such as continuing another account's session, see [known limit
 ## Disable switching or uninstall
 
 1. Switch Claude back to `default` and reload the window.
-2. If Codex switching is enabled, run **Disable Codex Account Switching** (under **Codex Account** in the Command Palette) and confirm. This removes PlanSwap's shell blocks (or, on Windows, its user-level `CODEX_HOME`) and clears the selection. Open windows keep the old account until you restart them as described in [Select an account and apply it](#select-an-account-and-apply-it).
+2. If Codex switching is enabled, run **Disable Codex Account Switching** (under **Codex Account** in the Command Palette) and confirm. This removes PlanSwap's marked blocks from `~/.profile`, `~/.bashrc` and each editor's `server-env-setup` (or, on Windows, its user-level `CODEX_HOME`) and clears the selection. Open windows keep the old account until you restart them as described in [Select an account and apply it](#select-an-account-and-apply-it).
 3. Uninstall PlanSwap from the Extensions view if you want.
 
 Account directories are kept. To also clear PlanSwap's saved account lists, display names and usage records, see the [uninstall instructions](../README.md#uninstall). This does not touch the accounts' own files.

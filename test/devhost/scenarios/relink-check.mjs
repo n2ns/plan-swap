@@ -1,4 +1,4 @@
-// Link check of linked accounts (Features 5.5, Claude design 6.7 "Link check"): a linked Claude account whose `rules`
+// Link check of linked accounts (Features 7, Claude design 6.7 "Link check"): a linked Claude account whose `rules`
 // link was deleted is pointed out by the background check on activation without being repaired; Re-link reports the
 // same problem first, and only Repair recreates the link.
 import * as fs from 'node:fs';

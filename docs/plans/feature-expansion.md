@@ -2,6 +2,8 @@
 
 Date: 2026-10-04. Status: proposal, not an implementation or release commitment.
 
+Implementation status (2026-10-18): A is implemented as the [recommended account](../features.md#22-recommended-account) card with per-account exclusions. Of B, only the low-limit reminder exists (`planswap.notifications.*`, [Features 2](../features.md#2-sidebar)); the expected-reset / confirmed-recovery distinction and recovery actions do not. C, D and the restart research gate are not started.
+
 ## Objective and scope
 
 Improve account selection, explain observed failures, and reduce the effort required to return to work while preserving PlanSwap's lightweight sidebar model. The user has already assigned restriction-aware recommendations for implementation; this plan does not modify or review that work.

@@ -1,4 +1,4 @@
-// Card order (Features 2.3): a stored claude.order shows from the first render with the current card first and the
+// Card order (Features 2.1): a stored claude.order shows from the first render with the current card first and the
 // unordered accounts after it by name; Alt+Down moves a card and writes the whole order; on the Codex page a mouse
 // drag does the same and writes codex.order.
 import * as fs from 'node:fs';

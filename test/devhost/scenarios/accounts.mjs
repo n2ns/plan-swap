@@ -1,4 +1,4 @@
-// Account rows (Features 2.3, 2.5, 2.7, 4.2, 4.3, 4.6, 4.7): add linked and independent accounts, duplicate-name
+// Account rows (Features 2.1, 2.3, 2.4, 5.2, 5.3, 5.6, 5.7): add linked and independent accounts, duplicate-name
 // validation, inline rename with collision, link/unlink confirmations, inline remove with the directory kept.
 import * as fs from 'node:fs';
 import * as path from 'node:path';

@@ -1,4 +1,4 @@
-// The recommended-account card (Features 2.4): trigger, ranking, exclusion marks, settings, themes, the Codex variant
+// The recommended-account card (Features 2.2): trigger, ranking, exclusion marks, settings, themes, the Codex variant
 // and the card's Switch. Fixture: ../fixtures/accounts.mjs.
 import * as sb from '../sidebar.mjs';
 

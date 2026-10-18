@@ -144,11 +144,14 @@ describe('Markdown links', () => {
   });
 });
 
-test('the document map links every docs/*.md file except translated user guides', () => {
+test('the document map links every docs/**/*.md file except translated user guides', () => {
   const map = read('docs/doc-map.md').replace(/\]\((?!\.\.\/)/g, '](docs/');
-  const missing = fs.readdirSync(path.join(root, 'docs'))
-    .filter((f) => f.endsWith('.md') && !/^user-guide\.[a-z-]+\.md$/.test(f))
-    .filter((f) => !map.includes(`](docs/${f}`));
+  // A link to a directory (ending in /) covers every file below it
+  const covered = (rel: string): boolean =>
+    map.includes(`](${rel})`) || rel.split('/').slice(1, -1).some((_, i, dirs) => map.includes(`](docs/${dirs.slice(0, i + 1).join('/')}/)`));
+  const missing = markdownFiles()
+    .filter((f) => f.startsWith('docs/') && !/^docs\/user-guide\.[a-z-]+\.md$/.test(f))
+    .filter((f) => !covered(f));
   assert.deepEqual(missing, []);
 });
 
