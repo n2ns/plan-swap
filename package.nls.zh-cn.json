@@ -42,6 +42,7 @@
   "config.language.zhTw": "繁體中文",
   "config.language.es": "Español",
   "config.language.ja": "日本語",
+  "config.language.ko": "한국어",
   "config.language.description": "侧边栏、状态栏和消息的语言。命令标题跟随编辑器语言。",
   "config.usageDisplay.description": "侧边栏和状态栏显示剩余或已用百分比。颜色始终按剩余额度判断。",
   "config.usageDisplay.remaining": "剩余量",

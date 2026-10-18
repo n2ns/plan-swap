@@ -42,6 +42,7 @@
   "config.language.zhTw": "繁體中文",
   "config.language.es": "Español",
   "config.language.ja": "日本語",
+  "config.language.ko": "한국어",
   "config.language.description": "Idioma de la barra lateral, la barra de estado y los mensajes. Los títulos de comandos siguen el idioma del editor.",
   "config.usageDisplay.description": "Mostrar porcentajes restantes o usados en la barra lateral y de estado. Los colores siempre siguen lo que queda.",
   "config.usageDisplay.remaining": "Lo que queda",
