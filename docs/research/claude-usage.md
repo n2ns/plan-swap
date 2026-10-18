@@ -12,6 +12,7 @@ The [VS Code documentation](https://code.claude.com/docs/en/vs-code) describes s
 
 - The documented stdin schema does not provide `CLAUDE_CONFIG_DIR`, and shared sessions and working-directory paths do not identify the signed-in account, so attributing a status-line invocation to an account is unverified.
 - Shared accounts link `settings.json` to the default account, so installing a collector through a named account's settings would modify the default settings, which [AGENTS.md](../../AGENTS.md#account-and-data-safety) forbids.
+- The [settings precedence documentation](https://code.claude.com/docs/en/settings#settings-precedence) permits a disposable workspace's `.claude/settings.local.json` to hold a collector without touching default settings; managed or higher-priority settings may override it.
 
 ## Official CLI query
 
@@ -48,19 +49,15 @@ The run is what makes Claude Code fetch the limits with its own credentials, and
 
 ### Rate limiting
 
-Measured on 2026-10-01 with Claude Code 2.1.286 against the signed-in default account: about 70 calls (40 sequential, 10 in parallel, one every 15 seconds for 3 minutes) all succeeded and none produced a 429. Claude Code itself fetched at most about once per 60 seconds per account (`fetchedAtMs` advanced only about once a minute) and answered the other calls from the cache. The server-side limits of the underlying endpoint cannot be observed through the CLI, so no safe rate is established. A smoke run of the real modules against the default account returned `ok` with three windows.
+Measured on 2026-10-01 with Claude Code 2.1.286 against the signed-in default account: about 70 calls (40 sequential, 10 in parallel, one every 15 seconds for 3 minutes) all succeeded and none produced a 429. Claude Code itself fetched at most about once per 60 seconds per account (`fetchedAtMs` advanced only about once a minute) and answered the other calls from the cache. The server-side limits of the underlying endpoint cannot be observed through the CLI, so no safe rate is established.
 
 Public sources checked on 2026-10-02 contradict treating this as safe. Claude Code's cost documentation states that the plan-limits request fails "most often because the usage endpoint is rate limited", after which `/usage` shows the last bars loaded within 60 minutes; changelog 2.1.284 made `/usage` and the IDE usage views back off after a rate limit. Community issues (anthropics/claude-code#31055, #30930, #31319, March 2026, Claude Code 2.1.69, no staff replies) report 429s on `api.anthropic.com/api/oauth/usage` after a few calls and a limit shared by every session of the account. No numbers are published. `claude -p /usage` is also not in the documented list of commands available with `-p`. PlanSwap's response is described in [Claude design 6.9](../design.md#69-claude-usage-limits).
 
-Not yet observed: named accounts with `CLAUDE_CONFIG_DIR` set; signed-out, API-key and expired-sign-in accounts (output, `is_error` and cache); whether the call writes anything in the account directory besides the cache entry; native Windows (`claude.cmd`/`claude.exe`). Pending user checks are tracked in [TODO](../../TODO.md).
+Not yet observed: named accounts with `CLAUDE_CONFIG_DIR` set; signed-out, API-key and expired-sign-in accounts (output, `is_error` and cache); whether the call writes anything in the account directory besides the cache entry; native Windows (`claude.cmd`/`claude.exe`). Pending user checks are tracked in [TODO](../../TODO.md). Some of these cases were observed later: a WSL named account, the native Windows default account and a signed-out account in the [structured usage report verification](#structured-usage-report-verification), and an expired subscription in the [subscription availability evidence](#subscription-availability-evidence).
 
 ### Side effects
 
 Checked on 2026-10-01 against the default account. Each plain `claude -p "/usage"` run writes a session transcript (about 4 KB) under `projects/<encoded working directory>/` of the account, which for a shared account is the default account's `projects/`; `--no-session-persistence` prevents it (no new transcript was written). A run in a working directory Claude Code has not seen before may create an empty `projects/<encoded directory>/memory/` folder even then. Without `--setting-sources user`, the working directory's project settings would apply; with the home directory as working directory that is `~/.claude/settings.json`, which would leak the default account's settings into an independent account's query. These are the reasons for the flags and working directory in [Claude design 6.9](../design.md#69-claude-usage-limits). Whether user-level hooks such as `SessionStart` run for the local command was not checked.
-
-## Decision
-
-Implemented via the CLI and cache route ([Claude design 6.9](../design.md#69-claude-usage-limits)). The status-line route was not pursued: graphical-chat invocation, account attribution and an installation that preserves default settings were never established together. If it is reopened, the [settings precedence documentation](https://code.claude.com/docs/en/settings#settings-precedence) permits a disposable workspace's `.claude/settings.local.json` to hold the collector without touching default settings (managed or higher-priority settings may override it); the user must first verify there that graphical chat invokes it and that attribution is correct.
 
 ## Extension-bundled CLI
 
@@ -109,43 +106,20 @@ Static inspection of the installed Windows 2.1.289 binary matches the runtime re
 - Rows carry `kind`, `group`, `percent`, nullable `resets_at`, `scope`, `severity`, and `is_active`. Unknown kinds, null reset times and `scope.surface` need explicit handling. The existing adapter's model-only scope handling must not silently turn a surface-specific limit into a general limit.
 - The report has no account identifier or fetch timestamp. Its receipt time may be called `observedAt`; it is not evidence of the server fetch time. Keep the existing identity checks, or replace them with explicit before/after identity validation and stale-result rejection when an account changes.
 
-### Migration recommendation and remaining gaps
+### Remaining gaps
 
-Prefer a bounded `json --verbose` message-array parser over a new streaming parser: both worked, and the array format permits one JSON parse after process completion. Accept a candidate assistant report only with normal process exit and a terminal successful `usage` result. The private control method `usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET` is unnecessary for this route.
+Not exercised with real accounts: server-generated 429s, expired/revoked sign-ins, API-key/provider accounts, re-login during an in-flight query, a Windows named account, clients older than the report feature, surface-specific/unknown meters, or the final feature inside VS Code. Open acceptance items are tracked in [TODO](../../TODO.md).
 
-Do not remove the official cache integration as part of the parser change. Today the sidebar and status bar read it, and both current/other-account scheduling and cross-window cooldowns use its timestamp. Keeping that coordination initially avoids introducing a second persistence mechanism. Older clients without a report can use the cache left by the same invocation, subject to the existing attribution/freshness checks; do not start another query merely because the report is absent, or report stale fallback values as a successful refresh.
+## Product query arguments
 
-All 16 offline fixture tests passed. They exercised bounded JSON message arrays and streaming output, malformed/truncated output, terminal errors and missing results, report absence/null/empty distinctions, UTF-8 splits, nullable resets, identity/expiry checks, directory changes and shared-cache scheduling. They are candidate-protocol and current-contract checks, not tests of a shipped report implementation. A fixture with two sequential window monitors demonstrated that replacing shared cache state with isolated in-memory reports would increase queries; the existing timestamp mechanism is not a cross-process lock. The six documentation checks and `git diff --check` also passed; no desktop/UI build or acceptance was required for this research-only change.
+Checked on 2026-10-05 with the official extension binaries (Windows x64 2.1.289; WSL 2.1.286 and 2.1.289) and existing signed-in accounts, using the product's query arguments without the feasibility probe's extra hook/MCP restrictions. Raw output, identities and quota values were not logged.
 
-Not exercised with real accounts: server-generated 429s, expired/revoked sign-ins, API-key/provider accounts, re-login during an in-flight query, a Windows named account, clients older than the report feature, surface-specific/unknown meters, or the final feature inside VS Code. These remain acceptance gaps; no production parsing or display behavior changed in this verification.
-
-## Implementation verification
-
-Checked on 2026-10-05 after implementing the structured-report validation now described in [Claude design 6.9](../design.md#69-claude-usage-limits). This is a separate verification of the changed `src/claudeUsage.ts`, not a claim that the preceding feasibility probes tested the implementation.
-
-- Four initial regression tests failed against the previous implementation: verbose-report cache hits, unavailable rows with an 80-second-old cache, missing reports with a successful final result, and empty limits with leftover older cache fields. They passed after the query/parser and empty-cache changes.
-- Windows validation: typecheck and build passed; the full unit suite passed 622 tests with 60 platform-specific skips and zero failures. The focused Claude usage suite passed 36 tests with seven Linux-only skips. Running the same focused suite inside WSL passed all 43 tests with zero skips, including existing monitor, status-bar and panel tests.
-- Focused tests use fake spawn and temporary HOME directories. Additional cases cover malformed/duplicate reports and terminal results, missing/null data, nullable resets, unused metadata, non-zero/signal exits, late stdout and split UTF-8, byte limits, account/organization changes, cache ownership/time/empty-state checks, cancellation and executable fallback. Existing scheduling/cooldown behavior remains covered. Independent source review found no concrete issue.
-
-At the user's explicit authorization, a disposable harness bundled and called the changed query module with real official executables and existing signed-in accounts. It used the product's exact query arguments and process options, without the feasibility probe's extra hook/MCP restrictions. The harness supplied the discovered official extension path as the fallback callback; it did not exercise VS Code's `vscode.extensions` lookup or install an extension. It neither opened credentials nor logged raw output, identities or quota values. CLI output was inspected in memory and only sanitized observations were saved under ignored `out/usage-report-validation/`.
-
-| Environment / case | Executable | Observed result |
-|---|---|---|
-| Windows, default account | Official extension 2.1.289 | PATH attempt returned ENOENT; bundled exe succeeded with one report and a displayable owned cache. |
-| Windows, repeat default-account query | Official extension 2.1.289 | Success with unchanged official cache timestamp, confirming an accepted recent-cache hit. |
-| WSL `Ubuntu_26_Dev`, default account | Official extension 2.1.286 | PATH attempt returned ENOENT; bundled Linux binary succeeded. |
-| WSL `Ubuntu_26_Dev`, existing named account | Official extension 2.1.286 | Success using the selected account directory, including before/after identity and cache ownership checks. |
-| WSL `Ubuntu_26`, default account | Official extension 2.1.289 | Success through the bundled Linux binary. |
-| Windows, default account with a failing proxy for this query only | Official extension 2.1.289 | CLI exited 0 with a successful local-command result but `limits: null`; the module returned `noUsage`. Cache timestamp stayed unchanged and historical values remained displayable. |
-
-The failing proxy returned HTTP 502 and was configured only through the query's child environment; 16 connections confirmed it was used. The official cache was about 170 seconds old at query start. The exact 80-second false-success boundary is covered by the automated fixture and the earlier feasibility observation, not by this implementation's live failure run. The proxy was closed after the check; host network settings and account selection were unchanged.
-
-Every completed CLI query reported a local `usage` command, zero turns, zero API duration, zero cost and an empty model-usage map. These are CLI-reported accounting observations, not a packet-level audit. The official CLI may still update its own account files. The WSL 2.1.289 query took about 19 seconds; other successful queries took about 3–4 seconds. These samples do not establish a performance bound.
-
-Not verified by this implementation check: native Linux outside WSL, Windows named accounts, a real PATH-installed CLI or `.cmd` invocation, real cancellation/re-login during a query, server-generated 429s, revoked/API-key/provider accounts, or the built extension's rendered behavior inside VS Code. Those paths have only the applicable automated coverage and remain subject to [manual acceptance](../manual-verification.md#claude-usage-limits). No VSIX was installed or published.
+- Default accounts on Windows and in both WSL distributions, and an existing named account in WSL, each returned one usage report. A repeated Windows default-account query succeeded with the official cache timestamp unchanged, a recent-cache hit.
+- With a loopback proxy returning HTTP 502 configured only in the query's child environment (16 connections confirmed its use) and the official cache about 170 seconds old, the CLI exited 0 with a successful local-command result but `limits: null`, and the cache timestamp stayed unchanged.
+- Every completed query reported a local `usage` command, zero turns, zero API duration, zero cost and an empty model-usage map; these are CLI-reported accounting observations, not a packet-level audit, and the CLI may still update its own account files. The WSL 2.1.289 query took about 19 seconds, the others about 3–4 seconds; these samples do not establish a performance bound.
 
 ## Subscription availability evidence
 
 2026-10-15, Linux, official Claude Code 2.1.299. A named account whose subscription expiry the user independently confirmed was compared with the default account. Both `claude auth status --json` results reported signed in with a Max subscription. The expired account's `-p /usage` structured report contained `rate_limits: null` and did not update the historical cache; the default account returned three windows and updated its cache.
 
-At the user's explicit request, sending `Reply with OK.` under the expired account returned exit code 1, assistant error `oauth_org_not_allowed`, and a terminal result with `subtype: success` but `is_error: true`; reported cost was zero. This proves the local denial signature, not that the error uniquely means billing expiry. Raw output, identifiers and credentials were not retained. This was a CLI-level test before implementation, not acceptance of the new editor feature; renewed-account recovery and Windows real-account probes remain unverified.
+At the user's explicit request, sending `Reply with OK.` under the expired account returned exit code 1, assistant error `oauth_org_not_allowed`, and a terminal result with `subtype: success` but `is_error: true`; reported cost was zero. This proves the local denial signature, not that the error uniquely means billing expiry. Raw output, identifiers and credentials were not retained. This was a CLI-level test before implementation, not acceptance of the new editor feature; pending checks are in [TODO](../../TODO.md).

@@ -34,6 +34,4 @@ Durations in milliseconds, rounded to three decimals:
 
 For N accounts, direct and panel layers each read/parse N files. The combined layer reads/parses 2N + 1 files. These counts demonstrate repeated reads across consumers; the large-file cases show their potential cost.
 
-## Decision
-
-No production cache or read-path change was introduced. Small synthetic configurations were inexpensive in this run. Large configurations cost more, but the actual distribution of account counts, file sizes and refresh frequency has not been established. Before optimizing, collect relevant non-sensitive scale/timing evidence and define a supported target. Any future cache also needs explicit invalidation behavior and before/after measurements under the same conditions.
+Small synthetic configurations were inexpensive in this run; large configurations cost more. The actual distribution of account counts, file sizes and refresh frequency was not established. The resulting design decision is in [Claude design 7](../design.md#7-refresh-triggers).
