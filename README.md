@@ -49,6 +49,7 @@ Every setting is listed in the [user guide](docs/user-guide.md#change-language-a
 - The official Claude Code and/or Codex extension installed where the window runs.
 - Optional: the `claude` and/or `codex` command on the PATH there. Without it, terminal sign-in and usage checks use the CLI bundled with the corresponding official extension.
 - For Codex switching outside native Windows: Bash as the login shell.
+- For Codex switching in a VS Code or VSCodium WSL window: the extension that connects the window reads the PlanSwap block in that editor's `server-env-setup` before its WSL server starts, so each editor keeps its own Codex selection. VS Code uses Microsoft's Remote - WSL; VSCodium needs the [wsl-remote](https://open-vsx.org/extension/n2ns/wsl-remote) extension (`n2ns.wsl-remote`).
 
 ## Supported editors
 
@@ -56,7 +57,7 @@ A Claude switch applies to new sessions; reload the window to move open panels o
 
 | Environment | After switching a Codex account |
 | --- | --- |
-| Antigravity IDE or VSCodium in WSL | PlanSwap restarts the WSL server after you confirm; reload each disconnected window. |
+| Antigravity IDE or VSCodium in WSL | PlanSwap restarts the WSL server after you confirm; reload each disconnected window. VSCodium connects through the [wsl-remote](https://open-vsx.org/extension/n2ns/wsl-remote) extension. |
 | VS Code in WSL | Close all VS Code windows of that distribution, then reopen them. |
 | Native Windows | Fully quit the editor and start it again from the Start menu or taskbar. |
 | Local Linux or other remote windows | Restart the editor or remote server as PlanSwap's instructions show. |

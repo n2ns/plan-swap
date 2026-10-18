@@ -31,6 +31,7 @@ You need:
 - PlanSwap and the official Claude Code and/or Codex extension installed where that window runs.
 - Optional: the `claude` and/or `codex` command on the PATH there. When the command is unavailable, signing in from the terminal and usage checks use the CLI bundled with the corresponding official extension.
 - For Codex switching outside native Windows: Bash as your login shell.
+- For Codex switching in a VS Code or VSCodium WSL window: the extension that connects the window reads the PlanSwap block in that editor's `server-env-setup` before its WSL server starts. VS Code uses Microsoft's Remote - WSL; VSCodium needs the [wsl-remote](https://open-vsx.org/extension/n2ns/wsl-remote) extension (`n2ns.wsl-remote`).
 
 See the [installation instructions](../README.md#install) and [supported editors](../README.md#supported-editors) for setup and how well each editor has been tested.
 

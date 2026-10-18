@@ -31,6 +31,7 @@ Claude 帳號名稱旁的警告圖示表示訂閱存取遭拒。懸停查看提�
 - 在該視窗執行的環境中安裝 PlanSwap，以及官方 Claude Code 和/或 Codex 擴充功能。
 - 選用：該環境的 PATH 中有 `claude` 和／或 `codex` 命令。該命令無法使用時，在終端機登入和查詢用量額度都會使用對應官方擴充功能內建的 CLI。
 - 在原生 Windows 以外的環境中切換 Codex：登入 shell 必須是 Bash。
+- 在 VS Code 或 VSCodium 的 WSL 視窗中切換 Codex：連接該視窗的擴充功能會在 WSL 伺服器啟動前讀取該編輯器 `server-env-setup` 中的 PlanSwap 區塊。VS Code 使用 Microsoft 的 Remote - WSL；VSCodium 需要安裝 [wsl-remote](https://open-vsx.org/extension/n2ns/wsl-remote) 擴充功能（`n2ns.wsl-remote`）。
 
 安裝步驟以及各編輯器的測試程度，請參閱[安裝說明](../README.md#install)和[支援的編輯器](../README.md#supported-editors)。
 

@@ -31,6 +31,7 @@ Claude アカウント名の横の警告アイコンは、サブスクリプシ�
 - そのウィンドウが動作する環境に、PlanSwap と公式の Claude Code 拡張機能または Codex 拡張機能（あるいは両方）がインストールされていること。
 - 任意：その環境の PATH 上の `claude` または `codex` コマンド。コマンドが利用できない場合、ターミナルからのサインインと使用量の確認には、対応する公式拡張機能に同梱された CLI が使われます。
 - ネイティブ Windows 以外で Codex を切り替える場合：ログインシェルが Bash であること。
+- VS Code または VSCodium の WSL ウィンドウで Codex を切り替える場合：ウィンドウを接続する拡張機能が、WSL サーバーの起動前にそのエディターの `server-env-setup` にある PlanSwap のブロックを読み込みます。VS Code では Microsoft の Remote - WSL を使い、VSCodium では [wsl-remote](https://open-vsx.org/extension/n2ns/wsl-remote) 拡張機能（`n2ns.wsl-remote`）が必要です。
 
 セットアップ方法と各エディターの検証状況については、[インストール手順](../README.md#install)と[対応エディター](../README.md#supported-editors)を参照してください。
 
