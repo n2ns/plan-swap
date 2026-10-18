@@ -18,7 +18,7 @@ import { ClaudeUsageMonitor, ClaudeUsageQueries } from './claudeUsageMonitor';
 import { ClaudeSubscriptionChecks, queryClaudeSubscription } from './claudeSubscription';
 import { CodexAccountStore } from './codex/codexStore';
 import { codexPanelSource, registerCodexCommands } from './codex/codexCommands';
-import { codexRunsInWsl } from './codex/codexSettings';
+import { codexRunsInWsl, warnCodexRunsInWsl } from './codex/codexSettings';
 import { checkSharedInBackground, registerToolCommands, runTool, type TerminalCheck, type ToolDeps } from './tools';
 import { LinkCheckNotices } from './linkCheck';
 import { registerDiagnosticsCommand } from './diagnosticsCommand';
@@ -398,7 +398,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   const refreshAllCodexUsage = async (): Promise<void> => {
     if (!codex || !usage || refreshingAllCodex) return;
     if (codexRunsInWsl()) {
-      void vscode.window.showWarningMessage(t('codex.win.runsInWsl'));
+      warnCodexRunsInWsl();
       return;
     }
     const eligible = codex.store.all()
@@ -653,7 +653,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     ...(usage
       ? [vscode.commands.registerCommand(REFRESH_USAGE_COMMAND, async () => {
         if (codexRunsInWsl()) {
-          void vscode.window.showWarningMessage(t('codex.win.runsInWsl'));
+          warnCodexRunsInWsl();
           return;
         }
         const left = usage.current().checking ? 0 : codexCooldown.remaining(effectiveDir());

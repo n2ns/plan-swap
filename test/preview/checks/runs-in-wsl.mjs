@@ -36,6 +36,18 @@ export async function run(ctx) {
   await step('codex banner: no horizontal overflow', !r.overflow);
   await step('codex: no sign-in or terminal buttons', r.terminals === 0, r.terminals);
   await step('codex: no sign-in hint', r.hints === 0, r.hints);
+  // The banner's Open Setting button sits inside the sidebar and asks the host for the Settings UI at the setting
+  const button = page.locator('#panel-codex .banner [data-action="openCodexWslSetting"]');
+  const b = await button.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const s = document.querySelector('#sidebar').getBoundingClientRect();
+    return { visible: r.width > 0 && r.height > 0, inside: r.left >= s.left - 1 && r.right <= s.right + 1, label: el.textContent.trim() };
+  }).catch(() => null);
+  await step('codex banner: Open Setting button visible inside the sidebar', !!b && b.visible && b.inside && b.label.length > 0, b);
+  await page.evaluate(() => window.preview.clearMessages());
+  await button.click();
+  const msg = await page.evaluate(() => window.preview.messages.at(-1));
+  await step('codex banner: the button sends the openCodexWslSetting tool message', !!msg && msg.type === 'tool' && msg.mode === 'codex' && msg.tool === 'openCodexWslSetting' && Object.keys(msg).length === 3, msg);
   await shot(`${locale}-${width}-codex.png`);
 
   await ctx.apply((state) => { state.codex.runsInWsl = true; state.codex.enabled = false; }, 'codex');
@@ -49,6 +61,7 @@ export async function run(ctx) {
     };
   });
   await step('codex disabled page: banner above the enable card', d.banner && d.beforeCard, d);
+  await step('codex disabled page: banner keeps its Open Setting button', await page.locator('#panel-codex .banner [data-action="openCodexWslSetting"]').count() === 1);
   await step('codex disabled page: no horizontal overflow', !d.overflow);
   await shot(`${locale}-${width}-codex-disabled.png`);
 }

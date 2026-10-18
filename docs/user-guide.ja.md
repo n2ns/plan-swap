@@ -98,7 +98,7 @@ Codex の場合は、先に[切り替えを有効化](#codex-アカウントを�
 - **WSL、ローカルの Linux、その他のリモートウィンドウ**：PlanSwap は `~/.profile` と `~/.bashrc` にマーカー付きのブロックを追加し、Bash のログインシェルが選択中のアカウントを読み込むことを確認します。競合する `CODEX_HOME` の設定やシェルの設定が報告された場合は、指摘された箇所を修正してからもう一度試してください。VS Code または VSCodium の WSL ウィンドウでは、最初の切り替え時にそのエディターの `~/.vscode-server/server-env-setup` または `~/.vscodium-server/server-env-setup` にもマーカー付きのブロックを追加します。WSL サーバーは起動前にこれを読み込みます。
 - **ネイティブ Windows**：PlanSwap はユーザーレベルの環境変数 `CODEX_HOME` を管理します。`CODEX_HOME` を自分で別の値に設定している場合、有効化は拒否されます。すでに PlanSwap のアカウントディレクトリ（`~/.codex-<name>`）を指している場合は、PlanSwap がその管理を引き継ぎます。
 
-Windows の Codex 拡張機能が WSL 内で実行するよう設定されている場合は、WSL ウィンドウからアカウントを管理するか、Windows のアカウントを管理する前に `chatgpt.runCodexInWindowsSubsystemForLinux` をオフにしてください。
+Windows の Codex 拡張機能が WSL 内で実行するよう設定されている場合は、WSL ウィンドウからアカウントを管理するか、Windows のアカウントを管理する前に `chatgpt.runCodexInWindowsSubsystemForLinux` をオフにしてください。サイドバーのバナーと警告には **設定を開く** ボタンがあり、設定エディターをその設定の位置で開きます。PlanSwap がこの設定を変更することはありません。
 
 ### アカウントを選択して適用する
 

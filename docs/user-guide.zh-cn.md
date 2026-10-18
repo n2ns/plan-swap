@@ -98,7 +98,7 @@ Claude 账号名旁的警告图标表示订阅访问被拒绝。悬浮查看提�
 - **WSL、本地 Linux 和其他远程窗口**：PlanSwap 会在 `~/.profile` 和 `~/.bashrc` 中添加带标记的代码块，然后检查 Bash 登录 shell 能否读到所选账号。如果它报告存在冲突的 `CODEX_HOME` 赋值或 shell 配置，请按提示修正后重试。在 VS Code 或 VSCodium 的 WSL 窗口里，第一次切换还会在该编辑器的 `~/.vscode-server/server-env-setup` 或 `~/.vscodium-server/server-env-setup` 中添加带标记的代码块，其 WSL 服务端会在启动前读取它。
 - **原生 Windows**：PlanSwap 管理你的用户级 `CODEX_HOME` 环境变量。如果你自己把 `CODEX_HOME` 设成了其他值，启用会被拒绝。如果它已指向某个 PlanSwap 账号目录（`~/.codex-<name>`），PlanSwap 会接管它。
 
-如果 Windows 上的 Codex 插件设置为在 WSL 中运行，请在 WSL 窗口中管理其账号，或者先关闭 `chatgpt.runCodexInWindowsSubsystemForLinux`，再管理 Windows 账号。
+如果 Windows 上的 Codex 插件设置为在 WSL 中运行，请在 WSL 窗口中管理其账号，或者先关闭 `chatgpt.runCodexInWindowsSubsystemForLinux`，再管理 Windows 账号。侧边栏横幅和警告通知上都有 **打开设置** 按钮，会把设置编辑器定位到这一项；PlanSwap 不会替你改它。
 
 ### 选择账号并使其生效
 

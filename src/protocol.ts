@@ -7,7 +7,8 @@ export type AccountKind = 'default' | 'named' | 'external';
 export type PanelMode = 'claude' | 'codex';
 // Setting planswap.usageDisplay: usage bars and percentages show what is left (the default) or what is used
 export type UsageDisplay = 'remaining' | 'used';
-export type ToolId = 'openGlobalMd' | 'openSettings' | 'reloadWindow' | 'restartExtHost' | 'cliVersions' | 'sync' | 'updateCli' | 'openHelp' | 'openStar' | 'refreshUsage' | 'refreshAllUsage';
+// openCodexWslSetting: the Settings UI at the Codex extension's run-in-WSL setting (the banner's button)
+export type ToolId = 'openGlobalMd' | 'openSettings' | 'reloadWindow' | 'restartExtHost' | 'cliVersions' | 'sync' | 'updateCli' | 'openHelp' | 'openStar' | 'refreshUsage' | 'refreshAllUsage' | 'openCodexWslSetting';
 
 export interface AccountView {
   kind: AccountKind;

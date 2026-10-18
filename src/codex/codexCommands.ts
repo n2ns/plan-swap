@@ -43,7 +43,7 @@ import { isWindows, tildify, errText } from '../platform';
 import { askCopyFallback } from '../linkPolicy';
 import { type ServerKind, canAutoRestart, detectServerKind, executeRestart, planRestart } from './codexServer';
 import type { CodexAccountStore } from './codexStore';
-import { codexRunsInWsl } from './codexSettings';
+import { codexRunsInWsl, warnCodexRunsInWsl } from './codexSettings';
 import { runTool, type TerminalCheck, type ToolDeps } from '../tools';
 import { t } from '../i18n';
 import type { CodexUsageHistory } from './codexUsageHistory';
@@ -324,7 +324,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
 
   async function enable(): Promise<void> {
     if (codexRunsInWsl()) {
-      void vscode.window.showWarningMessage(t('codex.win.runsInWsl'));
+      warnCodexRunsInWsl();
       return;
     }
     let check: ReturnType<typeof preCheck>;
@@ -422,7 +422,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
   async function switchTo(account: CodexAccount): Promise<void> {
     if (switching) return;
     if (codexRunsInWsl()) {
-      void vscode.window.showWarningMessage(t('codex.win.runsInWsl'));
+      warnCodexRunsInWsl();
       return;
     }
     // Switching is only allowed once PlanSwap manages CODEX_HOME (an unreadable rc file counts as not enabled)
@@ -683,7 +683,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
   function openTerminal(account: CodexAccount, login: boolean): void {
     // A Windows terminal would sign in to the Windows-side directory, which the WSL-side Codex never reads
     if (codexRunsInWsl()) {
-      void vscode.window.showWarningMessage(t('codex.win.runsInWsl'));
+      warnCodexRunsInWsl();
       return;
     }
     const isDefault = account.name === CODEX_DEFAULT_NAME;
@@ -810,7 +810,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     }),
     vscode.commands.registerCommand('planswap.codex.openTerminal', async () => {
       if (codexRunsInWsl()) {
-        void vscode.window.showWarningMessage(t('codex.win.runsInWsl'));
+        warnCodexRunsInWsl();
         return;
       }
       const a = await pickAccount(allWithExternal(), t('codex.pick.terminal'));

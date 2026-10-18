@@ -8,6 +8,7 @@ import * as path from 'node:path';
 import { execFile } from 'node:child_process';
 import { currentDir, isExplicitConfigDir } from './claudeSettings';
 import { effectiveDir } from './codex/codexState';
+import { openCodexWslSetting } from './codex/codexSettings';
 import { claudeJsonPath, defaultDir, sameRealPath, syncMcpServers } from './paths';
 import { ensureClaudeLinks, isSharedClaudeAccount, mirrorClaudeJson, type LinkOptions, type ShareReport } from './claudeShare';
 import { askCopyFallback } from './linkPolicy';
@@ -71,6 +72,7 @@ function userGuideUrl(): string {
  * - openGlobalMd: <currentDir()>/CLAUDE.md or <effectiveDir()>/AGENTS.md; a missing file is created empty (0600,
  *   exclusive) after a modal confirmation; for a dangling same-name symlink its target is created instead.
  * - openSettings: the editor settings filtered to `claudeCode.` or `chatgpt.`.
+ * - openCodexWslSetting: the Settings UI at chatgpt.runCodexInWindowsSubsystemForLinux (the runs-in-WSL banner's button).
  * - reloadWindow / restartExtHost: the editor commands, without confirmation.
  * - refreshUsage / refreshAllUsage: the vendor's own refresh command, so both entry points share one path.
  * - cliVersions: collectVersions, pushed to the panel through deps.postVersions or shown in a QuickPick.
@@ -91,6 +93,9 @@ export async function runTool(mode: PanelMode, tool: ToolId, deps: ToolDeps): Pr
       return;
     case 'openSettings':
       await vscode.commands.executeCommand('workbench.action.openSettings', mode === 'claude' ? 'claudeCode.' : 'chatgpt.');
+      return;
+    case 'openCodexWslSetting':
+      await openCodexWslSetting();
       return;
     case 'reloadWindow':
       await vscode.commands.executeCommand('workbench.action.reloadWindow');

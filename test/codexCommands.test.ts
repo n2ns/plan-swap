@@ -4,7 +4,8 @@ import * as fs from 'node:fs';
 import fsDefault from 'node:fs';
 import * as path from 'node:path';
 import { codexPanelSource, manualRestartMessages, registerCodexCommands, restartInfo, restartServerInteractive, validateName } from '../src/codex/codexCommands';
-import { codexRunsInWsl } from '../src/codex/codexSettings';
+import { codexRunsInWsl, RUNS_IN_WSL_SETTING } from '../src/codex/codexSettings';
+import { runTool } from '../src/tools';
 import { CodexAccountStore } from '../src/codex/codexStore';
 import { setLocale, t } from '../src/i18n';
 import { LabelStore } from '../src/labels';
@@ -934,7 +935,9 @@ describe('panel message handlers', () => {
   test('Windows with Codex run inside WSL: enable, switch and terminals are refused with guidance, nothing is written', async (ctx) => {
     const a = named('wslrun');
     const h = await harness([a]);
-    const warnings = modal(ctx, () => t('codex.saveSelectionButton'));
+    // The warning's Open Setting button is pressed every time; the Settings UI opens at the Codex setting
+    const warnings = modal(ctx, (message) => message === t('codex.win.runsInWsl') ? t('codex.win.openSetting') : t('codex.saveSelectionButton'));
+    const executed = ctx.mock.method(commands, 'executeCommand');
     const created = ctx.mock.method(window, 'createTerminal');
     const realPlatform = Object.getOwnPropertyDescriptor(process, 'platform') as PropertyDescriptor;
     const stateBefore = fs.existsSync(STATE_FILE()) ? read(STATE_FILE()) : undefined;
@@ -946,6 +949,13 @@ describe('panel message handlers', () => {
       await h.handle({ type: 'terminal', mode: 'codex', dir: a.dir });
       await commands.registered['planswap.codex.openTerminal']();
       assert.deepEqual(warnings.mock.calls.map((c) => c.arguments[0]), Array(4).fill(t('codex.win.runsInWsl')));
+      assert.deepEqual(warnings.mock.calls.map((c) => c.arguments[1]), Array(4).fill(t('codex.win.openSetting')), 'every warning offers Open Setting');
+      await new Promise((resolve) => setImmediate(resolve));
+      const opened = executed.mock.calls.map((c) => c.arguments).filter((args) => args[0] === 'workbench.action.openSettings');
+      assert.deepEqual(opened, Array(4).fill(['workbench.action.openSettings', RUNS_IN_WSL_SETTING]), 'the button opens the Settings UI at the setting');
+      // The banner's button goes through the tool dispatcher to the same place
+      await runTool('codex', 'openCodexWslSetting', {});
+      assert.deepEqual(executed.mock.calls.at(-1)?.arguments, ['workbench.action.openSettings', RUNS_IN_WSL_SETTING]);
       assert.equal(created.mock.callCount(), 0, 'no Windows terminal signs in where the WSL-side Codex cannot see it');
       assert.equal(codexPanelSource(h.store, h.labels).runsInWsl?.(), true, 'the panel hides the terminal buttons');
       assert.equal(fs.existsSync(STATE_FILE()) ? read(STATE_FILE()) : undefined, stateBefore);

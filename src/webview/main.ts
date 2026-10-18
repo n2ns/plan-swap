@@ -711,13 +711,24 @@ class Page {
     );
   }
 
-  // Codex run inside WSL on native Windows: account terminals are refused, so say where to manage the accounts
+  // Codex run inside WSL on native Windows: account terminals are refused, so say where to manage the accounts and
+  // offer the Settings UI at the extension's setting (the user decides whether to turn it off)
   private renderRunsInWsl(): HTMLElement | null {
     if (this.mode !== 'codex' || !this.tab.runsInWsl) return null;
     return h(
       'div',
       { class: 'banner', role: 'status' },
-      h('div', { class: 'banner-body' }, bannerTitle('warning', t('wsl.title')), h('div', { class: 'banner-text' }, t('wsl.text'))),
+      h(
+        'div',
+        { class: 'banner-body' },
+        bannerTitle('warning', t('wsl.title')),
+        h('div', { class: 'banner-text' }, t('wsl.text')),
+        h(
+          'div',
+          { class: 'banner-actions' },
+          onClick(h('vscode-button', { secondary: true, icon: 'settings-gear', 'data-action': 'openCodexWslSetting' }, t('wsl.openSetting')), () => this.send({ type: 'tool', tool: 'openCodexWslSetting' })),
+        ),
+      ),
     );
   }
 

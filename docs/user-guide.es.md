@@ -98,7 +98,7 @@ Abre la pestaña **Codex** y haz clic en **Activar cambio de cuenta de Codex**. 
 - **WSL, Linux local y otras ventanas remotas:** PlanSwap añade bloques delimitados a `~/.profile` y `~/.bashrc` y comprueba que un shell de inicio de sesión de Bash recoge la cuenta seleccionada. Si informa de una asignación de `CODEX_HOME` o una configuración de shell en conflicto, corrige lo que indica y vuelve a intentarlo. En una ventana WSL de VS Code o VSCodium, el primer cambio de cuenta añade además un bloque delimitado al `~/.vscode-server/server-env-setup` o `~/.vscodium-server/server-env-setup` de ese editor, que su servidor WSL lee antes de iniciarse.
 - **Windows nativo:** PlanSwap gestiona tu variable de entorno de usuario `CODEX_HOME`. Si tú mismo definiste `CODEX_HOME` con otro valor, se rechaza la activación. Si ya apunta a un directorio de cuenta de PlanSwap (`~/.codex-<name>`), PlanSwap pasa a gestionarla.
 
-Si la extensión de Codex de Windows está configurada para ejecutarse dentro de WSL, gestiona sus cuentas desde una ventana de WSL, o desactiva `chatgpt.runCodexInWindowsSubsystemForLinux` antes de gestionar cuentas de Windows.
+Si la extensión de Codex de Windows está configurada para ejecutarse dentro de WSL, gestiona sus cuentas desde una ventana de WSL, o desactiva `chatgpt.runCodexInWindowsSubsystemForLinux` antes de gestionar cuentas de Windows. El aviso de la barra lateral y la advertencia ofrecen **Abrir el ajuste**, que abre el editor de ajustes en ese ajuste; PlanSwap no lo cambia por ti.
 
 ### Seleccionar una cuenta y aplicarla
 

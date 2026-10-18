@@ -98,7 +98,7 @@ Open the **Codex** tab and click **Enable Codex switching**. Review and confirm 
 - **WSL, local Linux and other remote windows:** PlanSwap adds marked blocks to `~/.profile` and `~/.bashrc`, then checks that a Bash login shell picks up the selected account. If it reports a conflicting `CODEX_HOME` assignment or shell configuration, fix what it names and try again. In a VS Code or VSCodium WSL window, the first switch also adds a marked block to that editor's `~/.vscode-server/server-env-setup` or `~/.vscodium-server/server-env-setup`, which its WSL server reads before it starts.
 - **Native Windows:** PlanSwap manages your user-level `CODEX_HOME` environment variable. If you set `CODEX_HOME` yourself to another value, enabling is refused. If it already points to a PlanSwap account directory (`~/.codex-<name>`), PlanSwap takes it over.
 
-If the Windows Codex extension is set to run inside WSL, manage its accounts from a WSL window, or turn off `chatgpt.runCodexInWindowsSubsystemForLinux` before managing Windows accounts.
+If the Windows Codex extension is set to run inside WSL, manage its accounts from a WSL window, or turn off `chatgpt.runCodexInWindowsSubsystemForLinux` before managing Windows accounts. The sidebar banner and the warning offer **Open Setting**, which opens the Settings editor at that setting; PlanSwap does not change it for you.
 
 ### Select an account and apply it
 
