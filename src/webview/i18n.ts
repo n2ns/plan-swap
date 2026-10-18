@@ -305,7 +305,7 @@ export const zhTw: Record<MessageKey, string> = {
   'codex.loginTitle': '在終端機執行 codex login',
   'claude.terminalTitle': '在終端機中以此帳號執行 claude',
   'codex.terminalTitle': '在終端機中以此帳號執行 codex',
-  'claude.recommendSwitchTitle': '將 Claude Code 切換到 {name}，之後仍有一般確認',
+  'claude.recommendSwitchTitle': '將 Claude Code 切換到 {name}，之後照常需要確認',
   'codex.recommendSwitchTitle': '為 Codex 選擇 {name}，重新啟動後生效',
   'claude.recommendTerminalTitle': '開啟一個以 {name} 執行 claude 的終端機，不切換帳號',
   'codex.recommendTerminalTitle': '開啟一個以 {name} 執行 codex 的終端機，不切換帳號',

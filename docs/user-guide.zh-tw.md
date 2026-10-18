@@ -198,7 +198,7 @@ Claude 帳號的訂閱無法使用時，燈泡圖示會隱藏，但保留你先�
 
 狀態列會顯示每個產品的短週期額度，例如 `Claude 97% · Codex 82%`：預設是剩餘量，`planswap.usageDisplay` 設為 `used` 時是已用量。當快用完的是更長週期的額度時，會改為顯示該額度並附上週期，例如 `Claude 2%（7 天）`，因為這個數字要幾天後才會恢復。當任一一般額度（包括較長週期的額度）剩餘 30% 或更少時，其背景會變為佈景主題的警告色；剩餘 10% 或更少時則變為錯誤色。你可以變更這些臨界值、只顯示一個產品、將該項目移到左側或隱藏它（[變更語言和顯示設定](#變更語言和顯示設定)）。
 
-將游標停留在上面可查看一張表格：每個產品一列標題（電子郵件、方案，以及帳號可查詢時的重新整理圖示），每項一般額度一列。按一下它可開啟 PlanSwap。關閉 `planswap.sidebar.showEmail` 後，暫留提示改用帳號標籤代替電子郵件；使用者自訂名稱和別名保持不變。
+將游標停留在上面可查看一張表格：每個產品一列標題（電子郵件、方案，以及帳號可查詢時的重新整理圖示），每項一般額度一列。按一下它可開啟 PlanSwap。關閉 `planswap.sidebar.showEmail` 後，暫留提示改用帳號的別名或名稱代替電子郵件；使用者自訂名稱和別名保持不變。
 
 ## 重新命名或移除帳號
 
@@ -261,8 +261,8 @@ PlanSwap 啟動或重新整理時，會把在你的主目錄中找到、名稱�
 | `planswap.usageAutoRefreshCurrentOnly` | `false` | 自動查詢只查目前 Claude 和目前生效的 Codex 帳號。關閉時也查詢其他已登入帳號。手動重新整理不受影響。 |
 | `planswap.notifications.enabled` | `true` | 目前帳號的 5 小時或 7 天額度達到通知門檻時提醒。每項額度重設前只提醒一次；用完後不提醒。 |
 | `planswap.notifications.threshold` | `20` | 剩餘百分比小於或等於此值時提醒。需開啟用量通知。範圍：1–99。 |
-| `planswap.sidebar.shortFormat` | `false` | 在側邊欄使用簡短額度標籤和重設倒數，如 5d 12h。工具提示和無障礙文字保留完整中文說明。 |
-| `planswap.sidebar.showEmail` | `true` | 在側邊欄和狀態列工具提示中顯示電子郵件。隱藏時，工具提示顯示帳號名稱；名稱和別名不變。 |
+| `planswap.sidebar.shortFormat` | `false` | 在側邊欄使用簡短額度標籤和重設倒數，如 5d 12h。工具提示和無障礙文字保留目前語言的完整說明。 |
+| `planswap.sidebar.showEmail` | `true` | 在側邊欄和狀態列工具提示中顯示電子郵件。隱藏時，工具提示改為顯示帳號的別名或名稱；名稱和別名本身不變。 |
 | `planswap.sidebar.showFiveHourLimit` | `true` | 在側邊欄顯示各帳號的 5 小時額度。 |
 | `planswap.sidebar.showWeeklyLimit` | `true` | 在側邊欄顯示各帳號的 7 天額度。 |
 | `planswap.sidebar.showModelLimits` | `false` | 在 Claude 一般額度下方顯示各模型的額度。 |

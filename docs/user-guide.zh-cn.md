@@ -198,7 +198,7 @@ Claude 账号的订阅不可用时，灯泡图标会隐藏，但保留你此前�
 
 状态栏显示每个产品的短周期额度，例如 `Claude 97% · Codex 82%`：默认是剩余量，`planswap.usageDisplay` 设为 `used` 时是已用量。当快用完的是更长周期的额度时，改为显示该额度并附上周期，例如 `Claude 2%（7 天）`，因为这个数字要几天后才会恢复。当任一通用额度（包括较长周期的额度）剩余 30% 或更少时，其背景会变为主题的警告色；剩余 10% 或更少时变为错误色。你可以更改这些阈值、只显示一个产品、把该项移到左侧或隐藏它（[更改语言和显示设置](#更改语言和显示设置)）。
 
-悬停可查看一张表格：每个产品一行表头（邮箱、套餐，以及账号可查询时的刷新图标），每项通用额度一行。点击它可打开 PlanSwap。关闭 `planswap.sidebar.showEmail` 后，悬停提示改用账号名称代替邮箱；用户自定义名称和别名保持不变。
+悬停可查看一张表格：每个产品一行表头（邮箱、套餐，以及账号可查询时的刷新图标），每项通用额度一行。点击它可打开 PlanSwap。关闭 `planswap.sidebar.showEmail` 后，悬停提示改用账号的别名或名称代替邮箱；用户自定义名称和别名保持不变。
 
 ## 重命名或删除账号
 
@@ -261,8 +261,8 @@ PlanSwap 启动或刷新时，会把在你的主目录中找到的、名称有�
 | `planswap.usageAutoRefreshCurrentOnly` | `false` | 自动查询只查当前 Claude 和当前生效的 Codex 账号。关闭时也查询其他已登录账号。手动刷新不受影响。 |
 | `planswap.notifications.enabled` | `true` | 当前账号的 5 小时或 7 天额度达到通知门槛时提醒。每项额度重置前只提醒一次；用完后不提醒。 |
 | `planswap.notifications.threshold` | `20` | 剩余百分比小于或等于此值时提醒。需开启用量通知。范围：1–99。 |
-| `planswap.sidebar.shortFormat` | `false` | 在侧边栏使用简短额度标签和重置倒计时，如 5d 12h。悬停提示和无障碍文本保留完整中文说明。 |
-| `planswap.sidebar.showEmail` | `true` | 在侧边栏和状态栏悬浮提示中显示邮箱。隐藏时，悬浮提示显示账号名称；名称和别名不变。 |
+| `planswap.sidebar.shortFormat` | `false` | 在侧边栏使用简短额度标签和重置倒计时，如 5d 12h。悬停提示和无障碍文本保留当前语言的完整说明。 |
+| `planswap.sidebar.showEmail` | `true` | 在侧边栏和状态栏悬浮提示中显示邮箱。隐藏时，悬浮提示改为显示账号的别名或名称；名称和别名本身不变。 |
 | `planswap.sidebar.showFiveHourLimit` | `true` | 在侧边栏显示各账号的 5 小时额度。 |
 | `planswap.sidebar.showWeeklyLimit` | `true` | 在侧边栏显示各账号的 7 天额度。 |
 | `planswap.sidebar.showModelLimits` | `false` | 在 Claude 通用额度下方显示按模型划分的额度。 |

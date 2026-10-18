@@ -8,6 +8,7 @@
 
 ### Changed
 
+- Clearer translations: the Traditional Chinese tooltip of the recommended card's **Switch**, the Simplified and Traditional Chinese short-format and hidden-email setting descriptions, the Japanese and Spanish hidden-email setting descriptions, the Spanish color-threshold descriptions, and the Spanish and Japanese link and unlink confirmations, which now use the sidebar's terms for Codex thread databases and Skills.
 - The confirmation of **Disable Codex Account Switching** now also names the blocks in each editor's `server-env-setup`, which it has removed since 0.4.0.
 
 ### Fixed

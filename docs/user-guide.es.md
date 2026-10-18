@@ -198,7 +198,7 @@ Si el acceso por suscripción de una cuenta de Claude no está disponible, el ic
 
 La barra de estado muestra el límite corto de cada producto, por ejemplo `Claude 97% · Codex 82%`: lo que queda, o lo que se ha usado cuando `planswap.usageDisplay` está en `used`. Cuando el que se está agotando es un límite más largo, el elemento muestra ese límite con su duración, por ejemplo `Claude 2% (7 d)`, porque esa cifra tarda días en recuperarse. Su fondo cambia al color de advertencia del tema cuando algún límite general, incluidos los más largos, está al 30 % o menos, y al color de error al 10 % o menos. Puedes cambiar estos umbrales, mostrar un solo producto, mover el elemento a la izquierda u ocultarlo ([Cambiar el idioma y los ajustes de visualización](#cambiar-el-idioma-y-los-ajustes-de-visualización)).
 
-Pasa el puntero sobre ella para ver una tabla con una fila de encabezado por producto (correo, plan y, cuando la cuenta se puede consultar, un icono de actualizar) y una fila por límite general. Haz clic en ella para abrir PlanSwap. Con `planswap.sidebar.showEmail` desactivado, la información sobre herramientas usa etiquetas de cuenta en lugar de correos; los nombres y alias personalizados no cambian.
+Pasa el puntero sobre ella para ver una tabla con una fila de encabezado por producto (correo, plan y, cuando la cuenta se puede consultar, un icono de actualizar) y una fila por límite general. Haz clic en ella para abrir PlanSwap. Con `planswap.sidebar.showEmail` desactivado, la información sobre herramientas usa el alias o el nombre de cada cuenta en lugar de correos; los nombres y alias personalizados no cambian.
 
 ## Renombrar o quitar cuentas
 
@@ -256,13 +256,13 @@ En Cuentas, los ajustes de Claude aparecen juntos, seguidos por los de Codex.
 | --- | --- | --- |
 | `planswap.language` | `auto` | Idioma de la barra lateral, la barra de estado y los mensajes. Los títulos de comandos siguen el idioma del editor. |
 | `planswap.usageDisplay` | `remaining` | Mostrar porcentajes restantes o usados en la barra lateral y de estado. Los colores siempre siguen lo que queda. |
-| `planswap.usageWarningThreshold` | `30` | Color de advertencia cuando un límite tiene este porcentaje restante o menos. Se aplica a las barras laterales y al fondo de la barra de estado. Rango: 0–100. |
-| `planswap.usageErrorThreshold` | `10` | Color de error cuando un límite tiene este porcentaje restante o menos. Se aplica a las barras laterales y al fondo de la barra de estado; el error tiene prioridad. Rango: 0–100. |
+| `planswap.usageWarningThreshold` | `30` | Color de advertencia cuando un límite tiene este porcentaje restante o menos. Se aplica a las barras de la barra lateral y al fondo de la barra de estado. Rango: 0–100. |
+| `planswap.usageErrorThreshold` | `10` | Color de error cuando un límite tiene este porcentaje restante o menos. Se aplica a las barras de la barra lateral y al fondo de la barra de estado; el error tiene prioridad. Rango: 0–100. |
 | `planswap.usageAutoRefreshCurrentOnly` | `false` | Las consultas automáticas solo revisan la cuenta actual de Claude y la efectiva de Codex. Al desactivarlo, también revisan otras cuentas con sesión iniciada. No afecta a las consultas manuales. |
 | `planswap.notifications.enabled` | `true` | Avisar cuando el límite de 5 horas o 7 días de la cuenta actual llegue al umbral de notificación. Una vez por límite hasta su restablecimiento; sin aviso si está agotado. |
 | `planswap.notifications.threshold` | `20` | Avisar con este porcentaje restante o menos. Requiere las notificaciones de uso activadas. Rango: 1–99. |
 | `planswap.sidebar.shortFormat` | `false` | Usar etiquetas cortas de límites y tiempos de reinicio como 5d 12h en la barra lateral. La información sobre herramientas y el texto de accesibilidad conservan las explicaciones completas en el idioma actual. |
-| `planswap.sidebar.showEmail` | `true` | Mostrar correos en la barra lateral y la información sobre herramientas de la barra de estado. Al ocultarlos, esta muestra nombres de cuentas; nombres y alias no cambian. |
+| `planswap.sidebar.showEmail` | `true` | Mostrar correos en la barra lateral y la información sobre herramientas de la barra de estado. Al ocultarlos, esta muestra el alias o el nombre de cada cuenta; los nombres y alias no cambian. |
 | `planswap.sidebar.showFiveHourLimit` | `true` | Mostrar el límite de 5 horas de cada cuenta en la barra lateral. |
 | `planswap.sidebar.showWeeklyLimit` | `true` | Mostrar el límite de 7 días de cada cuenta en la barra lateral. |
 | `planswap.sidebar.showModelLimits` | `false` | Mostrar los límites por modelo de Claude debajo de sus límites generales. |

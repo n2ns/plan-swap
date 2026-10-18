@@ -52,7 +52,7 @@
   "config.notificationsThreshold.description": "Avisar con este porcentaje restante o menos. Requiere las notificaciones de uso activadas.",
   "config.sidebarModelLimits.description": "Mostrar los límites por modelo de Claude debajo de sus límites generales.",
   "config.sidebarShortFormat.description": "Usar etiquetas cortas de límites y tiempos de reinicio como 5d 12h en la barra lateral. La información sobre herramientas y el texto de accesibilidad conservan las explicaciones completas en el idioma actual.",
-  "config.sidebarEmail.description": "Mostrar correos en la barra lateral y la información sobre herramientas de la barra de estado. Al ocultarlos, esta muestra nombres de cuentas; nombres y alias no cambian.",
+  "config.sidebarEmail.description": "Mostrar correos en la barra lateral y la información sobre herramientas de la barra de estado. Al ocultarlos, esta muestra el alias o el nombre de cada cuenta; los nombres y alias no cambian.",
   "config.sidebarFiveHour.description": "Mostrar el límite de 5 horas de cada cuenta en la barra lateral.",
   "config.sidebarWeekly.description": "Mostrar el límite de 7 días de cada cuenta en la barra lateral.",
   "config.claudeUsageAutoRefresh.description": "Claude: consultar automáticamente el uso cuando esta ventana tenga el foco. Las cuentas dependen de planswap.usageAutoRefreshCurrentOnly. Las consultas manuales siguen disponibles.",
@@ -74,6 +74,6 @@
   "config.sidebarRecommendationThreshold.description": "Recomendar cuando el porcentaje restante general más bajo de la cuenta actual sea igual o inferior a este valor. Requiere las recomendaciones; es independiente de los colores.",
   "config.group.advanced": "Avanzado",
   "config.group.accounts": "Cuentas",
-  "config.usageWarningThreshold.description": "Color de advertencia cuando un límite tiene este porcentaje restante o menos. Se aplica a las barras laterales y al fondo de la barra de estado.",
-  "config.usageErrorThreshold.description": "Color de error cuando un límite tiene este porcentaje restante o menos. Se aplica a las barras laterales y al fondo de la barra de estado; el error tiene prioridad."
+  "config.usageWarningThreshold.description": "Color de advertencia cuando un límite tiene este porcentaje restante o menos. Se aplica a las barras de la barra lateral y al fondo de la barra de estado.",
+  "config.usageErrorThreshold.description": "Color de error cuando un límite tiene este porcentaje restante o menos. Se aplica a las barras de la barra lateral y al fondo de la barra de estado; el error tiene prioridad."
 }
