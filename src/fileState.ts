@@ -117,7 +117,10 @@ export class FileMemento implements Memento {
       delay = Math.min(delay * 2, 100);
     }
     try {
-      fs.writeFileSync(path.join(lockDir, 'owner'), String(process.pid));
+      // Written whole: a waiter must never read a half-written (empty) note and mistake it for a dead owner
+      const note = path.join(lockDir, 'owner.tmp');
+      fs.writeFileSync(note, String(process.pid));
+      fs.renameSync(note, path.join(lockDir, 'owner'));
     } catch {
       // The lock holds without the note; a waiter then relies on its age
     }
@@ -128,15 +131,21 @@ export class FileMemento implements Memento {
     }
   }
 
-  /** Removes a lock left behind by a process that is gone (owner pid not alive) or, without an owner note, one older
-   *  than LOCK_STALE_MS. Returns true when the caller should try mkdir again at once. The directory is renamed before
-   *  it is removed: only one of several waiters succeeds, the others see it gone and retry. */
+  /** Removes a lock left behind by a process that is gone (owner pid not alive) or, without a readable owner note,
+   *  one older than LOCK_STALE_MS. Returns true when the caller should try mkdir again at once. The directory is
+   *  renamed before it is removed: only one of several waiters succeeds, the others see it gone and retry. */
   private takeOverStaleLock(lockDir: string): boolean {
-    let stale: boolean;
+    let owner: number | undefined;
     try {
-      const owner = Number(fs.readFileSync(path.join(lockDir, 'owner'), 'utf8').trim());
-      stale = Number.isInteger(owner) && owner > 0 ? !pidAlive(owner) : true;
+      const text = fs.readFileSync(path.join(lockDir, 'owner'), 'utf8').trim();
+      if (/^[1-9][0-9]*$/.test(text)) owner = Number(text);
     } catch {
+      // No note (yet): decided by age below
+    }
+    let stale: boolean;
+    if (owner !== undefined) {
+      stale = !pidAlive(owner);
+    } else {
       try {
         stale = Date.now() - fs.statSync(lockDir).mtimeMs > LOCK_STALE_MS;
       } catch {

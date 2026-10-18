@@ -68,6 +68,15 @@ if (workerSpec) {
       assert.deepEqual(fs.readdirSync(path.dirname(m.lockDir)).filter((n) => n.includes('.lock')), [], 'no lock or stale leftover');
     });
 
+    test('an empty owner note (still being written) is not a dead owner', async () => {
+      const m = new FileMemento(fileOf('d0.json'), 300);
+      fs.mkdirSync(m.lockDir, { recursive: true });
+      fs.writeFileSync(path.join(m.lockDir, 'owner'), '');
+      await assert.rejects(m.update('k', 1), /holds the state file lock/);
+      assert.equal(fs.existsSync(m.lockDir), true, 'the fresh lock is left to its owner');
+      fs.rmSync(m.lockDir, { recursive: true, force: true });
+    });
+
     test('a lock without an owner note is taken over only once it is old', async () => {
       const m = new FileMemento(fileOf('d.json'), 300);
       // Old: a crash between mkdir and the owner note long ago
@@ -92,10 +101,10 @@ if (workerSpec) {
       assert.equal(fs.existsSync(m.lockDir), false);
     });
 
-    test('three processes updating the same file at once lose no key', { timeout: 50_000 }, async () => {
+    test('four processes updating the same file at once lose no key', { timeout: 50_000 }, async () => {
       const file = fileOf('shared.json');
-      const count = 25;
-      const workers = ['a', 'b', 'c'].map((prefix) => new Promise<number>((resolve) => {
+      const count = 30;
+      const workers = ['a', 'b', 'c', 'd'].map((prefix) => new Promise<number>((resolve) => {
         const child = spawn(process.execPath, [__filename], {
           env: { ...process.env, PLANSWAP_FILESTATE_WORKER: `${file}|${prefix}|${count}` },
           stdio: ['ignore', 'ignore', 'inherit'],
@@ -103,10 +112,10 @@ if (workerSpec) {
         child.on('exit', (code) => resolve(code ?? 1));
       }));
       const codes = await Promise.all(workers);
-      assert.deepEqual(codes, [0, 0, 0]);
+      assert.deepEqual(codes, [0, 0, 0, 0]);
       const state = JSON.parse(read(file)) as Record<string, number>;
-      assert.equal(Object.keys(state).length, 3 * count, 'every update survived');
-      for (const prefix of ['a', 'b', 'c']) for (let i = 0; i < count; i++) assert.equal(state[`${prefix}${i}`], i);
+      assert.equal(Object.keys(state).length, 4 * count, 'every update survived');
+      for (const prefix of ['a', 'b', 'c', 'd']) for (let i = 0; i < count; i++) assert.equal(state[`${prefix}${i}`], i);
       assert.equal(fs.existsSync(file + '.lock'), false);
     });
   });
