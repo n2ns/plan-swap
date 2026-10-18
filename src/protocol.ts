@@ -122,6 +122,9 @@ export type FromWebview =
   // Row button: exclude the registered account from recommendations (excluded true) or include it again; the host
   // ignores the external row and treats a non-boolean value as true
   | { type: 'recommendExclude'; mode: PanelMode; dir: string; excluded: boolean }
+  // After a card was dragged or moved with the keyboard: every row of the page in its new order, the current row
+  // first as shown; the host stores the registered rows' names in that order and skips the external row
+  | { type: 'reorder'; mode: PanelMode; dirs: string[] }
   // reload / dismissBanner: the Codex host ignores them
   | { type: 'reload'; mode: PanelMode }
   | { type: 'dismissBanner'; mode: PanelMode }

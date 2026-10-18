@@ -393,15 +393,19 @@ const MESSAGE_FIELDS: Record<FromWebview['type'], readonly string[]> = {
   unshare: ['dir'],
   rename: ['dir', 'label'],
   recommendExclude: ['dir'],
+  reorder: [],
   reload: [],
   dismissBanner: [],
   enable: [],
   tool: ['tool'],
 };
+// Fields that must be arrays of strings
+const LIST_FIELDS: Partial<Record<FromWebview['type'], readonly string[]>> = { reorder: ['dirs'] };
 
 /**
  * Checks a message from the webview (untrusted input) against the protocol: a known type, a known mode (every type but
- * 'ready'), and string values for its string fields. Returns the message, or undefined when it is malformed.
+ * 'ready'), string values for its string fields and arrays of strings for its list fields. Returns the message, or
+ * undefined when it is malformed.
  */
 export function checkMessage(raw: unknown): FromWebview | undefined {
   if (typeof raw !== 'object' || raw === null) return undefined;
@@ -410,6 +414,8 @@ export function checkMessage(raw: unknown): FromWebview | undefined {
   const type = msg.type as FromWebview['type'];
   if (type !== 'ready' && msg.mode !== 'claude' && msg.mode !== 'codex') return undefined;
   if (!MESSAGE_FIELDS[type].every((f) => typeof msg[f] === 'string')) return undefined;
+  const isStringList = (v: unknown): boolean => Array.isArray(v) && v.every((s) => typeof s === 'string');
+  if (!(LIST_FIELDS[type] ?? []).every((f) => isStringList(msg[f]))) return undefined;
   return raw as FromWebview;
 }
 

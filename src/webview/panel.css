@@ -313,6 +313,21 @@ body {
 }
 .row.is-current::before { inset: 0 auto 0 0; width: 3px; border-radius: 0; opacity: 1; }
 .row.is-current:hover { background: color-mix(in srgb, var(--ink) 11%, var(--base)); }
+/* Cards that can be dragged into a new place (every card but the current one): a grip in the left padding, shown on
+   hover or focus; the dragged card fades while its drag image follows the pointer */
+.row[draggable="true"] { cursor: grab; }
+.row.is-dragging { opacity: 0.4; }
+.grip {
+  position: absolute;
+  left: 0; top: 8px;
+  width: 12px; height: 20px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity var(--ease);
+  cursor: grab;
+}
+.row:hover .grip, .row:focus-visible .grip { opacity: 1; }
 /* Name line: the avatar and name take what they need (at most the whole line); the tag group (and icon-only buttons)
    follow at the right end and wrap onto the next line, still right-aligned, only when they do not fit beside the name */
 .row-head { grid-area: head; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; }

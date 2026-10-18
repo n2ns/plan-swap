@@ -299,6 +299,22 @@ describe('panel message handlers (Claude)', () => {
     }
   });
 
+  test('reorder stores the registered rows in the order sent and skips unknown directories', async () => {
+    const h = harness();
+    const a = await add(h, 'a', false);
+    const b = await add(h, 'b', false);
+    try {
+      await h.handle({ type: 'reorder', mode: 'claude', dirs: [b, path.join(home, '.claude-unknown'), defaultDir(), a] });
+      assert.deepEqual(h.memento.get('claude.order'), ['b', 'default', 'a']);
+      assert.deepEqual(h.store.all().map((x) => x.name), ['b', 'default', 'a']);
+      await h.handle({ type: 'reorder', mode: 'claude', dirs: [path.join(home, '.claude-unknown')] });
+      assert.equal(h.memento.get('claude.order'), undefined, 'no registered row: the order is cleared');
+      assert.deepEqual(h.store.all().map((x) => x.name), ['default', 'a', 'b']);
+    } finally {
+      h.dispose();
+    }
+  });
+
   test('remove refuses the current account', async (ctx) => {
     const h = harness();
     const dir = await add(h, 'a', false);

@@ -14,7 +14,7 @@ This document owns PlanSwap's intended user-visible behavior: what each command 
 
 ## 2. Sidebar
 
-The activity bar container `planswap` holds one view, `planswap.accounts`, with a Claude and a Codex tab (section 10); the last tab is remembered across reloads. Each page lists all accounts, current first, with usage refresh buttons, an add form and Tools (5.5). The title bar has `planswap.openSettings` (Settings UI filtered to PlanSwap) and `planswap.refresh` (4.5).
+The activity bar container `planswap` holds one view, `planswap.accounts`, with a Claude and a Codex tab (section 10); the last tab is remembered across reloads. Each page lists all accounts, current first and the rest in the order the user arranged them (2.3), with usage refresh buttons, an add form and Tools (5.5). The title bar has `planswap.openSettings` (Settings UI filtered to PlanSwap) and `planswap.refresh` (4.5).
 
 Settings (application scope, applied immediately):
 
@@ -42,6 +42,7 @@ Rows show the name (link badge when shared), email (or "Logged in"), plan, cache
 - **Link** (4.6) / **Unlink** (4.7) on non-current independent / shared named rows, each after a modal confirmation.
 - **Remove** (named, non-current rows) confirms inside the row (Cancel restores it; the confirmation is dropped if the account leaves the list), then continues with 4.3; **Rename** (2.7) on named rows.
 - **Exclude from recommendations** / **Include in recommendations** (lightbulb toggle, registered rows whose limits can be queried; highlighted while excluded) marks the account for the [recommended account](#24-recommended-account) card. The toggle is hidden when the page has only one account. The mark is stored per vendor ([Claude design 3](design.md#persisted-state)) and cleared when the account is removed or its directory disappears.
+- **Card order**: every card but the current one can be dragged to another place in the list, or moved one place with Alt+Up / Alt+Down while it has the focus; a grip appears at the card's left edge on hover. The current account always stays first, so a card never moves above it. The order is stored per vendor as the names of every row of the page in the shown order (`claude.order` / `codex.order`, [Claude design 3](design.md#persisted-state)), shared by every editor on the distribution; accounts not in the stored order follow, the default account first, then by name, which is also the order before anything was dragged. A removed account, or one whose directory disappears, leaves the order. Nothing is draggable while fewer than two cards could change place.
 
 ### 2.4 Recommended account
 

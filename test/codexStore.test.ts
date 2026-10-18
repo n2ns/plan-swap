@@ -34,6 +34,19 @@ describe('CodexAccountStore', () => {
     }
   });
 
+  test('the stored order (codex.order) places the default among the named accounts; remove takes a name out of it', async () => {
+    const memento = new MemoryMemento();
+    const store = new CodexAccountStore(memento);
+    for (const n of ['a', 'b']) await store.add({ name: n, dir: path.join(home, `.codex-${n}`) });
+    await store.setOrder(['b', 'default']);
+    assert.deepEqual(memento.get('codex.order'), ['b', 'default']);
+    assert.deepEqual(store.all().map((a) => a.name), ['b', 'default', 'a']);
+    assert.deepEqual(store.named().map((a) => a.name), ['b', 'a']);
+    await store.remove('b');
+    assert.deepEqual(memento.get('codex.order'), ['default']);
+    assert.deepEqual(store.all().map((a) => a.name), ['default', 'a']);
+  });
+
   test('add replaces an entry with the same name and clears the directory from the ignore list', async () => {
     const memento = new MemoryMemento();
     const store = new CodexAccountStore(memento);

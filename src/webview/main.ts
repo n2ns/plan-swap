@@ -369,6 +369,11 @@ class Page {
   // After Enter, while waiting for the host's renameResult: blur does not cancel, otherwise an error would have nowhere to show
   private submitting = false;
   private submittedLabel?: string;
+  // Card order: the directory of the card being dragged (while set, render() is deferred and noted in renderDeferred, so
+  // the list is not rebuilt under the pointer) and whether the drag ended on the list (dropped) or was cancelled
+  private draggingDir?: string;
+  private dropped = false;
+  private renderDeferred = false;
 
   constructor(readonly mode: PanelMode) {
     this.text = TEXT[mode];
@@ -408,6 +413,17 @@ class Page {
       this.addSection,
       this.list,
     );
+    // A card dragged over the list moves there at once; the drop sends the order, a cancelled drag restores the list
+    this.list.addEventListener('dragover', (e) => this.dragOver(e));
+    this.list.addEventListener('drop', (e) => {
+      if (!this.draggingDir) return;
+      e.preventDefault();
+      this.dropped = true;
+      this.sendOrder();
+    });
+    // No pointer event reaches the page while a drag is in progress, so a pointer release means the drag is over: a
+    // drag whose end the browser never reported (its session lost) would otherwise keep every render deferred
+    document.addEventListener('pointerup', () => this.endDrag(false));
     this.addField.addEventListener('input', () => {
       this.addError = undefined;
       this.updateAddHelp();
@@ -937,7 +953,87 @@ class Page {
         if (e.key === 'Enter' && e.target === row) this.send({ type: 'switch', dir: a.dir });
       });
     }
+    // Every card but the current one (pinned first) can be dragged into a new place, or moved with Alt+Up / Alt+Down
+    // while the card has the focus; a grip at the left edge shows on hover
+    if (this.movable() && !a.isCurrent && !editing) {
+      row.setAttribute('draggable', 'true');
+      row.prepend(h('span', { class: 'grip', title: t('row.dragHint'), 'aria-hidden': 'true' }, h('vscode-icon', { name: 'gripper', size: '12' })));
+      row.addEventListener('dragstart', (e) => {
+        // The buttons, the rename field and the other controls keep their own pointer behavior; the grip always drags
+        const path = e.composedPath().filter((n): n is HTMLElement => n instanceof HTMLElement);
+        if (!path.some((n) => n.classList.contains('grip')) && path.some((n) => n.matches('button, input, vscode-button, vscode-toolbar-button, vscode-textfield, [data-action]'))) {
+          e.preventDefault();
+          return;
+        }
+        e.dataTransfer?.setData('text/plain', a.dir);
+        if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+        this.draggingDir = a.dir;
+        this.dropped = false;
+        // Marked after the browser took its drag image, so the image is the card as it looks
+        setTimeout(() => { if (this.draggingDir === a.dir) row.classList.add('is-dragging'); }, 0);
+      });
+      row.addEventListener('dragend', () => this.endDrag(this.dropped));
+      row.addEventListener('keydown', (e) => {
+        if (!e.altKey || e.target !== row || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+        e.preventDefault();
+        this.moveRow(row, e.key === 'ArrowUp' ? -1 : 1);
+      });
+    }
     return row;
+  }
+
+  // ---------- Card order ----------
+  /** Whether the page has cards that can change place: at least two besides the current one */
+  private movable(): boolean {
+    return this.tab.accounts.filter((a) => !a.isCurrent).length > 1;
+  }
+
+  /** The directories of the rows as the list shows them now */
+  private rowOrder(): string[] {
+    return [...this.list.querySelectorAll<HTMLElement>(':scope > .row[data-dir]')].map((el) => el.dataset.dir!);
+  }
+
+  // The host stores the order and pushes the state; the next push always rebuilds the list, so a refused order is
+  // shown as the host has it
+  private sendOrder(): void {
+    this.renderedKey = undefined;
+    this.send({ type: 'reorder', dirs: this.rowOrder() });
+  }
+
+  /**
+   * Ends the drag. A cancelled drag (dropped false) shows the order of the state again; after a drop the list already
+   * shows the new order and the host's state push confirms it. A render that arrived while dragging is done now
+   * either way.
+   */
+  private endDrag(dropped: boolean): void {
+    if (!this.draggingDir) return;
+    this.list.querySelector('.row.is-dragging')?.classList.remove('is-dragging');
+    this.draggingDir = undefined;
+    this.dropped = false;
+    if (!dropped || this.renderDeferred) this.render();
+  }
+
+  // Moves the dragged card before or after the card under the pointer (by its vertical middle); the current card is
+  // not draggable and is never a target, so the dragged card stays below it
+  private dragOver(e: DragEvent): void {
+    if (!this.draggingDir) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    const dragged = this.list.querySelector<HTMLElement>(':scope > .row.is-dragging');
+    const target = (e.target instanceof Element ? e.target : null)?.closest<HTMLElement>('.row[draggable="true"]');
+    if (!dragged || !target || target === dragged || target.parentElement !== this.list) return;
+    const rect = target.getBoundingClientRect();
+    this.list.insertBefore(dragged, e.clientY < rect.top + rect.height / 2 ? target : target.nextSibling);
+  }
+
+  /** Swaps the card with its draggable neighbor above (delta -1) or below, sends the order and keeps the focus on it */
+  private moveRow(row: HTMLElement, delta: -1 | 1): void {
+    const neighbor = delta < 0 ? row.previousElementSibling : row.nextElementSibling;
+    if (!(neighbor instanceof HTMLElement) || neighbor.getAttribute('draggable') !== 'true') return;
+    if (delta < 0) this.list.insertBefore(row, neighbor);
+    else this.list.insertBefore(neighbor, row);
+    this.sendOrder();
+    focusElement(row);
   }
 
   // Page tools, including CLI updates (shown even when Codex is not enabled), always shown; Re-link only when the page
@@ -1017,6 +1113,12 @@ class Page {
   }
 
   render(): void {
+    // Not while a card is being dragged: the drag's end renders (dragend)
+    if (this.draggingDir) {
+      this.renderDeferred = true;
+      return;
+    }
+    this.renderDeferred = false;
     this.renderedKey = this.renderKey();
     // A rebuild replaces the focused node; remember what it was so the replacement gets the focus back
     const focused = this.focusedControl();

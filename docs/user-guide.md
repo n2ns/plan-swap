@@ -43,6 +43,7 @@ Click **PlanSwap** in the activity bar, then choose the **Claude** or **Codex** 
 - **Named accounts:** accounts such as `work` or `personal`, each in its own directory, for example `~/.claude-work` or `~/.codex-work`.
 - **External directory:** a directory the editor is currently using that is not in PlanSwap's account list. It cannot be renamed or removed in PlanSwap.
 - **Highlighted first row:** the current account. For Codex, this is the account in effect in this window, which can differ from an account you selected that waits for a restart.
+- **Card order:** drag any other card up or down to change the order, or press Alt+Up / Alt+Down while the card has the focus. The current account always stays first. The order is kept for every editor on the same machine or WSL distribution.
 - **Link badge:** a linked account, which uses the default account's settings, rules, skills, history and sessions. Its sign-in stays separate.
 
 Terms used in this guide:

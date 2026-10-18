@@ -55,6 +55,60 @@ describe('AccountStore list', () => {
   });
 });
 
+describe('AccountStore order', () => {
+  const three = async (): Promise<{ memento: MemoryMemento; store: AccountStore }> => {
+    const { memento, store } = make();
+    for (const n of ['a', 'b', 'c']) await store.add({ name: n, dir: path.join(home, `.claude-${n}`) });
+    return { memento, store };
+  };
+  const names = (store: AccountStore): string[] => store.all().map((a) => a.name);
+
+  test('setOrder places the named accounts and the default as asked; the rest follow, the default first, then by name', async () => {
+    const { memento, store } = await three();
+    await store.setOrder(['c', 'default', 'a']);
+    assert.deepEqual(memento.get('claude.order'), ['c', 'default', 'a']);
+    assert.deepEqual(names(store), ['c', 'default', 'a', 'b']);
+    assert.deepEqual(store.named().map((a) => a.name), ['c', 'a', 'b']);
+    await store.setOrder(['b']);
+    assert.deepEqual(names(store), ['b', 'default', 'a', 'c']);
+  });
+
+  test('setOrder drops unregistered names and duplicates; an order with nothing left deletes the entry', async () => {
+    const { memento, store } = await three();
+    await store.setOrder(['b', 'x', 'b', 'a']);
+    assert.deepEqual(memento.get('claude.order'), ['b', 'a']);
+    await store.setOrder(['x']);
+    assert.equal(memento.get('claude.order'), undefined);
+    assert.deepEqual(names(store), ['default', 'a', 'b', 'c']);
+  });
+
+  test('a stored order that is not a list is ignored; entries that are not strings are skipped', async () => {
+    const { memento, store } = await three();
+    await memento.update('claude.order', 'c');
+    assert.deepEqual(names(store), ['default', 'a', 'b', 'c']);
+    await memento.update('claude.order', ['c', 1, null, 'a']);
+    assert.deepEqual(names(store), ['c', 'a', 'default', 'b']);
+  });
+
+  test('remove and a pruned directory take the account out of the order; a sync that prunes nothing leaves it alone', async () => {
+    const { memento, store } = await three();
+    for (const n of ['a', 'c']) fs.mkdirSync(path.join(home, `.claude-${n}`));
+    await store.setOrder(['c', 'b', 'a']);
+    await store.remove('b');
+    assert.deepEqual(memento.get('claude.order'), ['c', 'a']);
+    const writes = memento.updates;
+    await store.syncWithDisk();
+    assert.equal(memento.updates, writes, 'nothing pruned, nothing written');
+    fs.rmSync(path.join(home, '.claude-c'), { recursive: true });
+    await store.syncWithDisk();
+    assert.deepEqual(memento.get('claude.order'), ['a']);
+    await store.remove('a');
+    assert.equal(memento.get('claude.order'), undefined, 'the last name deletes the entry');
+    await store.remove('nope');
+    assert.equal(memento.get('claude.order'), undefined);
+  });
+});
+
 describe('AccountStore add / remove / unignore', () => {
   test('add replaces an entry with the same name and clears the directory from the ignore list', async () => {
     const { memento, store } = make();

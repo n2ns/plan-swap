@@ -16,7 +16,7 @@ export const dump = (ctx) => ctx.frame.evaluate(() => {
       buttons: [...card.querySelectorAll('vscode-button')].map((b) => `${b.dataset.action}:${b.textContent.trim()}`) },
     banner: panel.querySelector('.banner:not(.recommend) .banner-title')?.textContent ?? null,
     rows: [...panel.querySelectorAll('.row')].map((r) => ({
-      dir: r.dataset.dir, current: r.getAttribute('aria-current') === 'true', name: r.querySelector('.row-name')?.textContent ?? null,
+      dir: r.dataset.dir, current: r.getAttribute('aria-current') === 'true', draggable: r.getAttribute('draggable') === 'true', name: r.querySelector('.row-name')?.textContent ?? null,
       email: r.querySelector('.row-email')?.textContent ?? null, plan: r.querySelector('.pill.plan')?.textContent ?? null,
       shared: !!r.querySelector('.shared-icon'), confirming: r.classList.contains('is-confirming'), error: r.querySelector('.row-error')?.textContent ?? null,
       usage: [...r.querySelectorAll('.usage-window')].map((w) => `${w.querySelector('.usage-duration').textContent} ${w.querySelector('.usage-pct').textContent} ${w.querySelector('.usage-track').dataset.level}`),

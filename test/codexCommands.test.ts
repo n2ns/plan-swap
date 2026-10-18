@@ -542,6 +542,20 @@ describe('panel message handlers', () => {
     }
   });
 
+  test('reorder stores the registered rows in the order sent, skips unknown directories and refreshes the panel', async () => {
+    const one = named('one');
+    const two = named('two');
+    const h = await harness([one, two]);
+    try {
+      const before = h.refreshes();
+      await h.handle({ type: 'reorder', mode: 'codex', dirs: [two.dir, codexAccountDir('nope'), def, one.dir] });
+      assert.deepEqual(h.store.all().map((a) => a.name), ['two', 'default', 'one']);
+      assert.equal(h.refreshes(), before + 1);
+    } finally {
+      h.dispose();
+    }
+  });
+
   test('remove: the directory of a non-effective, non-selected account is deleted through deleteCodexDir', async (ctx) => {
     const a = named('gone');
     const h = await harness([a]);

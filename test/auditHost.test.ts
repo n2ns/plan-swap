@@ -479,6 +479,8 @@ describe('the panel never keeps waiting and never sees an unhandled rejection', 
         { type: 'rename', mode: 'claude', dir: '/x' }, { type: 'rename', mode: 'claude', dir: '/x', label: {} },
         { type: 'tool', mode: 'claude' }, { type: 'setTab', mode: 'toString' }, { type: 'toString', mode: 'claude' },
         { type: 'recommendExclude', mode: 'claude', excluded: true },
+        { type: 'reorder', mode: 'claude' }, { type: 'reorder', mode: 'claude', dirs: '/x' }, { type: 'reorder', mode: 'codex', dirs: ['/x', 1] },
+        { type: 'reorder', mode: 'claude', dirs: { length: 1, 0: '/x' } },
       ]) {
         assert.equal(checkMessage(bad), undefined, JSON.stringify(bad));
         h.receive(bad);
@@ -491,6 +493,8 @@ describe('the panel never keeps waiting and never sees an unhandled rejection', 
         { type: 'rename', mode: 'codex', dir: '/x', label: 'L' },
         { type: 'add', mode: 'codex', name: 'n', shared: true },
         { type: 'recommendExclude', mode: 'claude', dir: '/x', excluded: true },
+        { type: 'reorder', mode: 'codex', dirs: ['/x', '/y'] },
+        { type: 'reorder', mode: 'claude', dirs: [] },
       ];
       for (const msg of good) {
         assert.equal(checkMessage(msg), msg);

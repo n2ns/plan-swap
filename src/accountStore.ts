@@ -1,7 +1,7 @@
-// Registered accounts of one vendor in the state file (FileMemento): a list of named accounts (the default is implicit)
-// and the directories of removed accounts the auto scan must skip. Each vendor instantiates it with its own keys,
-// default and scan (src/accounts.ts, src/codex/codexStore.ts), so the two vendors' data stay independent. Imports
-// vscode only for the Memento type.
+// Registered accounts of one vendor in the state file (FileMemento): a list of named accounts (the default is implicit),
+// the directories of removed accounts the auto scan must skip and the order the user dragged the accounts into. Each
+// vendor instantiates it with its own keys, default and scan (src/accounts.ts, src/codex/codexStore.ts), so the two
+// vendors' data stay independent. Imports vscode only for the Memento type.
 import * as fs from 'node:fs';
 import type { Memento } from 'vscode';
 import { samePath } from './paths';
@@ -15,6 +15,8 @@ export interface AccountStoreConfig<T extends StoredAccount> {
   stateKey: string;
   /** Memento key of the directories of removed accounts, skipped by the auto scan */
   ignoredKey: string;
+  /** Memento key of the order the user dragged the accounts into: the names (the default's included), first to last */
+  orderKey: string;
   defaultName: string;
   defaultDir(): string;
   /** Unregistered account directories on disk */
@@ -22,7 +24,9 @@ export interface AccountStoreConfig<T extends StoredAccount> {
 }
 
 /**
- * The default account { defaultName, defaultDir() } is implicit and always first in all(); named() is sorted by name.
+ * The default account { defaultName, defaultDir() } is implicit and part of all(); named() is all() without it. Both
+ * follow the stored order (orderKey, setOrder): accounts it names come first in that order, then the default, then the
+ * rest by name, so without a stored order the default is first and the named accounts are sorted by name.
  * Directories are compared with samePath, names with sameName (case-insensitive) where a clash matters.
  */
 export class AccountStoreBase<T extends StoredAccount> {
@@ -36,16 +40,45 @@ export class AccountStoreBase<T extends StoredAccount> {
     return this.state.update(this.config.stateKey, list);
   }
 
-  // Non-default accounts, sorted by name
-  named(): T[] {
-    return this.load()
-      .filter((a) => a.name !== this.config.defaultName)
-      .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  private order(): string[] {
+    const value = this.state.get<unknown>(this.config.orderKey);
+    return Array.isArray(value) ? value.filter((n): n is string => typeof n === 'string') : [];
   }
 
-  // The default account first, then named()
+  // Stored order first, then the default, then the rest by name
+  private sorted(list: T[]): T[] {
+    const order = this.order();
+    const rank = (a: T): number => {
+      const i = order.indexOf(a.name);
+      return i >= 0 ? i : a.name === this.config.defaultName ? order.length : order.length + 1;
+    };
+    return [...list].sort((a, b) => rank(a) - rank(b) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  }
+
+  // Non-default accounts, in the stored order
+  named(): T[] {
+    return this.sorted(this.load().filter((a) => a.name !== this.config.defaultName));
+  }
+
+  // The default account and named(), in the stored order
   all(): T[] {
-    return [{ name: this.config.defaultName, dir: this.config.defaultDir() } as T, ...this.named()];
+    return this.sorted([{ name: this.config.defaultName, dir: this.config.defaultDir() } as T, ...this.load().filter((a) => a.name !== this.config.defaultName)]);
+  }
+
+  /** Stores the order: the registered names among `names` (the default's included), first to last, without
+   *  duplicates; names of unregistered accounts are dropped. An empty result deletes the entry */
+  async setOrder(names: string[]): Promise<void> {
+    const registered = new Set(this.all().map((a) => a.name));
+    const order = [...new Set(names)].filter((n) => registered.has(n));
+    await this.state.update(this.config.orderKey, order.length ? order : undefined);
+  }
+
+  // Drops names from the stored order; writes only when one of them was in it
+  private async forgetOrder(names: string[]): Promise<void> {
+    const order = this.order();
+    const kept = order.filter((n) => !names.includes(n));
+    if (kept.length === order.length) return;
+    await this.state.update(this.config.orderKey, kept.length ? kept : undefined);
   }
 
   find(name: string): T | undefined {
@@ -67,13 +100,15 @@ export class AccountStoreBase<T extends StoredAccount> {
     await this.save([...this.load().filter((a) => !sameName(a.name, account.name)), account]);
   }
 
-  // Drops the entry and records its directory in the ignore list so the scan does not re-add it (the alias is the caller's)
+  // Drops the entry, its place in the stored order, and records its directory in the ignore list so the scan does not
+  // re-add it (the alias is the caller's)
   async remove(name: string): Promise<void> {
     const removed = this.load().find((a) => a.name === name);
     if (removed && !this.ignored().some((d) => samePath(d, removed.dir))) {
       await this.state.update(this.config.ignoredKey, [...this.ignored(), removed.dir]);
     }
     await this.save(this.load().filter((a) => a.name !== name));
+    await this.forgetOrder([name]);
   }
 
   // Called after the directory was deleted, so a recreated directory is auto-discovered again
@@ -83,7 +118,7 @@ export class AccountStoreBase<T extends StoredAccount> {
 
   /**
    * Prunes named entries whose directory no longer exists (their alias and recommendation mark are cleared through
-   * labels / exclusions; they are not added to the ignore list), then registers scanned directories that are not
+   * labels / exclusions, their place in the stored order here; they are not added to the ignore list), then registers scanned directories that are not
    * ignored, not already registered by directory, and whose name does not match (sameName, case-insensitive) the
    * default name, a remaining account's name or, with labels (callers pass the vendor's LabelStore), its display
    * name; such a directory is skipped until that alias changes. Saves only when something changed
@@ -114,5 +149,6 @@ export class AccountStoreBase<T extends StoredAccount> {
     const added = missing.filter((s) => !ignoredNow.some((d) => samePath(d, s.dir))
       && !current.some((a) => samePath(a.dir, s.dir) || sameName(a.name, s.name)));
     await this.save([...current, ...added]);
+    await this.forgetOrder(pruned.map((a) => a.name));
   }
 }

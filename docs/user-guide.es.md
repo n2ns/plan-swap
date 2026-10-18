@@ -43,6 +43,7 @@ Haz clic en **PlanSwap** en la barra de actividad y elige la pestaña **Claude**
 - **Cuentas con nombre:** cuentas como `work` o `personal`, cada una en su propio directorio, por ejemplo `~/.claude-work` o `~/.codex-work`.
 - **Directorio externo:** un directorio que el editor está usando y que no está en la lista de cuentas de PlanSwap. No se puede renombrar ni quitar en PlanSwap.
 - **Primera fila resaltada:** la cuenta actual. En Codex es la cuenta en vigor en esta ventana, que puede ser distinta de una cuenta que seleccionaste y que espera un reinicio.
+- **Orden de las tarjetas:** arrastra cualquier otra tarjeta hacia arriba o hacia abajo para cambiar el orden, o pulsa Alt+Arriba / Alt+Abajo mientras la tarjeta tiene el foco. La cuenta actual siempre queda primera. El orden se conserva para todos los editores de la misma máquina o distribución de WSL.
 - **Insignia de enlace:** una cuenta vinculada, que usa los ajustes, reglas, Skills, historial y sesiones de la cuenta predeterminada. Su inicio de sesión sigue siendo independiente.
 
 Términos usados en esta guía:

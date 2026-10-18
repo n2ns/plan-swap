@@ -268,6 +268,8 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, h
  *   post addResult / renameResult, also when they throw.
  * - recommendExclude: registered rows only (the external row is ignored); sets or clears the recommendation mark and
  *   refreshes the panel. The mark is cleared with the account (remove, or a pruned directory on sync).
+ * - reorder: the rows that resolve to registered accounts, in the order sent, become the stored order (store.setOrder);
+ *   the external row and unknown directories are skipped; then the panel is refreshed.
  * - share / unshare: effective or selected accounts (alternate spellings included) are refused before the modal and
  *   re-checked after it, then the host busy guard (codexAccountBusy or, on Windows, an open account terminal). Share
  *   re-checks registration, effective/selected and busy state after the copy fallback too, then passes the copy-fallback
@@ -761,6 +763,12 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
         const a = panel.resolve(MODE, msg.dir);
         if (!a || a.kind === 'external') return;
         await exclusions?.set(a.name, msg.excluded !== false);
+        panel.refresh();
+        return;
+      }
+      case 'reorder': {
+        const names = msg.dirs.map((dir) => panel.resolve(MODE, dir)).filter((a) => a && a.kind !== 'external').map((a) => a!.name);
+        await store.setOrder(names);
         panel.refresh();
         return;
       }

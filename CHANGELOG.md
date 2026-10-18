@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Sidebar cards can be dragged into a new order, or moved with Alt+Up / Alt+Down while a card has the focus; the current account stays first. The order is kept per product in `~/.config/planswap/state.json` (`claude.order` / `codex.order`), shared by every editor on the distribution, and also orders the Command Palette picks and the automatic usage checks.
+
 ## [0.4.0] - 2026-10-18
 
 ### Changed
