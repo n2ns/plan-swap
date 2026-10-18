@@ -6,6 +6,10 @@
 
 - On native Windows, when the Codex extension is set to run Codex inside WSL, the sidebar banner and the warning now offer **Open Setting**, which opens the Settings editor at `chatgpt.runCodexInWindowsSubsystemForLinux`; PlanSwap still never changes that setting itself.
 
+### Changed
+
+- The confirmation of **Disable Codex Account Switching** now also names the blocks in each editor's `server-env-setup`, which it has removed since 0.4.0.
+
 ## [0.4.1] - 2026-10-18
 
 ### Added
