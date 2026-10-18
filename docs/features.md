@@ -241,7 +241,7 @@ Same model as section 6 with `~/.codex`; entries and rules in [Codex design 8.6]
 
 ## 13. Language
 
-`planswap.language` (application scope): `auto` follows the VS Code display language, or `en`, `zh-cn`, `zh-tw`, `es`, `ja`. Changes apply without reload to everything rendered at runtime; manifest strings (commands, view names, setting descriptions) follow VS Code's display language. A legacy `aiSwitcher.language` is carried over once. Commands, paths, ids, account terminal names, plan names and the rc marker block are never translated; aliases show as typed ([Claude design 5.5](design.md#55-localization-i18n)).
+`planswap.language` (application scope): `auto` follows the VS Code display language, or `en`, `zh-cn`, `zh-tw`, `es`, `ja`, `ko`. Changes apply without reload to everything rendered at runtime; manifest strings (commands, view names, setting descriptions) follow VS Code's display language. A legacy `aiSwitcher.language` is carried over once. Commands, paths, ids, account terminal names, plan names and the rc marker block are never translated; aliases show as typed ([Claude design 5.5](design.md#55-localization-i18n)).
 
 ## 14. Diagnostics report
 

@@ -8,7 +8,7 @@ Which document owns which kind of information, and the rules for keeping them. R
 |---|---|
 | [README](../README.md) | Product intro, requirements, install, quick start, privacy summary, short limitations for users, including which environments have been accepted with real accounts (not module contracts or dev procedures). |
 | [Privacy](privacy.md) | For users: what PlanSwap reads, stores, changes and sends over the network (not credential rules for agents, which stay in AGENTS.md). |
-| [User guide](user-guide.md) | Step-by-step user instructions: sidebar, setup, switching, usage limits, settings, troubleshooting. English is the source of the `zh-cn` / `zh-tw` / `es` / `ja` translations (not behavior specs, contracts or verification). |
+| [User guide](user-guide.md) | Step-by-step user instructions: sidebar, setup, switching, usage limits, settings, troubleshooting. English is the source of the `zh-cn` / `zh-tw` / `es` / `ja` / `ko` translations (not behavior specs, contracts or verification). |
 | [CHANGELOG](../CHANGELOG.md) | User-facing release history (not current plans or agent instructions). |
 
 ### For maintainers

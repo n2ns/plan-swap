@@ -1,6 +1,6 @@
 # PlanSwap 使用指南
 
-[English](user-guide.md) · [简体中文](user-guide.zh-cn.md) · **繁體中文** · [Español](user-guide.es.md) · [日本語](user-guide.ja.md)
+[English](user-guide.md) · [简体中文](user-guide.zh-cn.md) · **繁體中文** · [Español](user-guide.es.md) · [日本語](user-guide.ja.md) · [한국어](user-guide.ko.md)
 
 PlanSwap 讓你同時保持多個 Claude Code 和 Codex 帳號的登入狀態，並選擇編輯器要使用哪一個。本指南介紹側邊欄的各項控制項、帳號設定、切換、用量額度和日常維護。Claude 和 Codex 彼此獨立管理：切換其中一個不會切換另一個。
 

@@ -1,6 +1,6 @@
 # PlanSwap User Guide
 
-**English** · [简体中文](user-guide.zh-cn.md) · [繁體中文](user-guide.zh-tw.md) · [Español](user-guide.es.md) · [日本語](user-guide.ja.md)
+**English** · [简体中文](user-guide.zh-cn.md) · [繁體中文](user-guide.zh-tw.md) · [Español](user-guide.es.md) · [日本語](user-guide.ja.md) · [한국어](user-guide.ko.md)
 
 PlanSwap lets you keep several Claude Code and Codex accounts signed in and choose which one your editor uses. This guide walks through the sidebar controls, account setup, switching, usage limits and everyday maintenance. Claude and Codex are managed independently: switching one does not switch the other.
 

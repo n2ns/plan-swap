@@ -45,7 +45,7 @@ test('shared colors use 30 / 10 and independent recommendation and notification 
 
 test('account descriptions identify Claude and Codex in every manifest locale', () => {
   const accounts = groups.find((group) => group.id === 'planswap.accounts')!;
-  for (const suffix of ['', '.zh-cn', '.zh-tw', '.es', '.ja']) {
+  for (const suffix of ['', '.zh-cn', '.zh-tw', '.es', '.ja', '.ko']) {
     const strings = JSON.parse(fs.readFileSync(path.join(__dirname, '..', `package.nls${suffix}.json`), 'utf8'));
     assert.equal(typeof strings['config.group.accounts'], 'string');
     for (const [key, setting] of Object.entries(accounts.properties)) {

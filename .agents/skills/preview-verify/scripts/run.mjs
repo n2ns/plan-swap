@@ -12,7 +12,7 @@ import { chromium } from 'playwright';
 const skillDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const root = path.resolve(skillDir, '..', '..', '..');
 const checksDir = path.join(root, 'test', 'preview', 'checks');
-const LOCALES = ['en', 'zh-cn', 'zh-tw', 'es', 'ja'];
+const LOCALES = ['en', 'zh-cn', 'zh-tw', 'es', 'ja', 'ko'];
 const WIDTHS = [200, 240, 280, 340, 420];
 const VIEWPORT = { width: 1920, height: 1080 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

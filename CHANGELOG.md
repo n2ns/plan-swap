@@ -4,6 +4,7 @@
 
 ### Added
 
+- Korean: the sidebar, status bar, messages, Command Palette titles, settings and the user guide are available in Korean (`planswap.language`: `ko`, or `auto` with a Korean editor).
 - On native Windows, when the Codex extension is set to run Codex inside WSL, the sidebar banner and the warning now offer **Open Setting**, which opens the Settings editor at `chatgpt.runCodexInWindowsSubsystemForLinux`; PlanSwap still never changes that setting itself.
 
 ### Changed

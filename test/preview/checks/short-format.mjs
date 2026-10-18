@@ -4,7 +4,7 @@ export async function run(ctx) {
   const { page, locale, width } = ctx;
   if (!installed) { await page.clock.install({ time: new Date('2026-10-10T12:00:00Z') }); installed = true; }
   await page.clock.setSystemTime(new Date('2026-10-10T12:00:00Z'));
-  const shortLabels = { en: ['5h', '7d'], 'zh-cn': ['5小时', '7天'], 'zh-tw': ['5小時', '7天'], es: ['5 h', '7 d'], ja: ['5時間', '7日'] }[locale];
+  const shortLabels = { en: ['5h', '7d'], 'zh-cn': ['5小时', '7天'], 'zh-tw': ['5小時', '7天'], es: ['5 h', '7 d'], ja: ['5時間', '7日'], ko: ['5시간', '7일'] }[locale];
   for (const mode of ['claude', 'codex']) {
     await ctx.apply((s) => {
       s.shortFormat = false;

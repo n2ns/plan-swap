@@ -205,7 +205,7 @@ body {
 .section { display: flex; flex-direction: column; gap: var(--gap); }
 /* The account list is hidden while loading and on the disabled page; the display rule above would override [hidden] */
 .section[hidden] { display: none; }
-/* Section headings and collapsible headers share one small label style (no uppercase or tracking for Chinese and Japanese) */
+/* Section headings and collapsible headers share one small label style (no uppercase or tracking for Chinese, Japanese and Korean) */
 .section-title {
   display: flex;
   align-items: center;
@@ -222,8 +222,10 @@ body {
   text-transform: uppercase;
   color: var(--muted);
 }
-.section-title:lang(zh), .section-title:lang(ja), .tools-summary:lang(zh), .tools-summary:lang(ja),
-.versions-head:lang(zh), .versions-head:lang(ja) { letter-spacing: 0; text-transform: none; }
+.section-title:lang(zh), .section-title:lang(ja), .section-title:lang(ko), .tools-summary:lang(zh), .tools-summary:lang(ja),
+.tools-summary:lang(ko), .versions-head:lang(zh), .versions-head:lang(ja), .versions-head:lang(ko) { letter-spacing: 0; text-transform: none; }
+/* Korean wraps at spaces, not between syllables; overflow-wrap still breaks a word that cannot fit */
+html:lang(ko) { word-break: keep-all; }
 .title-main { display: flex; align-items: center; gap: 6px; min-width: 0; }
 /* Neutral count: not a notification badge */
 .count {

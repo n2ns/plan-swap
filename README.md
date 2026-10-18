@@ -40,7 +40,7 @@ See how much is left on each Claude Code and Codex subscription account you own 
 - **Stay signed in everywhere**: sign in once per account, then switch with one click.
 - **Linked or independent accounts**: share the default account's setup and history, or keep them separate.
 - **Tools**: open your rules file and the official extension's settings, update the CLI, check linked accounts and repair their links.
-- **Five languages**: English, Simplified Chinese, Traditional Chinese, Spanish and Japanese.
+- **Six languages**: English, Simplified Chinese, Traditional Chinese, Spanish, Japanese and Korean.
 
 Every setting is listed in the [user guide](docs/user-guide.md#change-language-and-display-settings).
 

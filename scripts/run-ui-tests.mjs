@@ -8,19 +8,21 @@ import { startPreview } from './preview/server.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const output = path.join(root, '.test-out', 'ui');
-const locales = ['en', 'zh-cn', 'zh-tw', 'es', 'ja'];
+const locales = ['en', 'zh-cn', 'zh-tw', 'es', 'ja', 'ko'];
 const widths = [200, 240, 280, 340, 420];
 // Bar tooltip: what is left and what is used
 const barTitle = {
   en: (left) => `${left}% left (${100 - left}% used)`, 'zh-cn': (left) => `剩余 ${left}%（已用 ${100 - left}%）`,
   'zh-tw': (left) => `剩餘 ${left}%（已用 ${100 - left}%）`,
   es: (left) => `${left}% restante (${100 - left}% usado)`, ja: (left) => `残り ${left}%（使用済み ${100 - left}%）`,
+  ko: (left) => `${left}% 남음 (${100 - left}% 사용)`,
 };
 // Reset sentence in the bar's screen reader value: the short duration shown on the card plus the absolute date
 const resetsIn = {
   en: (time, date) => `Resets in ${time} (${date})`, 'zh-cn': (time, date) => `${time}后重置（${date}）`,
   'zh-tw': (time, date) => `${time}後重設（${date}）`,
   es: (time, date) => `Se restablece en ${time} (${date})`, ja: (time, date) => `${time}後にリセット（${date}）`,
+  ko: (time, date) => `${time} 후 초기화 (${date})`,
 };
 // Reference for the visible short duration (two largest units, zero unit left out, rounded up to the minute); runs in the page
 const SHORT_RESET = `(seconds) => {
@@ -30,24 +32,27 @@ const SHORT_RESET = `(seconds) => {
   const lang = document.documentElement.lang;
   return new Intl.DurationFormat(lang, { style: lang === 'ja' || lang === 'zh-TW' ? 'short' : 'narrow' }).format(parts);
 }`;
-const exhausted = { en: 'Used up', 'zh-cn': '已用完', 'zh-tw': '已用完', es: 'Agotado', ja: '使い切り' };
-const switchLabel = { en: 'Switch to this account', 'zh-cn': '切换到此账号', 'zh-tw': '切換到此帳號', es: 'Cambiar a esta cuenta', ja: 'このアカウントに切り替え' };
+const exhausted = { en: 'Used up', 'zh-cn': '已用完', 'zh-tw': '已用完', es: 'Agotado', ja: '使い切り', ko: '모두 사용함' };
+const switchLabel = { en: 'Switch to this account', 'zh-cn': '切换到此账号', 'zh-tw': '切換到此帳號', es: 'Cambiar a esta cuenta', ja: 'このアカウントに切り替え', ko: '이 계정으로 전환' };
 const refreshTitle = {
   en: 'Refresh usage limits of the current account', 'zh-cn': '刷新当前账号的用量额度', 'zh-tw': '重新整理目前帳號的用量額度',
   es: 'Actualizar los límites de uso de la cuenta actual', ja: '現在のアカウントの使用量の上限を更新',
+  ko: '현재 계정의 사용량 한도 새로 고침',
 };
 const refreshAllTitle = {
   en: 'Refresh usage limits of all accounts', 'zh-cn': '刷新全部账号的用量额度', 'zh-tw': '重新整理全部帳號的用量額度',
   es: 'Actualizar los límites de uso de todas las cuentas', ja: 'すべてのアカウントの使用量の上限を更新',
+  ko: '모든 계정의 사용량 한도 새로 고침',
 };
-const addLabel = { en: 'Add', 'zh-cn': '添加', 'zh-tw': '新增', es: 'Añadir', ja: '追加' };
-const durations = { en: ['5-hour limit', '7-day limit'], 'zh-cn': ['5 小时额度', '7 天额度'], 'zh-tw': ['5 小時額度', '7 天額度'], es: ['Límite de 5 h', 'Límite de 7 días'], ja: ['5 時間の上限', '7 日間の上限'] };
+const addLabel = { en: 'Add', 'zh-cn': '添加', 'zh-tw': '新增', es: 'Añadir', ja: '追加', ko: '추가' };
+const durations = { en: ['5-hour limit', '7-day limit'], 'zh-cn': ['5 小时额度', '7 天额度'], 'zh-tw': ['5 小時額度', '7 天額度'], es: ['Límite de 5 h', 'Límite de 7 días'], ja: ['5 時間の上限', '7 日間の上限'], ko: ['5시간 한도', '7일 한도'] };
 const scopedDurations = {
   en: ['5-hour limit', '7-day limit', '7-day limit · Fable'],
   'zh-cn': ['5 小时额度', '7 天额度', '7 天额度 · Fable'],
   'zh-tw': ['5 小時額度', '7 天額度', '7 天額度 · Fable'],
   es: ['Límite de 5 h', 'Límite de 7 días', 'Límite de 7 días · Fable'],
   ja: ['5 時間の上限', '7 日間の上限', '7 日間の上限 · Fable'],
+  ko: ['5시간 한도', '7일 한도', '7일 한도 · Fable'],
 };
 const remaining = {
   en: (percent) => `${percent}% remaining`,
@@ -55,6 +60,7 @@ const remaining = {
   'zh-tw': (percent) => `剩餘 ${percent}%`,
   es: (percent) => `${percent}% restante`,
   ja: (percent) => `残り ${percent}%`,
+  ko: (percent) => `${percent}% 남음`,
 };
 const results = { cases: [], interactions: [], window: null, failures: [], consoleErrors: [] };
 // Headless by default with a fixed 100% viewport; --headed opens a full-screen window on the display instead
@@ -536,12 +542,12 @@ async function refreshButtonVisibility() {
 // Recommendation card and the per-row "exclude from recommendations" toggle. The host decides what is recommended; the
 // page renders the card above the list with the account's general windows, when it was observed, and the actions
 // (Claude: Switch and Open terminal; Codex: Open terminal only), and the toggle on every registered row with usage limits
-const recommendTitle = { en: 'Recommended: Work', 'zh-cn': '推荐：Work', 'zh-tw': '推薦：Work', es: 'Recomendada: Work', ja: 'おすすめ：Work' };
-const recommendSwitch = { en: 'Switch', 'zh-cn': '切换', 'zh-tw': '切換', es: 'Cambiar', ja: '切り替え' };
-const recommendTerminal = { en: 'Terminal', 'zh-cn': '终端', 'zh-tw': '終端機', es: 'Terminal', ja: 'ターミナル' };
-const excludeTitle = { en: 'Exclude from recommendations', 'zh-cn': '不参与推荐', 'zh-tw': '不參與推薦', es: 'Excluir de las recomendaciones', ja: 'おすすめから除外' };
-const includeTitle = { en: 'Include in recommendations', 'zh-cn': '恢复参与推荐', 'zh-tw': '恢復參與推薦', es: 'Incluir en las recomendaciones', ja: 'おすすめに含める' };
-const updatedNow = { en: 'Updated just now', 'zh-cn': '刚刚更新', 'zh-tw': '剛剛更新', es: 'Actualizado ahora mismo', ja: 'たった今更新' };
+const recommendTitle = { en: 'Recommended: Work', 'zh-cn': '推荐：Work', 'zh-tw': '推薦：Work', es: 'Recomendada: Work', ja: 'おすすめ：Work', ko: '추천: Work' };
+const recommendSwitch = { en: 'Switch', 'zh-cn': '切换', 'zh-tw': '切換', es: 'Cambiar', ja: '切り替え', ko: '전환' };
+const recommendTerminal = { en: 'Terminal', 'zh-cn': '终端', 'zh-tw': '終端機', es: 'Terminal', ja: 'ターミナル', ko: '터미널' };
+const excludeTitle = { en: 'Exclude from recommendations', 'zh-cn': '不参与推荐', 'zh-tw': '不參與推薦', es: 'Excluir de las recomendaciones', ja: 'おすすめから除外', ko: '추천에서 제외' };
+const includeTitle = { en: 'Include in recommendations', 'zh-cn': '恢复参与推荐', 'zh-tw': '恢復參與推薦', es: 'Incluir en las recomendaciones', ja: 'おすすめに含める', ko: '추천에 포함' };
+const updatedNow = { en: 'Updated just now', 'zh-cn': '刚刚更新', 'zh-tw': '剛剛更新', es: 'Actualizado ahora mismo', ja: 'たった今更新', ko: '방금 업데이트됨' };
 async function recommendation(locale, width) {
   for (const mode of ['claude', 'codex']) {
     const where = `${mode} ${name(locale, width)}`;
@@ -626,7 +632,7 @@ async function recommendation(locale, width) {
   }
 }
 const usedLabel = {
-  en: (p) => `${p}% used`, 'zh-cn': (p) => `已用 ${p}%`, 'zh-tw': (p) => `已用 ${p}%`, es: (p) => `${p}% usado`, ja: (p) => `使用済み ${p}%`,
+  en: (p) => `${p}% used`, 'zh-cn': (p) => `已用 ${p}%`, 'zh-tw': (p) => `已用 ${p}%`, es: (p) => `${p}% usado`, ja: (p) => `使用済み ${p}%`, ko: (p) => `${p}% 사용`,
 };
 
 async function recommendationToggle() {
@@ -839,6 +845,7 @@ const usedTitle = {
   en: (used) => `${used}% used (${100 - used}% left)`, 'zh-cn': (used) => `已用 ${used}%（剩余 ${100 - used}%）`,
   'zh-tw': (used) => `已用 ${used}%（剩餘 ${100 - used}%）`,
   es: (used) => `${used}% usado (${100 - used}% restante)`, ja: (used) => `使用済み ${used}%（残り ${100 - used}%）`,
+  ko: (used) => `${used}% 사용 (${100 - used}% 남음)`,
 };
 async function usedDisplay() {
   for (const locale of locales) {

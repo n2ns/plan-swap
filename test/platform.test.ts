@@ -137,7 +137,7 @@ describe('Windows restart guidance', () => {
   });
 
   test('every language substitutes the hint', () => {
-    for (const lang of ['zh-cn', 'zh-tw', 'es', 'ja'] as const) {
+    for (const lang of ['zh-cn', 'zh-tw', 'es', 'ja', 'ko'] as const) {
       setLocale(lang);
       const m = manualRestartMessages('unknown', undefined, true);
       assert.ok(m.required.includes(m.hint) && m.switchConfirm.includes(m.hint), lang);

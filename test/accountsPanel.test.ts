@@ -89,7 +89,7 @@ test('add account waits for the replacement document after hiding the panel', as
   } finally { h.panel.dispose(); }
 });
 
-for (const locale of ['zh-tw', 'es', 'ja'] as const) {
+for (const locale of ['zh-tw', 'es', 'ja', 'ko'] as const) {
   test(`${locale}: initial document uses the selected language before frontend startup`, () => {
     setLocale(locale);
     const h = harness();

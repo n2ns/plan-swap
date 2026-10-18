@@ -1,6 +1,6 @@
 ---
 name: preview-verify
-description: Runs a task-specific layout check against the synthetic Webview preview at every sidebar width (200, 240, 280, 340, 420 px) and locale (en, zh-cn, zh-tw, es, ja), with screenshots and a JSON report. Use for the preview verification a Webview change needs (which widths and locales: docs/manual-verification.md#preview-verification) - patch the preview state to show the changed UI, assert its layout, keep the artifacts. Never for real accounts.
+description: Runs a task-specific layout check against the synthetic Webview preview at every sidebar width (200, 240, 280, 340, 420 px) and locale (en, zh-cn, zh-tw, es, ja, ko), with screenshots and a JSON report. Use for the preview verification a Webview change needs (which widths and locales: docs/manual-verification.md#preview-verification) - patch the preview state to show the changed UI, assert its layout, keep the artifacts. Never for real accounts.
 compatibility: Linux/WSL; the project's node_modules (esbuild, playwright with its headless Chromium) and a built dist/ (the script builds unless --no-build).
 allowed-tools: Bash(node ${CLAUDE_SKILL_DIR}/scripts/run.mjs *) Read
 argument-hint: [check]
