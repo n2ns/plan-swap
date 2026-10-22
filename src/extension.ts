@@ -23,7 +23,7 @@ import { checkSharedInBackground, registerToolCommands, runTool, type TerminalCh
 import { LinkCheckNotices } from './linkCheck';
 import { registerDiagnosticsCommand } from './diagnosticsCommand';
 import type { PanelMode } from './protocol';
-import { setLocale, t } from './i18n';
+import { joinSentences, setLocale, t } from './i18n';
 import { isSupportedPlatform } from './platform';
 import { migrateLegacyLanguage, resolveLocale, watchLocale } from './i18nVscode';
 import { effectiveDir, migrateLegacyCodex, upgradeRcBlocks } from './codex/codexState';
@@ -142,15 +142,23 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   // The account info file name depends on what the Claude Code setting passes (custom OAuth URL)
   setClaudeSettingEnv(settingEnvNames());
   const state = new FileMemento();
-  await state.importOnce(ctx.globalState);
+  // A state file that cannot be created (an unwritable ~/.config, a file in place of its folder) is reported below
+  let importError: Error | undefined;
+  try {
+    await state.importOnce(ctx.globalState);
+  } catch (err) {
+    importError = err instanceof Error ? err : new Error(String(err));
+  }
   const store = new AccountStore(state);
   const claudeLabels = new LabelStore(state, 'claude.labels');
   const claudeExclusions = new RecommendExclusions(state, 'claude.recommendExcluded');
   // An existing state file that cannot be read or is not a JSON object makes every write fail (FileMemento never
   // rewrites it from an empty state) and reads as empty: say which file and why at once, whether or not anything
   // needs writing, and activate with what can be read instead of failing activation
-  const stateError = state.readError();
-  if (stateError) void vscode.window.showErrorMessage(t('ext.stateUnreadable', { file: STATE_JSON(), error: stateError.message }));
+  const readError = state.readError();
+  const stateError = readError ?? importError;
+  if (readError) void vscode.window.showErrorMessage(t('ext.stateUnreadable', { file: STATE_JSON(), error: readError.message }));
+  else if (importError) void vscode.window.showErrorMessage(t('ext.stateSaveFailed', { file: STATE_JSON(), error: importError.message }));
   try {
     await store.syncWithDisk(claudeLabels, claudeExclusions);
   } catch (err) {
@@ -315,11 +323,16 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   }, {
     query: (dir) => claudeQuery(dir),
     queryIfStale: (dir) => claudeQueries.queryIfStale(dir, () => readAccountInfo(dir, isExplicitConfigDir(dir)).identity !== undefined && !subscriptionState(dir).unavailable),
-    eligible: (dir) => readAccountInfo(dir, isExplicitConfigDir(dir)).identity !== undefined && !subscriptionState(dir).unavailable,
+    // A confirmed unavailable account stops automatic checks only (claudeAutoRefresh); a manual refresh still queries it
+    eligible: (dir) => readAccountInfo(dir, isExplicitConfigDir(dir)).identity !== undefined,
     cachedAt: (dir) => readUsageFetchedAt(dir, isExplicitConfigDir(dir)),
     staleMs: () => usageSchedule('claude').staleMs,
   });
   statusBar.setClaudeUsage(claudeUsage.current());
+  // Automatic check of the current account, none once its subscription access was confirmed unavailable
+  const claudeAutoRefresh = (): void => {
+    if (!subscriptionState(currentDir()).unavailable) void claudeUsage.refreshIfStale();
+  };
   // Manual only: every registered signed-in Claude account, one claude process at a time, so rows can be compared
   // before switching. The result for the current account is handed to the monitor, which owns its tooltip state.
   // A second call while one runs is ignored; the unregistered external directory is not a target; accounts still in
@@ -339,7 +352,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
       void vscode.window.showInformationMessage(t('usage.allCooldown', { seconds: cooldownSeconds(waitMs) }));
       return;
     }
-    const skippedNote = skipped.length ? ` ${t('usage.allSkipped', { n: skipped.length })}` : '';
+    const skippedNote = skipped.length ? [t('usage.allSkipped', { n: skipped.length })] : [];
     refreshingAll = true;
     try {
       const abort = new AbortController();
@@ -374,9 +387,9 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
       const done = results.filter((r) => r.result.ok || r.result.detail !== 'cancelled' || !abort.signal.aborted);
       const failed = done.filter((r) => !r.result.ok);
       if (abort.signal.aborted) {
-        void vscode.window.showInformationMessage(t('claude.usageAllCancelled', { ok: done.length - failed.length, n: targets.length }) + skippedNote);
+        void vscode.window.showInformationMessage(joinSentences(t('claude.usageAllCancelled', { ok: done.length - failed.length, n: targets.length }), ...skippedNote));
       } else if (!failed.length) {
-        void vscode.window.showInformationMessage(t('claude.usageAllDone', { n: results.length }) + skippedNote);
+        void vscode.window.showInformationMessage(joinSentences(t('claude.usageAllDone', { n: results.length }), ...skippedNote));
       }
       if (!failed.length) return;
       // At most three accounts are named so the notification stays readable
@@ -385,7 +398,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
         return `${target.label} (${text})`;
       });
       if (failed.length > 3) named.push(t('claude.usageAllMore', { n: failed.length - 3 }));
-      void vscode.window.showWarningMessage(t('claude.usageAllFailed', { ok: done.length - failed.length, n: done.length, failures: named.join('; ') }) + (abort.signal.aborted ? '' : skippedNote));
+      void vscode.window.showWarningMessage(joinSentences(t('claude.usageAllFailed', { ok: done.length - failed.length, n: done.length, failures: named.join('; ') }), ...(abort.signal.aborted ? [] : skippedNote)));
     } finally {
       refreshingAll = false;
     }
@@ -416,7 +429,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
       void vscode.window.showInformationMessage(t('usage.allCooldown', { seconds: cooldownSeconds(waitMs) }));
       return;
     }
-    const skippedNote = skipped.length ? ` ${t('usage.allSkipped', { n: skipped.length })}` : '';
+    const skippedNote = skipped.length ? [t('usage.allSkipped', { n: skipped.length })] : [];
     refreshingAllCodex = true;
     try {
       const abort = new AbortController();
@@ -448,15 +461,15 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
       const done = results.filter((r) => r.result.ok || r.result.detail !== 'cancelled' || !abort.signal.aborted);
       const failed = done.filter((r) => !r.result.ok);
       if (abort.signal.aborted) {
-        void vscode.window.showInformationMessage(t('codex.usageAllCancelled', { ok: done.length - failed.length, n: targets.length }) + skippedNote);
+        void vscode.window.showInformationMessage(joinSentences(t('codex.usageAllCancelled', { ok: done.length - failed.length, n: targets.length }), ...skippedNote));
       } else if (!failed.length) {
-        void vscode.window.showInformationMessage(t('codex.usageAllDone', { n: results.length }) + skippedNote);
+        void vscode.window.showInformationMessage(joinSentences(t('codex.usageAllDone', { n: results.length }), ...skippedNote));
       }
       if (!failed.length) return;
       // At most three accounts are named so the notification stays readable
       const named = failed.slice(0, 3).map(({ target, result }) => `${target.label} (${result.ok ? '' : codexUsageFailureText(result)})`);
       if (failed.length > 3) named.push(t('claude.usageAllMore', { n: failed.length - 3 }));
-      void vscode.window.showWarningMessage(t('codex.usageAllFailed', { ok: done.length - failed.length, n: done.length, failures: named.join('; ') }) + (abort.signal.aborted ? '' : skippedNote));
+      void vscode.window.showWarningMessage(joinSentences(t('codex.usageAllFailed', { ok: done.length - failed.length, n: done.length, failures: named.join('; ') }), ...(abort.signal.aborted ? [] : skippedNote)));
     } finally {
       refreshingAllCodex = false;
     }
@@ -524,7 +537,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     if (!vscode.window.state.focused) return;
     checkLowUsage();
     if (usageSchedule('claude').auto) {
-      void claudeUsage.refreshIfStale();
+      claudeAutoRefresh();
       if (!usageCurrentOnly()) void otherClaudeChecks.run(otherClaudeDirs());
     }
     if (usage && !codexRunsInWsl()) {
@@ -621,7 +634,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     panel.onDidChange(() => {
       statusBar.update();
       // A sign-in of the current Claude account is checked at once; a recent check is not repeated
-      if (usageStarted && vscode.window.state.focused && usageSchedule('claude').auto) void claudeUsage.refreshIfStale();
+      if (usageStarted && vscode.window.state.focused && usageSchedule('claude').auto) claudeAutoRefresh();
       // With automatic checks off nothing is queried, but a result of a previous sign-in is not shown for a new one,
       // and a stored observation under the current sign-in is shown
       if (usage && !codexRunsInWsl()) {

@@ -41,6 +41,10 @@ export const workspace = {
     return { dispose() { configurationListeners.delete(listener); } };
   },
   async openTextDocument(options: { language: string; content: string }) { return options; },
+  createFileSystemWatcher(_pattern: unknown) {
+    const none = () => ({ dispose() {} });
+    return { onDidChange: none, onDidCreate: none, onDidDelete: none, dispose() {} };
+  },
   getConfiguration(section: string) {
     return {
       get<T>(key: string, defaultValue?: T): T | undefined {
@@ -137,7 +141,22 @@ export const window = {
     return terminal;
   },
   onDidCloseTerminal(_listener: unknown) { return { dispose() {} }; },
+  onDidChangeWindowState(_listener: unknown) { return { dispose() {} }; },
+  registerWebviewViewProvider(_id: string, _provider: unknown) { return { dispose() {} }; },
+  /** Runs the task at once with a progress sink that ignores reports and a token that is never cancelled */
+  async withProgress<T>(_options: unknown, task: (progress: { report(value: unknown): void }, token: { onCancellationRequested(listener: unknown): { dispose(): void } }) => Promise<T>): Promise<T> {
+    return task({ report() {} }, { onCancellationRequested: () => ({ dispose() {} }) });
+  },
 };
+export const Disposable = {
+  from(...items: Array<{ dispose(): unknown }>) { return { dispose() { for (const item of items) item.dispose(); } }; },
+};
+export const ProgressLocation ={ SourceControl: 1, Window: 10, Notification: 15 } as const;
+export class RelativePattern {
+  constructor(public readonly base: unknown, public readonly pattern: string) {}
+}
+/** No other extension is installed */
+export const extensions = { getExtension(_id: string): undefined { return undefined; } };
 export const commands = {
   /** Handlers by command id, as registered by the last registerCommand call for that id */
   registered: {} as Record<string, (...args: unknown[]) => Promise<void>>,
@@ -162,6 +181,9 @@ export class EventEmitter<T> {
 export const Uri = {
   parse(value: string) {
     return { scheme: value.split(':')[0], toString: () => value };
+  },
+  file(path: string) {
+    return { scheme: 'file', path, toString: () => path };
   },
   joinPath(base: { path: string }, ...parts: string[]) {
     const path = [base.path, ...parts].join('/');

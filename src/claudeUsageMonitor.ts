@@ -133,7 +133,11 @@ export class ClaudeUsageMonitor {
       else {
         // A skipped queue task is not an attempt; keep any actual background record received while waiting.
         if (this.last === lastAttempt) this.last = previous;
-        this.set({ checking: false, failure: this.eligible(dir) && this.state.failure && samePath(this.state.failure.dir, dir) ? this.state.failure : undefined });
+        // As in refreshIfStale: a cache refreshed elsewhere after the last attempt supersedes its failure
+        const cached = this.cachedAt(dir);
+        const superseded = cached !== undefined && cached <= this.now() + FUTURE_TOLERANCE_MS
+          && this.last !== undefined && samePath(this.last.dir, dir) && cached > this.last.at;
+        this.set({ checking: false, failure: this.eligible(dir) && !superseded && this.state.failure && samePath(this.state.failure.dir, dir) ? this.state.failure : undefined });
       }
       if (samePath(dir, this.dirOf())) return;
     }

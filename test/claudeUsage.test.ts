@@ -1028,3 +1028,32 @@ test('an automatic Claude read checks eligibility again after waiting in the pro
   await monitor.refreshIfStale();
   assert.deepEqual(calls, ['/blocker', '/current'], 'the skipped monitor query did not count an attempt');
 });
+
+test('a queued check skipped for a cache refreshed elsewhere while waiting clears the failure it supersedes', async () => {
+  let now = 1000;
+  let cached: number | undefined;
+  let release!: () => void;
+  const calls: string[] = [];
+  const queries = new ClaudeUsageQueries(async (dir) => {
+    calls.push(dir);
+    if (dir === '/blocker') await new Promise<void>((resolve) => { release = resolve; });
+    return { ok: false, reason: 'timeout' };
+  }, { cachedAt: (dir) => dir === '/a' ? cached : undefined, staleMs: () => 1000, now: () => now });
+  const monitor = new ClaudeUsageMonitor(() => '/a', () => undefined, {
+    query: (dir) => queries.query(dir), queryIfStale: (dir) => queries.queryIfStale(dir),
+    cachedAt: () => cached, staleMs: 1000, now: () => now,
+  });
+  await monitor.refreshIfStale();
+  assert.equal(monitor.current().failure?.reason, 'timeout');
+  now = 2100;
+  const blocker = queries.query('/blocker');
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  const scheduled = monitor.refreshIfStale();
+  // Claude Code in a terminal refreshes the cache while the check waits in the queue
+  cached = 2050;
+  release();
+  await Promise.all([blocker, scheduled]);
+  assert.deepEqual(calls, ['/a', '/blocker'], 'the fresh cache starts no query');
+  assert.equal(monitor.current().checking, false);
+  assert.equal(monitor.current().failure, undefined, 'the failure no longer describes the shown values');
+});
