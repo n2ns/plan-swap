@@ -45,7 +45,7 @@ import { type ServerKind, canAutoRestart, detectServerKind, executeRestart, plan
 import type { CodexAccountStore } from './codexStore';
 import { codexRunsInWsl, warnCodexRunsInWsl } from './codexSettings';
 import { runTool, type TerminalCheck, type ToolDeps } from '../tools';
-import { t } from '../i18n';
+import { joinSentences, t } from '../i18n';
 import type { CodexUsageHistory } from './codexUsageHistory';
 // Codex commands, panel message handling and the Codex panel data source. Command ids and restart behavior:
 // codex-design.md section 8 and docs/features.md. QuickPick items, messages and terminal names use labelFor; logic
@@ -622,7 +622,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       const r = makeCodexIndependent(account.dir, account.name);
       const done = t('unshare.done', { label: labelOf(account), removed: r.removed.length, copied: r.copied.join(', ') || t('unshare.nothingCopied') });
       const skipped = r.skipped.length ? t('unshare.skipped', { list: r.skipped.map((s) => `${s.file} (${s.reason})`).join(', ') }) : '';
-      void vscode.window.showInformationMessage([done, skipped].filter(Boolean).join(' '));
+      void vscode.window.showInformationMessage(joinSentences(...[done, skipped].filter(Boolean)));
     } catch (err) {
       void vscode.window.showErrorMessage(t('unshare.failed', { label: labelOf(account), error: errText(err) }));
     }
@@ -715,7 +715,8 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
         return;
       case 'switch': {
         const a = panel.resolve(MODE, msg.dir);
-        if (a) await switchTo(a);
+        // Only registered rows: the external directory must never become the selection (or the Windows user variable)
+        if (a && a.kind !== 'external') await switchTo(a);
         return;
       }
       case 'terminal': {

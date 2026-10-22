@@ -95,7 +95,7 @@ The sidebar is a `WebviewView` (one view, `planswap.accounts`, holding a Claude 
 
 - The frontend (`src/webview/main.ts`) only renders and exchanges messages; business logic and validation are authoritative on the extension side, and frontend validation is only an immediate hint.
 - All messages are typed in `src/protocol.ts` (types only, shared by both sides). Every message except `ready` carries `mode`, and the host dispatches by it to the Claude or Codex handler.
-- When the extension receives `switch`/`terminal`/`remove`/`rename`/`share`/`unshare`/`recommendExclude`/`subscriptionCheck`/`reorder` (each of its `dirs`), it first looks the directory up with `panel.resolve(mode, dir)` among the rows currently shown on that page and only accepts directories present in the list; `remove`, `rename`, `share` and `unshare` only act on rows with `kind === "named"`, `recommendExclude` and `reorder` on registered rows (not the external directory).
+- When the extension receives `switch`/`terminal`/`remove`/`rename`/`share`/`unshare`/`recommendExclude`/`subscriptionCheck`/`reorder` (each of its `dirs`), it first looks the directory up with `panel.resolve(mode, dir)` among the rows currently shown on that page and only accepts directories present in the list; `remove`, `rename`, `share` and `unshare` only act on rows with `kind === "named"`, `recommendExclude`, `reorder` and the Codex `switch` on registered rows (not the external directory).
 
 ### 5.3 Content security policy
 

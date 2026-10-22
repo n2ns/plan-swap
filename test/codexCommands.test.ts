@@ -782,6 +782,67 @@ describe('panel message handlers', () => {
     }
   });
 
+  test('zh-cn unshare message joins its sentences without a space', LINUX_ONLY, async (ctx) => {
+    const shared = named('zh-unshare-joined');
+    const h = await harness([shared]);
+    fs.rmSync(path.join(def, 'config.toml'), { force: true });
+    fs.mkdirSync(path.join(def, 'sessions'), { recursive: true });
+    fs.symlinkSync(path.join(def, 'sessions'), path.join(shared.dir, 'sessions'), 'junction');
+    writeSelectedDir(undefined);
+    const infos = ctx.mock.method(window, 'showInformationMessage', async () => undefined);
+    modal(ctx, () => t('unshare.confirmButton'));
+    try {
+      setLocale('zh-cn');
+      await h.handle({ type: 'unshare', mode: 'codex', dir: shared.dir });
+      const message = String(infos.mock.calls[0]?.arguments[0]);
+      const skipped = t('unshare.skipped', { list: `config.toml (${t('codex.seed.srcMissing')})` });
+      assert.ok(message.endsWith(`。${skipped}`), message);
+    } finally {
+      setLocale('en');
+      h.dispose();
+    }
+  });
+
+  test('switch on the external row never writes the unregistered directory into the selection', LINUX_ONLY, async (ctx) => {
+    fs.writeFileSync(bashrc(), 'x=1\n');
+    fs.writeFileSync(profile(), 'p=1\n');
+    installRcBlocks();
+    const a = named('ext-selected');
+    const external = path.join(fxHome, 'codex-external');
+    fs.mkdirSync(external, { recursive: true });
+    const state = new MemoryMemento();
+    const store = new CodexAccountStore(state);
+    const labels = new LabelStore(state, 'codex.labels');
+    fs.mkdirSync(a.dir, { recursive: true, mode: 0o700 });
+    await store.add(a);
+    const source = codexPanelSource(store, labels);
+    let handle!: (message: FromWebview) => Promise<void>;
+    const panel = {
+      setHandler(_mode: string, callback: typeof handle) { handle = callback; },
+      // As AccountsPanel.resolve: any row currently shown, the external one included
+      resolve(_mode: string, dir: string) {
+        const row = source.accounts().find((r) => r.dir === dir);
+        return row && { name: row.name, dir: row.dir, kind: row.kind };
+      },
+      refresh() {},
+    } as unknown as AccountsPanel;
+    const disposables = registerCodexCommands({ store, labels, panel, tools: {} });
+    const warnings = modal(ctx, () => t('codex.saveSelectionButton'));
+    const savedCodexHome = process.env.CODEX_HOME;
+    try {
+      process.env.CODEX_HOME = external;
+      writeSelectedDir(a.dir);
+      assert.equal(source.accounts().find((r) => r.kind === 'external')?.dir, external);
+      await handle({ type: 'switch', mode: 'codex', dir: external });
+      assert.equal(readSelectedDir(), a.dir);
+      assert.equal(warnings.mock.callCount(), 0);
+    } finally {
+      restoreEnv('CODEX_HOME', savedCodexHome);
+      writeSelectedDir(undefined);
+      disposables.forEach((d) => d.dispose());
+    }
+  });
+
   test('share command picks only independent named accounts outside the effective and selected directories', LINUX_ONLY, async (ctx) => {
     const candidate = named('palette-share-choice');
     const effective = named('palette-share-effective');
