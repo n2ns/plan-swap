@@ -5,7 +5,7 @@ import { AccountStore } from './accounts';
 import { claudeCredentialOverrides, oneDriveHome, pathVarsWithSpaces } from './environmentWarnings';
 import { AccountsPanel, VIEW_ID, claudePanelSource, type PanelSource } from './accountsPanel';
 import { EXTERNAL_NAME, LabelStore, labelFor } from './labels';
-import { FileMemento, STATE_JSON } from './fileState';
+import { FileMemento, STATE_JSON, type StateMemento } from './fileState';
 import { RecommendExclusions } from './recommend';
 import { usageColorsChanged } from './usageSettings';
 import { findSameDir, readAccountInfo, samePath, setClaudeSettingEnv } from './paths';
@@ -718,7 +718,7 @@ const DISMISSED_KEY = 'warnings.dismissed';
  * settles once every shown warning was answered (tests await it; activation does not).
  */
 export async function showEnvironmentWarnings(
-  state: vscode.Memento,
+  state: StateMemento,
   env: NodeJS.ProcessEnv = process.env,
   home: string = os.homedir(),
   setting: { set: readonly string[]; cleared?: readonly string[] } = settingEnvNames(),
@@ -731,7 +731,8 @@ export async function showEnvironmentWarnings(
     shown.push(vscode.window.showWarningMessage(message, never).then(async (picked) => {
       if (picked !== never) return;
       try {
-        await state.update(DISMISSED_KEY, [...new Set([...dismissed(), id])]);
+        // Under the lock, so a warning another window dismissed meanwhile stays dismissed
+        await state.updateWith(DISMISSED_KEY, () => [...new Set([...dismissed(), id])]);
       } catch (err) {
         // The state file cannot be saved: say so instead of ignoring the click
         void vscode.window.showErrorMessage(t('ext.stateSaveFailed', { file: STATE_JSON(), error: err instanceof Error ? err.message : String(err) }));

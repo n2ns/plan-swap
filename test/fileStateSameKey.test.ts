@@ -12,6 +12,9 @@ import { RecommendExclusions } from '../src/recommend';
 import { LowUsageNotices } from '../src/usageNotices';
 import { CodexUsageHistory } from '../src/codex/codexUsageHistory';
 import { LinkCheckNotices } from '../src/linkCheck';
+import { showEnvironmentWarnings } from '../src/extension';
+import { window } from 'vscode';
+import { t } from '../src/i18n';
 import { makeTempHome, type TempHome } from './helpers';
 
 let tmp: TempHome;
@@ -111,5 +114,13 @@ describe('same-key updates keep another window\'s write made while this one wait
     const record = readState()['links.announced'] as Record<string, unknown>;
     assert.deepEqual(record['codex'], other);
     assert.ok(record['claude']);
+  });
+  test('"Don\'t Show Again" keeps the warning another window dismissed', async (ctx) => {
+    writeState({});
+    const m = new FileMemento();
+    ctx.mock.method(window, 'showWarningMessage', async () => t('common.dontShowAgain'));
+    await whileLocked(m, () => showEnvironmentWarnings(m, { PATH: '/bin', ANTHROPIC_API_KEY: 'x' }, tmp.home, { set: [], cleared: [] }),
+      () => writeState({ 'warnings.dismissed': ['oneDriveHome'] }));
+    assert.deepEqual(readState()['warnings.dismissed'], ['oneDriveHome', 'claudeEnv:ANTHROPIC_API_KEY']);
   });
 });
