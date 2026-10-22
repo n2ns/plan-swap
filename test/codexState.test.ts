@@ -1,6 +1,7 @@
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
+import fsDefault from 'node:fs';
 import * as path from 'node:path';
 import { setLocale } from '../src/i18n';
 import {
@@ -60,6 +61,15 @@ describe('state file', () => {
     assert.equal(readSelectedDir(), undefined);
     fs.writeFileSync(STATE_FILE(), '  \n');
     assert.equal(readSelectedDir(), undefined);
+  });
+  test('a failed write or fsync removes the temp file', (ctx) => {
+    fs.rmSync(path.dirname(STATE_FILE()), { recursive: true, force: true });
+    writeSelectedDir(path.join(home, '.codex-a'));
+    ctx.mock.method(fsDefault, 'fsyncSync', () => { throw Object.assign(new Error('ENOSPC'), { code: 'ENOSPC' }); });
+    assert.throws(() => writeSelectedDir(path.join(home, '.codex-b')), /ENOSPC/);
+    ctx.mock.restoreAll();
+    assert.deepEqual(fs.readdirSync(path.dirname(STATE_FILE())), ['codex-home']);
+    assert.equal(readSelectedDir(), path.join(home, '.codex-a'));
   });
   test('effectiveDir uses the extension host CODEX_HOME, default directory when empty', () => {
     withEnv({ CODEX_HOME: undefined }, () => assert.equal(effectiveDir(), path.join(home, '.codex')));
@@ -573,6 +583,21 @@ describe('selfCheck (real bash -i -l, clean environment)', LINUX_ONLY, () => {
     assert.match(r.detail, /CODEX_HOME in the login shell is ""/);
     assert.ok(!r.detail.includes('cannot set terminal process group'));
     assert.ok(!r.detail.includes('no job control in this shell'));
+  });
+  test('an unreadable state file is reported as a failure, not thrown', (ctx) => {
+    writeSelectedDir(path.join(home, '.codex-orig'));
+    const realRead = fs.readFileSync;
+    ctx.mock.method(fsDefault, 'readFileSync', ((file: fs.PathOrFileDescriptor, ...args: unknown[]) => {
+      if (file === STATE_FILE()) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+      return (realRead as (...args: unknown[]) => unknown)(file, ...args);
+    }) as typeof fs.readFileSync);
+    let r: { ok: boolean; detail: string } | undefined;
+    assert.doesNotThrow(() => { r = inCleanEnv(selfCheck); });
+    ctx.mock.restoreAll();
+    assert.equal(r?.ok, false);
+    assert.match(r?.detail ?? '', /EACCES/);
+    assert.equal(read(STATE_FILE()), path.join(home, '.codex-orig'));
+    assert.deepEqual(fs.readdirSync(path.dirname(STATE_FILE())), ['codex-home']);
   });
   test('login-shell output such as a sudo hint is never taken for the value', () => {
     removeRcBlocks();

@@ -121,3 +121,32 @@ test('diagnostics previews before copying and cancellation leaves clipboard unch
     } finally { disposable.dispose(); }
   } finally { tmp.restore(); }
 });
+
+test('diagnostics matches another spelling of an account directory like the panel does', async () => {
+  const tmp = makeTempHome('diagnostics-spelling');
+  try {
+    const claude = path.join(tmp.home, '.claude-work');
+    const codex = path.join(tmp.home, '.codex-work');
+    fs.mkdirSync(claude);
+    fs.mkdirSync(codex);
+    const claudeLink = path.join(tmp.home, 'claude-link');
+    const codexLink = path.join(tmp.home, 'codex-link');
+    fs.symlinkSync(claude, claudeLink, 'junction');
+    fs.symlinkSync(codex, codexLink, 'junction');
+    writeSelectedDir(codex);
+    setConfig('claudeCode', 'environmentVariables', [{ name: 'CLAUDE_CONFIG_DIR', value: claudeLink }]);
+    await withEnv({ CODEX_HOME: codexLink }, async () => {
+      const snapshot = await collectDiagnostics({
+        store: { named: () => [{ name: 'work', dir: claude }] },
+        codexStore: { named: () => [{ name: 'work', dir: codex }] },
+        extensionVersion: '0.2.0', versions,
+        check: () => ({ ok: true }), enabled: () => true,
+        restart: () => ({ context: 'local', auto: false }),
+      });
+      assert.deepEqual(snapshot.claude.configured, { kind: 'named', number: 1 });
+      assert.deepEqual(snapshot.codex.effective, { kind: 'named', number: 1 });
+      assert.deepEqual(snapshot.codex.selected, { kind: 'named', number: 1 });
+      assert.equal(snapshot.codex.pending, false);
+    });
+  } finally { resetConfig(); tmp.restore(); }
+});

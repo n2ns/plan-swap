@@ -78,12 +78,12 @@ export function writeSelectedDir(dir: string | undefined, kind: ServerKind = cur
   // Exclusive create: never write through a file or symlink that already sits at the random temp name
   const fd = fs.openSync(tmp, 'wx', 0o600);
   try {
-    fs.writeFileSync(fd, dir === undefined ? '' : path.resolve(dir));
-    fs.fsyncSync(fd);
-  } finally {
-    fs.closeSync(fd);
-  }
-  try {
+    try {
+      fs.writeFileSync(fd, dir === undefined ? '' : path.resolve(dir));
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
     renameReplacing(tmp, file);
   } catch (e) {
     try { fs.unlinkSync(tmp); } catch { /* ignore */ }
@@ -575,7 +575,7 @@ export function migrateLegacyCodex(): boolean {
   const legacy = readText(LEGACY_STATE_FILE());
   if (legacy !== undefined && readText(STATE_FILE()) === undefined) {
     const dir = legacy.trim();
-    writeSelectedDir(dir ? dir : undefined);
+    writeSelectedDir(dir ? dir : undefined, 'unknown');
   }
   for (const { file, content } of writes) writeRc(file, content, statMode(file));
   try { fs.unlinkSync(LEGACY_STATE_FILE()); } catch { /* missing or already removed by another window */ }
@@ -622,9 +622,10 @@ export function selfCheckWindows(run?: Runner): { ok: boolean; detail: string } 
 export function selfCheck(): { ok: boolean; detail: string } {
   if (isWindows()) return selfCheckWindows();
   const file = STATE_FILE();
-  const backup = readText(file);
+  let backup: string | undefined;
   let tmpDir: string | undefined;
   try {
+    backup = readText(file);
     // The scratch directory lives next to the state file (user-owned, 0700), not in the world-writable temp directory
     fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
     tmpDir = fs.mkdtempSync(path.join(path.dirname(file), SELF_CHECK_DIR_PREFIX));

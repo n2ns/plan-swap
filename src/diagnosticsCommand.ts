@@ -1,5 +1,5 @@
 // planswap.tools.diagnostics: read-only collection of a DiagnosticSnapshot and its preview. No account-info or
-// credential contents are read; directories become anonymous references (samePath) and exception details are dropped.
+// credential contents are read; directories become anonymous references (findSameDir) and exception details are dropped.
 import * as fs from 'node:fs';
 import * as vscode from 'vscode';
 import type { AccountStore } from './accounts';
@@ -7,12 +7,12 @@ import { currentDir, settingEnvNames } from './claudeSettings';
 import { restartInfo } from './codex/codexCommands';
 import { codexRunsInWsl } from './codex/codexSettings';
 import { codexDefaultDir } from './codex/codexPaths';
-import { effectiveDir, isEnabled, preCheck, readSelectedDir, STATE_FILE } from './codex/codexState';
+import { effectiveDir, isEnabled, preCheck, readSelectedDir, watchedStateFiles } from './codex/codexState';
 import type { CodexAccountStore } from './codex/codexStore';
 import { buildDiagnosticsReport, type DiagnosticAccount, type DiagnosticSnapshot } from './diagnostics';
 import { claudeCredentialOverrides } from './environmentWarnings';
 import { t } from './i18n';
-import { defaultDir, samePath } from './paths';
+import { defaultDir, findSameDir } from './paths';
 import { collectVersions } from './tools';
 
 type Versions = Awaited<ReturnType<typeof collectVersions>>;
@@ -31,16 +31,18 @@ export interface DiagnosticsDeps {
 }
 
 function accountFor(dir: string, base: string, named: Array<{ dir: string }>): DiagnosticAccount {
-  if (samePath(dir, base)) return { kind: 'default' };
-  const index = named.findIndex((account) => samePath(account.dir, dir));
+  if (findSameDir([base], dir) === 0) return { kind: 'default' };
+  const index = findSameDir(named.map((account) => account.dir), dir);
   return index < 0 ? { kind: 'external' } : { kind: 'named', number: index + 1 };
 }
 
 /**
  * Gathers the snapshot: versions via tools.collectVersions (`--version` only), Claude setting / environment variable
  * names, and the Codex effective and selected directories. The pre-check is skipped when Codex runs inside WSL, and its
- * exception detail is discarded. A differing Codex selection is pending only when switching is enabled or the
- * selection file exists (an empty file selects the default); an unmanaged external CODEX_HOME alone is not pending.
+ * exception detail is discarded. Directories match registered ones as the panel does (findSameDir: another spelling of the
+ * same folder counts). A differing Codex selection is pending only when switching is enabled or one of the selection files
+ * this editor reads exists (watchedStateFiles; an empty file selects the default); an unmanaged external CODEX_HOME
+ * alone is not pending.
  */
 export async function collectDiagnostics(deps: DiagnosticsDeps): Promise<DiagnosticSnapshot> {
   const versions = await (deps.versions ?? collectVersions)();
@@ -79,7 +81,7 @@ export async function collectDiagnostics(deps: DiagnosticsDeps): Promise<Diagnos
       selected: accountFor(selected, codexDefaultDir(), codexNamed),
       count: codexNamed.length,
       enabled,
-      pending: (enabled === true || fs.existsSync(STATE_FILE())) && !samePath(effective, selected),
+      pending: (enabled === true || watchedStateFiles().some((file) => fs.existsSync(file))) && findSameDir([effective], selected) < 0,
       runsInWsl,
       precheck,
       restart: restartMode,
