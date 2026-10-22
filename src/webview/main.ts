@@ -150,7 +150,7 @@ function avatar(a: AccountView): HTMLElement {
   let hash = 0;
   for (const ch of a.name) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
   const color = AVATAR_COLORS[hash % AVATAR_COLORS.length];
-  const letter = a.kind === 'external' ? '?' : a.label.charAt(0).toUpperCase();
+  const letter = a.kind === 'external' ? '?' : (graphemes(a.label)[0] ?? '').toUpperCase();
   // Default account: the same disc with a home icon instead of a letter, marking it as the home-directory account
   if (a.kind === 'default') {
     return h('div', { class: 'avatar', style: `--avatar-color: var(--vscode-charts-${color})`, title: a.dirLabel, role: 'img', 'aria-label': t('account.default') }, h('vscode-icon', { name: 'home', size: '12' }));
