@@ -4,8 +4,8 @@ import type { SpawnOptions } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { claudeJsonPath, readAccountInfo } from './paths';
-import { stripBom, isPlainObject } from './platform';
+import { claudeJsonPath, readAccountInfo, realPath } from './paths';
+import { comparablePath, stripBom, isPlainObject } from './platform';
 import { runClaudeCli, usageEnv, type ClaudeQueryOptions } from './claudeUsage';
 import { claudeCredentialOverrides } from './environmentWarnings';
 
@@ -43,7 +43,11 @@ export async function queryClaudeSubscription(dir: string, explicit: boolean, op
       exit: (out, code, signal) => (signal !== null ? 'unknown' : outcome(out, code)),
     });
     return a.kind === 'done' && identity(dir, explicit) === before ? a.result : 'unknown';
-  } finally { fs.rmSync(cwd, { recursive: true, force: true }); }
+  } finally {
+    // Windows refuses to remove the working folder of a process still exiting after a timeout or cancellation
+    try { fs.rmSync(cwd, { recursive: true, force: true }); }
+    catch { void fs.promises.rm(cwd, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }).catch(() => undefined); }
+  }
 }
 
 function outcome(stdout: string, code: number | null): ClaudeSubscriptionResult {
@@ -68,8 +72,10 @@ interface Entry {
   running?: Promise<ClaudeSubscriptionResult>;
 }
 
-/** In-memory, identity-bound observations. Automatic probes stop after a confirmed denial; manual checks can restore
- * access. Transient failures retain a confirmed denial. The caller serializes these checks with usage queries. */
+/** In-memory, identity-bound observations, one per account folder however it is spelled (real path, case-insensitive
+ * on Windows). Automatic probes stop after a confirmed denial; manual checks can restore access. Transient failures,
+ * including an info file that cannot be read for a moment, retain a confirmed denial. The caller serializes these
+ * checks with usage queries. */
 export class ClaudeSubscriptionChecks {
   private readonly entries = new Map<string, Entry>();
   constructor(
@@ -77,10 +83,14 @@ export class ClaudeSubscriptionChecks {
     private readonly changed: () => void = () => undefined,
     private readonly now: () => number = Date.now,
   ) {}
+  private key(dir: string, explicit: boolean): string {
+    return comparablePath(realPath(claudeJsonPath(dir, explicit)));
+  }
   private entry(dir: string, explicit: boolean): Entry | undefined {
-    const key = path.resolve(claudeJsonPath(dir, explicit));
+    const key = this.key(dir, explicit);
     const current = identity(dir, explicit);
-    if (!current) { this.entries.delete(key); return undefined; }
+    // A missing or half-written info file (the CLI rewriting it) keeps the observation; only another sign-in replaces it
+    if (!current) return undefined;
     let entry = this.entries.get(key);
     if (!entry || entry.identity !== current) {
       entry = { identity: current, unavailable: false };
@@ -100,8 +110,11 @@ export class ClaudeSubscriptionChecks {
       return Promise.resolve(entry.unavailable ? 'unavailable' : 'unknown');
     }
     entry.lastAttempt = this.now();
+    const key = this.key(dir, explicit);
     entry.running = Promise.resolve().then(() => this.query(dir, explicit, signal)).catch((): ClaudeSubscriptionResult => 'unknown').then((result) => {
-      if (this.entry(dir, explicit) !== entry) return 'unknown';
+      // Dropped only for another sign-in meanwhile, not for an info file that cannot be read at this moment
+      const current = identity(dir, explicit);
+      if (this.entries.get(key) !== entry || (current !== undefined && current !== entry.identity)) return 'unknown';
       if (result !== 'unknown') entry.unavailable = result === 'unavailable';
       return result;
     }).finally(() => { entry.running = undefined; this.changed(); });

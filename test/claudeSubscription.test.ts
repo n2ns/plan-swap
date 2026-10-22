@@ -2,11 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
+import nodeFs from 'node:fs';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { ClaudeSubscriptionChecks, queryClaudeSubscription, type ClaudeSubscriptionResult } from '../src/claudeSubscription';
 import type { ClaudeUsageChild, ClaudeUsageSpawn } from '../src/claudeUsage';
-import { makeTempHome, withEnv } from './helpers';
+import { makeTempHome, onWindows, withEnv } from './helpers';
 
 class Child extends EventEmitter implements ClaudeUsageChild {
   stdout = new PassThrough();
@@ -117,5 +118,63 @@ test('checks deduplicate, stop automatic denied probes, retain denial on unknown
     now += 3600_000;
     const stale = checks.check(dir, true); await Promise.resolve(); writeIdentity(dir, 'other'); finish('unavailable');
     assert.equal(await stale, 'unknown'); assert.equal(checks.state(dir, true).unavailable, false);
+  } finally { home.restore(); }
+});
+
+test('a confirmed denial survives an info file that cannot be read for a moment (the CLI rewriting it)', async () => {
+  const home = makeTempHome('subscription');
+  try {
+    const dir = path.join(home.home, '.claude-test'); writeIdentity(dir);
+    let now = 0; let calls = 0; let finish!: (result: ClaudeSubscriptionResult) => void;
+    const checks = new ClaudeSubscriptionChecks(() => { calls++; return new Promise((resolve) => { finish = resolve; }); }, () => undefined, () => now);
+    const first = checks.check(dir, true); await Promise.resolve(); finish('unavailable'); await first;
+    const info = path.join(dir, '.claude.json');
+    const whole = fs.readFileSync(info, 'utf8');
+    fs.writeFileSync(info, whole.slice(0, 10));
+    checks.state(dir, true);
+    fs.writeFileSync(info, whole);
+    assert.deepEqual(checks.state(dir, true), { unavailable: true, checking: false });
+    now += 3600_000;
+    assert.equal(await checks.check(dir, true), 'unavailable'); assert.equal(calls, 1, 'no automatic probe after the denial');
+    // A result arriving while the file is half-written still belongs to the unchanged sign-in
+    const manual = checks.check(dir, true, true); await Promise.resolve();
+    fs.writeFileSync(info, whole.slice(0, 10)); finish('available'); await manual;
+    fs.writeFileSync(info, whole);
+    assert.equal(checks.state(dir, true).unavailable, false);
+  } finally { home.restore(); }
+});
+
+test('another spelling of the same account folder shares one availability state', { skip: onWindows && 'directory symbolic links' }, async () => {
+  const home = makeTempHome('subscription');
+  try {
+    const dir = path.join(home.home, '.claude-test'); writeIdentity(dir);
+    const link = path.join(home.home, 'link-to-test'); fs.symlinkSync(dir, link);
+    let calls = 0;
+    const checks = new ClaudeSubscriptionChecks(async () => { calls++; return 'unavailable'; }, () => undefined, () => 0);
+    assert.equal(await checks.check(link, true), 'unavailable');
+    assert.deepEqual(checks.state(dir, true), { unavailable: true, checking: false });
+    assert.equal(await checks.check(dir, true), 'unavailable'); assert.equal(calls, 1);
+  } finally { home.restore(); }
+});
+
+test('a temporary cwd still held by an exiting process is removed later and does not change the result', async (t) => {
+  const home = makeTempHome('subscription');
+  try {
+    const dir = path.join(home.home, '.claude-test'); writeIdentity(dir);
+    let cwd = '';
+    const realRm = nodeFs.rmSync;
+    let refused = 0;
+    // Windows refuses to remove the working folder of a process that has not exited yet
+    const rm = t.mock.method(nodeFs, 'rmSync', ((p: fs.PathLike, options?: fs.RmOptions) => {
+      if (String(p) === cwd && refused++ === 0) throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' });
+      realRm(p, options);
+    }) as typeof fs.rmSync);
+    try {
+      const spawn: ClaudeUsageSpawn = (command, args, options) => { cwd = String(options.cwd); return reply(denied, 1)(command, args, options); };
+      assert.equal(await queryClaudeSubscription(dir, true, { spawn }), 'unavailable');
+    } finally { rm.mock.restore(); }
+    assert.equal(refused, 1);
+    for (let i = 0; i < 100 && fs.existsSync(cwd); i++) await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(fs.existsSync(cwd), false);
   } finally { home.restore(); }
 });
