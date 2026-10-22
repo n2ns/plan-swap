@@ -15,7 +15,7 @@ import { askCopyFallback } from './linkPolicy';
 import { describeShareReport, type ShareReportLike } from './shareReport';
 import { accountProblems, announcementKeys, describeLinkCheck, isFixable, type AccountCheck, type LinkCheckNotices } from './linkCheck';
 import type { PanelMode, ToolId } from './protocol';
-import { getLocale, LOCALE_INFO, t } from './i18n';
+import { getLocale, joinSentences, LOCALE_INFO, t } from './i18n';
 import { CLAUDE_REFRESH_ALL_USAGE_COMMAND, CLAUDE_REFRESH_USAGE_COMMAND, CODEX_REFRESH_ALL_USAGE_COMMAND, REFRESH_USAGE_COMMAND } from './statusBar';
 import { isWindows, errText } from './platform';
 import { accountTerminalShell } from './terminalShell';
@@ -181,8 +181,9 @@ function sharedAccounts(mode: PanelMode, deps: ToolDeps): SharedAccounts | undef
 }
 
 // Read-only check of every shared account; a failing account becomes an error entry and the next one continues.
-// keys: what the background check announces (announcementKeys; Windows file links count as unknown before a probe).
-// background: mirror groups that differ in prompt keys only are left out; a switch mirrors them and their lack only
+// keys: what the background check announces (announcementKeys; Windows file links count as unknown before a probe),
+// computed without the mirror groups that differ in prompt keys only, so Re-link records what the background check
+// announces. background: those groups are also left out of the checks; a switch mirrors them and their lack only
 // makes Claude Code ask once more
 function checkShared(accounts: SharedAccounts, deps: ToolDeps, background = false): { checks: AccountCheck[]; keys: string[] } {
   const fileLinks = deps.linkNotices?.fileLinks();
@@ -190,13 +191,13 @@ function checkShared(accounts: SharedAccounts, deps: ToolDeps, background = fals
   const checks = accounts.dirs.map((dir): AccountCheck => {
     const label = accounts.nameOf(dir);
     try {
-      const check: AccountCheck = { dir, label, def, vendor: accounts.vendor === 'Claude' ? 'claude' : 'codex', ...accounts.ops.check(dir, { busy: accounts.busyOf(dir), fileLinks }) };
-      return background ? { ...check, mirror: check.mirror?.filter((key) => !check.mirrorQuiet?.includes(key)) } : check;
+      return { dir, label, def, vendor: accounts.vendor === 'Claude' ? 'claude' : 'codex', ...accounts.ops.check(dir, { busy: accounts.busyOf(dir), fileLinks }) };
     } catch (err) {
       return { dir, label, error: errText(err) };
     }
   });
-  return { checks, keys: announcementKeys(checks, isWindows() && fileLinks === undefined) };
+  const quiet = checks.map((c) => (c.mirror ? { ...c, mirror: c.mirror.filter((key) => !c.mirrorQuiet?.includes(key)) } : c));
+  return { checks: background ? quiet : checks, keys: announcementKeys(quiet, isWindows() && fileLinks === undefined) };
 }
 
 // The check's notification: the problems and notes per account, with Repair when a repair would change something
@@ -251,7 +252,7 @@ async function repairClaudeChecks(deps: ToolDeps, offered: AccountCheck[]): Prom
     }
   }
   const done = t(issues.length ? 'linkCheck.claudeAttempted' : 'linkCheck.claudeRepaired', { count });
-  if (issues.length) void vscode.window.showWarningMessage(`${done} ${t('sync.issues', { list: issues.join(t('common.listSep')) })}`);
+  if (issues.length) void vscode.window.showWarningMessage(joinSentences(done, t('sync.issues', { list: issues.join(t('common.listSep')) })));
   else void vscode.window.showInformationMessage(done);
 }
 
@@ -315,7 +316,7 @@ async function repairShared(mode: PanelMode, deps: ToolDeps): Promise<void> {
     }
   }
   const done = t(issues.length ? 'sync.attempted' : 'sync.done', { count: shared.length, vendor });
-  if (issues.length) void vscode.window.showWarningMessage(`${done} ${t('sync.issues', { list: issues.join(t('common.listSep')) })}`);
+  if (issues.length) void vscode.window.showWarningMessage(joinSentences(done, t('sync.issues', { list: issues.join(t('common.listSep')) })));
   else void vscode.window.showInformationMessage(done);
 }
 
