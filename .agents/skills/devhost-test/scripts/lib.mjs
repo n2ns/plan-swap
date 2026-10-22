@@ -41,11 +41,18 @@ export async function runScenario({ name, config, seed, scenario, window, outDir
   let editor;
   // Stopped by run.mjs (timeout, or run.mjs stopped by its pid; the editor gets the same signal): wait for the editor to
   // exit, so it writes nothing into the HOME afterwards, then remove the HOME
-  process.once('SIGTERM', async () => {
+  let stopping = false;
+  process.on('SIGTERM', async () => {
+    if (stopping) return;
+    stopping = true;
+    // run.mjs may already have closed the pipes: a late log line must not crash the launcher before the cleanup
+    for (const stream of [process.stdout, process.stderr]) stream.on('error', () => undefined);
     if (editor) await Promise.race([editor.catch(() => undefined), sleep(10_000)]);
     removeHome();
     process.exit(143);
   });
+  // Any other way out (a seed that throws, a crash): the HOME is still removed
+  process.once('exit', removeHome);
   const report = { name, startedAt: new Date().toISOString(), steps: [], failures: [] };
   const dirs = (seed ?? config.seed)(home);
 
