@@ -156,7 +156,7 @@ export class FileMemento implements StateMemento {
     }
   }
 
-  /** Removes a lock left behind by a process that is gone (owner pid not alive) or, without a readable owner note,
+  /** Removes a lock left behind by a process that is gone (owner pid not alive, or this process's own pid) or, without a readable owner note,
    *  one older than LOCK_STALE_MS. Returns true when the caller should try mkdir again at once. The directory is
    *  renamed before it is removed: only one of several waiters succeeds, the others see it gone and retry. */
   private takeOverStaleLock(lockDir: string): boolean {
@@ -169,7 +169,8 @@ export class FileMemento implements StateMemento {
     }
     let stale: boolean;
     if (owner !== undefined) {
-      stale = !pidAlive(owner);
+      // This process never waits for a lock it holds (holding is synchronous): its own pid is a leftover
+      stale = owner === process.pid || !pidAlive(owner);
     } else {
       try {
         stale = Date.now() - fs.statSync(lockDir).mtimeMs > LOCK_STALE_MS;

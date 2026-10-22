@@ -46,7 +46,7 @@ if (workerSpec) {
       const m = new FileMemento(fileOf('b.json'));
       fs.mkdirSync(path.dirname(m.lockDir), { recursive: true });
       fs.mkdirSync(m.lockDir);
-      fs.writeFileSync(path.join(m.lockDir, 'owner'), String(process.pid)); // this test process: alive
+      fs.writeFileSync(path.join(m.lockDir, 'owner'), String(process.ppid)); // the test runner: alive, and not this process
       let done = false;
       const pending = m.update('k', 'v').then(() => { done = true; });
       await sleep(200);
@@ -109,12 +109,23 @@ if (workerSpec) {
       assert.ok(ticks > 0, 'the event loop ran while waiting');
     });
 
+    test('a lock whose note names this very process is left over and taken over', async () => {
+      // Holding the lock is synchronous, so this process cannot be waiting for a lock it holds (a reused pid, or a
+      // lock directory a failed cleanup left behind)
+      const m = new FileMemento(fileOf('self.json'), 300);
+      fs.mkdirSync(m.lockDir, { recursive: true });
+      fs.writeFileSync(path.join(m.lockDir, 'owner'), String(process.pid));
+      await m.update('k', 1);
+      assert.deepEqual(JSON.parse(read(fileOf('self.json'))), { k: 1 });
+      assert.equal(fs.existsSync(m.lockDir), false);
+    });
+
     test('the lock and file errors are localized', async () => {
       setLocale('zh-cn');
       try {
         const m = new FileMemento(fileOf('zh.json'), 100);
         fs.mkdirSync(m.lockDir, { recursive: true });
-        fs.writeFileSync(path.join(m.lockDir, 'owner'), String(process.pid));
+        fs.writeFileSync(path.join(m.lockDir, 'owner'), String(process.ppid));
         await assert.rejects(m.update('k', 1), { message: t('state.lockBusy', { dir: m.lockDir }) });
         fs.rmSync(m.lockDir, { recursive: true, force: true });
         fs.writeFileSync(fileOf('zh.json'), '[1]');

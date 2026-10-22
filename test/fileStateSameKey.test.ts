@@ -27,10 +27,10 @@ const writeState = (state: Record<string, unknown>): void => {
   fs.mkdirSync(path.dirname(STATE_JSON()), { recursive: true });
   fs.writeFileSync(STATE_JSON(), JSON.stringify(state));
 };
-// Another window holds the lock (this live process as its owner) until the returned function is called
+// Another window holds the lock (the live test runner as its owner) until the returned function is called
 const holdLock = (m: FileMemento): (() => void) => {
   fs.mkdirSync(m.lockDir, { recursive: true });
-  fs.writeFileSync(path.join(m.lockDir, 'owner'), String(process.pid));
+  fs.writeFileSync(path.join(m.lockDir, 'owner'), String(process.ppid));
   return () => fs.rmSync(m.lockDir, { recursive: true, force: true });
 };
 // Starts op while the lock is held, lets the other window write meanwhile, then releases the lock
