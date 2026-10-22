@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Linking an account no longer deletes its only copy of a file when the default folder's entry is a symbolic link to that account's own file; the file is kept and reported instead (Claude and Codex).
+- On Windows without Developer Mode, converting a Codex account no longer lists its thread databases among the files that need Developer Mode; they always stay with the account there.
+- Two editor windows changing the account list, display names, recommendation exclusions, low-limit notice records, Codex usage observations, announced link problems or dismissed warnings at almost the same time no longer lose one window's change (for example a removed account coming back or a notice repeating).
+- A Codex usage result recorded after a token refresh no longer replaces a newer observation another window recorded.
+- When the state file lock cannot be taken over (a dangling link in its place or an unwritable folder), the editor no longer freezes; the change fails after 5 seconds with an error.
+- The "another PlanSwap window holds the state file lock" and "not a JSON object" errors are shown in the interface language.
+- PlanSwap activates and reports the problem when its state folder cannot be created or written, instead of failing to activate.
+- Upgrading from ai-switcher 0.1.x in a VS Code or VSCodium WSL window keeps the selected Codex account in the shared selection, so terminals and other editors no longer fall back to the default account.
+- The Codex external directory row no longer offers **Switch to this account**, and switching to it no longer writes that unregistered folder into the selection (on Windows, the user variable `CODEX_HOME`).
+- When the selection file cannot be read while enabling Codex switching, PlanSwap reports it and removes the shell configuration it had just added.
+- The diagnostics report recognizes an account folder written another way (for example through a symbolic link) and, in a VS Code or VSCodium WSL window, reports a pending Codex selection from that editor's own selection file.
+- A Claude account confirmed without subscription access keeps that state when Claude Code rewrites its `.claude.json` or when the setting spells its folder differently, instead of being probed again.
+- Refreshing the usage limits of a current Claude account confirmed without subscription access now queries it instead of silently doing nothing; automatic checks still skip it.
+- "Usage check failed" now clears when another window or terminal refreshed the usage cache while a scheduled check was waiting.
+- The subscription probe no longer leaves temporary folders behind on Windows after a timeout or cancellation.
+- After **Re-link**, the background link check no longer shows the same notification again when the default account has newly trusted a folder.
+- On Windows, a linked account's missing `settings.json` copy is announced by the background check even before file-link support is known.
+- Messages made of several sentences (unlinking a Codex account, **Repair**, refreshing all accounts' usage) no longer put a stray space between sentences in Chinese and Japanese.
+- Avatars of accounts whose display name starts with an emoji or a rare CJK character show that character instead of a broken glyph.
+- Spanish and Japanese messages, tooltips, command titles and setting descriptions use the documented terms consistently.
+
 ## [0.4.2] - 2026-10-18
 
 ### Added
