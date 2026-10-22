@@ -146,7 +146,7 @@ Panel actions call the flow functions in `commands.ts` directly through Webview 
 ### 6.2 Add
 
 1. The input lives in the panel; `planswap.addAccount` only focuses it.
-2. The extension validates the trimmed name authoritatively (`validateName`): the name pattern `^[A-Za-z0-9_-]+$`, not `default`, no clash with a name or alias of the same vendor (ignoring case), not the default directory, not containing the default directory after resolving links (6.7), on Windows no existing folder differing only in letter case, and `~/.claude-<name>` not a symbolic link (`scanAccountDirs` skips symlinks, so adding must not register one either). Reasons go back to the panel (texts: `claude.*` / `account.*` in `src/i18n.ts`).
+2. The extension validates the trimmed name authoritatively (`validateName`): the name pattern `^[A-Za-z0-9_-]+$`, not `default`, no clash with a name or alias of the same vendor (ignoring case), not the default directory, not containing the default directory after resolving links (6.7), on Windows no existing folder differing only in letter case, and `~/.claude-<name>` not a symbolic link (`scanAccountDirs` skips symlinks, so adding must not register one either). Reasons go back to the panel (texts: `name.*` / `account.*` in `src/i18n.ts`).
 3. `~/.claude-<name>` is created (0700) or reused as is, without clearing; a creation failure is reported and nothing is registered.
 4. Depending on `shared` (the linked / independent option of the add form; missing counts as shared), see 6.7:
    - shared: `ensureClaudeLinks(dir)`, then `mirrorClaudeJson` from the default account's info file;

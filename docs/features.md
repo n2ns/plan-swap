@@ -93,7 +93,7 @@ An unavailable account shows only a warning icon beside its name, with no extra 
 
 ### 4.4 Usage refresh buttons
 
-Each page's list heading has **Refresh** (`planswap.claude.refreshUsage` / `planswap.codex.refreshUsage`, current account) and **Refresh all** (`planswap.claude.refreshAllUsage`, 5.9 / `planswap.codex.refreshAllUsage`, 10.3.1). Each appears only when the current row, or for Refresh all some registered row, can be queried, and neither while the page is disabled.
+Each page's list heading has **Refresh** (`planswap.claude.refreshUsage` / `planswap.codex.refreshUsage`, current account) and **Refresh all** (`planswap.claude.refreshAllUsage`, 5.9 / `planswap.codex.refreshAllUsage`, 12.4). Each appears only when the current row, or for Refresh all some registered row, can be queried, and neither while the page is disabled.
 
 ### 4.5 Manual refresh cooldown
 
@@ -133,7 +133,7 @@ Row link button (independent named, not current) or `planswap.shareAccount`. Aft
 
 ### 5.7 Unlink a shared account
 
-Panel only (row unlink button; shared named, not current), with the same confirmation and refusals as 4.6. The account becomes independent with a one-time copy of the default configuration; history, sessions and the login stay, and the default directory is not modified. If copying fails the account stays shared and **Re-link** repairs it.
+Panel only (row unlink button; shared named, not current), with the same confirmation and refusals as 5.6. The account becomes independent with a one-time copy of the default configuration; history, sessions and the login stay, and the default directory is not modified. If copying fails the account stays shared and **Re-link** repairs it.
 
 ### 5.8 Refresh usage limits `planswap.claude.refreshUsage`
 
@@ -198,7 +198,7 @@ Category "Codex Account"; QuickPicks as in section 5, without email.
 - `planswap.codex.enable` (disabled-page button, Command Palette): on WSL/Linux runs the [pre-checks](codex-design.md#4-login-shell-configuration), writes the rc marker blocks after a modal confirmation and self-checks them; a failure reports every reason and removes only blocks written by this run. Native Windows manages the per-user `CODEX_HOME` instead and refuses enable, switch and account terminals while Codex runs inside WSL, where the Codex page shows a warning banner instead of the sign-in and terminal buttons; the banner and the refusal warning offer **Open Setting**, which opens the Settings editor at `chatgpt.runCodexInWindowsSubsystemForLinux` without changing it ([Codex design 9a](codex-design.md#9a-native-windows)).
 - `planswap.codex.disable` (Command Palette): after confirmation removes the rc blocks, the `server-env-setup` blocks and every state file, changing nothing when a block is damaged (native Windows: the state file, and the user `CODEX_HOME` while it still points at an account directory); open windows keep `CODEX_HOME` until restarted.
 - `planswap.codex.switchAccount` (switch button, double-click, Enter): 12.5.
-- `planswap.codex.addAccount`: focuses the add form; 10.7.
+- `planswap.codex.addAccount`: focuses the add form; 12.6.
 - `planswap.codex.shareAccount` (row `link` button): 12.10.
 - `planswap.codex.removeAccount` (trash button): 12.7.
 - `planswap.codex.openTerminal` (terminal or sign-in button, also for an effective external directory): opens `Codex (<label>)` running `codex` as that account, or `codex login` with the sign-in tip when signed out ([Codex design 8.4](codex-design.md#84-terminal)); refused on native Windows while Codex runs inside WSL; without `codex` on PATH the terminal runs the Codex extension's bundled binary.

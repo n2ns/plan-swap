@@ -114,7 +114,7 @@ You can change an account's mode later, and **Re-link** in Tools checks linked a
 
 ## Privacy
 
-PlanSwap has no telemetry and makes no network requests of its own. Usage limits are read through the official `claude` and `codex` CLIs, which contact their own services as usual. When Claude usage is unavailable, a minimal official CLI model request can check subscription access; it may consume a small amount of quota. PlanSwap never copies, moves or sends your sign-in credentials, and it changes your shell or environment configuration only after you confirm. Details: [privacy](docs/privacy.md).
+PlanSwap has no telemetry and makes no network requests of its own. Usage limits are read through the official `claude` and `codex` CLIs, which contact their own services as usual. When Claude usage is unavailable, a minimal official CLI model request can check subscription access; it may consume a small amount of quota. PlanSwap never copies, moves or sends your sign-in credentials, and it changes your shell or environment configuration only after you confirm (afterwards it keeps the blocks it added up to date). Details: [privacy](docs/privacy.md).
 
 ## Uninstall
 

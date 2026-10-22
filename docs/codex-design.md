@@ -54,10 +54,10 @@ fi
 # <<< planswap codex <<<
 ```
 
-- The block only fills in `CODEX_HOME` when the shell inherited none. A value that was already in the environment (the editor's server-env-setup hook of 4a, a Windows user variable passed through WSLENV, the user's own profile) is kept, in the server's login-shell resolution as well as in integrated terminals. Versions 0.1.4 - 0.3.12 ran `unset` when the state file was empty; that turned every terminal of an editor whose server had the variable from its hook back to the default account. `upgradeRcBlocks` replaces such a block in place on every activation (the markers are unchanged, so removal still restores the original bytes). After switching back to the default account a new server starts without the variable, so nothing stale is inherited.
+- The block only fills in `CODEX_HOME` when the shell inherited none. A value that was already in the environment (the editor's server-env-setup hook of 4a, a Windows user variable passed through WSLENV, the user's own profile) is kept, in the server's login-shell resolution as well as in integrated terminals. Versions 0.1.4 - 0.3.14 ran `unset` when the state file was empty; that turned every terminal of an editor whose server had the variable from its hook back to the default account. `upgradeRcBlocks` replaces such a block in place on every activation (the markers are unchanged, so removal still restores the original bytes). After switching back to the default account a new server starts without the variable, so nothing stale is inherited.
 - In `~/.bashrc` the block is inserted before the interactive guard (`case $- in *i*) ;; *) return;; esac`); if no guard is found it is appended to the end of the file. This way non-interactive login shells such as `bash -lc` also see it.
 - Pre-checks before writing (`planswap.codex.enable`):
-  1. The extension host's `process.env.SHELL` is bash. For zsh only a snippet is shown for the user to add to `~/.zprofile` and `~/.zshrc`; fish is not supported.
+  1. The extension host's `process.env.SHELL` is bash; any other login shell (zsh, fish) is refused with the reason and nothing is written.
   2. `~/.bash_profile` and `~/.bash_login` do not exist, or they source `~/.bashrc` (a line mentioning `.bashrc` outside a `#` comment); otherwise the reason is shown and nothing is written.
   3. `~/.profile` and `~/.bashrc` contain no `export CODEX_HOME` of the user's own; if they do, the conflict is shown and nothing is written.
   4. A modal confirmation shows the content to be written; an existing marker block is not written again.
@@ -114,7 +114,7 @@ Local Linux windows (including WSLg desktop) use **save selection + manual resta
 4. Preserve the original session setup. For the WSLg test launched through `dbus-run-session`, run the original launcher again to create a fresh bus/keyring session; do not reuse the ended session's `DBUS_SESSION_BUS_ADDRESS`. The external test launcher remains outside the product.
 5. The selected account remains pending until a new extension host actually reports the intended `CODEX_HOME`. Saving the selection is not activation.
 
-Subsequent cold starts (source-derived, pending user verification):
+Subsequent cold starts (source-derived, pending user verification; see [TODO](../TODO.md)):
 
 - Desktop menu/icon (no `VSCODE_CLI`): the shell environment resolution runs the marker block, so a named selection is applied. Returning to the default account is reliable only if the graphical session itself does not carry a `CODEX_HOME` (fact 20); a session that sourced `~/.profile` while a named account was selected keeps that value until the next login.
 - `code` from a terminal: no shell resolution; the terminal's environment is used, which reflects the selection at the time that terminal started.
@@ -209,7 +209,7 @@ Local Windows editors have no rc files and no WSL server. Selection is persisted
 - `auth.json` remains read-only; accounts stored in the OS keyring instead of `auth.json` (`cli_auth_credentials_store = keyring`/`auto`) read as signed out.
 - **Codex run inside WSL**: with the Codex extension setting `chatgpt.runCodexInWindowsSubsystemForLinux` on, PlanSwap treats Codex as using the WSL-side `~/.codex` rather than the Windows `CODEX_HOME`, and PlanSwap never reads WSL files from Windows. `codexRunsInWsl()` is then true: enable, switch, account terminals (sign-in included) and the Codex usage refresh commands are refused with `codex.win.runsInWsl`, since a Windows terminal would sign in to the Windows-side directory the WSL-side Codex never reads; the Codex page then shows a warning banner (`TabState.runsInWsl`, also above the disabled page's enable card) instead of the rows' sign-in and terminal buttons and the sign-in hint (open a WSL window and manage the accounts there, or turn the setting off), the status bar tooltip shows `status.codexRunsInWsl` instead of usage limits, and no usage query runs. The banner and the refusal warning each carry an **Open Setting** button (`openCodexWslSetting`) that opens the Settings UI at `chatgpt.runCodexInWindowsSubsystemForLinux`; turning it off stays the user's decision, since PlanSwap never changes another extension's settings. The status bar and the sidebar re-render when the setting changes. The Codex extension's actual WSL-mode behavior remains part of the real-Windows acceptance work below.
 - Codex honors `CODEX_HOME` on Windows, including non-ASCII paths ([evidence](research/windows.md#codex-on-windows)).
-- Not verified with a real Windows sign-in: that the extension host inherits the changed variable after a fresh start, the observed credential-store behavior (the upstream default is `file`), and that the Codex extension really ignores the Windows `CODEX_HOME` in its WSL mode; see [TODO](../TODO.md).
+- Switching with a real Windows sign-in, including the extension host inheriting the changed variable after a fresh start, is accepted ([README](../README.md#known-limitations)). Not verified: the observed credential-store behavior (the upstream default is `file`) and that the Codex extension really ignores the Windows `CODEX_HOME` in its WSL mode; see [TODO](../TODO.md).
 
 ## 10. Code structure
 
@@ -234,6 +234,6 @@ The self-check, server/terminal shutdown observations, reconnect environment che
 9. Links replaced by Codex between link refreshes (8.6) are repaired only at the next refresh (jsonl files) or reported (other entries).
 10. Converting an independent account cannot be undone automatically; differing files are kept as `<name>.from-<account>` / `<name>.independent-backup`, and on Linux the account's thread databases are kept as backups; Windows keeps them as independent databases.
 11. MCP servers in the shared `config.toml` are shared, but MCP OAuth credentials are never linked or copied, so OAuth-based servers must be authorized in each account; for independent accounts, `env` values of MCP servers are copied in plain text with `config.toml`.
-12. Local desktop switching (5.1) has no automatic quit/relaunch, and cold starts depend on the launch route; installed-build acceptance of the guidance is pending.
+12. Local desktop switching (5.1) has no automatic quit/relaunch, and cold starts depend on the launch route (the routes other than the tested one are pending, see 5.1).
 13. Usage limits (8.7) depend on the `codex app-server` protocol (facts 24-26) and a `codex` binary; each query starts a short-lived CLI process that contacts OpenAI's service as the CLI itself does.
 14. Whether Antigravity's WSL server sources a `server-env-setup` file is not verified (fact 31), so Antigravity stays on the shared selection and cannot be given an account of its own next to VS Code or VSCodium.
