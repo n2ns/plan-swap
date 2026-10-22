@@ -102,7 +102,7 @@ jobs:
             body=$(tail -c 20000 test-output.txt)
           fi
           msg=$(printf '%s\n' "$body" | tr -d '\r' | sed -e 's/%/%25/g' | awk 'BEGIN{ORS="%0A"}{print}')
-          echo "::error title=Failing tests (${{ matrix.os }}, Node ${{ matrix.node }})::${msg}"
+          echo "::error title=Failing tests (${{ matrix.os }}%2C Node ${{ matrix.node }})::${msg}"
 
       - name: Build
         run: npm run build
