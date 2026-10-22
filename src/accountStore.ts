@@ -1,9 +1,10 @@
 // Registered accounts of one vendor in the state file (FileMemento): a list of named accounts (the default is implicit),
 // the directories of removed accounts the auto scan must skip and the order the user dragged the accounts into. Each
 // vendor instantiates it with its own keys, default and scan (src/accounts.ts, src/codex/codexStore.ts), so the two
-// vendors' data stay independent. Imports vscode only for the Memento type.
+// vendors' data stay independent. Every write computes its value under the state file lock (updateWith), so a change
+// another window made to the same key meanwhile is kept. Imports no vscode.
 import * as fs from 'node:fs';
-import type { Memento } from 'vscode';
+import type { StateMemento } from './fileState';
 import { samePath } from './paths';
 import { labelFor, sameName, type LabelStore } from './labels';
 import type { RecommendExclusions } from './recommend';
@@ -30,14 +31,10 @@ export interface AccountStoreConfig<T extends StoredAccount> {
  * Directories are compared with samePath, names with sameName (case-insensitive) where a clash matters.
  */
 export class AccountStoreBase<T extends StoredAccount> {
-  constructor(private readonly state: Memento, private readonly config: AccountStoreConfig<T>) {}
+  constructor(private readonly state: StateMemento, private readonly config: AccountStoreConfig<T>) {}
 
   private load(): T[] {
     return this.state.get<T[]>(this.config.stateKey, []);
-  }
-
-  private save(list: T[]): Thenable<void> {
-    return this.state.update(this.config.stateKey, list);
   }
 
   private order(): string[] {
@@ -68,17 +65,21 @@ export class AccountStoreBase<T extends StoredAccount> {
   /** Stores the order: the registered names among `names` (the default's included), first to last, without
    *  duplicates; names of unregistered accounts are dropped. An empty result deletes the entry */
   async setOrder(names: string[]): Promise<void> {
-    const registered = new Set(this.all().map((a) => a.name));
-    const order = [...new Set(names)].filter((n) => registered.has(n));
-    await this.state.update(this.config.orderKey, order.length ? order : undefined);
+    await this.state.updateWith(this.config.orderKey, () => {
+      const registered = new Set(this.all().map((a) => a.name));
+      const order = [...new Set(names)].filter((n) => registered.has(n));
+      return order.length ? order : undefined;
+    });
   }
 
   // Drops names from the stored order; writes only when one of them was in it
   private async forgetOrder(names: string[]): Promise<void> {
-    const order = this.order();
-    const kept = order.filter((n) => !names.includes(n));
-    if (kept.length === order.length) return;
-    await this.state.update(this.config.orderKey, kept.length ? kept : undefined);
+    await this.state.updateWith<unknown>(this.config.orderKey, (current) => {
+      const order = this.order();
+      const kept = order.filter((n) => !names.includes(n));
+      if (kept.length === order.length) return current;
+      return kept.length ? kept : undefined;
+    });
   }
 
   find(name: string): T | undefined {
@@ -96,24 +97,24 @@ export class AccountStoreBase<T extends StoredAccount> {
 
   // Replaces an entry with the same name (sameName, case-insensitive) and takes its directory off the ignore list
   async add(account: T): Promise<void> {
-    await this.state.update(this.config.ignoredKey, this.ignored().filter((d) => !samePath(d, account.dir)));
-    await this.save([...this.load().filter((a) => !sameName(a.name, account.name)), account]);
+    await this.state.updateWith(this.config.ignoredKey, () => this.ignored().filter((d) => !samePath(d, account.dir)));
+    await this.state.updateWith(this.config.stateKey, () => [...this.load().filter((a) => !sameName(a.name, account.name)), account]);
   }
 
   // Drops the entry, its place in the stored order, and records its directory in the ignore list so the scan does not
   // re-add it (the alias is the caller's)
   async remove(name: string): Promise<void> {
-    const removed = this.load().find((a) => a.name === name);
-    if (removed && !this.ignored().some((d) => samePath(d, removed.dir))) {
-      await this.state.update(this.config.ignoredKey, [...this.ignored(), removed.dir]);
-    }
-    await this.save(this.load().filter((a) => a.name !== name));
+    await this.state.updateWith<unknown>(this.config.ignoredKey, (current) => {
+      const removed = this.load().find((a) => a.name === name);
+      return removed && !this.ignored().some((d) => samePath(d, removed.dir)) ? [...this.ignored(), removed.dir] : current;
+    });
+    await this.state.updateWith(this.config.stateKey, () => this.load().filter((a) => a.name !== name));
     await this.forgetOrder([name]);
   }
 
   // Called after the directory was deleted, so a recreated directory is auto-discovered again
   async unignore(dir: string): Promise<void> {
-    await this.state.update(this.config.ignoredKey, this.ignored().filter((d) => !samePath(d, dir)));
+    await this.state.updateWith(this.config.ignoredKey, () => this.ignored().filter((d) => !samePath(d, dir)));
   }
 
   /**
@@ -142,13 +143,16 @@ export class AccountStoreBase<T extends StoredAccount> {
       missing.push(s);
     }
     if (!pruned.length && !missing.length) return;
-    // Another window may have added, removed or ignored accounts while the disk was scanned (and the aliases cleared):
-    // apply only the deltas to the list as it is now, so its changes are kept
-    const current = this.load().filter((a) => !pruned.some((p) => p.name === a.name && samePath(p.dir, a.dir)));
-    const ignoredNow = this.ignored();
-    const added = missing.filter((s) => !ignoredNow.some((d) => samePath(d, s.dir))
-      && !current.some((a) => samePath(a.dir, s.dir) || sameName(a.name, s.name)));
-    await this.save([...current, ...added]);
+    // Another window may have added, removed or ignored accounts while the disk was scanned (and the aliases cleared)
+    // or while this one waits for the lock: apply only the deltas to the list as it is under the lock, so its changes
+    // are kept
+    await this.state.updateWith(this.config.stateKey, () => {
+      const current = this.load().filter((a) => !pruned.some((p) => p.name === a.name && samePath(p.dir, a.dir)));
+      const ignoredNow = this.ignored();
+      const added = missing.filter((s) => !ignoredNow.some((d) => samePath(d, s.dir))
+        && !current.some((a) => samePath(a.dir, s.dir) || sameName(a.name, s.name)));
+      return [...current, ...added];
+    });
     await this.forgetOrder(pruned.map((a) => a.name));
   }
 }
