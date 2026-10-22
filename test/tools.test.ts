@@ -6,7 +6,7 @@ import { checkSharedInBackground, runTool } from '../src/tools';
 import { LinkCheckNotices } from '../src/linkCheck';
 import { ensureClaudeLinks, mirrorClaudeJson } from '../src/claudeShare';
 import { ensureCodexLinks, isSharedCodexAccount } from '../src/codex/codexShare';
-import { setLocale, t } from '../src/i18n';
+import { joinSentences, setLocale, t } from '../src/i18n';
 import { commands, env, resetConfig, setConfig, window } from './stubs/vscode';
 import { inLocale, LINUX_ONLY, makeTempHome, MemoryMemento } from './helpers';
 
@@ -72,6 +72,41 @@ describe('Claude repair scope', LINUX_ONLY, () => {
       fs.writeFileSync(source, JSON.stringify({ projects: { '/p': { hasTrustDialogAccepted: true, enabledMcpjsonServers: ['s'] } } }));
       await checkSharedInBackground('claude', { claudeDirs: () => dirs, linkNotices: new LinkCheckNotices(new MemoryMemento()) });
       assert.equal(warning.mock.callCount(), 2);
+    } finally { tmp.restore(); }
+  });
+
+  test('Re-link records what the background check announces, also with a project trusted only by the default', async (ctx) => {
+    const { tmp, source, dirs } = fixture();
+    try {
+      fs.writeFileSync(source, JSON.stringify({ projects: { '/p': { hasTrustDialogAccepted: true } } }));
+      fs.unlinkSync(path.join(dirs[0], 'rules'));
+      const warning = ctx.mock.method(window, 'showWarningMessage', async () => undefined);
+      const state = new MemoryMemento();
+      await state.update('links.fileLinks', true);
+      const linkNotices = new LinkCheckNotices(state);
+      await runTool('claude', 'sync', { claudeDirs: () => dirs, linkNotices });
+      assert.equal(warning.mock.callCount(), 1);
+      await checkSharedInBackground('claude', { claudeDirs: () => dirs, linkNotices });
+      assert.equal(warning.mock.callCount(), 1, 'the background check does not repeat what Re-link showed');
+    } finally { tmp.restore(); }
+  });
+
+  test('zh-cn: a Claude repair with issues joins its sentences with the locale separator', async (ctx) => {
+    const { tmp, dirs } = fixture();
+    try {
+      fs.unlinkSync(path.join(dirs[0], 'rules'));
+      await inLocale('zh-cn', async () => {
+        const warning = ctx.mock.method(window, 'showWarningMessage', async (_m: string, ...items: string[]) => {
+          // The account gets its own rules folder while the notification is open, so the repair reports a conflict
+          if (items.length) fs.mkdirSync(path.join(dirs[0], 'rules'));
+          return items.find((i) => i === t('linkCheck.repair'));
+        });
+        ctx.mock.method(window, 'showInformationMessage', async () => undefined);
+        await runTool('claude', 'sync', { claudeDirs: () => [dirs[0]] });
+        assert.equal(warning.mock.callCount(), 2);
+        const message = String(warning.mock.calls[1].arguments[0]);
+        assert.ok(message.startsWith(joinSentences(t('linkCheck.claudeAttempted', { count: 1 }), t('sync.issues', { list: '' }))), message);
+      });
     } finally { tmp.restore(); }
   });
 
@@ -230,7 +265,7 @@ describe('re-link result messages', () => {
           } else {
             assert.equal(info.mock.callCount(), 0);
             const message = String(warning.mock.calls[1].arguments[0]);
-            assert.ok(message.startsWith(t('sync.attempted', { count: 1, vendor: 'Codex' })));
+            assert.ok(message.startsWith(joinSentences(t('sync.attempted', { count: 1, vendor: 'Codex' }), t('sync.issues', { list: '' }))));
             assert.ok(!message.includes(t('sync.done', { count: 1, vendor: 'Codex' })));
             assert.ok(message.includes(outcome === 'failure' ? 'Fixture failure' : 'settings'));
           }
