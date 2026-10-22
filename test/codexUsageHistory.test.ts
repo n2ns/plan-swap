@@ -112,3 +112,20 @@ test('a response with an outdated accepted stamp neither replaces nor clears the
     }
   } finally { tmp.restore(); }
 });
+
+test('an older result recorded under the same stamp does not replace a newer observation of the directory', async () => {
+  const tmp = makeTempHome('usage-history-older');
+  try {
+    let now = 100_000 + 15 * 60_000;
+    // Window A observed 60% now; window B re-stamps its own result from 15 minutes earlier after a token refresh
+    const history = new CodexUsageHistory(new FileMemento(), () => now, () => 'stamp');
+    await history.record(tmp.home, observed(now, 60), 'stamp');
+    await history.record(tmp.home, observed(100_000, 10), 'stamp');
+    assert.equal(history.get(tmp.home)?.windows[0].usedPercent, 60);
+    assert.equal(history.get(tmp.home)?.checkedAt, now);
+    // A newer result still replaces it
+    now += 1000;
+    await history.record(tmp.home, observed(now, 70), 'stamp');
+    assert.equal(history.get(tmp.home)?.windows[0].usedPercent, 70);
+  } finally { tmp.restore(); }
+});

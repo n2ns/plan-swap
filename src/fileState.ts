@@ -3,12 +3,14 @@
 // Besides STATE_KEYS the file holds warnings.dismissed (extension.ts), codex.usageHistory (codexUsageHistory.ts),
 // usage.lowNotified (usageNotices.ts) and links.announced / links.fileLinks (linkCheck.ts).
 // Every update is a read-modify-write under a cross-process lock (the directory <file>.lock, see withLock), so two
-// extension hosts of the same distribution (VS Code and VSCodium side by side) cannot lose each other's writes.
+// extension hosts of the same distribution (VS Code and VSCodium side by side) cannot lose each other's writes; a new
+// value that depends on the key's current one is computed under that lock (updateWith).
 // Depends only on vscode's Memento type
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { Memento } from 'vscode';
+import { t } from './i18n';
 import { pidAlive, renameReplacing, stripBom } from './platform';
 
 export const STATE_JSON = () => path.join(os.homedir(), '.config', 'planswap', 'state.json');
@@ -23,7 +25,13 @@ export const LOCK_WAIT_MS = 5000;
 /** A lock without a readable owner that is older than this was left behind (a crash between mkdir and the owner note). */
 export const LOCK_STALE_MS = 10_000;
 
-export class FileMemento implements Memento {
+/** The Memento the state stores write through (FileMemento; an in-memory stand-in in tests) */
+export interface StateMemento extends Memento {
+  /** Sets key to fn(its current value), read and written under one lock; see FileMemento.updateWith */
+  updateWith<T>(key: string, fn: (current: T | undefined) => T | undefined): Thenable<void>;
+}
+
+export class FileMemento implements StateMemento {
   /** lockWaitMs: how long update waits for the lock (tests shorten it). */
   constructor(private readonly file: string = STATE_JSON(), private readonly lockWaitMs: number = LOCK_WAIT_MS) {}
 
@@ -48,7 +56,7 @@ export class FileMemento implements Memento {
     const body = stripBom(text);
     if (body.trim() === '') return {};
     const parsed: unknown = JSON.parse(body);
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('not a JSON object');
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error(t('state.notObject'));
     return parsed as State;
   }
 
@@ -87,17 +95,33 @@ export class FileMemento implements Memento {
    *  JSON; temp file 0600 + rename, directory 0700). Rejects without writing when the file exists but cannot be read
    *  or is not a JSON object, or when the lock is not released within lockWaitMs */
   async update(key: string, value: unknown): Promise<void> {
+    await this.withLock(() => this.writeKey(this.readOrThrow(), key, value));
+  }
+
+  /** A read-modify-write of one key: under the lock, fn gets the key's value in the freshly read file and returns the
+   *  new one (undefined deletes the key), so a write of the same key by another window while this one waited for
+   *  the lock is not lost. fn runs synchronously under the lock (get of other keys reads the file as it stands);
+   *  returning the current value itself writes nothing. Rejects like update */
+  async updateWith<T>(key: string, fn: (current: T | undefined) => T | undefined): Promise<void> {
     await this.withLock(() => {
-      const entries = Object.entries(this.readOrThrow()).filter(([k]) => k !== key);
-      if (value !== undefined) entries.push([key, value]);
-      this.write(Object.fromEntries(entries));
+      const state = this.readOrThrow();
+      const current = Object.hasOwn(state, key) ? (state[key] as T) : undefined;
+      const value = fn(current);
+      if (value !== current) this.writeKey(state, key, value);
     });
+  }
+
+  private writeKey(state: State, key: string, value: unknown): void {
+    const entries = Object.entries(state).filter(([k]) => k !== key);
+    if (value !== undefined) entries.push([key, value]);
+    this.write(Object.fromEntries(entries));
   }
 
   /**
    * Runs fn while holding <file>.lock. Acquire: mkdir, retried with a short backoff until lockWaitMs passed; a lock
    * whose owner process is gone, or that has no owner note and is older than LOCK_STALE_MS, is taken over (renamed
-   * away first, so only one waiter takes it). Release: the directory is removed, also when fn throws.
+   * away first, so only one waiter takes it) and mkdir retried after a zero-delay yield, within the same deadline.
+   * Release: the directory is removed, also when fn throws.
    */
   private async withLock<T>(fn: () => T): Promise<T> {
     const lockDir = this.lockDir;
@@ -111,10 +135,11 @@ export class FileMemento implements Memento {
       } catch (e) {
         if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
       }
-      if (this.takeOverStaleLock(lockDir)) continue;
-      if (Date.now() >= deadline) throw new Error(`another PlanSwap window holds the state file lock (${lockDir})`);
-      await new Promise((resolve) => setTimeout(resolve, delay));
-      delay = Math.min(delay * 2, 100);
+      const tookOver = this.takeOverStaleLock(lockDir);
+      if (Date.now() >= deadline) throw new Error(t('state.lockBusy', { dir: lockDir }));
+      // After a takeover mkdir is retried at once, still yielding, so a takeover that keeps failing cannot spin
+      await new Promise((resolve) => setTimeout(resolve, tookOver ? 0 : delay));
+      if (!tookOver) delay = Math.min(delay * 2, 100);
     }
     try {
       // Written whole: a waiter must never read a half-written (empty) note and mistake it for a dead owner

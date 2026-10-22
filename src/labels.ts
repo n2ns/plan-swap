@@ -1,5 +1,5 @@
-// Account display name (alias) storage and validation, keyed by account name; depends only on vscode's Memento type
-import type { Memento } from 'vscode';
+// Account display name (alias) storage and validation, keyed by account name; imports no vscode
+import type { StateMemento } from './fileState';
 import { t, translationsOf } from './i18n';
 
 // Internal sentinel name of the "external directory" row; never displayed (see labelFor). '<' cannot pass NAME_RE.
@@ -19,7 +19,7 @@ type Labels = Record<string, string>;
 
 export class LabelStore {
   constructor(
-    private readonly state: Memento,
+    private readonly state: StateMemento,
     private readonly key: 'claude.labels' | 'codex.labels',
   ) {}
 
@@ -33,10 +33,13 @@ export class LabelStore {
 
   /** undefined, empty or equal to name → remove the entry (entering the account's own name clears the alias) */
   async set(name: string, label: string | undefined): Promise<void> {
-    // Rebuilt with Object.fromEntries (define semantics) so a `__proto__` name is stored as a normal own key
-    const entries = Object.entries(this.read()).filter(([k]) => k !== name);
-    if (label && label !== name) entries.push([name, label]);
-    await this.state.update(this.key, Object.fromEntries(entries));
+    // Rebuilt with Object.fromEntries (define semantics) so a `__proto__` name is stored as a normal own key; under the
+    // lock, so another window's alias stored meanwhile is kept
+    await this.state.updateWith(this.key, () => {
+      const entries = Object.entries(this.read()).filter(([k]) => k !== name);
+      if (label && label !== name) entries.push([name, label]);
+      return Object.fromEntries(entries);
+    });
   }
 
   /** Called when an account is deleted */

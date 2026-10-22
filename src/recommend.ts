@@ -1,7 +1,7 @@
 // Account recommendation: which registered account of a page to suggest when the current one runs low, and the
 // per-account "excluded from recommendations" marks. Pure ranking over the rows the panel already shows (no new data,
 // no vscode import); the Webview only renders the result.
-import type { Memento } from 'vscode';
+import type { StateMemento } from './fileState';
 import type { AccountView } from './protocol';
 
 type UsageWindow = NonNullable<AccountView['usage']>['windows'][number];
@@ -50,7 +50,7 @@ export function recommend(rows: readonly AccountView[], recommendationThreshold:
 // Stored under state[key]: the names of the accounts excluded from recommendations
 export class RecommendExclusions {
   constructor(
-    private readonly state: Memento,
+    private readonly state: StateMemento,
     private readonly key: 'claude.recommendExcluded' | 'codex.recommendExcluded',
   ) {}
 
@@ -61,11 +61,15 @@ export class RecommendExclusions {
   /** Adds or removes the name; nothing is written when the mark is already as asked, and the entry is dropped from
    *  the state when the list becomes empty */
   async set(name: string, excluded: boolean): Promise<void> {
-    const current = this.read();
-    if (current.includes(name) === excluded) return;
-    const names = current.filter((n) => n !== name);
-    if (excluded) names.push(name);
-    await this.state.update(this.key, names.length ? names : undefined);
+    if (this.read().includes(name) === excluded) return;
+    // Under the lock, so another window's change meanwhile is kept
+    await this.state.updateWith<unknown>(this.key, (value) => {
+      const current = this.read();
+      if (current.includes(name) === excluded) return value;
+      const names = current.filter((n) => n !== name);
+      if (excluded) names.push(name);
+      return names.length ? names : undefined;
+    });
   }
 
   /** Called when an account is deleted */

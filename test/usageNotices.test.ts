@@ -59,7 +59,7 @@ test('used-up, model-specific, undated and reached windows are left to Claude Co
 });
 
 test('nothing is announced when the record cannot be saved', async () => {
-  const failing = { get: () => undefined, keys: () => [], update: () => Promise.reject(new Error('read-only')) };
+  const failing = { get: () => undefined, keys: () => [], update: () => Promise.reject(new Error('read-only')), updateWith: () => Promise.reject(new Error('read-only')) };
   const notices = new LowUsageNotices(failing, () => NOW);
   assert.equal(await notices.take('claude', '/tmp/x', [hour(90)], 20), undefined);
 });

@@ -7,6 +7,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { FileMemento, LOCK_STALE_MS } from '../src/fileState';
+import { setLocale, t } from '../src/i18n';
 import { makeTempHome, read, type TempHome } from './helpers';
 
 const workerSpec = process.env['PLANSWAP_FILESTATE_WORKER'];
@@ -90,6 +91,38 @@ if (workerSpec) {
       await assert.rejects(m.update('k', 2), /holds the state file lock/);
       assert.deepEqual(JSON.parse(read(fileOf('d.json'))), { k: 1 }, 'nothing written');
       fs.rmSync(m.lockDir, { recursive: true, force: true });
+    });
+
+    test('a lock path that cannot be taken over still times out without blocking the event loop', { skip: process.platform === 'win32' }, async () => {
+      // A dangling symbolic link at the lock path: mkdir reports EEXIST, while the owner note and stat report ENOENT
+      const m = new FileMemento(fileOf('dangling.json'), 300);
+      fs.mkdirSync(path.dirname(m.lockDir), { recursive: true });
+      fs.symlinkSync(path.join(path.dirname(m.lockDir), 'missing-target'), m.lockDir);
+      let ticks = 0;
+      const timer = setInterval(() => { ticks++; }, 10);
+      try {
+        await assert.rejects(m.update('k', 1), /holds the state file lock/);
+      } finally {
+        clearInterval(timer);
+        fs.rmSync(m.lockDir, { force: true });
+      }
+      assert.ok(ticks > 0, 'the event loop ran while waiting');
+    });
+
+    test('the lock and file errors are localized', async () => {
+      setLocale('zh-cn');
+      try {
+        const m = new FileMemento(fileOf('zh.json'), 100);
+        fs.mkdirSync(m.lockDir, { recursive: true });
+        fs.writeFileSync(path.join(m.lockDir, 'owner'), String(process.pid));
+        await assert.rejects(m.update('k', 1), { message: t('state.lockBusy', { dir: m.lockDir }) });
+        fs.rmSync(m.lockDir, { recursive: true, force: true });
+        fs.writeFileSync(fileOf('zh.json'), '[1]');
+        assert.equal(m.readError()?.message, t('state.notObject'));
+        assert.equal(m.readError()?.message, '不是 JSON 对象');
+      } finally {
+        setLocale('en');
+      }
     });
 
     test('the lock is released when the write fails', async () => {

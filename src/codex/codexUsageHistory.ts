@@ -1,8 +1,8 @@
 // Last observed usage per directory, stored under codex.usageHistory as entries { dir, stamp, usage } (dir compared with
 // samePath). Only quota numbers, collection time and the auth.json stat stamp are persisted: no email, identity key or
 // credentials. Age, stamp and reset checks happen on read; expired entries are pruned when a result is recorded.
-// Imports vscode only for the Memento type.
-import type { Memento } from 'vscode';
+// Imports no vscode.
+import type { StateMemento } from '../fileState';
 import { samePath } from '../paths';
 import { authFileStamp } from './codexUsageMonitor';
 import { usageAsOf, type CodexUsage, type UsageResult } from './codexUsage';
@@ -24,13 +24,12 @@ function validEntry(value: unknown): value is Entry {
 
 export class CodexUsageHistory {
   constructor(
-    private readonly state: Memento,
+    private readonly state: StateMemento,
     private readonly now: () => number = Date.now,
     private readonly stamp: (dir: string) => string = authFileStamp,
   ) {}
 
-  private entries(): Entry[] {
-    const raw = this.state.get<unknown>(KEY);
+  private entries(raw: unknown = this.state.get<unknown>(KEY)): Entry[] {
     return Array.isArray(raw) ? raw.filter(validEntry) : [];
   }
 
@@ -53,20 +52,27 @@ export class CodexUsageHistory {
   }
 
   /** Capture only completed queries. Ignored when acceptedStamp no longer matches auth.json. Success replaces this
-   *  directory's entry under acceptedStamp; notLoggedIn / authExpired clear it; any other failure (temporary) leaves
-   *  the last observation intact. */
+   *  directory's entry under acceptedStamp, unless that entry is a newer observation under the same stamp (another
+   *  window's query, while this one re-stamps an older result after a token refresh); notLoggedIn / authExpired
+   *  clear it; any other failure (temporary) leaves the last observation intact. Computed under the state file lock,
+   *  so other directories' entries written by another window meanwhile are kept. */
   async record(dir: string, result: UsageResult, acceptedStamp: string): Promise<void> {
     if (acceptedStamp !== this.stamp(dir)) return;
     if (!result.ok && result.reason !== 'notLoggedIn' && result.reason !== 'authExpired') return;
-    const entries = this.entries().filter((e) => !samePath(e.dir, dir) && this.recent(e));
     const stamp = acceptedStamp;
-    if (result.ok && stamp !== 'missing') {
-      const { windows, checkedAt, limitReached } = result.usage;
-      entries.push({ dir, stamp, usage: {
-        windows: windows.map(({ usedPercent, windowMinutes, resetsAt }) => ({ usedPercent, windowMinutes, resetsAt })),
-        checkedAt, limitReached,
-      } });
-    }
-    if (JSON.stringify(entries) !== JSON.stringify(this.entries())) await this.state.update(KEY, entries);
+    await this.state.updateWith<unknown>(KEY, (raw) => {
+      const stored = this.entries(raw);
+      const entries = stored.filter((e) => !samePath(e.dir, dir) && this.recent(e));
+      if (result.ok && stamp !== 'missing') {
+        const newer = stored.find((e) => samePath(e.dir, dir) && e.stamp === stamp && this.recent(e)
+          && e.usage.checkedAt > result.usage.checkedAt);
+        const { windows, checkedAt, limitReached } = result.usage;
+        entries.push(newer ?? { dir, stamp, usage: {
+          windows: windows.map(({ usedPercent, windowMinutes, resetsAt }) => ({ usedPercent, windowMinutes, resetsAt })),
+          checkedAt, limitReached,
+        } });
+      }
+      return JSON.stringify(entries) !== JSON.stringify(stored) ? entries : raw;
+    });
   }
 }

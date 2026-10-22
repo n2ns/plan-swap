@@ -4,7 +4,7 @@ import childProcess from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import type { Memento } from 'vscode';
+import type { StateMemento } from '../src/fileState';
 import { CLAUDE_OVERRIDE_VARS } from '../src/environmentWarnings';
 import { setLocale } from '../src/i18n';
 
@@ -162,7 +162,7 @@ export function snapshot(dir: string): string[] {
 }
 
 /** In-memory Memento stub */
-export class MemoryMemento implements Memento {
+export class MemoryMemento implements StateMemento {
   readonly data = new Map<string, unknown>();
   // Number of update() calls, so tests can assert that nothing was written
   updates = 0;
@@ -176,5 +176,11 @@ export class MemoryMemento implements Memento {
     this.updates++;
     if (value === undefined) this.data.delete(key);
     else this.data.set(key, value);
+  }
+  // FileMemento.updateWith without the lock: returning the current value writes nothing
+  async updateWith<T>(key: string, fn: (current: T | undefined) => T | undefined): Promise<void> {
+    const current = this.get<T>(key);
+    const value = fn(current);
+    if (value !== current) await this.update(key, value);
   }
 }
