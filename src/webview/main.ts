@@ -831,7 +831,8 @@ class Page {
     const checking = this.mode === 'claude' && a.subscriptionChecking === true;
     const editing = this.renamingDir === a.dir && !!this.renameField;
     const selected = this.mode === 'codex' && a.isSelected === true;
-    const canSwitch = !a.isCurrent || (this.mode === 'codex' && a.isSelected === false);
+    // The host refuses a Codex switch to the external directory (it never becomes the selection), so it offers none
+    const canSwitch = (!a.isCurrent || (this.mode === 'codex' && a.isSelected === false)) && !(this.mode === 'codex' && a.kind === 'external');
     if (editing) classes.push('is-editing');
 
     // Built in edit mode too: CSS hides it there (visibility: hidden) so the card keeps its height and columns
