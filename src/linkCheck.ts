@@ -115,7 +115,8 @@ export function describeLinkCheck(checks: readonly AccountCheck[]): { lines: str
  * (no labels; only '.claude.json' for the mirror, so routine changes of the mirrored keys do not count): repairable
  * problems only, since a link elsewhere, the account's own entry, a busy account or a failed check cannot be helped by
  * Repair and would come back every day. Also left out with fileLinksUnknown (Windows before any file-link probe): a
- * missing link whose default target is not a folder, which may need Developer Mode. Empty → nothing to announce.
+ * missing link whose default target is not a folder, which may need Developer Mode (the stripped settings.json copy is
+ * no link and stays announced). Empty → nothing to announce.
  */
 export function announcementKeys(checks: readonly AccountCheck[], fileLinksUnknown = false): string[] {
   const keys: string[] = [];
@@ -127,7 +128,8 @@ export function announcementKeys(checks: readonly AccountCheck[], fileLinksUnkno
         return false;
       }
     };
-    const quiet = (kind: ProblemKind, entry: string): boolean => kind === 'missing' && fileLinksUnknown && !isDir(entry);
+    const quiet = (kind: ProblemKind, entry: string): boolean => kind === 'missing' && fileLinksUnknown && !isDir(entry)
+      && !c.report?.stripped?.includes(entry);
     for (const p of accountProblems(c)) {
       if (!isFixable(p.kind)) continue;
       for (const entry of p.entries) if (!quiet(p.kind, entry)) keys.push(`${c.dir}\0${p.kind}\0${entry}`);

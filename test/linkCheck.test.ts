@@ -338,6 +338,13 @@ describe('link problems', () => {
     assert.deepEqual(announcementKeys([check]), ['/a\0missing\0CLAUDE.md', '/a\0missing\0rules']);
     assert.deepEqual(announcementKeys([check], true), ['/a\0missing\0rules']);
   });
+
+  test('the missing stripped settings.json copy is announced while Windows file links are unknown', () => {
+    const def = path.join(home, '.claude');
+    write(path.join(def, 'settings.json'), '{}');
+    const check: AccountCheck = { dir: '/a', label: 'a', def, report: report({ stripped: ['settings.json'], refused: ['settings.json'] }) };
+    assert.deepEqual(announcementKeys([check], true), ['/a\0missing\0settings.json']);
+  });
 });
 
 describe('LinkCheckNotices', () => {
