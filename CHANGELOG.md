@@ -8,7 +8,7 @@
 - On Windows without Developer Mode, converting a Codex account no longer lists its thread databases among the files that need Developer Mode; they always stay with the account there.
 - Two editor windows changing the account list, display names, recommendation exclusions, low-limit notice records, Codex usage observations, announced link problems or dismissed warnings at almost the same time no longer lose one window's change (for example a removed account coming back or a notice repeating).
 - A Codex usage result recorded after a token refresh no longer replaces a newer observation another window recorded.
-- When the state file lock cannot be taken over (a dangling link in its place or an unwritable folder), the editor no longer freezes; the change fails after 5 seconds with an error.
+- When the state file lock cannot be taken over (a dangling link in its place or an unwritable folder), the editor no longer freezes; the change fails after 5 seconds with an error. A lock left behind by the window's own process (for example after a failed cleanup) is taken over instead of making every later change fail.
 - The "another PlanSwap window holds the state file lock" and "not a JSON object" errors are shown in the interface language.
 - PlanSwap activates and reports the problem when its state folder cannot be created or written, instead of failing to activate.
 - Upgrading from ai-switcher 0.1.x in a VS Code or VSCodium WSL window keeps the selected Codex account in the shared selection, so terminals and other editors no longer fall back to the default account.
@@ -23,7 +23,7 @@
 - On Windows, a linked account's missing `settings.json` copy is announced by the background check even before file-link support is known.
 - Messages made of several sentences (unlinking a Codex account, **Repair**, refreshing all accounts' usage) no longer put a stray space between sentences in Chinese and Japanese.
 - Avatars of accounts whose display name starts with an emoji or a rare CJK character show that character instead of a broken glyph.
-- Spanish and Japanese messages, tooltips, command titles and setting descriptions use the documented terms consistently.
+- Spanish, Japanese, Simplified Chinese and Traditional Chinese messages, tooltips, command titles and setting descriptions use one term for each concept.
 
 ## [0.4.2] - 2026-10-18
 

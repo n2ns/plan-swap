@@ -266,8 +266,8 @@ PlanSwap がホームディレクトリで見つけた、有効な名前を持�
 | `planswap.sidebar.showFiveHourLimit` | `true` | サイドバーに各アカウントの 5 時間の上限を表示します。 |
 | `planswap.sidebar.showWeeklyLimit` | `true` | サイドバーに各アカウントの 7 日間の上限を表示します。 |
 | `planswap.sidebar.showModelLimits` | `false` | Claude の一般的な上限の下にモデル別の上限を表示します。 |
-| `planswap.sidebar.showRecommendation` | `true` | アカウントの推奨カードと、対象から外すための電球ボタンを表示します。 |
-| `planswap.sidebar.recommendationThreshold` | `10` | 現在のアカウントの一般的な上限のうち最も低い残りの割合がこの値以下になると推奨します。推奨をオンにする必要があり、色とは独立しています。範囲：0–100。 |
+| `planswap.sidebar.showRecommendation` | `true` | アカウントのおすすめと、対象から外すための電球ボタンを表示します。 |
+| `planswap.sidebar.recommendationThreshold` | `10` | 現在のアカウントの一般的な上限のうち最も低い残りの割合がこの値以下になると、おすすめを表示します。おすすめをオンにする必要があり、色とは独立しています。範囲：0–100。 |
 | `planswap.statusBar.enabled` | `true` | ステータスバーに PlanSwap を表示します。 |
 | `planswap.statusBar.products` | `both` | ステータスバーに表示するサービス。文字、ツールチップ、色だけに影響し、自動確認は続きます。 |
 | `planswap.statusBar.alignment` | `right` | PlanSwap をステータスバーの左か右に置きます。 |
@@ -280,7 +280,7 @@ PlanSwap がホームディレクトリで見つけた、有効な名前を持�
 | `planswap.claude.usageTimeoutSeconds` | `30` | Claude: 使用量の問い合わせがタイムアウトするまでの秒数。自動確認と手動更新の両方に適用します。範囲：10–120。 |
 | `planswap.codex.usageTimeoutSeconds` | `15` | Codex: 使用量の問い合わせがタイムアウトするまでの秒数。自動確認と手動更新の両方に適用します。範囲：5–120。 |
 
-自動確認をオフにしても、更新アイコンとコマンドは引き続き使えます。メール設定はステータスバーのツールチップにも適用します。色には全般の共通しきい値を使います。推奨とサイドバーの上限の表示設定はステータスバーには影響しません。コマンドパレットのタイトルとサイドバーの名前は、`planswap.language` ではなくエディターの表示言語に従います。
+自動確認をオフにしても、更新アイコンとコマンドは引き続き使えます。メール設定はステータスバーのツールチップにも適用します。色には全般の共通しきい値を使います。おすすめとサイドバーの上限の表示設定はステータスバーには影響しません。コマンドパレットのタイトルとサイドバーの名前は、`planswap.language` ではなくエディターの表示言語に従います。
 
 ## よくある問題の解決
 
