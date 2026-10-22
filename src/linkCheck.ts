@@ -2,11 +2,11 @@
 // check-mode reports of ensureClaudeLinks / ensureCodexLinks (and the .claude.json keys mirrorClaudeJson would change)
 // into problems that a repair fixes or cannot fix and notes about entries kept on purpose, formats them for one
 // notification, and remembers what was announced.
-// Design: docs/design.md 6.7 ("Link check"). Imports vscode only for the Memento type.
+// Design: docs/design.md 6.7 ("Link check"). No vscode import.
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { Memento } from 'vscode';
+import type { StateMemento } from './fileState';
 import type { ShareReport } from './claudeShare';
 import { t } from './i18n';
 import { knownFileLinks } from './platform';
@@ -152,7 +152,7 @@ export const REANNOUNCE_MS = 24 * 60 * 60_000;
  * known Windows file-link probe result under links.fileLinks for the read-only check, which cannot probe.
  */
 export class LinkCheckNotices {
-  constructor(private readonly state: Memento, private readonly now: () => number = Date.now) {}
+  constructor(private readonly state: StateMemento, private readonly now: () => number = Date.now) {}
 
   private entries(): Partial<Record<Vendor, Announced>> {
     const raw = this.state.get<unknown>(KEY);
@@ -184,11 +184,14 @@ export class LinkCheckNotices {
   }
 
   private async save(vendor: Vendor, keys: readonly string[]): Promise<boolean> {
-    const entries = this.entries();
-    if (keys.length) entries[vendor] = { fp: fingerprint(keys), at: this.now() };
-    else delete entries[vendor];
     try {
-      await this.state.update(KEY, Object.keys(entries).length ? entries : undefined);
+      // Under the lock, so the other vendor's record stored meanwhile by another window is kept
+      await this.state.updateWith(KEY, () => {
+        const entries = { ...this.entries() };
+        if (keys.length) entries[vendor] = { fp: fingerprint(keys), at: this.now() };
+        else delete entries[vendor];
+        return Object.keys(entries).length ? entries : undefined;
+      });
       const probe = knownFileLinks();
       if (probe !== undefined && this.state.get<unknown>(FILE_LINKS_KEY) !== probe) await this.state.update(FILE_LINKS_KEY, probe);
       return true;

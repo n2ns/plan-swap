@@ -11,6 +11,7 @@ import { LabelStore } from '../src/labels';
 import { RecommendExclusions } from '../src/recommend';
 import { LowUsageNotices } from '../src/usageNotices';
 import { CodexUsageHistory } from '../src/codex/codexUsageHistory';
+import { LinkCheckNotices } from '../src/linkCheck';
 import { makeTempHome, type TempHome } from './helpers';
 
 let tmp: TempHome;
@@ -99,5 +100,16 @@ describe('same-key updates keep another window\'s write made while this one wait
       () => writeState({ 'codex.usageHistory': [{ dir: b, stamp: 'stamp', usage: usage(80) }] }));
     assert.equal(history.get(a)?.windows[0].usedPercent, 42);
     assert.equal(history.get(b)?.windows[0].usedPercent, 80, 'the other window\'s observation survives');
+  });
+  test('LinkCheckNotices.take keeps the record another window stored for the other vendor', async () => {
+    writeState({});
+    const m = new FileMemento();
+    const other = { fp: 'other', at: 1 };
+    const announced = await whileLocked(m, () => new LinkCheckNotices(m, () => 1000).take('claude', ['k']),
+      () => writeState({ 'links.announced': { codex: other } }));
+    assert.equal(announced, true);
+    const record = readState()['links.announced'] as Record<string, unknown>;
+    assert.deepEqual(record['codex'], other);
+    assert.ok(record['claude']);
   });
 });
