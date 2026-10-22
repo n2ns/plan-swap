@@ -224,9 +224,11 @@ export function linkEntry(link: string, target: string, check?: LinkCheck): Link
   }
   if (linksTo(link, target)) return 'ok';
   // Windows with file-link privilege now available: a copied config file identical to the default is upgraded to a real
-  // link (config files only: databases and locks may be open elsewhere)
+  // link (config files only: databases and locks may be open elsewhere). Not when the default entry resolves to this
+  // very file: it is the only copy, and the link would point back at itself
   const fileLinks = (): boolean => (check ? check.fileLinks : fileLinksAvailable(path.dirname(link)));
-  if (isWindows() && COPYABLE_ON_NO_LINK.includes(path.basename(link)) && st.isFile() && fs.existsSync(target) && sameContent(link, target, st, fs.statSync(target)) && fileLinks()) {
+  if (isWindows() && COPYABLE_ON_NO_LINK.includes(path.basename(link)) && st.isFile() && fs.existsSync(target) && !sameRealPath(link, target)
+    && sameContent(link, target, st, fs.statSync(target)) && fileLinks()) {
     if (check) return 'linked';
     // The link is made under a temporary name and then renamed over the copy, so a failure leaves the copy in place
     const tmp = `${link}.planswap-${process.pid}.link`;
