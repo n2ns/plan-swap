@@ -37,8 +37,15 @@ export async function runScenario({ name, config, seed, scenario, window, outDir
   fs.rmSync(out, { recursive: true, force: true });
   fs.mkdirSync(out, { recursive: true });
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'devhost-'));
-  // Also when the launcher is stopped before the cleanup at the end (launch.mjs exits on SIGTERM)
-  process.once('exit', () => fs.rmSync(home, { recursive: true, force: true }));
+  const removeHome = () => { try { fs.rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch { /* best effort */ } };
+  let editor;
+  // Stopped by run.mjs (timeout, or run.mjs stopped by its pid; the editor gets the same signal): wait for the editor to
+  // exit, so it writes nothing into the HOME afterwards, then remove the HOME
+  process.once('SIGTERM', async () => {
+    if (editor) await Promise.race([editor.catch(() => undefined), sleep(10_000)]);
+    removeHome();
+    process.exit(143);
+  });
   const report = { name, startedAt: new Date().toISOString(), steps: [], failures: [] };
   const dirs = (seed ?? config.seed)(home);
 
@@ -81,7 +88,7 @@ export async function runScenario({ name, config, seed, scenario, window, outDir
     return Promise.resolve();
   };
 
-  const editor = runTests({
+  editor = runTests({
     version: config.vscodeVersion, extensionDevelopmentPath: root,
     extensionTestsPath: path.join(path.dirname(fileURLToPath(import.meta.url)), 'suite.cjs'),
     extensionTestsEnv: { DEVHOST_HOME: home, DEVHOST_EXTENSION_ID: config.extensionId, DEVHOST_FOCUS_COMMAND: config.focusCommand },
