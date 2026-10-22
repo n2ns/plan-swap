@@ -1261,6 +1261,36 @@ describe('migrateClaudeToShared', SHARING, () => {
   });
 });
 
+describe('default entries linked to the account\'s own files', SHARING, () => {
+  test('conversion and later refreshes leave the account file in place and report it', () => {
+    const acc = accountDir('own');
+    write(path.join(acc, 'settings.json'), '{"model":"x"}\n');
+    write(path.join(acc, 'CLAUDE.md'), 'account rules');
+    write(path.join(acc, 'history.jsonl'), '{"h":1}\n');
+    for (const name of ['settings.json', 'CLAUDE.md', 'history.jsonl']) fs.symlinkSync(path.join(acc, name), path.join(def, name), 'file');
+    const r = migrateClaudeToShared(acc, 'own', fakeProc({}));
+    assert.equal(r.duplicates, 0);
+    assert.equal(r.moved, 0);
+    const check = (report: { conflicts: string[] }): void => {
+      for (const name of ['settings.json', 'CLAUDE.md', 'history.jsonl']) {
+        assert.ok(report.conflicts.includes(name), name);
+        assert.ok(fs.lstatSync(path.join(acc, name)).isFile(), name);
+        assert.ok(isLinkTo(path.join(def, name), path.join(acc, name)), name);
+      }
+      assert.equal(read(path.join(acc, 'settings.json')), '{"model":"x"}\n');
+      assert.equal(read(path.join(acc, 'CLAUDE.md')), 'account rules');
+      assert.equal(read(path.join(def, 'history.jsonl')), '{"h":1}\n');
+    };
+    check(r);
+    assert.equal(isSharedClaudeAccount(acc), true);
+    // The shared account's history merge-back must not merge the file into itself either
+    const r2 = ensureClaudeLinks(acc, fakeProc({}));
+    assert.ok(!r2.merged?.includes('history.jsonl'));
+    check(r2);
+    check(ensureClaudeLinks(acc, fakeProc({}), { check: true }));
+  });
+});
+
 describe('moveEntry link targets', SHARING, () => {
   test('whole-tree moves preserve internal and external relative links on the same and another volume', (ctx) => {
     const physicalParent = path.join(home, 'physical-parent');

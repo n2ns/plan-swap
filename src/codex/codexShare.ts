@@ -152,7 +152,8 @@ export function isSharedCodexAccount(dir: string): boolean {
 /** Creates/repairs every link of a shared account (idempotent). Never touches the default dir's existing content;
  *  missing default entries are created empty ('file' 0600, hooks.json '{}', 'dir' 0700; 'link-only' never).
  *  In a shared account a real history.jsonl / session_index.jsonl is merged back into the default file (mergeLines:
- *  missing lines appended) and relinked (reported under `merged` and `linked`), except while
+ *  missing lines appended) and relinked (reported under `merged` and `linked`; a file the default one resolves to stays a
+ *  conflict), except while
  *  codexAccountBusy(dir, procRoot) or options.busy() (checked lazily, only when a merge-back comes up): then the file
  *  is left untouched and reported under `busy`; without file-link privilege it is not merged. A real sqlite db stays a
  *  conflict (links elsewhere also under `elsewhere`). Nested entries ('.tmp/…') need a real account folder (created
@@ -228,7 +229,8 @@ export function ensureCodexLinks(dir: string, options: LinkOptions = {}, procRoo
       if (missingDefault(path.join(def, parent), 'dir')) report.created.push(parent);
     }
     if (kind !== 'link-only' && missingDefault(target, kind)) report.created.push(name);
-    if (shared && fileLinks && JSONL_FILES.includes(name) && lstatOrUndefined(link)?.isFile()) {
+    // (not when the default file links to this very file: merging it into itself would remove the only copy)
+    if (shared && fileLinks && JSONL_FILES.includes(name) && lstatOrUndefined(link)?.isFile() && !sameRealPath(link, target)) {
       if (isBusy()) {
         (report.busy ??= []).push(name);
         continue;
@@ -373,7 +375,8 @@ function backupSqlite(src: string, rel: string, ctx: MergeCtx): void {
  *    '<name>.independent-backup'; config.toml also stays when the default config is refused;
  *  - sqlite dbs: renamed with -wal / -shm to '<db>.independent-backup' (-2, -3… when taken); kept on win32;
  *  - skills / plugins/cache children merged (excludes kept); nested entries only inside a real account folder;
- *  - without file-link privilege single files stay and are reported under noPrivilege.
+ *  - a file the default entry resolves to stays (a conflict of ensureCodexLinks);
+ *  - without file-link privilege single files stay and are reported under noPrivilege (databases, kept on win32, are not).
  *  `moved` counts files moved into ~/.codex and jsonl files that contributed at least one line. */
 export function migrateCodexToShared(dir: string, accountName: string, procRoot = '/proc', options: LinkOptions = {}): MigrateReport {
   const report: MigrateReport = { ...emptyReport(), moved: 0, duplicates: 0, keptBoth: [], backups: [] };
@@ -401,7 +404,11 @@ export function migrateCodexToShared(dir: string, accountName: string, procRoot 
       if (into) mergeEntry(src, into, name, ctx);
     } else if (!st.isFile()) {
       continue;
-    } else if (!fileLinks) {
+    } else if (lstatOrUndefined(dst) && sameRealPath(src, dst)) {
+      // The default entry links to this very file: its "identical copy" would be the only one, so the file stays
+      // (ensureCodexLinks reports it as a conflict)
+      continue;
+    } else if (!fileLinks && !name.endsWith('.sqlite')) {
       (report.noPrivilege ??= []).push(name);
     } else if (JSONL_FILES.includes(name)) {
       if (mergeLines(src, dst) > 0) report.moved++;

@@ -310,8 +310,8 @@ export function mergeLines(src: string, dst: string): number {
  *  settings.json '{}\n'); a missing account entry
  *  becomes a link; a regular entry or a link elsewhere stays and is reported under conflicts (links also under
  *  elsewhere). Exception: in an already shared account a regular history.jsonl (replaced by `claude project purge`) is
- *  merged back with mergeLines and relinked (merged and linked; only while file links work); an independent account's
- *  own history.jsonl stays a conflict.
+ *  merged back with mergeLines and relinked (merged and linked; only while file links work, and not when the default
+ *  history.jsonl resolves to it); an independent account's own history.jsonl stays a conflict.
  *  skills/ plugins/: a whole-folder link from an earlier version is replaced by a real folder with per-child links
  *  (except CLAUDE_CHILD_EXCLUDES), and child links whose default child no longer exists are removed (both unlinked).
  *  Those three steps move or unlink account files, so they are skipped and reported under busy while
@@ -387,7 +387,8 @@ export function ensureClaudeLinks(dir: string, procRoot = '/proc', options: Link
     }
     if (missingDefault(target, kind)) report.created.push(name);
     // `claude project purge` rewrites history.jsonl by rename, replacing the link: merge the lines back and relink
-    if (shared && name === 'history.jsonl' && lstatOrUndefined(link)?.isFile() && fileLinks) {
+    // (not when the default history links to this very file: merging it into itself would remove the only copy)
+    if (shared && name === 'history.jsonl' && lstatOrUndefined(link)?.isFile() && fileLinks && !sameRealPath(link, target)) {
       if (isBusy()) {
         (report.busy ??= []).push(name);
         continue;
@@ -1094,7 +1095,8 @@ function appendHistory(src: string, dst: string): void {
  *  (appendHistory); settings.json / CLAUDE.md moved when the default lacks them (a settings.json with identity keys
  *  stays, unlinked), dropped when identical, otherwise renamed to '<name>.independent-backup' (backups); settings.json
  *  also stays when the default one cannot be shared. Without file-link privilege single files stay (noPrivilege).
- *  An account file is deleted only when an identical default copy exists. Ends with finalizeMerge and
+ *  An account file is deleted only when an identical default copy exists; a file the default entry resolves to stays
+ *  (a conflict of ensureClaudeLinks). Ends with finalizeMerge and
  *  ensureClaudeLinks(dir, procRoot, options), whose report is merged in. The default dir → empty report. */
 export function migrateClaudeToShared(dir: string, accountName: string, procRoot = '/proc', label = accountName, options: LinkOptions = {}): MigrateReport {
   const report: MigrateReport = { ...emptyReport(), moved: 0, duplicates: 0, keptBoth: [], backups: [] };
@@ -1123,6 +1125,9 @@ export function migrateClaudeToShared(dir: string, accountName: string, procRoot
         (report.noPrivilege ??= []).push(name);
         continue;
       }
+      // The default entry links to this very file: its "identical copy" would be the only one, so the file stays
+      // (ensureClaudeLinks reports it as a conflict)
+      if (lstatOrUndefined(dst) && sameRealPath(src, dst)) continue;
       if (name === 'history.jsonl') {
         appendHistory(src, dst);
         rememberMove(ctx, src, dst);
