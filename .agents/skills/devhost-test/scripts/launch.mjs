@@ -3,6 +3,9 @@ import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { root, runScenario } from './lib.mjs';
 
+// Stopped by run.mjs (timeout, or run.mjs stopped by its pid): exit normally, so lib.mjs removes the temporary HOME
+process.on('SIGTERM', () => process.exit(143));
+
 const [configPath, scenarioPath, name, windowArg] = process.argv.slice(2);
 const config = (await import(pathToFileURL(configPath))).default;
 const mod = await import(pathToFileURL(scenarioPath));

@@ -37,6 +37,8 @@ export async function runScenario({ name, config, seed, scenario, window, outDir
   fs.rmSync(out, { recursive: true, force: true });
   fs.mkdirSync(out, { recursive: true });
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'devhost-'));
+  // Also when the launcher is stopped before the cleanup at the end (launch.mjs exits on SIGTERM)
+  process.once('exit', () => fs.rmSync(home, { recursive: true, force: true }));
   const report = { name, startedAt: new Date().toISOString(), steps: [], failures: [] };
   const dirs = (seed ?? config.seed)(home);
 

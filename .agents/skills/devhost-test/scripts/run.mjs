@@ -58,8 +58,14 @@ const launch = [process.execPath, path.join(skillDir, 'scripts', 'launch.mjs'), 
 const xvfb = !args.includes('--visible') && spawnSync('xvfb-run', ['--help'], { stdio: 'ignore' }).status !== null;
 const [cmd, ...cmdArgs] = xvfb ? ['xvfb-run', '-a', '-s', '-screen 0 2560x1600x24', ...launch] : launch;
 if (!xvfb && !args.includes('--visible')) console.log('[devhost] xvfb-run not found: the editor window opens on the real display (install xvfb to hide it)');
-const child = spawn(cmd, cmdArgs, { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] });
-const killer = setTimeout(() => { console.error('devhost run exceeded 15 minutes; stopping it'); child.kill('SIGTERM'); }, 15 * 60_000);
+// Its own process group: stopping the run ends xvfb-run, Xvfb, the launcher and the editor together (a signal to
+// xvfb-run alone leaves the editor running); the launcher removes its temporary HOME on SIGTERM
+const child = spawn(cmd, cmdArgs, { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+const stop = () => { try { process.kill(-child.pid, 'SIGTERM'); } catch { /* already gone */ } };
+// Stopping run.mjs by its pid (SKILL.md) stops the whole run; the exit handler below then releases the lock
+process.on('SIGTERM', stop);
+process.on('SIGINT', stop);
+const killer = setTimeout(() => { console.error('devhost run exceeded 15 minutes; stopping it'); stop(); }, 15 * 60_000);
 let rest = '';
 const onData = (chunk) => {
   log.write(chunk);
