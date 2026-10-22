@@ -86,6 +86,8 @@ export async function runScenario({ name, config, seed, scenario, window, outDir
     launchArgs: [path.join(home, 'workspace'), '--user-data-dir', userData, '--extensions-dir', path.join(home, 'extensions'),
       '--skip-welcome', '--skip-release-notes', '--disable-workspace-trust', '--disable-gpu', '--no-sandbox', `--remote-debugging-port=${PORT}`],
   });
+  // Handled from the start: an editor that exits early must not crash the launcher before the cleanup below
+  editor.catch(() => undefined);
   let browser;
   try {
     const until = Date.now() + 120_000;
