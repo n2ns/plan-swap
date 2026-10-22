@@ -7,7 +7,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { ClaudeSubscriptionChecks, queryClaudeSubscription, type ClaudeSubscriptionResult } from '../src/claudeSubscription';
 import type { ClaudeUsageChild, ClaudeUsageSpawn } from '../src/claudeUsage';
-import { makeTempHome, onWindows, withEnv } from './helpers';
+import { makeTempHome, withEnv } from './helpers';
 
 class Child extends EventEmitter implements ClaudeUsageChild {
   stdout = new PassThrough();
@@ -152,11 +152,11 @@ test('a confirmed denial survives an info file that cannot be read for a moment 
   } finally { home.restore(); }
 });
 
-test('another spelling of the same account folder shares one availability state', { skip: onWindows && 'directory symbolic links' }, async () => {
+test('another spelling of the same account folder shares one availability state', async () => {
   const home = makeTempHome('subscription');
   try {
     const dir = path.join(home.home, '.claude-test'); writeIdentity(dir);
-    const link = path.join(home.home, 'link-to-test'); fs.symlinkSync(dir, link);
+    const link = path.join(home.home, 'link-to-test'); fs.symlinkSync(dir, link, 'junction');
     let calls = 0;
     const checks = new ClaudeSubscriptionChecks(async () => { calls++; return 'unavailable'; }, () => undefined, () => 0);
     assert.equal(await checks.check(link, true), 'unavailable');

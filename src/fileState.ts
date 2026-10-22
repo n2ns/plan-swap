@@ -11,7 +11,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import type { Memento } from 'vscode';
 import { t } from './i18n';
-import { pidAlive, renameReplacing, stripBom } from './platform';
+import { isWindows, pidAlive, renameReplacing, stripBom } from './platform';
 
 export const STATE_JSON = () => path.join(os.homedir(), '.config', 'planswap', 'state.json');
 
@@ -129,14 +129,19 @@ export class FileMemento implements StateMemento {
     const deadline = Date.now() + this.lockWaitMs;
     let delay = 5;
     for (;;) {
+      // Windows refuses mkdir with EPERM while the lock directory another process just removed is still pending
+      // deletion: retried like a held lock, and rethrown only if it lasts until the deadline
+      let pending: NodeJS.ErrnoException | undefined;
       try {
         fs.mkdirSync(lockDir);
         break;
       } catch (e) {
-        if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+        const code = (e as NodeJS.ErrnoException).code;
+        if (isWindows() && code === 'EPERM') pending = e as NodeJS.ErrnoException;
+        else if (code !== 'EEXIST') throw e;
       }
-      const tookOver = this.takeOverStaleLock(lockDir);
-      if (Date.now() >= deadline) throw new Error(t('state.lockBusy', { dir: lockDir }));
+      const tookOver = !pending && this.takeOverStaleLock(lockDir);
+      if (Date.now() >= deadline) throw pending ?? new Error(t('state.lockBusy', { dir: lockDir }));
       // After a takeover mkdir is retried at once, still yielding, so a takeover that keeps failing cannot spin
       await new Promise((resolve) => setTimeout(resolve, tookOver ? 0 : delay));
       if (!tookOver) delay = Math.min(delay * 2, 100);
