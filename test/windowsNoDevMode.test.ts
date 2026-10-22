@@ -142,6 +142,18 @@ describe('Windows without Developer Mode', () => {
     assert.ok(!r2.copied?.some((n) => n.endsWith('.sqlite') || n.endsWith('.jsonl')));
   });
 
+  test('Codex conversion keeps the account databases without asking for Developer Mode', () => {
+    emulate(false);
+    const acc = path.join(home, '.codex-work');
+    fs.mkdirSync(acc);
+    fs.writeFileSync(path.join(acc, 'state_5.sqlite'), 'account db');
+    fs.writeFileSync(path.join(acc, 'config.toml'), 'model = "x"\n');
+    const r = migrateCodexToShared(acc, 'work', FAKE_PROC);
+    assert.equal(fs.readFileSync(path.join(acc, 'state_5.sqlite'), 'utf8'), 'account db');
+    assert.ok(r.noPrivilege?.includes('config.toml'));
+    assert.ok(!r.noPrivilege?.some((n) => n.endsWith('.sqlite')), String(r.noPrivilege));
+  });
+
   test('Codex databases are never linked on Windows, even with Developer Mode', FILE_SYMLINKS, () => {
     emulate(true);
     const acc = path.join(home, '.codex-work');

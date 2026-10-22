@@ -722,6 +722,34 @@ describe('migrateCodexToShared', SHARING, () => {
   });
 });
 
+describe('default entries linked to the account\'s own files', SHARING, () => {
+  test('conversion and later refreshes leave the account file in place and report it', () => {
+    const acc = newAccount('own');
+    write(path.join(acc, 'AGENTS.md'), 'account rules');
+    write(path.join(acc, 'history.jsonl'), '{"h":1}\n');
+    for (const name of ['AGENTS.md', 'history.jsonl']) fs.symlinkSync(path.join(acc, name), path.join(def, name), 'file');
+    const r = migrateCodexToShared(acc, 'own', fakeProc({}));
+    assert.equal(r.duplicates, 0);
+    assert.equal(r.moved, 0);
+    const check = (report: { conflicts: string[] }): void => {
+      for (const name of ['AGENTS.md', 'history.jsonl']) {
+        assert.ok(report.conflicts.includes(name), name);
+        assert.ok(fs.lstatSync(path.join(acc, name)).isFile(), name);
+        assert.ok(isLinkTo(path.join(def, name), path.join(acc, name)), name);
+      }
+      assert.equal(read(path.join(def, 'AGENTS.md')), 'account rules');
+      assert.equal(read(path.join(def, 'history.jsonl')), '{"h":1}\n');
+    };
+    check(r);
+    assert.equal(isSharedCodexAccount(acc), true);
+    // The shared account's jsonl merge-back must not merge the file into itself either
+    const r2 = ensureCodexLinks(acc, {}, fakeProc({}));
+    assert.ok(!r2.merged?.includes('history.jsonl'));
+    check(r2);
+    check(ensureCodexLinks(acc, { check: true }, fakeProc({})));
+  });
+});
+
 describe('copyCodexIndependent', SHARING, () => {
   test('copies config without overwriting, never links, never copies auth', () => {
     write(path.join(def, 'config.toml'), 'model = "m"\n');
