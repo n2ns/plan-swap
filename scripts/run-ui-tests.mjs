@@ -70,6 +70,7 @@ let preview;
 let context;
 let page;
 let profile;
+let codexShots = 0;
 
 const name = (locale, width) => `${locale}-${width}`;
 const row = (mode, suffix) => `#panel-${mode} .row[data-dir="/fixture/.${mode}-${suffix}"]`;
@@ -84,6 +85,7 @@ async function shot(file, mode) {
   assert.deepEqual(tab, { selected: `tab-${mode}`, active: `tab-${mode}`, shown: [`panel-${mode}`] }, `tab bar does not match the ${mode} page for ${file}`);
   await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined))));
   await page.screenshot({ path: path.join(output, file) });
+  if (mode === 'codex') codexShots++;
 }
 
 // Card structure of one provider page: no current badge or directory line, aria-current, visible Switch button,
@@ -1119,7 +1121,7 @@ try {
   await interactions();
   await updatedAgoTicks();
   assert.deepEqual(results.consoleErrors, [], 'preview console must have no errors or warnings');
-  console.log(`UI preview passed: ${results.cases.length} layout cases, 121 Codex screenshots, ${results.interactions.length} interactions`);
+  console.log(`UI preview passed: ${results.cases.length} layout cases, ${codexShots} Codex screenshots, ${results.interactions.length} interactions`);
 } catch (error) {
   results.failures.push(error instanceof Error ? error.stack ?? error.message : String(error));
   if (page) await page.screenshot({ path: path.join(output, 'failure.png'), fullPage: true }).catch(() => undefined);
