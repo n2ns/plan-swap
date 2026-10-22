@@ -187,6 +187,8 @@ export const en = {
   'codex.win.enableDetail': 'PlanSwap stores the selected Codex account in ~/.config/planswap/codex-home and sets or removes the per-user environment variable CODEX_HOME (HKCU\\Environment) when you switch accounts. auth.json is never changed. Fully restart the editor to apply the selection.',
   'ext.codexUnavailable': 'Codex account switching is unavailable: {error}',
   'ext.stateUnreadable': 'PlanSwap cannot read its state file {file}: {error}. Accounts are not registered or changed until it is readable.',
+  'state.lockBusy': 'another PlanSwap window holds the state file lock ({dir})',
+  'state.notObject': 'not a JSON object',
   'ext.stateSaveFailed': 'PlanSwap cannot save its state file {file}: {error}',
   'ext.syncFailed': 'PlanSwap could not update its account list: {error}',
   'common.dontShowAgain': 'Don\'t Show Again',
@@ -566,6 +568,8 @@ export const zhCn: Record<MessageKey, string> = {
   'codex.win.enableDetail': 'PlanSwap 会将所选 Codex 账号保存到 ~/.config/planswap/codex-home，并在切换账号时设置或删除用户环境变量 CODEX_HOME（HKCU\\Environment）。不会修改 auth.json。完全重启编辑器后生效。',
   'ext.codexUnavailable': 'Codex 账号切换不可用：{error}',
   'ext.stateUnreadable': 'PlanSwap 无法读取状态文件 {file}：{error}。在它可读之前不会注册或更改账号。',
+  'state.lockBusy': '另一个 PlanSwap 窗口正占用状态文件锁（{dir}）',
+  'state.notObject': '不是 JSON 对象',
   'ext.stateSaveFailed': 'PlanSwap 无法保存状态文件 {file}：{error}',
   'ext.syncFailed': 'PlanSwap 无法更新账号列表：{error}',
   'common.dontShowAgain': '不再提示',
@@ -922,6 +926,8 @@ export const zhTw: Record<MessageKey, string> = {
   'codex.win.enableDetail': 'PlanSwap 會將所選 Codex 帳號儲存在 ~/.config/planswap/codex-home，並在切換帳號時設定或移除使用者環境變數 CODEX_HOME（HKCU\\Environment）。絕不會修改 auth.json。完全重新啟動編輯器後才會套用選擇。',
   'ext.codexUnavailable': '無法使用 Codex 帳號切換：{error}',
   'ext.stateUnreadable': 'PlanSwap 無法讀取狀態檔 {file}：{error}。在它可讀之前不會註冊或變更帳號。',
+  'state.lockBusy': '另一個 PlanSwap 視窗正佔用狀態檔鎖定（{dir}）',
+  'state.notObject': '不是 JSON 物件',
   'ext.stateSaveFailed': 'PlanSwap 無法儲存狀態檔 {file}：{error}',
   'ext.syncFailed': 'PlanSwap 無法更新帳號清單：{error}',
   'common.dontShowAgain': '不再顯示',
@@ -1277,6 +1283,8 @@ export const es: Record<MessageKey, string> = {
   'codex.win.enableDetail': 'PlanSwap guarda la cuenta de Codex seleccionada en ~/.config/planswap/codex-home y define o elimina la variable de entorno de usuario CODEX_HOME (HKCU\\Environment) al cambiar de cuenta. auth.json no se modifica. Reinicia por completo el editor para aplicar la selección.',
   'ext.codexUnavailable': 'No se puede cambiar de cuenta de Codex: {error}',
   'ext.stateUnreadable': 'PlanSwap no puede leer su archivo de estado {file}: {error}. No se registran ni cambian cuentas hasta que se pueda leer.',
+  'state.lockBusy': 'otra ventana de PlanSwap tiene el bloqueo del archivo de estado ({dir})',
+  'state.notObject': 'no es un objeto JSON',
   'ext.stateSaveFailed': 'PlanSwap no puede guardar su archivo de estado {file}: {error}',
   'ext.syncFailed': 'PlanSwap no pudo actualizar su lista de cuentas: {error}',
   'common.dontShowAgain': 'No volver a mostrar',
@@ -1617,6 +1625,8 @@ export const ja: Record<MessageKey, string> = {
   'codex.win.enableDetail': 'PlanSwap は選択した Codex アカウントを ~/.config/planswap/codex-home に保存し、切り替え時にユーザー環境変数 CODEX_HOME（HKCU\\Environment）を設定または削除します。auth.json は変更しません。選択を反映するにはエディターを完全に再起動してください。',
   'ext.codexUnavailable': 'Codex アカウントを切り替えられません: {error}',
   'ext.stateUnreadable': 'PlanSwap は状態ファイル {file} を読み取れません: {error}。読み取れるようになるまでアカウントの登録や変更は行われません。',
+  'state.lockBusy': '別の PlanSwap ウィンドウが状態ファイルのロックを保持しています（{dir}）',
+  'state.notObject': 'JSON オブジェクトではありません',
   'ext.stateSaveFailed': 'PlanSwap は状態ファイル {file} を保存できません: {error}',
   'ext.syncFailed': 'PlanSwap はアカウント一覧を更新できませんでした: {error}',
   'common.dontShowAgain': '今後表示しない',
@@ -1957,6 +1967,8 @@ export const ko: Record<MessageKey, string> = {
   'codex.win.enableDetail': 'PlanSwap은 선택된 Codex 계정을 ~/.config/planswap/codex-home에 저장하고, 계정을 전환할 때 사용자별 환경 변수 CODEX_HOME(HKCU\\Environment)을 설정하거나 제거합니다. auth.json은 변경하지 않습니다. 선택을 적용하려면 편집기를 완전히 다시 시작하세요.',
   'ext.codexUnavailable': 'Codex 계정 전환을 사용할 수 없습니다: {error}',
   'ext.stateUnreadable': 'PlanSwap이 상태 파일 {file}을(를) 읽을 수 없습니다: {error}. 읽을 수 있게 될 때까지 계정을 등록하거나 변경하지 않습니다.',
+  'state.lockBusy': '다른 PlanSwap 창이 상태 파일 잠금을 가지고 있습니다({dir})',
+  'state.notObject': 'JSON 개체가 아닙니다',
   'ext.stateSaveFailed': 'PlanSwap이 상태 파일 {file}을(를) 저장할 수 없습니다: {error}',
   'ext.syncFailed': 'PlanSwap이 계정 목록을 업데이트하지 못했습니다: {error}',
   'common.dontShowAgain': '다시 표시 안 함',
@@ -2214,6 +2226,12 @@ export function formatMessage(text: string, params: Record<string, string | numb
 /** Looks up a message in the current locale and fills its plural blocks and `{name}` placeholders (see formatMessage). */
 export function t(key: MessageKey, params?: Record<string, string | number>): string {
   return formatMessage(tables[current][key], params, LOCALE_INFO[current].intl);
+}
+
+/** Joins translated sentences with the current locale's sentenceSeparator (Chinese and Japanese need none; the
+ *  Webview twin is joinSentences in src/webview/i18n.ts). */
+export function joinSentences(...sentences: string[]): string {
+  return sentences.join(LOCALE_INFO[current].sentenceSeparator);
 }
 
 /** The message in every locale (labels.ts uses it to reserve every localized external-account name). */
