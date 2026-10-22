@@ -14,6 +14,7 @@ export async function run(ctx) {
   await sleep(1500);
   const notices = await notifications();
   await step('switch asks for confirmation (modal refused in test mode, text quoted)', notices.some((n) => /refused to show dialog/.test(n) && /Codex account/.test(n)), notices[0]?.slice(0, 200));
+  d = await sb.dump(ctx);
   await step('refused confirmation changes nothing', !fs.existsSync(path.join(home, '.config', 'planswap', 'codex-home')) && !d.banner);
 
   // A selection written by another window: the state file watcher shows the pending banner

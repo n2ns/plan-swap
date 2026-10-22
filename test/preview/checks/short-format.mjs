@@ -44,28 +44,28 @@ export async function run(ctx) {
     }, {shortFormat, usageDisplay});
     await toggle(true);
     const compact = await snapshot();
-    ctx.step(`${mode}: localized short labels and Latin countdown boundaries`, compact[0].duration === shortLabels[0] && compact[1].duration === shortLabels[1] &&
+    await ctx.step(`${mode}: localized short labels and Latin countdown boundaries`, compact[0].duration === shortLabels[0] && compact[1].duration === shortLabels[1] &&
       JSON.stringify(compact.map(x => x.reset)) === JSON.stringify(['5d 12h', '3h 45m', '1h', '1h', '1m', undefined, undefined]), JSON.stringify(compact));
-    ctx.step(`${mode}: full semantics, missing cycle/time and names preserved`, compact.every((x,i) => x.value === before[i].value && x.label === before[i].label && x.title === before[i].title && x.pct === '58%' && x.level === before[i].level) && compact[5].duration === before[5].duration && compact[6].duration.includes('Model Name') && await row.locator('.row-name').textContent() === 'Work Alias');
-    ctx.step(`${mode}: reset hover is fully localized`, compact[0].resetTitle === before[0].value.split(', ').slice(1).join(', ') && compact[0].durationTitle === before[0].duration, compact[0].resetTitle);
+    await ctx.step(`${mode}: full semantics, missing cycle/time and names preserved`, compact.every((x,i) => x.value === before[i].value && x.label === before[i].label && x.title === before[i].title && x.pct === '58%' && x.level === before[i].level) && compact[5].duration === before[5].duration && compact[6].duration.includes('Model Name') && await row.locator('.row-name').textContent() === 'Work Alias');
+    await ctx.step(`${mode}: reset hover is fully localized`, compact[0].resetTitle === before[0].value.split(', ').slice(1).join(', ') && compact[0].durationTitle === before[0].duration, compact[0].resetTitle);
     const recommendation = await page.locator(`#panel-${mode} .recommend-text [aria-hidden="true"]`).allTextContents();
-    ctx.step(`${mode}: recommendation has bare percentages with full hover meaning`, recommendation.includes(`${shortLabels[0]} 58%`) && (await page.locator(`#panel-${mode} .recommend-text .sr-only`).first().textContent()) === `${before[0].duration} ${before[0].value.split(', ')[0]}` && (await page.locator(`#panel-${mode} .recommend-text span[title]`).first().getAttribute('title')).includes(before[0].duration));
+    await ctx.step(`${mode}: recommendation has bare percentages with full hover meaning`, recommendation.includes(`${shortLabels[0]} 58%`) && (await page.locator(`#panel-${mode} .recommend-text .sr-only`).first().textContent()) === `${before[0].duration} ${before[0].value.split(', ')[0]}` && (await page.locator(`#panel-${mode} .recommend-text span[title]`).first().getAttribute('title')).includes(before[0].duration));
     await toggle(false);
-    ctx.step(`${mode}: disabling restores full display immediately`, JSON.stringify(await snapshot()) === JSON.stringify(before));
+    await ctx.step(`${mode}: disabling restores full display immediately`, JSON.stringify(await snapshot()) === JSON.stringify(before));
     await toggle(false, 'used');
     const fullUsed = await snapshot();
     await toggle(true, 'used');
     const used = await snapshot();
-    ctx.step(`${mode}: used mode keeps accurate tooltip/ARIA and remaining-based colors`, used.every((x,i) => x.pct === '42%' && x.value === fullUsed[i].value && x.title === fullUsed[i].title && x.level === before[i].level) && used[0].title !== before[0].title);
+    await ctx.step(`${mode}: used mode keeps accurate tooltip/ARIA and remaining-based colors`, used.every((x,i) => x.pct === '42%' && x.value === fullUsed[i].value && x.title === fullUsed[i].title && x.level === before[i].level) && used[0].title !== before[0].title);
     await page.clock.runFor(60_000);
     const live = await snapshot();
-    ctx.step(`${mode}: minute tick retains Latin format and localized reset hover/ARIA`, live[1].reset === '3h 44m' && live[1].value !== used[1].value && live[1].resetTitle === live[1].value.split(', ').slice(1).join(', '));
+    await ctx.step(`${mode}: minute tick retains Latin format and localized reset hover/ARIA`, live[1].reset === '3h 44m' && live[1].value !== used[1].value && live[1].resetTitle === live[1].value.split(', ').slice(1).join(', '));
     await page.evaluate((locale) => {
       const s = window.preview.state(); s.locale = locale;
       window.preview.post({ type: 'state', state: s });
     }, locale === 'en' ? 'ja' : 'en');
     const translated = await snapshot();
-    ctx.step(`${mode}: switching language updates full explanations but keeps Latin time`, translated[1].reset === live[1].reset && translated[1].label !== live[1].label && translated[1].title !== live[1].title && translated[1].value !== live[1].value);
+    await ctx.step(`${mode}: switching language updates full explanations but keeps Latin time`, translated[1].reset === live[1].reset && translated[1].label !== live[1].label && translated[1].title !== live[1].title && translated[1].value !== live[1].value);
     await page.evaluate((locale) => {
       const s = window.preview.state(); s.locale = locale;
       window.preview.post({ type: 'state', state: s });
@@ -77,7 +77,7 @@ export async function run(ctx) {
         return !r || r.left >= sidebar.left - 1 && r.right <= sidebar.right + 1;
       }));
     });
-    ctx.step(`${mode}: short format stays within ${width}px sidebar`, layout);
+    await ctx.step(`${mode}: short format stays within ${width}px sidebar`, layout);
     await ctx.shot(`${locale}-${width}-${mode}.png`);
   }
 }

@@ -49,24 +49,32 @@ test('probe constrains execution, cleans its temporary cwd, and validates identi
   const home = makeTempHome('subscription');
   try {
     const dir = path.join(home.home, '.claude-test'); writeIdentity(dir);
-    let cwd = '';
+    // Recorded and asserted outside the fake: the product maps a throwing spawn to 'unknown', which would hide a failed check
+    const calls: Array<{ command: string; args: readonly string[]; options: Parameters<ClaudeUsageSpawn>[2]; cwdExisted: boolean }> = [];
     const spawn: ClaudeUsageSpawn = (command, args, options) => {
-      assert.equal(command, 'claude');
-      assert.equal(options.env?.CLAUDE_CONFIG_DIR, dir);
-      assert.ok(args.includes('--no-session-persistence'));
-      assert.equal(args[args.indexOf('--tools') + 1], '');
-      assert.equal(JSON.parse(args[args.indexOf('--settings') + 1]).disableAllHooks, true);
-      assert.ok(args.includes('--strict-mcp-config'));
-      cwd = String(options.cwd); assert.ok(fs.existsSync(cwd)); assert.notEqual(cwd, home.home);
+      calls.push({ command, args, options, cwdExisted: fs.existsSync(String(options.cwd)) });
       return reply(success, 0, () => writeIdentity(dir, 'account-2'))(command, args, options);
     };
     assert.equal(await queryClaudeSubscription(dir, true, { spawn }), 'unknown');
+    assert.equal(calls.length, 1);
+    const [{ command, args, options, cwdExisted }] = calls;
+    assert.equal(command, 'claude');
+    assert.equal(options.env?.CLAUDE_CONFIG_DIR, dir);
+    assert.ok(args.includes('--no-session-persistence'));
+    assert.equal(args[args.indexOf('--tools') + 1], '');
+    assert.equal(JSON.parse(args[args.indexOf('--settings') + 1]).disableAllHooks, true);
+    assert.ok(args.includes('--strict-mcp-config'));
+    const cwd = String(options.cwd);
+    assert.ok(cwdExisted); assert.notEqual(cwd, home.home);
     assert.equal(fs.existsSync(cwd), false);
+    let spawned = 0;
+    const counting: ClaudeUsageSpawn = (command, args, options) => { spawned++; return reply(success, 0)(command, args, options); };
     await withEnv({ ANTHROPIC_API_KEY: 'fake' }, async () => {
-      assert.equal(await queryClaudeSubscription(dir, true, { spawn: () => { throw new Error('must not spawn'); } }), 'unknown');
+      assert.equal(await queryClaudeSubscription(dir, true, { spawn: counting }), 'unknown');
     });
     fs.writeFileSync(path.join(dir, 'settings.json'), JSON.stringify({ apiKeyHelper: 'example' }));
-    assert.equal(await queryClaudeSubscription(dir, true, { spawn: () => { throw new Error('must not spawn'); } }), 'unknown');
+    assert.equal(await queryClaudeSubscription(dir, true, { spawn: counting }), 'unknown');
+    assert.equal(spawned, 0, 'a credential override or apiKeyHelper must not start the CLI');
   } finally { home.restore(); }
 });
 

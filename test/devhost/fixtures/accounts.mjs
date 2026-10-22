@@ -58,11 +58,11 @@ export function seedAccounts(home) {
   }, null, 2) + '\n', { mode: 0o600 });
 
   // Codex switching counts as enabled when both rc files carry the marker block. Same text as rcBlock() in
-  // src/codex/codexState.ts; a drift shows up as a disabled Codex page in the editor
-  const block = ['# >>> planswap codex >>>', 'if [ -r "$HOME/.config/planswap/codex-home" ]; then',
+  // src/codex/codexState.ts; a drift is rewritten in place on activation (upgradeRcBlocks), not shown as disabled
+  const block = ['# >>> planswap codex >>>', 'if [ -z "${CODEX_HOME:-}" ] && [ -r "$HOME/.config/planswap/codex-home" ]; then',
     '  _planswap_codex_home="$(cat "$HOME/.config/planswap/codex-home" 2>/dev/null)"',
     '  if [ -n "$_planswap_codex_home" ] && [ -d "$_planswap_codex_home" ]; then', '    export CODEX_HOME="$_planswap_codex_home"',
-    '  else', '    unset CODEX_HOME', '  fi', '  unset _planswap_codex_home', 'fi', '# <<< planswap codex <<<', ''].join('\n');
+    '  fi', '  unset _planswap_codex_home', 'fi', '# <<< planswap codex <<<', ''].join('\n');
   for (const rc of ['.bashrc', '.profile']) fs.writeFileSync(path.join(home, rc), `# fake ${rc}\n\n${block}`);
   return dirs;
 }
