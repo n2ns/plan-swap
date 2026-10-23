@@ -577,6 +577,10 @@ describe('syncMcpServers', () => {
     assert.notEqual(path.resolve(file), realPath(file));
     assert.equal(withConfigLock(file, realPath(file), () => fs.existsSync(`${file}.lock`)), true);
     assert.ok(!fs.existsSync(`${file}.lock`));
+    // A file not created yet is its own real path, in whichever spelling
+    const missing = path.join(linkDir, 'missing.json');
+    assert.equal(withConfigLock(missing, missing, () => fs.existsSync(`${missing}.lock`)), true);
+    assert.ok(!fs.existsSync(`${missing}.lock`));
   });
 });
 

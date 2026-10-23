@@ -403,10 +403,11 @@ function readJsonObject(file: string): Record<string, unknown> | undefined {
  */
 export function withConfigLock<T>(file: string, real: string, commit: () => T): T {
   const busy = (): Error => new Error(t('mcp.changed', { file: real }));
-  // Only a link to another entry has a second lock. Its folder resolved, a plain file reached through a linked folder
-  // or another spelling (Windows short names, letter case) is real itself, and so is a file replaced by a link since
-  // real was resolved (the commit's validation refuses it)
-  const linked = !samePath(path.join(realPath(path.dirname(file)), path.basename(file)), real);
+  // Only a link to another entry has a second lock. With their folders resolved, a plain or missing file reached
+  // through a linked folder or another spelling (Windows short names, letter case) is real itself, and so is a file
+  // replaced by a link since real was resolved (the commit's validation refuses it)
+  const entry = (p: string): string => path.join(realPath(path.dirname(p)), path.basename(p));
+  const linked = !samePath(entry(file), entry(real));
   return withLockDir(`${file}.lock`, 10_000, busy, linked ? () => withLockDir(`${real}.lock`, 10_000, busy, commit) : commit);
 }
 
