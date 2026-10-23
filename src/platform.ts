@@ -216,7 +216,8 @@ export function renameReplacing(
   }
 }
 
-function sleepSync(ms: number): void {
+/** Blocks the thread for ms milliseconds (short retries of synchronous file operations). */
+export function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 

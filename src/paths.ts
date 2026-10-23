@@ -133,7 +133,7 @@ function claudeSeesSet(name: string): boolean {
 /** File name of the account info file: Claude Code (2.1.284) names it '.claude-custom-oauth.json' while
  *  CLAUDE_CODE_CUSTOM_OAUTH_URL is set, '.claude.json' otherwise (its local / staging variants exist only in
  *  development builds). "Set" as Claude Code started by this editor sees it: the setting's set / cleared names
- *  (setClaudeSettingEnv) first, then process.env. Used by claudeJsonPath, mirrorClaudeJson and syncMcpServers. */
+ *  (setClaudeSettingEnv) first, then process.env. Used by claudeJsonPath, syncClaudeAccount and syncMcpServers. */
 export function claudeJsonName(): string {
   return claudeSeesSet('CLAUDE_CODE_CUSTOM_OAUTH_URL') ? '.claude-custom-oauth.json' : '.claude.json';
 }

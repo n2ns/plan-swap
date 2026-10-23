@@ -10,7 +10,7 @@ import { currentDir, isExplicitConfigDir } from './claudeSettings';
 import { effectiveDir } from './codex/codexState';
 import { openCodexWslSetting } from './codex/codexSettings';
 import { claudeJsonPath, defaultDir, sameRealPath, syncMcpServers } from './paths';
-import { ensureClaudeLinks, isSharedClaudeAccount, mirrorClaudeJson, type LinkOptions, type ShareReport } from './claudeShare';
+import { ensureClaudeLinks, isSharedClaudeAccount, syncClaudeAccount, type LinkOptions, type ShareReport } from './claudeShare';
 import { askCopyFallback } from './linkPolicy';
 import { describeShareReport, type ShareReportLike } from './shareReport';
 import { accountProblems, announcementKeys, describeLinkCheck, isFixable, type AccountCheck, type LinkCheckNotices } from './linkCheck';
@@ -52,11 +52,12 @@ export interface ToolDeps {
 export type TerminalCheck = (dir: string) => boolean;
 
 /**
- * Mirrors the default account's info file into a shared account. An account that is not shared (e.g. an existing
- * folder that could not be linked) only gets the default MCP servers added, so its own servers are never replaced.
+ * Syncs a shared account with the default account in both directions (syncClaudeAccount, full). An account that is
+ * not shared (e.g. an existing folder that could not be linked) only gets the default MCP servers added, so its own
+ * servers are never replaced and the default account is not changed.
  */
-export function mirrorClaudeJsonInto(fromJson: string, dir: string): void {
-  if (isSharedClaudeAccount(dir)) mirrorClaudeJson(fromJson, dir);
+export function syncClaudeInto(fromJson: string, dir: string): void {
+  if (isSharedClaudeAccount(dir)) syncClaudeAccount(fromJson, dir);
   else syncMcpServers(fromJson, dir);
 }
 
@@ -136,17 +137,16 @@ const claudeShareOps: ShareOps = {
   refresh(dir, options) {
     const report = ensureClaudeLinks(dir, '/proc', options);
     const def = defaultDir();
-    mirrorClaudeJsonInto(claudeJsonPath(def, isExplicitConfigDir(def)), dir);
+    syncClaudeInto(claudeJsonPath(def, isExplicitConfigDir(def)), dir);
     return report;
   },
   check(dir, options) {
     const report = ensureClaudeLinks(dir, '/proc', { ...options, check: true });
     const def = defaultDir();
-    // Only shared accounts are checked, which mirrorClaudeJsonInto mirrors with mirrorClaudeJson. The current account
-    // holds the latest configuration and writes it back on the next switch, so its difference is not a problem
-    if (sameRealPath(dir, currentDir())) return { report, mirror: [] };
-    const { changed, promptOnly } = mirrorClaudeJson(claudeJsonPath(def, isExplicitConfigDir(def)), dir, undefined, true);
-    return { report, mirror: changed, mirrorQuiet: promptOnly };
+    // Only shared accounts are checked, which syncClaudeInto syncs with syncClaudeAccount. The current account is
+    // checked too: what the default account gained meanwhile is missing in the account in use
+    const { changed, quiet } = syncClaudeAccount(claudeJsonPath(def, isExplicitConfigDir(def)), dir, 'check');
+    return { report, mirror: changed, mirrorQuiet: quiet };
   },
   defaultDir,
 };
@@ -182,9 +182,9 @@ function sharedAccounts(mode: PanelMode, deps: ToolDeps): SharedAccounts | undef
 
 // Read-only check of every shared account; a failing account becomes an error entry and the next one continues.
 // keys: what the background check announces (announcementKeys; Windows file links count as unknown before a probe),
-// computed without the mirror groups that differ in prompt keys only, so Re-link records what the background check
-// announces. background: those groups are also left out of the checks; a switch mirrors them and their lack only
-// makes Claude Code ask once more
+// computed without the quiet sync groups (prompt keys only, or refreshed sign-ins the account already has), so Re-link
+// records what the background check announces. background: those groups are also left out of the checks; a switch
+// syncs them, and their lack only makes Claude Code ask once more or use an older token it can refresh itself
 function checkShared(accounts: SharedAccounts, deps: ToolDeps, background = false): { checks: AccountCheck[]; keys: string[] } {
   const fileLinks = deps.linkNotices?.fileLinks();
   const def = accounts.ops.defaultDir();
@@ -241,9 +241,9 @@ async function repairClaudeChecks(deps: ToolDeps, offered: AccountCheck[]): Prom
     try {
       const scope = claudeRepairScope(check);
       const report = ensureClaudeLinks(check.dir, '/proc', { ...options, busy: accounts.busyOf(check.dir), entries: scope.entries });
-      if (scope.mirror.length && !sameRealPath(check.dir, currentDir())) {
+      if (scope.mirror.length) {
         const def = defaultDir();
-        mirrorClaudeJson(claudeJsonPath(def, isExplicitConfigDir(def)), check.dir, undefined, false, scope.mirror);
+        syncClaudeAccount(claudeJsonPath(def, isExplicitConfigDir(def)), check.dir, 'pull', scope.mirror);
       }
       const notes = describeShareReport(report);
       if (notes) issues.push(t('sync.item', { name: accounts.nameOf(check.dir), notes }));

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { setLocale } from '../src/i18n';
-import { ensureClaudeLinks, mirrorClaudeJson, type ShareReport } from '../src/claudeShare';
+import { ensureClaudeLinks, syncClaudeAccount, type ShareReport } from '../src/claudeShare';
 import { ensureCodexLinks } from '../src/codex/codexShare';
 import { accountDir } from '../src/paths';
 import { codexAccountDir } from '../src/codex/codexPaths';
@@ -147,56 +147,57 @@ describe('Claude read-only link check', LINUX_ONLY, () => {
     assert.deepEqual(accountProblems({ dir: acc, label: 'a', report: ensureClaudeLinks(acc, fakeProc(), { check: true }) }), []);
   });
 
-  test('the .claude.json mirror check lists what the mirror changes and writes nothing', () => {
+  test('the sync check lists what a pull changes in the account and writes nothing', () => {
     const { acc, def } = setup();
     const from = path.join(def, '.claude.json');
-    mirrorClaudeJson(from, acc);
-    assert.deepEqual(mirrorClaudeJson(from, acc, undefined, true).changed, []);
+    syncClaudeAccount(from, acc);
+    assert.deepEqual(syncClaudeAccount(from, acc, 'check').changed, []);
     write(from, JSON.stringify({ mcpServers: { b: { command: 'b' } }, projects: { '/p': { hasTrustDialogAccepted: true } } }));
     const before = fullSnapshot(home);
-    const checked = mirrorClaudeJson(from, acc, undefined, true).changed;
+    const checked = syncClaudeAccount(from, acc, 'check').changed;
     assert.deepEqual(fullSnapshot(home), before);
     assert.deepEqual(checked, ['mcpServers', 'projects:/p']);
     assert.deepEqual(fixableOf({ linked: [], created: [], conflicts: [], refused: [] }, checked), ['mirror']);
-    assert.deepEqual(mirrorClaudeJson(from, acc).changed, checked);
-    assert.deepEqual(mirrorClaudeJson(from, acc, undefined, true).changed, []);
+    assert.deepEqual(syncClaudeAccount(from, acc, 'pull', checked).changed, checked);
+    assert.deepEqual(syncClaudeAccount(from, acc, 'check').changed, []);
   });
 
-  test('the mirror check ignores changes to what Claude Code reads anyway (research fact 18)', () => {
+  test('the sync check ignores changes to what Claude Code reads anyway (research fact 18)', () => {
     const { acc, def } = setup();
     const from = path.join(def, '.claude.json');
-    mirrorClaudeJson(from, acc);
+    syncClaudeAccount(from, acc);
     // The default account opened a new project: an entry of default values only, as Claude Code writes it
     const fresh = { allowedTools: [], mcpContextUris: [], mcpServers: {}, enabledMcpjsonServers: [], disabledMcpjsonServers: [],
       hasTrustDialogAccepted: false, hasClaudeMdExternalIncludesApproved: false, hasClaudeMdExternalIncludesWarningShown: false, lastCost: 1 };
     write(from, JSON.stringify({ mcpServers: { a: { command: 'a' } }, projects: { '/new': fresh } }));
-    assert.deepEqual(mirrorClaudeJson(from, acc, undefined, true).changed, []);
-    // The repair still writes the entry; the account reads the same values before and after
-    assert.deepEqual(mirrorClaudeJson(from, acc).changed, ['projects:/new']);
+    assert.deepEqual(syncClaudeAccount(from, acc, 'check').changed, []);
+    assert.deepEqual(syncClaudeAccount(from, acc).changed, []);
 
     // Trusting the project in the default account is a real difference, also against an account entry lacking the key
     const accJson = path.join(acc, '.claude.json');
     const data = JSON.parse(fs.readFileSync(accJson, 'utf8'));
-    delete data.projects['/new'].hasTrustDialogAccepted;
+    data.projects = { '/new': { lastCost: 2 } };
     write(accJson, JSON.stringify(data));
     write(from, JSON.stringify({ mcpServers: { a: { command: 'a' } }, projects: { '/new': { ...fresh, hasTrustDialogAccepted: true } } }));
-    assert.deepEqual(mirrorClaudeJson(from, acc, undefined, true).changed, ['projects:/new']);
+    assert.deepEqual(syncClaudeAccount(from, acc, 'check').changed, ['projects:/new']);
   });
 
-  test('the mirror check ignores what the account has beyond the default', () => {
+  test('the sync check ignores what the account changed on its own since the last sync', () => {
     const { acc, def } = setup();
     const from = path.join(def, '.claude.json');
     const accJson = path.join(acc, '.claude.json');
     write(from, JSON.stringify({ mcpServers: { a: { command: 'a' } }, projects: { '/p': { hasTrustDialogAccepted: false, enabledMcpjsonServers: ['x'] } } }));
+    syncClaudeAccount(from, acc);
     // A project only the account trusts, an MCP server only it has, an extra enabled server
     write(accJson, JSON.stringify({ mcpServers: { a: { command: 'a' }, mine: { command: 'm' } }, projects: { '/p': { hasTrustDialogAccepted: true, enabledMcpjsonServers: ['x', 'y'] } } }));
-    assert.deepEqual(mirrorClaudeJson(from, acc, undefined, true).changed, []);
+    assert.deepEqual(syncClaudeAccount(from, acc, 'check').changed, []);
     // A server the default changed, or one the account lacks, is a difference
-    write(from, JSON.stringify({ mcpServers: { a: { command: 'a2' } } }));
-    assert.deepEqual(mirrorClaudeJson(from, acc, undefined, true).changed, ['mcpServers']);
-    write(from, JSON.stringify({ mcpServers: { a: { command: 'a' }, b: { command: 'b' } } }));
-    assert.deepEqual(mirrorClaudeJson(from, acc, undefined, true).changed, ['mcpServers']);
+    write(from, JSON.stringify({ mcpServers: { a: { command: 'a2' } }, projects: { '/p': { hasTrustDialogAccepted: false, enabledMcpjsonServers: ['x'] } } }));
+    assert.deepEqual(syncClaudeAccount(from, acc, 'check').changed, ['mcpServers']);
+    write(from, JSON.stringify({ mcpServers: { a: { command: 'a' }, b: { command: 'b' } }, projects: { '/p': { hasTrustDialogAccepted: false, enabledMcpjsonServers: ['x'] } } }));
+    assert.deepEqual(syncClaudeAccount(from, acc, 'check').changed, ['mcpServers']);
   });
+
 
   test('a check of an account with a missing default directory creates nothing', () => {
     const { acc, def } = setup();

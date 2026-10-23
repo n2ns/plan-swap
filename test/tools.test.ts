@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { checkSharedInBackground, runTool } from '../src/tools';
 import { LinkCheckNotices } from '../src/linkCheck';
-import { ensureClaudeLinks, mirrorClaudeJson } from '../src/claudeShare';
+import { ensureClaudeLinks, syncClaudeAccount } from '../src/claudeShare';
 import { ensureCodexLinks, isSharedCodexAccount } from '../src/codex/codexShare';
 import { joinSentences, setLocale, t } from '../src/i18n';
 import { commands, env, resetConfig, setConfig, window } from './stubs/vscode';
@@ -21,7 +21,7 @@ describe('Claude repair scope', LINUX_ONLY, () => {
     const dirs = ['a', 'b'].map((name) => path.join(tmp.home, `.claude-${name}`));
     for (const dir of dirs) {
       ensureClaudeLinks(dir, proc);
-      mirrorClaudeJson(source, dir);
+      syncClaudeAccount(source, dir);
     }
     return { tmp, def, source, dirs };
   }
@@ -145,7 +145,7 @@ describe('Claude repair scope', LINUX_ONLY, () => {
     } finally { tmp.restore(); }
   });
 
-  test('the current account is not reported for MCP differences; other linked accounts still are', async (ctx) => {
+  test('the current account is reported for what the default account gained, like other linked accounts, and repaired', async (ctx) => {
     const { tmp, source, dirs } = fixture();
     try {
       fs.writeFileSync(source, JSON.stringify({ mcpServers: { shared: { command: 'shared' } } }));
@@ -154,15 +154,20 @@ describe('Claude repair scope', LINUX_ONLY, () => {
       const warning = ctx.mock.method(window, 'showWarningMessage', async () => undefined);
       await runTool('claude', 'sync', { claudeDirs: () => dirs });
       const mirror = t('linkCheck.mirror', { list: '.claude.json (mcpServers)' });
-      assert.equal(warning.mock.calls[0].arguments[0], t('linkCheck.claudeFound', { list: t('sync.item', { name: 'b', notes: mirror }) }));
+      const items = ['a', 'b'].map((name) => t('sync.item', { name, notes: mirror }));
+      assert.equal(warning.mock.calls[0].arguments[0], t('linkCheck.claudeFound', { list: items.join(t('common.listSep')) }));
 
+      warning.mock.mockImplementation(async (_m: string, ...choices: string[]) => choices.find((i) => i === t('linkCheck.repair')));
+      ctx.mock.method(window, 'showInformationMessage', async () => undefined);
       await runTool('claude', 'sync', { claudeDirs: () => [dirs[0]] });
-      assert.equal(warning.mock.callCount(), 1, 'only the current account: nothing to report');
+      assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dirs[0], '.claude.json'), 'utf8')).mcpServers, { mine: { command: 'mine' }, shared: { command: 'shared' } });
+      assert.equal(fs.readFileSync(source, 'utf8'), JSON.stringify({ mcpServers: { shared: { command: 'shared' } } }));
     } finally {
       resetConfig();
       tmp.restore();
     }
   });
+
 
   test('an account made current while Repair is open keeps its latest MCP configuration', async (ctx) => {
     const { tmp, source, dirs } = fixture();
@@ -171,7 +176,7 @@ describe('Claude repair scope', LINUX_ONLY, () => {
       const file = path.join(dirs[0], '.claude.json');
       const currentInfo = JSON.stringify({ mcpServers: { shared: { command: 'current-new' } } });
       const warning = ctx.mock.method(window, 'showWarningMessage', async (_m: string, ...items: string[]) => {
-        mirrorClaudeJson(source, dirs[0]);
+        syncClaudeAccount(source, dirs[0]);
         setConfig('claudeCode', 'environmentVariables', [{ name: 'CLAUDE_CONFIG_DIR', value: dirs[0] }]);
         fs.writeFileSync(file, currentInfo);
         return items.find((i) => i === t('linkCheck.repair'));

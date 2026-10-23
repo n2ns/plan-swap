@@ -1,5 +1,5 @@
 // Read-only link check of linked (shared) accounts, shared by the Re-link tool and the background check: turns the
-// check-mode reports of ensureClaudeLinks / ensureCodexLinks (and the .claude.json keys mirrorClaudeJson would change)
+// check-mode reports of ensureClaudeLinks / ensureCodexLinks (and the sync groups a syncClaudeAccount pull would change)
 // into problems that a repair fixes or cannot fix and notes about entries kept on purpose, formats them for one
 // notification, and remembers what was announced.
 // Design: docs/design.md 6.7 ("Link check"). No vscode import.
@@ -11,7 +11,7 @@ import type { ShareReport } from './claudeShare';
 import { t } from './i18n';
 import { knownFileLinks } from './platform';
 
-/** One linked account's check: the check-mode report and the mirror's would-be changes, or the error the check threw. */
+/** One linked account's check: the check-mode report and the sync groups a pull would change, or the error the check threw. */
 export interface AccountCheck {
   dir: string;
   label: string;
@@ -19,7 +19,7 @@ export interface AccountCheck {
   def?: string;   // the vendor's default dir (the link targets), to tell plugin cache files and folders apart
   report?: ShareReport;
   mirror?: string[];
-  mirrorQuiet?: string[];  // mirror groups that differ in prompt keys only (trust); the background check leaves them out
+  mirrorQuiet?: string[];  // sync groups that differ in prompt keys only (trust) or in refreshed sign-ins; the background check leaves them out
   error?: string;
 }
 
@@ -39,7 +39,7 @@ export interface Problem { kind: ProblemKind; entries: string[] }
  * - defaultMissing: default entries the repair creates empty (created);
  * - replaced: history files merged back before relinking (merged);
  * - stale: links the repair removes (unlinked);
- * - mirror: '.claude.json' when the mirror would change keys;
+ * - mirror: '.claude.json' when a pull sync would change the account (MCP servers, project settings, MCP sign-ins);
  * - busy: repairs skipped while the account is in use;
  * - error: the check's error message;
  * - elsewhere / conflict (notes, isNote): conflicts that are links resolving elsewhere / real entries (never changed).
@@ -89,6 +89,11 @@ function isNote(kind: ProblemKind): boolean {
   return (NOTE_KINDS as readonly string[]).includes(kind);
 }
 
+// A sync group as listed: the file it lives in, then the group ('mcpOAuth:<server key>' is in .credentials.json)
+function syncGroupLabel(group: string): string {
+  return `${group.startsWith('mcpOAuth:') ? '.credentials.json' : '.claude.json'} (${group})`;
+}
+
 /** One localized line per account with problems or notes ('<label>: <part>; <part>'); problems: whether any is not a
  *  note; fixable: whether a repair would change anything. */
 export function describeLinkCheck(checks: readonly AccountCheck[]): { lines: string[]; problems: boolean; fixable: boolean } {
@@ -103,7 +108,7 @@ export function describeLinkCheck(checks: readonly AccountCheck[]): { lines: str
     const parts = problems.map((p) => (p.kind === 'error'
       ? t('linkCheck.error', { error: p.entries[0] })
       : t(c.vendor === 'claude' && p.kind === 'defaultMissing' ? 'linkCheck.claudeDefaultMissing' : `linkCheck.${p.kind}`, {
-        list: (c.vendor === 'claude' && p.kind === 'mirror' ? (c.mirror ?? []).map((key) => `.claude.json (${key})`) : p.entries).join(t('common.nameSep')),
+        list: (c.vendor === 'claude' && p.kind === 'mirror' ? (c.mirror ?? []).map(syncGroupLabel) : p.entries).join(t('common.nameSep')),
       })));
     lines.push(t('sync.item', { name: c.label, notes: parts.join(t('common.listSep')) }));
   }

@@ -1,4 +1,4 @@
-// Usage limits of a Claude account. PlanSwap never reads .credentials.json: it runs the official CLI's local `/usage`
+// Usage limits of a Claude account. The usage check never reads .credentials.json: it runs the official CLI's local `/usage`
 // command with the account's directory, so Claude Code refreshes the usage cache (cachedUsageUtilization) in that
 // account's own info file with its own credentials. Its structured report validates the query; displayed values and
 // fetch times still come from that cache. No vscode import.

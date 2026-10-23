@@ -431,7 +431,7 @@ describe('panel message handlers (Claude)', () => {
     }
   });
 
-  test('switching away from a shared current account writes its MCP servers back first; a failure cancels the switch', LINUX_ONLY, async (ctx) => {
+  test('switching away from a shared current account syncs it with the default first; a failure cancels the switch', LINUX_ONLY, async (ctx) => {
     const h = harness();
     const a = await add(h, 'a', true);
     const b = await add(h, 'b', true);
@@ -443,10 +443,11 @@ describe('panel message handlers (Claude)', () => {
     const error = ctx.mock.method(window, 'showErrorMessage', async () => undefined);
     try {
       await h.handle({ type: 'switch', mode: 'claude', dir: b });
+      // The server the default gained directly stays; the one the account added reaches the default and the next account
       const def = JSON.parse(fs.readFileSync(defJson, 'utf8'));
-      assert.deepEqual(def.mcpServers, { mine: { command: 'mine' } });
+      assert.deepEqual(def.mcpServers, { old: { command: 'old' }, mine: { command: 'mine' } });
       assert.equal(def.oauthAccount.emailAddress, 'def@x');
-      assert.deepEqual(JSON.parse(fs.readFileSync(path.join(b, '.claude.json'), 'utf8')).mcpServers, { mine: { command: 'mine' } });
+      assert.deepEqual(JSON.parse(fs.readFileSync(path.join(b, '.claude.json'), 'utf8')).mcpServers, { old: { command: 'old' }, mine: { command: 'mine' } });
       assert.equal(configured(), b);
       assert.equal(error.mock.callCount(), 0);
 
@@ -464,27 +465,23 @@ describe('panel message handlers (Claude)', () => {
     }
   });
 
-  test('adding the current external directory keeps its settings only when it already was linked', LINUX_ONLY, async () => {
+  test('adding a directory as a linked account syncs its own settings and the default both ways', LINUX_ONLY, async () => {
     const h = harness();
     const defJson = path.join(home, '.claude.json');
     fs.writeFileSync(defJson, JSON.stringify({ mcpServers: { def: { command: 'def' } } }));
     const own = JSON.stringify({ mcpServers: { own: { command: 'own' } } });
     try {
-      const linked = accountDir('linked');
-      fs.mkdirSync(linked, { mode: 0o700 });
-      ensureClaudeLinks(linked);
-      fs.writeFileSync(path.join(linked, '.claude.json'), own);
-      setCurrent(linked);
-      await h.handle({ type: 'add', mode: 'claude', name: 'linked', shared: true });
-      assert.equal(fs.readFileSync(path.join(linked, '.claude.json'), 'utf8'), own);
-
-      const solo = accountDir('solo');
-      fs.mkdirSync(solo, { mode: 0o700 });
-      fs.writeFileSync(path.join(solo, '.claude.json'), own);
-      setCurrent(solo);
-      await h.handle({ type: 'add', mode: 'claude', name: 'solo', shared: true });
-      assert.ok(isSharedClaudeAccount(solo));
-      assert.deepEqual(JSON.parse(fs.readFileSync(path.join(solo, '.claude.json'), 'utf8')).mcpServers, { def: { command: 'def' } });
+      for (const name of ['linked', 'solo']) {
+        const dir = accountDir(name);
+        fs.mkdirSync(dir, { mode: 0o700 });
+        if (name === 'linked') ensureClaudeLinks(dir);
+        fs.writeFileSync(path.join(dir, '.claude.json'), own);
+        setCurrent(dir);
+        await h.handle({ type: 'add', mode: 'claude', name, shared: true });
+        assert.ok(isSharedClaudeAccount(dir));
+        assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, '.claude.json'), 'utf8')).mcpServers, { own: { command: 'own' }, def: { command: 'def' } });
+      }
+      assert.deepEqual(JSON.parse(fs.readFileSync(defJson, 'utf8')).mcpServers, { def: { command: 'def' }, own: { command: 'own' } });
     } finally {
       h.dispose();
     }

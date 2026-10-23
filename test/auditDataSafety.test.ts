@@ -11,7 +11,7 @@ import {
   accountDir, checkSafeToDelete, deleteAccountDir, readAccountInfo, realPath, realPathInside, scanAccountDirs, syncMcpServers,
 } from '../src/paths';
 import { checkCodexSafeToDelete, codexAccountDir, deleteCodexDir, scanCodexDirs } from '../src/codex/codexPaths';
-import { ensureClaudeLinks, linkEntry, mirrorClaudeJson } from '../src/claudeShare';
+import { ensureClaudeLinks, linkEntry, syncClaudeAccount } from '../src/claudeShare';
 import { ensureCodexLinks } from '../src/codex/codexShare';
 import { renameReplacing, unlinkLinks } from '../src/platform';
 import { assertTempHome, FILE_SYMLINKS, makeTempHome, onWindows, SHARING, read, type TempHome } from './helpers';
@@ -225,7 +225,7 @@ describe('renameReplacing re-checks before every attempt', () => {
     assert.equal(linux.calls.length, 1);
   });
 
-  test('mirrorClaudeJson and syncMcpServers still refuse a write made before the commit', () => {
+  test('syncClaudeAccount and syncMcpServers still refuse a write made before the commit', () => {
     const def = path.join(home, '.claude');
     fs.mkdirSync(def);
     const from = path.join(home, '.claude.json');
@@ -234,7 +234,7 @@ describe('renameReplacing re-checks before every attempt', () => {
     const file = path.join(acc, '.claude.json');
     write(file, '{"x":1}');
     const cli = (): void => fs.writeFileSync(file, '{"x":2}');
-    assert.throws(() => mirrorClaudeJson(from, acc, cli), { message: t('mcp.changed', { file: realPath(file) }) });
+    assert.throws(() => syncClaudeAccount(from, acc, 'full', undefined, cli), { message: t('mcp.changed', { file: realPath(file) }) });
     assert.equal(read(file), '{"x":2}');
     assert.throws(() => syncMcpServers(from, acc, () => fs.writeFileSync(file, '{"x":3}')), { message: t('mcp.changed', { file: realPath(file) }) });
     assert.equal(read(file), '{"x":3}');
@@ -295,7 +295,7 @@ describe('.claude.json with a UTF-8 byte order mark', () => {
     assert.deepEqual(readAccountInfo(acc), { email: 'bom@example.com', plan: 'Pro', loggedIn: true });
   });
 
-  test('syncMcpServers and mirrorClaudeJson accept a target with a BOM and keep its keys', () => {
+  test('syncMcpServers and syncClaudeAccount accept a target with a BOM and keep its keys', () => {
     fs.mkdirSync(path.join(home, '.claude'));
     const from = path.join(home, '.claude.json');
     write(from, JSON.stringify({ mcpServers: { a: { command: 'a' } } }));
@@ -307,7 +307,7 @@ describe('.claude.json with a UTF-8 byte order mark', () => {
 
     write(from, JSON.stringify({ mcpServers: { b: { command: 'b' } } }));
     write(file, BOM + JSON.stringify(oauth));
-    assert.deepEqual(mirrorClaudeJson(from, acc).changed, ['mcpServers']);
+    assert.deepEqual(syncClaudeAccount(from, acc).changed, ['mcpServers']);
     assert.deepEqual(JSON.parse(read(file)), { ...oauth, mcpServers: { b: { command: 'b' } } });
   });
 });

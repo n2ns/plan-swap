@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Linked Claude accounts now also share their sign-ins to MCP servers (for example Stripe or Notion) with the default account, so an MCP server authorized in one linked account works in the others without authorizing again. Only those entries of `.credentials.json` are synced; each account keeps its own Claude sign-in.
+- **Re-link** and the background check now also report what the Claude account in use lacks of the default account, and **Repair** adds it.
+
+### Fixed
+
+- An MCP server or project setting added to the default Claude account while a linked account was in use (for example with `claude mcp add` in a terminal outside PlanSwap) is no longer removed when switching away from the linked account. Switching now syncs each linked account with the default account item by item in both directions: a change made on one side since the last sync is kept, a removal included, and of two changes the account's wins.
+
 ## [0.4.3] - 2026-10-22
 
 ### Fixed

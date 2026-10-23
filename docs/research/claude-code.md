@@ -41,6 +41,10 @@ The following fact was read on 2026-10-06 from the native Linux x64 binary of Cl
 
 18. A project entry of `.claude.json` defaults to `{allowedTools: [], mcpContextUris: [], mcpServers: {}, enabledMcpjsonServers: [], disabledMcpjsonServers: [], hasTrustDialogAccepted: false, hasClaudeMdExternalIncludesApproved: false, hasClaudeMdExternalIncludesWarningShown: false}`: a missing entry is read as this object, and an entry that lacks one of these keys is not merged with it, but every reader treats the missing key as that default (`?.`, `?? []`, `?? {}`, `|| false`, `=== true`). A missing key therefore behaves like its default value. `mcpContextUris` and the project `allowedTools` are not read at all in this version.
 
+The following fact was read on 2026-10-23 from the native Linux x64 binary of Claude Code 2.1.306 (`~/.local/share/claude/versions/2.1.306`); re-verify after upgrades.
+
+19. With the plaintext credential storage (Linux and Windows), the MCP OAuth sign-ins live in `<config dir>/.credentials.json` next to the Claude sign-in (`claudeAiOauth`): `mcpOAuth` holds one entry per server (tokens, `serverName`, `serverUrl`, discovery state) and `mcpOAuthClientConfig` the registered client per server (client secret). Both are keyed `<server name>|<first 16 hex digits of the SHA-256 of {type, url, headers}>`, so the same server definition has the same key in every account. Every credentials write is a read-modify-write (`mutate`) of the whole file under a proper-lockfile lock on `<config dir>/.storage-write` (lock folder `.storage-write.lock`, 10 retries of 100-1000 ms, stale after 15 s) that re-reads the file under the lock, so a write made by another process before the lock is kept. A linked credentials file is refused (`O_NOFOLLOW`, state `refused-symlink`).
+
 
 ## Directory lifecycle
 

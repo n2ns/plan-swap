@@ -25,7 +25,7 @@ import {
   lstatOrUndefined,
   makeClaudeIndependent,
   migrateClaudeToShared,
-  writeBackClaudeJson,
+  syncClaudeAccount,
 } from './claudeShare';
 import { describeShareReport } from './shareReport';
 import { currentDir, isExplicitConfigDir, setConfigDir } from './claudeSettings';
@@ -36,7 +36,7 @@ import { labelFor, sameName, type LabelStore, EXTERNAL_NAME } from './labels';
 import type { RecommendExclusions } from './recommend';
 import type { FromWebview } from './protocol';
 import type { CodexAccountStore } from './codex/codexStore';
-import { mirrorClaudeJsonInto, runTool, type TerminalCheck, type ToolDeps } from './tools';
+import { syncClaudeInto, runTool, type TerminalCheck, type ToolDeps } from './tools';
 import { t } from './i18n';
 import { isWindows, errText } from './platform';
 import { askCopyFallback } from './linkPolicy';
@@ -158,12 +158,11 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
       void vscode.window.showErrorMessage(t('account.dirMissing', { dir: account.dir }));
       return false;
     }
-    // Only one account is in use at a time: a shared current account writes what it changed back to the default
-    // account first, so the incoming account gets it. A failure cancels the switch, since the mirror below would
-    // otherwise drop those changes the next time this account is switched to
+    // A shared current account syncs with the default account first, so the incoming account gets what it changed.
+    // A failure cancels the switch, so nothing is left half synced behind the user's back
     const outgoing = currentDir();
     try {
-      writeBackClaudeJson(outgoing, defaultJson());
+      if (isSharedClaudeAccount(outgoing)) syncClaudeAccount(defaultJson(), outgoing);
     } catch (err) {
       const all = store.all();
       const i = findSameDir(all.map((a) => a.dir), outgoing);
@@ -171,13 +170,13 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
       void vscode.window.showErrorMessage(t('share.writeBackFailed', { label, error: errText(err) }));
       return false;
     }
-    // A shared account is re-linked and mirrored first. A linking problem only warns and the switch still happens; a
-    // failed mirror cancels it, since switching away would later write the account's stale settings back
+    // A shared account is re-linked and synced first. A linking problem only warns and the switch still happens; a
+    // failed sync cancels it, since the account would otherwise start without what the default account gained
     if (account.name !== DEFAULT_NAME && isSharedClaudeAccount(account.dir)) {
       const warning = relinkShared(account);
       if (warning) void vscode.window.showWarningMessage(t('share.refreshWarning', { label: labelOf(account), notes: warning }));
       try {
-        mirrorClaudeJsonInto(defaultJson(), account.dir);
+        syncClaudeInto(defaultJson(), account.dir);
       } catch (err) {
         void vscode.window.showErrorMessage(t('share.mirrorFailed', { label: labelOf(account), error: errText(err) }));
         return false;
@@ -226,12 +225,10 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
     try {
       if (shared) {
         // The folder may already exist (kept from an earlier removal, its terminal possibly still open)
-        const wasShared = isSharedClaudeAccount(account.dir);
         const report = ensureClaudeLinks(account.dir, '/proc', { ...linkOptions, busy: linkBusy(account) });
         // An existing folder that could not be linked stays independent: it only gains the default MCP servers. A
-        // current directory that already was shared (an external linked account) keeps its own settings, which hold
-        // the latest configuration and are written back on the next switch
-        if (!wasShared || !sameRealPath(account.dir, currentDir())) mirrorClaudeJsonInto(defaultJson(), account.dir);
+        // shared one syncs both ways, so what it changed on its own (e.g. as the current external account) is kept
+        syncClaudeInto(defaultJson(), account.dir);
         const notes = describeShareReport(report);
         if (notes) void vscode.window.showWarningMessage(t(isSharedClaudeAccount(account.dir) ? 'share.addNotes' : 'share.addNotLinked', { name, notes }));
       } else {
@@ -291,7 +288,7 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
     }
     try {
       const report = migrateClaudeToShared(account.dir, account.name, procRoot, labelOf(account), { ...linkOptions, busy: linkBusy(account) });
-      mirrorClaudeJsonInto(defaultJson(), account.dir);
+      syncClaudeInto(defaultJson(), account.dir);
       void vscode.window.showInformationMessage(t(isSharedClaudeAccount(account.dir) ? 'share.done' : 'share.incomplete', { label: labelOf(account), summary: describeShareReport(report) || t('share.nothingElse') }));
     } catch (err) {
       void vscode.window.showErrorMessage(t('share.failed', { label: labelOf(account), error: errText(err) }));

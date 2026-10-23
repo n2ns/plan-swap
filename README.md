@@ -99,7 +99,7 @@ Signing in to a new account never signs out the others. The [user guide](docs/us
 | Settings, rules and skills | The default account's | A copy, changed separately |
 | History and sessions | The default account's | Its own |
 | Sign-in | Its own | Its own |
-| Claude MCP servers and project trust | Kept in step with the default account (changes in the account in use are written back when you switch away) | A copy, changed separately |
+| Claude MCP servers, MCP sign-ins and project trust | Kept in sync with the default account, in both directions, when you switch | A copy of the servers, changed separately; its own sign-ins |
 
 You can change an account's mode later, and **Re-link** in Tools checks linked accounts after you change the default setup and offers **Repair** for what it finds. PlanSwap also runs this check in the background and notifies you when something can be repaired ([user guide](docs/user-guide.md#change-an-existing-account-mode)).
 
@@ -114,7 +114,7 @@ You can change an account's mode later, and **Re-link** in Tools checks linked a
 
 ## Privacy
 
-PlanSwap has no telemetry and makes no network requests of its own. Usage limits are read through the official `claude` and `codex` CLIs, which contact their own services as usual. When Claude usage is unavailable, a minimal official CLI model request can check subscription access; it may consume a small amount of quota. PlanSwap never copies, moves or sends your sign-in credentials, and it changes your shell or environment configuration only after you confirm (afterwards it keeps the blocks it added up to date). Details: [privacy](docs/privacy.md).
+PlanSwap has no telemetry and makes no network requests of its own. Usage limits are read through the official `claude` and `codex` CLIs, which contact their own services as usual. When Claude usage is unavailable, a minimal official CLI model request can check subscription access; it may consume a small amount of quota. PlanSwap never copies, moves or sends your Claude or Codex sign-in; between linked Claude accounts it syncs only the sign-ins to MCP servers, and it changes your shell or environment configuration only after you confirm (afterwards it keeps the blocks it added up to date). Details: [privacy](docs/privacy.md).
 
 ## Uninstall
 
@@ -124,7 +124,7 @@ Before uninstalling PlanSwap:
 2. If you enabled Codex switching, run **Codex Account: Disable Codex Account Switching** from the Command Palette to remove its shell configuration and the blocks in each editor's `server-env-setup` (on Windows, the user environment variable `CODEX_HOME`).
 3. Uninstall PlanSwap from the Extensions view in the window where you installed it (WSL or Windows).
 
-Your account directories (`~/.claude-<name>` and `~/.codex-<name>`) are kept. To clear PlanSwap's saved account list, display names and usage records as well, delete `~/.config/planswap/state.json`. This does not delete the accounts' own files.
+Your account directories (`~/.claude-<name>` and `~/.codex-<name>`) are kept, including the `.planswap-sync.json` file of each linked Claude account. To clear PlanSwap's saved account list, display names and usage records as well, delete `~/.config/planswap/state.json`. This does not delete the accounts' own files.
 
 ## Documentation
 
