@@ -1009,7 +1009,7 @@ describe('syncClaudeAccount', () => {
     const external = path.join(home, 'linked-info.json'); write(external, '{}');
     fs.symlinkSync(external, file);
     fs.mkdirSync(`${external}.lock`);
-    assert.throws(() => syncClaudeAccount(src(), acc, 'fill'), { message: t('mcp.changed', { file: external }) });
+    assert.throws(() => syncClaudeAccount(src(), acc, 'fill'), { message: t('mcp.changed', { file: realPath(external) }) });
     assert.equal(read(external), '{}');
     assert.ok(!exists(`${file}.lock`));
     fs.rmSync(`${external}.lock`, { recursive: true });
