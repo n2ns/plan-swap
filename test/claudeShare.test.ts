@@ -977,7 +977,7 @@ describe('syncClaudeAccount', () => {
     assert.ok(fs.lstatSync(src()).isSymbolicLink());
   });
 
-  test('fill adds only the default MCP servers the account lacks, and writes nothing else', () => {
+  test('fill adds only the default MCP servers the account lacks, and writes nothing else', (ctx) => {
     const defText = JSON.stringify({
       hasCompletedOnboarding: true,
       mcpServers: { missing: { command: 'm' }, differs: { command: 'default' } },
@@ -991,7 +991,18 @@ describe('syncClaudeAccount', () => {
     write(file, JSON.stringify({ oauthAccount: { emailAddress: 'a@x' }, mcpServers: { differs: { command: 'own' }, extra: { command: 'e' } } }));
     fs.chmodSync(file, 0o640);
     write(path.join(acc, '.credentials.json'), '{}');
+    // The credentials files are never read
+    const credentials = [path.join(def, '.credentials.json'), path.join(acc, '.credentials.json')].map((f) => path.resolve(f));
+    const reads: string[] = [];
+    const realRead = fs.readFileSync;
+    ctx.mock.method(fsModule, 'readFileSync', ((file: fs.PathOrFileDescriptor, ...args: unknown[]) => {
+      reads.push(path.resolve(String(file)));
+      return (realRead as (...a: unknown[]) => unknown)(file, ...args);
+    }) as typeof fs.readFileSync);
     const r = syncClaudeAccount(src(), acc, 'fill');
+    ctx.mock.restoreAll();
+    assert.ok(reads.length > 0, 'the read spy saw the info file reads');
+    assert.deepEqual(reads.filter((f) => credentials.includes(f)), []);
     assert.deepEqual(r, { changed: ['mcpServers'], added: ['missing'] });
     assert.deepEqual(info(acc), {
       oauthAccount: { emailAddress: 'a@x' },

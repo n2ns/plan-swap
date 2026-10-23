@@ -702,6 +702,7 @@ export interface SyncResult {
   defaultChanged?: string[]; // full: groups changed in the default account
   quiet?: string[];          // check: changed groups that only differ in PROMPT_KEYS, or only in sign-ins the account already has (token refreshes)
   added?: string[];          // fill: names of the user-level MCP servers added to the account
+  baseError?: string;        // fill: the base write failed after the servers in added were written (not thrown)
 }
 
 /**
@@ -727,7 +728,8 @@ export interface SyncResult {
  *   the next full sync carries the removal to the default as usual. Never removes or changes a server the account
  *   has, never touches project servers, project keys, onboarding keys or credentials (not even read), never writes
  *   the default account; options.inUse is ignored, and so are options.groups except []. result.added names the servers
- *   added.
+ *   added; a base write failing after they were written is returned as result.baseError instead of thrown (unrecorded
+ *   hashes only make the next sync treat the servers as present on both sides).
  * Writes replace atomically, keep the mode, follow an info file's symlink (validated like accountInfoTarget) and refuse
  * with t('mcp.changed') a file changed since it was read; credentials commits hold Claude Code's storage lock. A
  * missing account info file is created 0600; a credentials file is never created. Order: default info, default
@@ -842,12 +844,18 @@ export function syncClaudeAccount(fromJson: string, dir: string, mode: SyncMode 
   if (stale || !isDeepStrictEqual(newBase, base)) {
     const baseFile = path.join(path.resolve(dir), SYNC_BASE);
     const tmp = `${baseFile}.planswap-${process.pid}.tmp`;
-    fs.rmSync(tmp, { force: true });
     try {
-      fs.writeFileSync(tmp, JSON.stringify({ ...origin, items: Object.fromEntries(newBase) }) + '\n', { mode: 0o600, flag: 'wx' });
-      renameReplacing(tmp, baseFile);
-    } finally {
       fs.rmSync(tmp, { force: true });
+      try {
+        fs.writeFileSync(tmp, JSON.stringify({ ...origin, items: Object.fromEntries(newBase) }) + '\n', { mode: 0o600, flag: 'wx' });
+        renameReplacing(tmp, baseFile);
+      } finally {
+        fs.rmSync(tmp, { force: true });
+      }
+    } catch (err) {
+      // fill: the servers are in the account already, so the caller still names them
+      if (mode !== 'fill' || !dirty.has(account)) throw err;
+      result.baseError = err instanceof Error ? err.message : String(err);
     }
   }
   return result;

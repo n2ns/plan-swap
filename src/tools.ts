@@ -259,15 +259,17 @@ async function repairClaudeChecks(deps: ToolDeps, offered: AccountCheck[]): Prom
 // Background check, Claude: adds to every shared account, the account in use included, the default account's
 // user-level MCP servers it lacks (syncClaudeAccount fill: add only, a server the account removed since the last sync
 // is not re-added, the default account is never written) and names them in one information notice. A failing account
-// is only logged; its check then lists the servers for Repair
+// is only logged; its check then lists the servers for Repair. A failing base write after the servers were added is only
+// logged too; the notice still names them
 function fillClaudeMcpServers(accounts: SharedAccounts): void {
   const def = defaultDir();
   const from = claudeJsonPath(def, isExplicitConfigDir(def));
   const filled: Array<{ name: string; servers: string }> = [];
   for (const dir of accounts.dirs) {
     try {
-      const added = syncClaudeAccount(from, dir, 'fill').added ?? [];
+      const { added = [], baseError } = syncClaudeAccount(from, dir, 'fill');
       if (added.length) filled.push({ name: accounts.nameOf(dir), servers: added.join(t('common.nameSep')) });
+      if (baseError !== undefined) console.warn(`[planswap] recording the added default MCP servers failed: ${baseError}`);
     } catch (err) {
       console.warn(`[planswap] adding the default MCP servers failed: ${errText(err)}`);
     }

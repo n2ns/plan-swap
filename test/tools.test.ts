@@ -1,6 +1,7 @@
 import { after, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
+import fsModule from 'node:fs';
 import * as path from 'node:path';
 import { checkSharedInBackground, runTool } from '../src/tools';
 import { LinkCheckNotices } from '../src/linkCheck';
@@ -196,6 +197,54 @@ describe('Claude repair scope', LINUX_ONLY, () => {
     }
   });
 
+  test('servers added before the sync base write fails are still named, and the failure is logged', async (ctx) => {
+    const { tmp, source, dirs } = fixture();
+    try {
+      fs.writeFileSync(source, JSON.stringify({ mcpServers: { 'n2n-nexus': { command: 'nexus' } } }));
+      // A folder in place of the base file: the account info write succeeds, the base rename then fails
+      const base = path.join(dirs[0], '.planswap-sync.json');
+      fs.rmSync(base, { force: true });
+      fs.mkdirSync(base);
+      const info = ctx.mock.method(window, 'showInformationMessage', async () => undefined);
+      ctx.mock.method(window, 'showWarningMessage', async () => undefined);
+      const warn = ctx.mock.method(console, 'warn', () => undefined);
+      await checkSharedInBackground('claude', { claudeDirs: () => [dirs[0]], linkNotices: new LinkCheckNotices(new MemoryMemento()) });
+      assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dirs[0], '.claude.json'), 'utf8')).mcpServers, { 'n2n-nexus': { command: 'nexus' } });
+      assert.equal(info.mock.callCount(), 1);
+      assert.equal(info.mock.calls[0].arguments[0], t('linkCheck.mcpFilled', { name: 'a', servers: 'n2n-nexus' }));
+      assert.equal(warn.mock.callCount(), 1);
+      assert.match(String(warn.mock.calls[0].arguments[0]), /^\[planswap\] /);
+    } finally { tmp.restore(); }
+  });
+
+  test('an account whose fill fails is only logged, and the check that follows lists its servers for Repair', async (ctx) => {
+    const { tmp, source, dirs } = fixture();
+    try {
+      fs.writeFileSync(source, JSON.stringify({ mcpServers: { 'n2n-nexus': { command: 'nexus' } } }));
+      const file = path.join(dirs[0], '.claude.json');
+      const rewritten = JSON.stringify({ numStartups: 2 });
+      // Claude Code rewrites the account's info file between the read and the commit (changed since read)
+      const realWrite = fs.writeFileSync;
+      ctx.mock.method(fsModule, 'writeFileSync', ((target: fs.PathOrFileDescriptor, ...args: unknown[]) => {
+        (realWrite as (...a: unknown[]) => void)(target, ...args);
+        if (String(target).startsWith(`${file}.planswap-`)) realWrite(file, rewritten);
+      }) as typeof fs.writeFileSync);
+      const info = ctx.mock.method(window, 'showInformationMessage', async () => undefined);
+      const warning = ctx.mock.method(window, 'showWarningMessage', async () => undefined);
+      const warn = ctx.mock.method(console, 'warn', () => undefined);
+      await checkSharedInBackground('claude', { claudeDirs: () => [dirs[0]], linkNotices: new LinkCheckNotices(new MemoryMemento()) });
+      ctx.mock.restoreAll();
+      assert.equal(fs.readFileSync(file, 'utf8'), rewritten);
+      assert.equal(info.mock.callCount(), 0);
+      assert.equal(warn.mock.callCount(), 1);
+      assert.ok(String(warn.mock.calls[0].arguments[0]).includes(t('mcp.changed', { file })));
+      const mirror = t('linkCheck.mirror', { list: t('linkCheck.g.mcpServers') });
+      assert.equal(warning.mock.callCount(), 1);
+      assert.equal(warning.mock.calls[0].arguments[0], joinSentences(t('linkCheck.claudeFound'), t('linkCheck.line', { name: 'a', notes: mirror })));
+      assert.deepEqual(warning.mock.calls[0].arguments.slice(1), [t('linkCheck.repair')]);
+    } finally { tmp.restore(); }
+  });
+
   test('zh-cn: one filled account gets the short notice, and a server it removed later is not added again', async (ctx) => {
     const { tmp, source, dirs } = fixture();
     try {
@@ -383,6 +432,8 @@ describe('re-link result messages', () => {
     assert.equal(warning.mock.callCount(), 0);
     const notes = [t('linkCheck.elsewhere', { list: 'rules' }), t('linkCheck.conflict', { list: 'AGENTS.md' })].join(t('common.listSep'));
     assert.equal(info.mock.calls[0].arguments[0], joinSentences(t('linkCheck.ok', { count: 1, vendor: 'Codex' }), t('linkCheck.line', { name: 'a', notes })));
+    // The notes follow without contradicting the summary
+    assert.equal(info.mock.calls[0].arguments[0], 'Checked 1 linked Codex account; nothing to repair. a: uses a different location for rules; keeps its own AGENTS.md.');
   });
 
   test('problems shown without choosing Repair change nothing', async (ctx) => {
