@@ -198,7 +198,7 @@ For a Claude account with unavailable subscription access, the lightbulb icon is
 
 The status bar shows each product's short limit, for example `Claude 97% · Codex 82%`: what is left, or what is used when `planswap.usageDisplay` is `used`. When a longer limit is the one running low, the item shows that one with its length instead, for example `Claude 2% (7d)`, since that figure only recovers days later. Its background turns to the theme's warning color when any general limit, including longer ones, is at 30% or less, and to the error color at 10% or less. You can change these thresholds, show only one product, move the item to the left or hide it ([Change language and display settings](#change-language-and-display-settings)).
 
-Hover it for a table with one header row per product (email, plan and, when the account can be checked, a refresh icon) and one row per general limit. Click it to open PlanSwap. With `planswap.sidebar.showEmail` off, the tooltip uses account labels instead of emails; user-defined names and aliases are unchanged.
+Hover it for a table with one section per product, separated by lines: the product name, a header row (email, plan and, when the account can be checked, a refresh icon) and one row per general limit. Click it to open PlanSwap. With `planswap.sidebar.showEmail` off, the tooltip uses account labels instead of emails; user-defined names and aliases are unchanged.
 
 ## Rename or remove accounts
 

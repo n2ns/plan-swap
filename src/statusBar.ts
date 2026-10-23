@@ -221,23 +221,28 @@ export function refreshLink(command: string): string {
 
 /**
  * All products as one HTML table (MarkdownString.supportHtml), so the bars, percentages and reset times of every product
- * share the same columns. A product starts with a header row whose email (bold) spans the name, bar and percentage
- * columns (colspan, which markdown tables lack), so it cannot widen the name column; the plan and the refresh link sit in
- * the right-aligned last column. Then one row per usage window and one full-width row per status line. Kept on one line:
- * a blank line would end the HTML block. Text from outside is escaped here or before.
+ * share the same columns. Each product is a section between full-width rule rows (an <hr> in a cell: the only line the
+ * hover sanitizer lets through, since border attributes, fieldset and style on cells are removed): a bold product-name
+ * row, then a header row whose email spans the name, bar and percentage columns (colspan, which markdown tables lack),
+ * so it cannot widen the name column, with the plan and the refresh link in the right-aligned last column. Then one row
+ * per usage window and one full-width row per status line. Kept on one line: a blank line would end the HTML block.
+ * Text from outside is escaped here or before.
  */
-export interface TableBlock { identity: string; plan?: string; refresh?: string; rows: readonly string[]; notes: readonly string[] }
+export interface TableBlock { product: string; identity: string; plan?: string; refresh?: string; rows: readonly string[]; notes: readonly string[] }
 export function usageTable(blocks: readonly TableBlock[]): string {
   if (!blocks.length) return '';
+  const rule = '<tr><td colspan="4"><hr></td></tr>';
   const rows = blocks.flatMap((block) => {
     const tail = [block.plan ? escapeHtml(block.plan) : '', block.refresh ?? ''].filter(Boolean).join(' ');
     return [
-      `<tr><td colspan="3"><strong>${escapeHtml(block.identity)}</strong></td><td align="right">${tail}</td></tr>`,
+      rule,
+      `<tr><td colspan="4"><strong>${escapeHtml(block.product)}</strong></td></tr>`,
+      `<tr><td colspan="3">${escapeHtml(block.identity)}</td><td align="right">${tail}</td></tr>`,
       ...block.rows,
       ...block.notes.map((note) => `<tr><td colspan="4">${note}</td></tr>`),
     ];
   });
-  return `<table>${rows.join('')}</table>`;
+  return `<table>${rows.join('')}${rule}</table>`;
 }
 
 const italic = (text: string): string => `<em>${escapeHtml(text)}</em>`;
@@ -332,7 +337,9 @@ export function codexUsageFailureText(failure: { reason: UsageFailure; detail?: 
 }
 
 interface Block {
-  // First line: the email, or its fallback
+  // Heading line: the product name (Claude / Codex, not localized, as in the status bar text)
+  product: string;
+  // Next line: the email, or its fallback
   identity: string;
   // Shown at the right end of the first line; absent for no plan (and for the Codex API key mode, where identity says it)
   plan?: string;
@@ -366,7 +373,8 @@ function candidatesOf(windows: ReadonlyArray<UsageWindow | ClaudeUsageWindow>): 
  * (signed in, not API key, not codexRunsInWsl()). The background follows the lowest remaining percentage over the
  * general windows of both products (never model-specific ones).
  *
- * Tooltip: one usageTable with one block per vendor. Identity is the email unless planswap.sidebar.showEmail is off;
+ * Tooltip: one usageTable with one block per vendor, each headed by its product name between rules. Identity is the email
+ * unless planswap.sidebar.showEmail is off;
  * with email hidden or absent, a Codex API key account shows
  * "API key" (and no plan), another signed-in account its label, a signed-out one "Not logged in". Codex notes in order:
  * the pending selection (only while switching is enabled and the selected and effective directories differ; an
@@ -439,6 +447,7 @@ export class StatusBar implements vscode.Disposable {
       products.push(productPart('Claude', usage?.windows, display, settings));
       if (usage) candidates.push(...candidatesOf(usage.windows));
       blocks.push({
+        product: 'Claude',
         identity: (showEmail ? info.email : undefined) ?? (info.loggedIn ? label : t('common.notLoggedIn')),
         plan: info.plan,
         refresh: showUsage && this.claudeUsage !== undefined ? CLAUDE_REFRESH_USAGE_COMMAND : undefined,
@@ -476,6 +485,7 @@ export class StatusBar implements vscode.Disposable {
       }
       products.push(part);
       blocks.push({
+        product: 'Codex',
         identity: apiKey ? 'API key' : (showEmail ? info.email : undefined) ?? (info.loggedIn ? label : t('common.notLoggedIn')),
         plan: apiKey ? undefined : info.plan,
         refresh: showUsage && this.codexUsage !== undefined ? REFRESH_USAGE_COMMAND : undefined,
@@ -527,7 +537,7 @@ function buildTooltip(blocks: Block[]): vscode.MarkdownString {
   md.supportHtml = true;
   md.isTrusted = { enabledCommands: [CLAUDE_REFRESH_USAGE_COMMAND, REFRESH_USAGE_COMMAND] };
   md.appendMarkdown(usageTable(blocks.map((block) => ({
-    identity: block.identity, plan: block.plan, refresh: block.refresh && refreshLink(block.refresh), rows: block.usage.rows, notes: block.usage.notes,
+    product: block.product, identity: block.identity, plan: block.plan, refresh: block.refresh && refreshLink(block.refresh), rows: block.usage.rows, notes: block.usage.notes,
   }))));
   return md;
 }

@@ -598,13 +598,13 @@ describe('status bar', () => {
     const item = statusBarItems.at(-1)!;
     try {
       assert.equal(item.text, '$(dashboard) Codex');
-      assert.equal(tooltipText(item.tooltip), '| **work** |  |');
+      assert.equal(tooltipText(item.tooltip), '| <hr> |\n| **Codex** |\n| work |  |\n| <hr> |');
       // The selection (default) differs from the effective account, but PlanSwap does not manage CODEX_HOME
       assert.doesNotMatch(tooltipText(item.tooltip), /Pending:/);
       if (onWindows) writeSelectedDir(undefined);
       else installRcBlocks();
       bar.update();
-      assert.match(tooltipText(item.tooltip), /^\| \*\*work\*\* \|  \|\n\| _Pending: default \(restart required\)_ \|$/);
+      assert.match(tooltipText(item.tooltip), /^\| <hr> \|\n\| \*\*Codex\*\* \|\n\| work \|  \|\n\| _Pending: default \(restart required\)_ \|\n\| <hr> \|$/);
     } finally {
       bar.dispose();
     }
@@ -623,7 +623,7 @@ describe('status bar', () => {
     try {
       assert.equal(statusBarItems.at(-1)!.text, '$(dashboard) Claude');
       // Not signed in, so the first line is the sign-in state; the registered label only shows with a signed-in account without email
-      assert.equal(tooltipText(statusBarItems.at(-1)!.tooltip), '| **Not logged in** |  |');
+      assert.equal(tooltipText(statusBarItems.at(-1)!.tooltip), '| <hr> |\n| **Claude** |\n| Not logged in |  |\n| <hr> |');
     } finally {
       bar.dispose();
     }

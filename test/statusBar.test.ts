@@ -61,7 +61,7 @@ test('Codex status keeps effective account and reports pending selection with al
   try {
     const item = statusBarItems.at(-1)!;
     assert.equal(item.text, '$(dashboard) Codex');
-    assert.match(tooltipText(item.tooltip), /^\| \*\*Not logged in\*\* \|  \|\n\| _Pending: Work alias \(restart required\)_ \|$/);
+    assert.match(tooltipText(item.tooltip), /^\| <hr> \|\n\| \*\*Codex\*\* \|\n\| Not logged in \|  \|\n\| _Pending: Work alias \(restart required\)_ \|\n\| <hr> \|$/);
     writeSelectedDir(dir);
     bar.update();
     assert.doesNotMatch(tooltipText(item.tooltip), /Pending:/);
@@ -241,7 +241,7 @@ describe('Codex usage limits in the tooltip', () => {
     result: { ok: true, usage: { windows: [{ usedPercent: 42, windowMinutes: 300, resetsAt: Math.floor(now / 1000) + 3600 }, { usedPercent: 7, windowMinutes: 10080 }], limitReached: false, checkedAt: now } },
   };
 
-  test('windowRow and usageTable build one HTML table for all products: header rows span the email over three columns', () => {
+  test('windowRow and usageTable build one HTML table for all products: each product under its name between rules, the email spanning three columns', () => {
     const rows = [windowRow({ usedPercent: 42, windowMinutes: 300, resetsAt: Math.floor(now / 1000) + 3600 }, 0, now), windowRow({ usedPercent: 100, windowMinutes: 10080 }, 1, now), windowRow({ usedPercent: 3 }, 2, now)];
     assert.equal(rows[0], '<tr><td>5h</td><td>██████░░░░</td><td align="right">58%</td><td align="right"><span class="codicon codicon-clock"></span> 1h</td></tr>');
     assert.equal(htmlText(rows[1]), '| 7d | ░░░░░░░░░░ | 0% $(warning) Used up |  |');
@@ -251,20 +251,22 @@ describe('Codex usage limits in the tooltip', () => {
     assert.equal(htmlText(windowRow({ usedPercent: 100, windowMinutes: 10080 }, 1, now, 'used')), '| 7d | ██████████ | 100% $(warning) Used up |  |');
     const link = refreshLink('planswap.claude.refreshUsage');
     assert.equal(link, '<a href="command:planswap.claude.refreshUsage" title="Refresh usage limits"><span class="codicon codicon-refresh"></span></a>');
+    const rule = '<tr><td colspan="4"><hr></td></tr>';
     assert.equal(
       usageTable([
-        { identity: 'me@example.com', plan: 'Max 5x', refresh: link, rows: rows.slice(0, 1), notes: [] },
-        { identity: 'b@example.com', plan: 'Plus', rows: rows.slice(1, 2), notes: ['<em>Checking</em>'] },
-        { identity: 'API key', rows: [], notes: [] },
+        { product: 'Claude', identity: 'me@example.com', plan: 'Max 5x', refresh: link, rows: rows.slice(0, 1), notes: [] },
+        { product: 'Codex', identity: 'b@example.com', plan: 'Plus', rows: rows.slice(1, 2), notes: ['<em>Checking</em>'] },
+        { product: 'Codex', identity: 'API key', rows: [], notes: [] },
       ]),
-      `<table><tr><td colspan="3"><strong>me@example.com</strong></td><td align="right">Max 5x ${link}</td></tr>${rows[0]}`
-      + '<tr><td colspan="3"><strong>b@example.com</strong></td><td align="right">Plus</td></tr>' + rows[1] + '<tr><td colspan="4"><em>Checking</em></td></tr>'
-      + '<tr><td colspan="3"><strong>API key</strong></td><td align="right"></td></tr></table>',
-      'one table on one line: the email spans name, bar and percentage, so it cannot widen the name column',
+      `<table>${rule}<tr><td colspan="4"><strong>Claude</strong></td></tr><tr><td colspan="3">me@example.com</td><td align="right">Max 5x ${link}</td></tr>${rows[0]}`
+      + rule + '<tr><td colspan="4"><strong>Codex</strong></td></tr><tr><td colspan="3">b@example.com</td><td align="right">Plus</td></tr>' + rows[1] + '<tr><td colspan="4"><em>Checking</em></td></tr>'
+      + rule + '<tr><td colspan="4"><strong>Codex</strong></td></tr><tr><td colspan="3">API key</td><td align="right"></td></tr>' + rule + '</table>',
+      'one table on one line: a rule, the product name and the email spanning name, bar and percentage, so it cannot widen the name column',
     );
     assert.equal(usageTable([]), '');
-    assert.equal(htmlText(usageTable([{ identity: '<b>&', rows: [], notes: [] }])), '| **<b>&** |  |', 'the identity is escaped');
-    assert.ok(usageTable([{ identity: '<b>&', rows: [], notes: [] }]).includes('&#60;b&#62;&#38;'));
+    const escaped = usageTable([{ product: '<p>', identity: '<b>&', rows: [], notes: [] }]);
+    assert.ok(escaped.includes('<strong>&#60;p&#62;</strong>'), 'the product name is escaped');
+    assert.ok(escaped.includes('<td colspan="3">&#60;b&#62;&#38;</td>'), 'the identity is escaped');
   });
 
   test('codexUsageParts: short window first, reached note, checking note', () => {
@@ -324,7 +326,7 @@ describe('Codex usage limits in the tooltip', () => {
         assert.equal(tip.supportHtml, true);
         assert.deepEqual(tip.isTrusted, { enabledCommands: ['planswap.claude.refreshUsage', 'planswap.codex.refreshUsage'] });
         assert.ok(!tip.value.includes(path.join(temp.home, '.codex')));
-        assert.match(tooltipText(tip), /^\| \*\*default\*\* \| \[\$\(refresh\)\]\(command:planswap\.codex\.refreshUsage "Refresh usage limits"\) \|\n\| 5h \| ██████░░░░ \| 58% \| \$\(clock\) 1h \|\n\| 7d \|/);
+        assert.match(tooltipText(tip), /^\| <hr> \|\n\| \*\*Codex\*\* \|\n\| default \| \[\$\(refresh\)\]\(command:planswap\.codex\.refreshUsage "Refresh usage limits"\) \|\n\| 5h \| ██████░░░░ \| 58% \| \$\(clock\) 1h \|\n\| 7d \|/);
         // The status bar text states the product and the short window only, never the account
         assert.equal(item.text, '$(dashboard) Codex 58%');
         assert.equal(item.name, 'PlanSwap');
@@ -362,7 +364,7 @@ describe('Codex usage limits in the tooltip', () => {
         for (const locale of Object.keys(expected) as Locale[]) {
           setLocale(locale);
           bar.update();
-          assert.equal(tooltipText(item.tooltip), `| **default** | ${htmlText(refreshLink('planswap.codex.refreshUsage'))} |\n| _${expected[locale]}_ |`, locale);
+          assert.equal(tooltipText(item.tooltip), `| <hr> |\n| **Codex** |\n| default | ${htmlText(refreshLink('planswap.codex.refreshUsage'))} |\n| _${expected[locale]}_ |\n| <hr> |`, locale);
           assert.equal(item.text, '$(dashboard) Codex', 'no usage, no number');
         }
       } finally { setLocale('en'); bar.dispose(); }
@@ -373,7 +375,7 @@ describe('Codex usage limits in the tooltip', () => {
       const { bar, item } = make();
       try {
         bar.setCodexUsage(ok);
-        assert.equal(tooltipText(item.tooltip), '| **Not logged in** |  |');
+        assert.equal(tooltipText(item.tooltip), '| <hr> |\n| **Codex** |\n| Not logged in |  |\n| <hr> |');
         assert.equal(item.text, '$(dashboard) Codex');
       } finally { bar.dispose(); }
     });
@@ -384,7 +386,7 @@ describe('Codex usage limits in the tooltip', () => {
       try {
         bar.setCodexUsage(ok);
         assert.equal(item.text, '$(dashboard) Codex');
-        assert.equal(tooltipText(item.tooltip), '| **API key** |  |');
+        assert.equal(tooltipText(item.tooltip), '| <hr> |\n| **Codex** |\n| API key |  |\n| <hr> |');
       } finally { bar.dispose(); }
     });
 
@@ -399,7 +401,7 @@ describe('Codex usage limits in the tooltip', () => {
       try {
         bar.setCodexUsage(ok);
         const value = (item.tooltip as MarkdownString).value;
-        assert.match(tooltipText(item.tooltip), /^\| \*\*\[x\]\(command:workbench\.action\.quit\)\*\* \|/);
+        assert.match(tooltipText(item.tooltip), /^\| <hr> \|\n\| \*\*Codex\*\* \|\n\| \[x\]\(command:workbench\.action\.quit\) \|/);
         assert.ok(!value.includes('](command:workbench.action.quit)') && !value.includes('href="command:workbench'));
         assert.ok(!item.text.includes('[x]'), 'the account label is not in the status bar text');
       } finally {
@@ -418,7 +420,7 @@ describe('Codex usage limits in the tooltip', () => {
         bar.setCodexUsage(ok);
         const value = (item.tooltip as MarkdownString).value;
         assert.ok(!value.includes('](command:evil)') && !value.includes('|b@') && !value.includes('href="command:evil'));
-        assert.match(value, /^<table><tr><td colspan="3"><strong>&#91;x&#93;&#40;command:evil&#41;&#124;b@example\.com<\/strong><\/td><td align="right">Plus <a href="command:planswap\.codex\.refreshUsage" title="[^"]*">/);
+        assert.match(value, /^<table><tr><td colspan="4"><hr><\/td><\/tr><tr><td colspan="4"><strong>Codex<\/strong><\/td><\/tr><tr><td colspan="3">&#91;x&#93;&#40;command:evil&#41;&#124;b@example\.com<\/td><td align="right">Plus <a href="command:planswap\.codex\.refreshUsage" title="[^"]*">/);
       } finally { bar.dispose(); }
     });
   });
@@ -470,7 +472,7 @@ describe('both products in the status bar', LINUX_ONLY, () => {
       assert.equal(item.text, '$(dashboard) Claude 97% · Codex 82%');
       assert.equal(color(item), undefined);
       const tip = tooltipText(item.tooltip);
-      assert.match(tip, /^\| \*\*me@example\.com\*\* \| Max 5x \[\$\(refresh\)\]\(command:planswap\.claude\.refreshUsage "Refresh usage limits"\) \|\n\| 5h \| ██████████ \| 97% \| \$\(clock\) 2h \|\n\| 7d \| ██████░░░░ \| 60% \| \$\(clock\) 3d \|\n\| \*\*default\*\* \| \[\$\(refresh\)\]\(command:planswap\.codex\.refreshUsage "Refresh usage limits"\) \|\n\| 5h \| ████████░░ \| 82% \| \$\(clock\) 1h \|\n\| 7d \| █████░░░░░ \| 50% \| \$\(clock\) 5d \|$/);
+      assert.match(tip, /^\| <hr> \|\n\| \*\*Claude\*\* \|\n\| me@example\.com \| Max 5x \[\$\(refresh\)\]\(command:planswap\.claude\.refreshUsage "Refresh usage limits"\) \|\n\| 5h \| ██████████ \| 97% \| \$\(clock\) 2h \|\n\| 7d \| ██████░░░░ \| 60% \| \$\(clock\) 3d \|\n\| <hr> \|\n\| \*\*Codex\*\* \|\n\| default \| \[\$\(refresh\)\]\(command:planswap\.codex\.refreshUsage "Refresh usage limits"\) \|\n\| 5h \| ████████░░ \| 82% \| \$\(clock\) 1h \|\n\| 7d \| █████░░░░░ \| 50% \| \$\(clock\) 5d \|\n\| <hr> \|$/);
       assert.ok(!tip.includes('Fable'), 'model-specific windows are off by default');
       assert.deepEqual(tip.match(/\(command:[^ )]+/g), ['(command:planswap.claude.refreshUsage', '(command:planswap.codex.refreshUsage'], 'only the two refresh links');
       assert.deepEqual((item.tooltip as MarkdownString).isTrusted, { enabledCommands: ['planswap.claude.refreshUsage', 'planswap.codex.refreshUsage'] });
@@ -658,7 +660,7 @@ describe('both products in the status bar', LINUX_ONLY, () => {
       bar.setClaudeUsage({ checking: false });
       assert.equal(item.text, '$(dashboard) Claude · Codex');
       assert.equal(color(item), undefined);
-      assert.equal(tooltipText(item.tooltip), '| **Not logged in** |  |\n| **default** |  |');
+      assert.equal(tooltipText(item.tooltip), '| <hr> |\n| **Claude** |\n| Not logged in |  |\n| <hr> |\n| **Codex** |\n| default |  |\n| <hr> |');
       assert.equal(item.accessibilityInformation?.label, 'PlanSwap: Claude, Codex');
     } finally { bar.dispose(); }
   });
@@ -668,9 +670,9 @@ describe('both products in the status bar', LINUX_ONLY, () => {
     const { bar, item } = make();
     try {
       bar.setClaudeUsage({ checking: true });
-      assert.match(tooltipText(item.tooltip), /^\| \*\*me@example\.com\*\*[^\n]*\n\| 5h [^\n]*\n\| _Checking usage limits…_ \|\n\| \*\*/);
+      assert.match(tooltipText(item.tooltip), /^\| <hr> \|\n\| \*\*Claude\*\* \|\n\| me@example\.com[^\n]*\n\| 5h [^\n]*\n\| _Checking usage limits…_ \|\n\| <hr> \|\n\| \*\*Codex\*\* \|/);
       bar.setClaudeUsage({ checking: false, failure: { dir: path.join(temp.home, '.claude'), reason: 'timeout' } });
-      assert.match(tooltipText(item.tooltip), /\| 5h [^\n]*\n\| _Usage check failed_ \|\n\| \*\*/);
+      assert.match(tooltipText(item.tooltip), /\| 5h [^\n]*\n\| _Usage check failed_ \|\n\| <hr> \|\n\| \*\*Codex\*\* \|/);
       bar.setClaudeUsage({ checking: false, failure: { dir: path.join(temp.home, '.other'), reason: 'timeout' } });
       assert.ok(!tooltipText(item.tooltip).includes('failed'), 'a failure of another directory is not shown');
     } finally { bar.dispose(); }
@@ -697,7 +699,7 @@ describe('both products in the status bar', LINUX_ONLY, () => {
       fireConfigurationChange('planswap.sidebar.showEmail');
       const hidden = (item.tooltip as MarkdownString).value;
       assert.ok(!hidden.includes('me@example.com') && !hidden.includes('codex@example.com'), 'emails absent from raw tooltip');
-      assert.equal((hidden.match(/<strong>default<\/strong>/g) ?? []).length, 2, 'both products use account labels');
+      assert.equal((hidden.match(/<td colspan="3">default<\/td>/g) ?? []).length, 2, 'both products use account labels');
       assert.equal(item.text, text);
       assert.equal(color(item), background);
       assert.deepEqual(item.accessibilityInformation, accessibility);
@@ -740,7 +742,7 @@ describe('both products in the status bar', LINUX_ONLY, () => {
     const { bar, item } = make();
     try {
       const shown = (item.tooltip as MarkdownString).value;
-      assert.equal((shown.match(/<strong>default<\/strong>/g) ?? []).length, 2);
+      assert.equal((shown.match(/<td colspan="3">default<\/td>/g) ?? []).length, 2);
       for (const show of [false, true]) {
         setConfig('planswap', 'sidebar.showEmail', show);
         fireConfigurationChange('planswap.sidebar.showEmail');
@@ -757,7 +759,7 @@ describe('both products in the status bar', LINUX_ONLY, () => {
     fs.writeFileSync(path.join(temp.home, '.claude.json'), '{}');
     const { bar, item } = make();
     try {
-      assert.match(tooltipText(item.tooltip), /^\| \*\*default\*\* \|  \|\n\| \*\*/);
+      assert.match(tooltipText(item.tooltip), /^\| <hr> \|\n\| \*\*Claude\*\* \|\n\| default \|  \|\n\| <hr> \|\n\| \*\*Codex\*\* \|/);
     } finally { bar.dispose(); fs.rmSync(path.join(temp.home, '.claude', '.credentials.json'), { force: true }); }
   });
 });

@@ -4,6 +4,7 @@
 
 ### Changed
 
+- The status bar tooltip tells the products apart: each block starts with a bold "Claude" / "Codex" line and the blocks are separated by horizontal lines.
 - The sidebar names each usage window by its duration alone ("5 hours", "7 days") instead of "5-hour limit" / "7-day limit".
 - Linked Claude accounts now also share their sign-ins to MCP servers (for example Stripe or Notion) with the default account, so an MCP server authorized in one linked account works in the others without authorizing again. Only those entries of `.credentials.json` are synced; each account keeps its own Claude sign-in.
 - **Re-link** and the background check now also report what the Claude account in use lacks of the default account, and **Repair** adds it.
