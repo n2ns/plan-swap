@@ -45,14 +45,14 @@ const refreshAllTitle = {
   ko: '모든 계정의 사용량 한도 새로 고침',
 };
 const addLabel = { en: 'Add', 'zh-cn': '添加', 'zh-tw': '新增', es: 'Añadir', ja: '追加', ko: '추가' };
-const durations = { en: ['5-hour limit', '7-day limit'], 'zh-cn': ['5 小时额度', '7 天额度'], 'zh-tw': ['5 小時額度', '7 天額度'], es: ['Límite de 5 h', 'Límite de 7 días'], ja: ['5 時間の上限', '7 日間の上限'], ko: ['5시간 한도', '7일 한도'] };
+const durations = { en: ['5 hours', '7 days'], 'zh-cn': ['5小时', '7天'], 'zh-tw': ['5小時', '7天'], es: ['5 h', '7 días'], ja: ['5 時間', '7 日間'], ko: ['5시간', '7일'] };
 const scopedDurations = {
-  en: ['5-hour limit', '7-day limit', '7-day limit · Fable'],
-  'zh-cn': ['5 小时额度', '7 天额度', '7 天额度 · Fable'],
-  'zh-tw': ['5 小時額度', '7 天額度', '7 天額度 · Fable'],
-  es: ['Límite de 5 h', 'Límite de 7 días', 'Límite de 7 días · Fable'],
-  ja: ['5 時間の上限', '7 日間の上限', '7 日間の上限 · Fable'],
-  ko: ['5시간 한도', '7일 한도', '7일 한도 · Fable'],
+  en: ['5 hours', '7 days', '7 days · Fable'],
+  'zh-cn': ['5小时', '7天', '7天 · Fable'],
+  'zh-tw': ['5小時', '7天', '7天 · Fable'],
+  es: ['5 h', '7 días', '7 días · Fable'],
+  ja: ['5 時間', '7 日間', '7 日間 · Fable'],
+  ko: ['5시간', '7일', '7일 · Fable'],
 };
 const remaining = {
   en: (percent) => `${percent}% remaining`,

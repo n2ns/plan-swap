@@ -107,7 +107,7 @@ English is the source of every visible string; the translations live in `src/i18
 | Independent mode | independent | 独立 | 獨立 | independiente | 独立 | 독립 | |
 | General limit (not model-specific) | general limit | 通用额度 | 一般額度 | límite general | 一般的な上限 | 일반 한도 | ja 共通の上限 |
 | Usage limits | usage limits | 用量额度 | 用量額度 | límites de uso | 使用量の上限 | 사용량 한도 | zh 用量限额; ja 使用上限, 使用量上限 |
-| One limit window label | 5-hour limit, 7-day limit | 5 小时额度，7 天额度 | 5 小時額度，7 天額度 | Límite de 5 h, Límite de 7 días | 5 時間の上限、7 日間の上限 | 5시간 한도, 7일 한도 | zh 小时限额 / 天限额 |
+| One limit window label (the duration alone) | 5 hours, 7 days | 5小时，7天 | 5小時，7天 | 5 h, 7 días | 5 時間、7 日間 | 5시간, 7일 | 5-hour limit; zh 小时额度 / 天额度 |
 | Sign-in action | sign in (button: Log in) | 登录 | 登入 | iniciar sesión (button: Acceder) | サインイン (button: ログイン) | 로그인 (button: 로그인) | |
 | Signed-out state | Not logged in | 未登录 | 未登入 | Sin sesión | 未ログイン | 로그인 안 됨 | |
 | Switch accounts | Switch | 切换 | 切換 | Cambiar | 切り替え | 전환 | |

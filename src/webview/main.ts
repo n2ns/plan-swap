@@ -267,7 +267,7 @@ function updatedAgo(checkedAtMs: number): string {
   return t('recommend.updated', { time });
 }
 
-// Window duration text: "5-hour limit", "7-day limit", with the model name for Claude's model-specific limits
+// Window duration text: "5 hours", "7 days", with the model name for Claude's model-specific limits
 function windowDuration(w: UsageWindowView, compact = false): string {
   const minutes = w.windowMinutes;
   const limit = minutes === undefined ? t('usage.window')

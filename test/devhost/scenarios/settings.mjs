@@ -10,7 +10,7 @@ export async function run(ctx) {
 
   writeSettings({ 'planswap.language': 'zh-cn' });
   d = await sb.waitFor(ctx, (x) => x.listTitle === '全部账号');
-  await step('language zh-cn applies without reload', d.listTitle === '全部账号' && work(d).usage[0].startsWith('5 小时额度'), { title: d.listTitle, usage: work(d).usage });
+  await step('language zh-cn applies without reload', d.listTitle === '全部账号' && work(d).usage[0].startsWith('5小时'), { title: d.listTitle, usage: work(d).usage });
   await sb.shot(ctx, '01-zh-cn.png');
   writeSettings({ 'planswap.language': 'ja' });
   d = await sb.waitFor(ctx, (x) => x.listTitle === 'すべてのアカウント');
@@ -21,7 +21,7 @@ export async function run(ctx) {
   writeSettings({ 'planswap.usageDisplay': 'used' });
   d = await sb.waitFor(ctx, (x) => work(x).usage[0].includes(' 42% '));
   await step('usageDisplay used: percentages show what is used, colors still follow what is left',
-    work(d).usage[0] === '5-hour limit 42% ok' && d.rows[0].usage[0] === '5-hour limit 80% warn', { work: work(d).usage, current: d.rows[0].usage });
+    work(d).usage[0] === '5 hours 42% ok' && d.rows[0].usage[0] === '5 hours 80% warn', { work: work(d).usage, current: d.rows[0].usage });
 
   writeSettings({ 'planswap.sidebar.showEmail': false });
   d = await sb.waitFor(ctx, (x) => x.rows.every((r) => r.email === null));
@@ -36,7 +36,7 @@ export async function run(ctx) {
 
   writeSettings({ 'planswap.sidebar.showModelLimits': true });
   d = await sb.waitFor(ctx, (x) => work(x).usage.length === 3);
-  await step('showModelLimits on: the Fable window appears after the general ones', work(d).usage[2] === '7-day limit · Fable 90% ok', work(d).usage);
+  await step('showModelLimits on: the Fable window appears after the general ones', work(d).usage[2] === '7 days · Fable 90% ok', work(d).usage);
   await sb.shot(ctx, '02-model-limits.png');
 
   writeSettings({ 'planswap.usageWarningThreshold': 60, 'planswap.usageErrorThreshold': 25 });
@@ -45,5 +45,5 @@ export async function run(ctx) {
   writeSettings();
   await sleep(1000);
   d = await sb.waitFor(ctx, (x) => work(x).usage.length === 2 && work(x).email !== null);
-  await step('defaults restored', work(d).usage.length === 2 && work(d).email !== null && work(d).usage[0] === '5-hour limit 58% ok');
+  await step('defaults restored', work(d).usage.length === 2 && work(d).email !== null && work(d).usage[0] === '5 hours 58% ok');
 }

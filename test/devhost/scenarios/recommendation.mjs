@@ -11,7 +11,7 @@ export async function run(ctx) {
 
   // Claude: the default account is low, Work is recommended, Personal (weekly used up) never
   let d = await sb.waitFor(ctx, (x) => !!x.card);
-  await step('claude card recommends Work', d.card?.title === 'Recommended: work' && /5-hour limit 58% remaining · 7-day limit 46% remaining · Updated \d+ minutes? ago/.test(d.card?.text ?? ''), d.card);
+  await step('claude card recommends Work', d.card?.title === 'Recommended: work' && /5 hours 58% remaining · 7 days 46% remaining · Updated \d+ minutes? ago/.test(d.card?.text ?? ''), d.card);
   await step('claude card buttons: Switch + Terminal', JSON.stringify(d.card?.buttons) === JSON.stringify(['switch:Switch', 'terminal:Terminal']), d.card?.buttons);
   await step('claude rows: default current, 5 rows, a toggle on every registered row', d.rows.length === 5 && d.rows[0].dir === dirs.claudeDefault && d.rows[0].current && d.rows.every((r) => r.toggle), short(d.rows));
   await sb.shot(ctx, '01-claude-dark.png');
@@ -57,7 +57,7 @@ export async function run(ctx) {
   // Codex: effective default 15% left → Work with Switch + Terminal; Team (limit reached) never
   await sb.tab(ctx, 'codex');
   d = await sb.waitFor(ctx, (x) => x.mode === 'codex' && !!x.card);
-  await step('codex card recommends Work with Switch + Terminal', d.card?.title === 'Recommended: work' && JSON.stringify(d.card?.buttons) === JSON.stringify(['switch:Switch', 'terminal:Terminal']) && /80% remaining · 7-day limit 60% remaining/.test(d.card?.text ?? ''), d.card);
+  await step('codex card recommends Work with Switch + Terminal', d.card?.title === 'Recommended: work' && JSON.stringify(d.card?.buttons) === JSON.stringify(['switch:Switch', 'terminal:Terminal']) && /80% remaining · 7 days 60% remaining/.test(d.card?.text ?? ''), d.card);
   await step('codex rows: default effective, three rows', d.rows.length === 3 && d.rows[0].dir === dirs.codexDefault && d.rows[0].current, short(d.rows));
   await sb.shot(ctx, '07-codex-dark.png');
   await sb.rowAction(ctx, dirs.codexWork, 'recommendExclude');
