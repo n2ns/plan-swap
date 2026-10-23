@@ -7,6 +7,10 @@
 - The background check now adds MCP servers of the default Claude account that a linked account lacks, including the account in use, and tells you which ones it added; start a new Claude conversation to use them. It only adds: servers the account already has are never removed or changed, the default account is not changed, and a server you removed from the account is not added back. Everything else still waits for **Repair**.
 - The link check and **Repair** notifications are shorter and use plain words: they say which account differs from the default account and how, one sentence per account, and what **Repair** does.
 
+### Fixed
+
+- PlanSwap now waits for Claude Code's own lock before it writes a `.claude.json` (MCP servers and project settings), so PlanSwap and Claude Code no longer overwrite each other's changes when both save the file at the same moment; if Claude Code keeps the file locked, PlanSwap leaves it unchanged and tries again at the next check. This matters more now that the background check adds MCP servers while Claude Code runs.
+
 ## [0.4.4] - 2026-10-23
 
 ### Changed

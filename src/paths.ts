@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { t } from './i18n';
-import { comparablePath, isWindows, renameReplacing, stripBom, unlinkLinks, isPlainObject } from './platform';
+import { comparablePath, isWindows, renameReplacing, stripBom, unlinkLinks, isPlainObject, withLockDir } from './platform';
 
 export const DEFAULT_NAME = 'default';
 export const NAME_RE = /^[A-Za-z0-9_-]+$/;
@@ -396,14 +396,26 @@ function readJsonObject(file: string): Record<string, unknown> | undefined {
 }
 
 /**
+ * Runs commit while holding Claude Code's config lock of the info file `file` (the folder `<file>.lock`, research fact
+ * 21) and, when file is a link, the one of its target `real`, so a Claude Code write of the file cannot land between
+ * the change check and the rename. A lock that stays held for about a second throws Error(t('mcp.changed')); one
+ * older than Claude Code's stale time (10 s) is taken over.
+ */
+export function withConfigLock<T>(file: string, real: string, commit: () => T): T {
+  const busy = (): Error => new Error(t('mcp.changed', { file: real }));
+  const inner = (): T => withLockDir(`${real}.lock`, 10_000, busy, commit);
+  return path.resolve(file) === path.resolve(real) ? inner() : withLockDir(`${file}.lock`, 10_000, busy, inner);
+}
+
+/**
  * Merges the user-level MCP servers (mcpServers) of the default account's info file fromJson into <dir>/.claude.json:
  * names the account lacks are added, identical ones skipped, differing ones kept (reported in kept); nothing is ever removed.
  * A missing target file is created (0600) with only mcpServers; an existing one keeps every other key and its mode
  * and is replaced atomically (<real>.planswap-<pid>.tmp + rename, symlinks followed). Throws Error(t('mcp.badTarget'))
  * when the target is not a JSON object, Error(t('mcp.unsafeTarget')) before reading a protected/ambiguous target,
  * Error(t('mcp.changed')) when it changed between read and rename (the CLI
- * rewrites it; the file is then left unchanged). No write when dir is the default dir (sameRealPath), the source has
- * no servers or nothing is added. beforeCommit runs between writing the temporary file and the change check (tests
+ * rewrites it; the file is then left unchanged) or Claude Code's config lock stays held (withConfigLock). No write
+ * when dir is the default dir (sameRealPath), the source has no servers or nothing is added. beforeCommit runs between writing the temporary file and the change check (tests
  * simulate a concurrent CLI write).
  */
 export function syncMcpServers(fromJson: string, dir: string, beforeCommit?: () => void): McpSyncResult {
@@ -447,7 +459,9 @@ export function syncMcpServers(fromJson: string, dir: string, beforeCommit?: () 
     fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n', { mode, flag: 'wx' });
     beforeCommit?.();
     // Refuse to overwrite a write the CLI made in the meantime, checked again before every rename attempt
-    if (!renameReplacing(tmp, real, undefined, undefined, () => target.validate() && unchangedSince(real, before))) throw new Error(t('mcp.changed', { file: real }));
+    withConfigLock(file, real, () => {
+      if (!renameReplacing(tmp, real, undefined, undefined, () => target.validate() && unchangedSince(real, before))) throw new Error(t('mcp.changed', { file: real }));
+    });
   } finally {
     fs.rmSync(tmp, { force: true });
   }

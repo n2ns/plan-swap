@@ -969,6 +969,54 @@ describe('syncClaudeAccount', () => {
     assert.equal(read(src()), defRewritten);
   });
 
+  test('an info file commit waits for Claude Code\'s config lock, takes over a stale one and refuses a held one', () => {
+    write(src(), JSON.stringify({ mcpServers: { a: { command: 'a' } } }));
+    const acc = accountDir('config-lock');
+    const file = path.join(acc, '.claude.json');
+    write(file, '{}');
+    const lock = `${file}.lock`;
+    fs.mkdirSync(lock);
+    // Another process (a Claude Code config write) releases the lock while the commit waits for it
+    spawn(process.execPath, ['-e', "setTimeout(() => require('node:fs').rmSync(process.argv[1], { recursive: true, force: true }), 200)", lock], { stdio: 'ignore' });
+    assert.deepEqual(syncClaudeAccount(src(), acc, 'fill').added, ['a']);
+    assert.ok(!exists(lock));
+    write(src(), JSON.stringify({ mcpServers: { a: { command: 'a' }, b: { command: 'b' } } }));
+    fs.mkdirSync(lock);
+    assert.throws(() => syncClaudeAccount(src(), acc, 'fill'), { message: t('mcp.changed', { file: realPath(file) }) });
+    assert.deepEqual(info(acc).mcpServers, { a: { command: 'a' } });
+    assert.ok(exists(lock));
+    const old = new Date(Date.now() - 60_000);
+    fs.utimesSync(lock, old, old);
+    assert.deepEqual(syncClaudeAccount(src(), acc, 'fill').added, ['b']);
+    assert.ok(!exists(lock));
+
+    // The default's own lock guards its commit
+    write(file, JSON.stringify({ mcpServers: { a: { command: 'a' }, b: { command: 'b' }, own: { command: 'o' } } }));
+    const defBefore = read(src());
+    fs.mkdirSync(`${src()}.lock`);
+    assert.throws(() => syncClaudeAccount(src(), acc, 'full'), { message: t('mcp.changed', { file: realPath(src()) }) });
+    assert.equal(read(src()), defBefore);
+    fs.rmSync(`${src()}.lock`, { recursive: true });
+    syncClaudeAccount(src(), acc, 'full');
+    assert.deepEqual(Object.keys(info(home).mcpServers).sort(), ['a', 'b', 'own']);
+    assert.ok(!exists(`${src()}.lock`));
+  });
+
+  test('a linked info file commit also holds the config lock of its target', FILE_SYMLINKS, () => {
+    write(src(), JSON.stringify({ mcpServers: { a: { command: 'a' } } }));
+    const acc = accountDir('linked-lock'); fs.mkdirSync(acc);
+    const file = path.join(acc, '.claude.json');
+    const external = path.join(home, 'linked-info.json'); write(external, '{}');
+    fs.symlinkSync(external, file);
+    fs.mkdirSync(`${external}.lock`);
+    assert.throws(() => syncClaudeAccount(src(), acc, 'fill'), { message: t('mcp.changed', { file: external }) });
+    assert.equal(read(external), '{}');
+    assert.ok(!exists(`${file}.lock`));
+    fs.rmSync(`${external}.lock`, { recursive: true });
+    assert.deepEqual(syncClaudeAccount(src(), acc, 'fill').added, ['a']);
+    assert.ok(!exists(`${file}.lock`) && !exists(`${external}.lock`));
+  });
+
   test('a dangling default info link is refused', FILE_SYMLINKS, () => {
     const acc = accountDir('a');
     write(path.join(acc, '.claude.json'), JSON.stringify({ mcpServers: { a: {} } }));

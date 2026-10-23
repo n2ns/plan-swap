@@ -10,10 +10,10 @@ import { createHash } from 'node:crypto';
 import * as path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { t } from './i18n';
-import { accountInfoTarget, claudeIdentitySetting, claudeJsonName, copySettingsStripped, defaultDir, realPath, realPathInside, samePath, sameRealPath, strippedSettings, syncMcpServers, unchangedSince } from './paths';
+import { accountInfoTarget, claudeIdentitySetting, claudeJsonName, copySettingsStripped, defaultDir, realPath, realPathInside, samePath, sameRealPath, strippedSettings, syncMcpServers, unchangedSince, withConfigLock } from './paths';
 import {
   comparablePath, isOpaqueReparseDir, JunctionError, LinkPrivilegeError, createLink, fileLinksAvailable, isWindows, pidAlive, renameReplacing, type StartTimeProbe,
-  sleepSync, stripBom, unlinkLinks, windowsStartTimes, isPlainObject,
+  stripBom, unlinkLinks, windowsStartTimes, isPlainObject, withLockDir,
 } from './platform';
 
 // Whole-entry links (kind: file needs an empty-file default, dir needs an empty dir). 'projects' is the marker entry
@@ -666,27 +666,7 @@ function commitJson(target: SyncFile, text: string, beforeCommit?: () => void, v
 // stale after 15 s; research fact 19). The commit of a credentials file holds the same lock, so a token refresh
 // cannot land between its compare and rename; a lock held longer than about a second throws t('mcp.changed')
 function withStorageLock(target: SyncFile, commit: () => void): void {
-  const lock = path.join(path.dirname(target.real), '.storage-write.lock');
-  for (let attempt = 0; ; attempt++) {
-    try {
-      fs.mkdirSync(lock);
-      break;
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
-      const st = lstatOrUndefined(lock);
-      if (st && Date.now() - st.mtimeMs > 15_000) {
-        fs.rmSync(lock, { recursive: true, force: true });
-        continue;
-      }
-      if (attempt >= 10) throw new Error(t('mcp.changed', { file: target.real }));
-      sleepSync(100);
-    }
-  }
-  try {
-    commit();
-  } finally {
-    fs.rmSync(lock, { recursive: true, force: true });
-  }
+  withLockDir(path.join(path.dirname(target.real), '.storage-write.lock'), 15_000, () => new Error(t('mcp.changed', { file: target.real })), commit);
 }
 
 export type SyncMode = 'full' | 'pull' | 'check' | 'fill';
@@ -731,9 +711,10 @@ export interface SyncResult {
  *   added; a base write failing after they were written is returned as result.baseError instead of thrown (unrecorded
  *   hashes only make the next sync treat the servers as present on both sides).
  * Writes replace atomically, keep the mode, follow an info file's symlink (validated like accountInfoTarget) and refuse
- * with t('mcp.changed') a file changed since it was read; credentials commits hold Claude Code's storage lock. A
- * missing account info file is created 0600; a credentials file is never created. Order: default info, default
- * credentials, account info, account credentials, base, so an interrupted sync converges on the next one. Errors:
+ * with t('mcp.changed') a file changed since it was read; credentials commits hold Claude Code's storage lock, info
+ * file commits its config lock (withConfigLock). A missing account info file is created 0600; a credentials file is
+ * never created. Order: default info, default credentials, account info, account credentials, base, so an interrupted
+ * sync converges on the next one. Errors:
  * t('share.badSource') (default info not a JSON object), t('mcp.badTarget'), t('mcp.unsafeTarget') (before any
  * account info content is read, check mode included). The default dir, or groups = [], → no-op without reading.
  */
@@ -835,7 +816,7 @@ export function syncClaudeAccount(fromJson: string, dir: string, mode: SyncMode 
   const write = (file: SyncFile, text: string, valid?: () => boolean): void => {
     if (!dirty.has(file)) return;
     if (file === defCred || file === accCred) withStorageLock(file, () => commitJson(file, text, beforeCommit, valid));
-    else commitJson(file, text, beforeCommit, valid);
+    else withConfigLock(file.file, file.real, () => commitJson(file, text, beforeCommit, valid));
   };
   write(def, JSON.stringify(def.data, null, 2) + '\n');
   if (defCred) write(defCred, JSON.stringify(defCred.data));

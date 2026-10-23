@@ -555,6 +555,19 @@ describe('syncMcpServers', () => {
     assert.deepEqual(syncMcpServers(src(), f), { added: ['one'], kept: [] });
     assert.deepEqual(target(f), { userID: 'u', numStartups: 2, mcpServers: { one } });
   });
+
+  test('a target whose Claude Code config lock is held is left unchanged and reported', () => {
+    setSource({ one });
+    const f = mk('f-lock');
+    const file = path.join(f, '.claude.json');
+    fs.writeFileSync(file, JSON.stringify({ userID: 'u' }));
+    fs.mkdirSync(`${file}.lock`);
+    assert.throws(() => syncMcpServers(src(), f), { message: t('mcp.changed', { file: realPath(file) }) });
+    assert.deepEqual(target(f), { userID: 'u' });
+    fs.rmSync(`${file}.lock`, { recursive: true });
+    assert.deepEqual(syncMcpServers(src(), f), { added: ['one'], kept: [] });
+    assert.ok(!fs.existsSync(`${file}.lock`));
+  });
 });
 
 describe('checkSafeToDelete in zh-cn', () => {

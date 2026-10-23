@@ -216,6 +216,33 @@ export function renameReplacing(
   }
 }
 
+/** Runs fn while holding the lock folder lock (created with mkdir, the layout of proper-lockfile): a folder whose mtime
+ *  is older than staleMs is taken over, a fresh one is waited for up to about a second (10 tries 100 ms apart), then
+ *  busy() is thrown. The folder is removed afterwards. */
+export function withLockDir<T>(lock: string, staleMs: number, busy: () => Error, fn: () => T): T {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      fs.mkdirSync(lock);
+      break;
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+      let mtime: number | undefined;
+      try { mtime = fs.lstatSync(lock).mtimeMs; } catch { /* released meanwhile: try again */ }
+      if (mtime !== undefined && Date.now() - mtime > staleMs) {
+        fs.rmSync(lock, { recursive: true, force: true });
+        continue;
+      }
+      if (attempt >= 10) throw busy();
+      sleepSync(100);
+    }
+  }
+  try {
+    return fn();
+  } finally {
+    fs.rmSync(lock, { recursive: true, force: true });
+  }
+}
+
 /** Blocks the thread for ms milliseconds (short retries of synchronous file operations). */
 export function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
