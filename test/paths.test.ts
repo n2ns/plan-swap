@@ -7,7 +7,7 @@ import { setLocale, t } from '../src/i18n';
 import {
   accountDir, checkSafeToDelete, claudeJsonPath, copySettingsStripped, defaultDir, deleteAccountDir,
   ensureAccountDir, formatClaudePlan, readAccountInfo, samePath, sameRealPath, scanAccountDirs,
-  findSameDir, realPath, setClaudeSettingEnv, syncMcpServers,
+  findSameDir, realPath, setClaudeSettingEnv, syncMcpServers, withConfigLock,
 } from '../src/paths';
 import { assertTempHome, makeTempHome, assertMode, FILE_SYMLINKS, read, withEnv, type TempHome } from './helpers';
 
@@ -566,6 +566,16 @@ describe('syncMcpServers', () => {
     assert.deepEqual(target(f), { userID: 'u' });
     fs.rmSync(`${file}.lock`, { recursive: true });
     assert.deepEqual(syncMcpServers(src(), f), { added: ['one'], kept: [] });
+    assert.ok(!fs.existsSync(`${file}.lock`));
+  });
+  test('a plain info file under a linked folder takes its config lock once', () => {
+    const realDir = path.join(home, 'lock-real'); fs.mkdirSync(realDir);
+    const linkDir = path.join(home, 'lock-alias');
+    fs.symlinkSync(realDir, linkDir, 'junction');
+    const file = path.join(linkDir, '.claude.json');
+    fs.writeFileSync(file, '{}');
+    assert.notEqual(path.resolve(file), realPath(file));
+    assert.equal(withConfigLock(file, realPath(file), () => fs.existsSync(`${file}.lock`)), true);
     assert.ok(!fs.existsSync(`${file}.lock`));
   });
 });

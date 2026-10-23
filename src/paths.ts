@@ -403,8 +403,10 @@ function readJsonObject(file: string): Record<string, unknown> | undefined {
  */
 export function withConfigLock<T>(file: string, real: string, commit: () => T): T {
   const busy = (): Error => new Error(t('mcp.changed', { file: real }));
-  const inner = (): T => withLockDir(`${real}.lock`, 10_000, busy, commit);
-  return path.resolve(file) === path.resolve(real) ? inner() : withLockDir(`${file}.lock`, 10_000, busy, inner);
+  // Only a link to another entry has a second lock: a plain file reached through a linked folder or another spelling
+  // is one entry, and so is a file replaced by a link since real was resolved (the commit's validation refuses it)
+  const linked = !samePath(file, real) && (fs.lstatSync(file, { throwIfNoEntry: false })?.isSymbolicLink() ?? false);
+  return withLockDir(`${file}.lock`, 10_000, busy, linked ? () => withLockDir(`${real}.lock`, 10_000, busy, commit) : commit);
 }
 
 /**
