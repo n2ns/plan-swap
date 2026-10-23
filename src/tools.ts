@@ -203,7 +203,7 @@ function checkShared(accounts: SharedAccounts, deps: ToolDeps, background = fals
 // The check's notification: the problems and notes per account, with Repair when a repair would change something
 async function offerRepair(mode: PanelMode, deps: ToolDeps, accounts: SharedAccounts, checks: AccountCheck[]): Promise<void> {
   const { lines, fixable } = describeLinkCheck(checks);
-  const message = t(fixable ? (mode === 'claude' ? 'linkCheck.claudeFound' : 'linkCheck.found') : 'linkCheck.foundNoFix', { vendor: accounts.vendor, list: lines.join(t('common.listSep')) });
+  const message = joinSentences(t(fixable ? (mode === 'claude' ? 'linkCheck.claudeFound' : 'linkCheck.found') : 'linkCheck.foundNoFix', { vendor: accounts.vendor }), ...lines);
   const repair = t('linkCheck.repair');
   const picked = await (fixable ? vscode.window.showWarningMessage(message, repair) : vscode.window.showWarningMessage(message));
   if (picked === repair) {
@@ -256,22 +256,48 @@ async function repairClaudeChecks(deps: ToolDeps, offered: AccountCheck[]): Prom
   else void vscode.window.showInformationMessage(done);
 }
 
+// Background check, Claude: adds to every shared account, the account in use included, the default account's
+// user-level MCP servers it lacks (syncClaudeAccount fill: add only, a server the account removed since the last sync
+// is not re-added, the default account is never written) and names them in one information notice. A failing account
+// is only logged; its check then lists the servers for Repair
+function fillClaudeMcpServers(accounts: SharedAccounts): void {
+  const def = defaultDir();
+  const from = claudeJsonPath(def, isExplicitConfigDir(def));
+  const filled: Array<{ name: string; servers: string }> = [];
+  for (const dir of accounts.dirs) {
+    try {
+      const added = syncClaudeAccount(from, dir, 'fill').added ?? [];
+      if (added.length) filled.push({ name: accounts.nameOf(dir), servers: added.join(t('common.nameSep')) });
+    } catch (err) {
+      console.warn(`[planswap] adding the default MCP servers failed: ${errText(err)}`);
+    }
+  }
+  if (filled.length === 1) void vscode.window.showInformationMessage(t('linkCheck.mcpFilled', filled[0]));
+  else if (filled.length) {
+    const list = filled.map((f) => t('linkCheck.mcpFilledItem', f)).join(t('common.nameSep'));
+    void vscode.window.showInformationMessage(t('linkCheck.mcpFilledMany', { list }));
+  }
+}
+
 /**
- * Background link check of one vendor (the host calls it in the focused window): checks every shared account read
- * only and shows the Re-link notification (all problems) when LinkCheckNotices.take says its announcement keys
- * (repairable problems only, announcementKeys) are due. Nothing is repaired without the user's Repair; nothing happens
- * when the vendor is not initialized or deps.linkNotices is missing.
+ * Background link check of one vendor (the host calls it in the focused window). Claude first adds the default
+ * account's user-level MCP servers that shared accounts lack (fillClaudeMcpServers, with its own information notice).
+ * Then every shared account is checked read only and the Re-link notification (all problems) is shown when
+ * LinkCheckNotices.take says its announcement keys (repairable problems only, announcementKeys) are due. Nothing else
+ * is repaired without the user's Repair; nothing happens when the vendor is not initialized or deps.linkNotices is
+ * missing.
  */
 export async function checkSharedInBackground(mode: PanelMode, deps: ToolDeps): Promise<void> {
   const accounts = sharedAccounts(mode, deps);
   const notices = deps.linkNotices;
   if (!accounts || !notices) return;
+  if (mode === 'claude') fillClaudeMcpServers(accounts);
   const { checks, keys } = checkShared(accounts, deps, true);
   if (await notices.take(mode, keys)) await offerRepair(mode, deps, accounts, checks);
 }
 
-// Re-link: checks every shared account of the vendor read only; without problems it reports "all fine" (with the notes
-// on entries kept as they are, if any), otherwise one notification lists every problem and note per account and offers
+// Re-link: checks every shared account of the vendor read only; without problems it reports "all fine" (followed by the
+// notes on entries kept as they are, if any), otherwise one notification lists every problem and note per account and offers
 // Repair (scoped for Claude; full refresh for Codex) when a repair would change something. Its
 // announcement keys are recorded so the background check does not repeat them. Without the vendor's directory list or
 // share ops (not initialized) only a warning is shown
@@ -290,7 +316,7 @@ async function syncShared(mode: PanelMode, deps: ToolDeps): Promise<void> {
   const { lines, problems } = describeLinkCheck(checks);
   if (!problems) {
     const params = { count: accounts.dirs.length, vendor: accounts.vendor };
-    void vscode.window.showInformationMessage(lines.length ? t('linkCheck.okNotes', { ...params, list: lines.join(t('common.listSep')) }) : t('linkCheck.ok', params));
+    void vscode.window.showInformationMessage(joinSentences(t('linkCheck.ok', params), ...lines));
     return;
   }
   await offerRepair(mode, deps, accounts, checks);

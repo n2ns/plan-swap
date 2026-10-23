@@ -89,13 +89,21 @@ function isNote(kind: ProblemKind): boolean {
   return (NOTE_KINDS as readonly string[]).includes(kind);
 }
 
-// A sync group as listed: the file it lives in, then the group ('mcpOAuth:<server key>' is in .credentials.json)
+// A sync group in plain words (linkCheck.g.*): the MCP servers, a project's settings, the MCP sign-in of a server
+// ('mcpOAuth:<name>|<hash>' shows the name) or the first-run setup (the onboarding keys)
 function syncGroupLabel(group: string): string {
-  return `${group.startsWith('mcpOAuth:') ? '.credentials.json' : '.claude.json'} (${group})`;
+  if (group === 'mcpServers') return t('linkCheck.g.mcpServers');
+  if (group.startsWith('projects:')) return t('linkCheck.g.project', { path: group.slice('projects:'.length) });
+  if (group.startsWith('mcpOAuth:')) {
+    const key = group.slice('mcpOAuth:'.length);
+    const bar = key.lastIndexOf('|');
+    return t('linkCheck.g.mcpSignIn', { server: bar > 0 ? key.slice(0, bar) : key });
+  }
+  return t('linkCheck.g.onboarding');
 }
 
-/** One localized line per account with problems or notes ('<label>: <part>; <part>'); problems: whether any is not a
- *  note; fixable: whether a repair would change anything. */
+/** One localized sentence per account with problems or notes (linkCheck.line, '<label>: <part>; <part>.'; callers
+ *  join them with joinSentences); problems: whether any is not a note; fixable: whether a repair would change anything. */
 export function describeLinkCheck(checks: readonly AccountCheck[]): { lines: string[]; problems: boolean; fixable: boolean } {
   const lines: string[] = [];
   let fixable = false;
@@ -108,9 +116,9 @@ export function describeLinkCheck(checks: readonly AccountCheck[]): { lines: str
     const parts = problems.map((p) => (p.kind === 'error'
       ? t('linkCheck.error', { error: p.entries[0] })
       : t(c.vendor === 'claude' && p.kind === 'defaultMissing' ? 'linkCheck.claudeDefaultMissing' : `linkCheck.${p.kind}`, {
-        list: (c.vendor === 'claude' && p.kind === 'mirror' ? (c.mirror ?? []).map(syncGroupLabel) : p.entries).join(t('common.nameSep')),
+        list: (c.vendor === 'claude' && p.kind === 'mirror' ? [...new Set((c.mirror ?? []).map(syncGroupLabel))] : p.entries).join(t('common.nameSep')),
       })));
-    lines.push(t('sync.item', { name: c.label, notes: parts.join(t('common.listSep')) }));
+    lines.push(t('linkCheck.line', { name: c.label, notes: parts.join(t('common.listSep')) }));
   }
   return { lines, problems: any, fixable };
 }

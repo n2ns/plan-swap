@@ -893,7 +893,7 @@ describe('syncClaudeAccount', () => {
       assert.notEqual(String(candidate), credential, 'credential payload must not be opened');
       return Reflect.apply(originalRead, fsModule, [candidate, ...args]);
     }) as typeof fs.readFileSync);
-    for (const mode of ['full', 'pull', 'check'] as const) {
+    for (const mode of ['full', 'pull', 'check', 'fill'] as const) {
       assert.throws(() => syncClaudeAccount(src(), acc, mode), { message: t('mcp.unsafeTarget', { file }) });
     }
     assert.ok(fs.lstatSync(file).isSymbolicLink());
@@ -975,6 +975,77 @@ describe('syncClaudeAccount', () => {
     fs.symlinkSync(path.join(home, 'gone.json'), src());
     assert.throws(() => syncClaudeAccount(src(), acc), { message: t('mcp.unsafeTarget', { file: src() }) });
     assert.ok(fs.lstatSync(src()).isSymbolicLink());
+  });
+
+  test('fill adds only the default MCP servers the account lacks, and writes nothing else', () => {
+    const defText = JSON.stringify({
+      hasCompletedOnboarding: true,
+      mcpServers: { missing: { command: 'm' }, differs: { command: 'default' } },
+      projects: { '/p': { hasTrustDialogAccepted: true, mcpServers: { proj: { command: 'p' } } } },
+    });
+    write(src(), defText);
+    const defCred = JSON.stringify({ mcpOAuth: { 'missing|0123456789abcdef': { accessToken: 'synthetic' } } });
+    write(path.join(def, '.credentials.json'), defCred);
+    const acc = accountDir('fill');
+    const file = path.join(acc, '.claude.json');
+    write(file, JSON.stringify({ oauthAccount: { emailAddress: 'a@x' }, mcpServers: { differs: { command: 'own' }, extra: { command: 'e' } } }));
+    fs.chmodSync(file, 0o640);
+    write(path.join(acc, '.credentials.json'), '{}');
+    const r = syncClaudeAccount(src(), acc, 'fill');
+    assert.deepEqual(r, { changed: ['mcpServers'], added: ['missing'] });
+    assert.deepEqual(info(acc), {
+      oauthAccount: { emailAddress: 'a@x' },
+      mcpServers: { differs: { command: 'own' }, extra: { command: 'e' }, missing: { command: 'm' } },
+    });
+    assertMode(file, '640');
+    assert.equal(read(src()), defText, 'the default info file is never written');
+    assert.equal(read(path.join(def, '.credentials.json')), defCred);
+    assert.equal(read(path.join(acc, '.credentials.json')), '{}');
+    // Nothing left to add: no write at all
+    const texts = [read(file), read(path.join(acc, '.planswap-sync.json'))];
+    assert.deepEqual(syncClaudeAccount(src(), acc, 'fill'), { changed: [], added: [] });
+    assert.deepEqual([read(file), read(path.join(acc, '.planswap-sync.json'))], texts);
+  });
+
+  test('fill does not re-add a server removed from the account after a sync, and adds one the default gained since', () => {
+    write(src(), JSON.stringify({ mcpServers: { a: { command: 'a' } } }));
+    const acc = accountDir('removed');
+    const file = path.join(acc, '.claude.json');
+    write(file, '{}');
+    // Removed after a full sync
+    syncClaudeAccount(src(), acc);
+    write(file, JSON.stringify({ mcpServers: {} }));
+    assert.deepEqual(syncClaudeAccount(src(), acc, 'fill').added, []);
+    // Removed after a fill (fill records the base too)
+    write(src(), JSON.stringify({ mcpServers: { a: { command: 'a' }, b: { command: 'b' } } }));
+    assert.deepEqual(syncClaudeAccount(src(), acc, 'fill').added, ['b']);
+    write(file, JSON.stringify({ mcpServers: {} }));
+    assert.deepEqual(syncClaudeAccount(src(), acc, 'fill').added, []);
+    // Changed in the default after the account removed it: the account wins, still not re-added
+    write(src(), JSON.stringify({ mcpServers: { a: { command: 'a2' }, b: { command: 'b' } } }));
+    assert.deepEqual(syncClaudeAccount(src(), acc, 'fill').added, []);
+    assert.deepEqual(info(acc), { mcpServers: {} });
+    // Pull, unlike fill, changes and removes servers the account has
+    const other = accountDir('pull');
+    write(src(), JSON.stringify({ mcpServers: { x: { command: 'x' }, y: { command: 'y' } } }));
+    write(path.join(other, '.claude.json'), '{}');
+    syncClaudeAccount(src(), other);
+    write(src(), JSON.stringify({ mcpServers: { y: { command: 'y2' } } }));
+    assert.deepEqual(syncClaudeAccount(src(), other, 'fill').added, []);
+    assert.deepEqual(info(other).mcpServers, { x: { command: 'x' }, y: { command: 'y' } });
+    syncClaudeAccount(src(), other, 'pull', { groups: ['mcpServers'] });
+    assert.deepEqual(info(other).mcpServers, { y: { command: 'y2' } });
+  });
+
+  test('fill refuses an account info file changed since it was read and leaves it unchanged', () => {
+    write(src(), JSON.stringify({ mcpServers: { a: { command: 'a' } } }));
+    const acc = accountDir('fill-race');
+    const file = path.join(acc, '.claude.json');
+    write(file, JSON.stringify({ userID: 'u' }));
+    const rewritten = JSON.stringify({ userID: 'u', numStartups: 2 });
+    assert.throws(() => syncClaudeAccount(src(), acc, 'fill', { beforeCommit: () => fs.writeFileSync(file, rewritten) }), { message: t('mcp.changed', { file: realPath(file) }) });
+    assert.equal(read(file), rewritten);
+    assert.deepEqual(fs.readdirSync(acc), ['.claude.json']);
   });
 
   test('onboarding keys are added only to a signed-in account that lacks them', () => {

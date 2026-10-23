@@ -689,7 +689,7 @@ function withStorageLock(target: SyncFile, commit: () => void): void {
   }
 }
 
-export type SyncMode = 'full' | 'pull' | 'check';
+export type SyncMode = 'full' | 'pull' | 'check' | 'fill';
 
 export interface SyncOptions {
   groups?: readonly string[];  // limits what is written into the account (and listed) to these groups; [] → no-op without reading
@@ -701,6 +701,7 @@ export interface SyncResult {
   changed: string[];         // groups of the account that change (check: would change): 'mcpServers', 'projects:<path>', 'mcpOAuth:<server key>', onboarding keys
   defaultChanged?: string[]; // full: groups changed in the default account
   quiet?: string[];          // check: changed groups that only differ in PROMPT_KEYS, or only in sign-ins the account already has (token refreshes)
+  added?: string[];          // fill: names of the user-level MCP servers added to the account
 }
 
 /**
@@ -718,7 +719,15 @@ export interface SyncResult {
  *   records the new base;
  * - pull (Repair): writes into the account only what it lacks of the default (the changes a full sync would make
  *   there), limited to options.groups; the default stays as it is;
- * - check: read only; lists what pull would change, with the quiet groups.
+ * - check: read only; lists what pull would change, with the quiet groups;
+ * - fill (the background link check): add only. Adds to the account each user-level MCP server (mcpServers) that the
+ *   default account has, the account lacks and the base has no recorded hash for, so mergeItem gives it to the
+ *   account; records its hash. A server with a recorded hash that the account lacks was removed from the account
+ *   since that sync (or removed there and changed in the default, where the account wins), so it is not re-added;
+ *   the next full sync carries the removal to the default as usual. Never removes or changes a server the account
+ *   has, never touches project servers, project keys, onboarding keys or credentials (not even read), never writes
+ *   the default account; options.inUse is ignored, and so are options.groups except []. result.added names the servers
+ *   added.
  * Writes replace atomically, keep the mode, follow an info file's symlink (validated like accountInfoTarget) and refuse
  * with t('mcp.changed') a file changed since it was read; credentials commits hold Claude Code's storage lock. A
  * missing account info file is created 0600; a credentials file is never created. Order: default info, default
@@ -736,7 +745,7 @@ export function syncClaudeAccount(fromJson: string, dir: string, mode: SyncMode 
   const accountBefore = fs.existsSync(infoFile) ? fs.readFileSync(target.real, 'utf8') : undefined;
   const account: SyncFile = { file: infoFile, real: target.real, before: accountBefore, data: parseSyncFile(accountBefore, t('mcp.badTarget', { file: target.real })), mode: target.mode };
   const def = readDefaultInfo(fromJson);
-  const defCred = readCredentials(defaultDir());
+  const defCred = mode === 'fill' ? undefined : readCredentials(defaultDir());
   const accCred = defCred && readCredentials(dir);
   const startOf = (data: Record<string, unknown>): string | null => hashOf(data.firstStartTime) ?? null;
   const origin: BaseOrigin = { defaultDir: realPath(defaultDir()), starts: [startOf(def.data), startOf(account.data)] };
@@ -752,7 +761,21 @@ export function syncClaudeAccount(fromJson: string, dir: string, mode: SyncMode 
   const defaultChanged = new Set<string>();
   const loud = new Set<string>();
   const dirty = new Set<SyncFile>();
-  for (const { d, y, dItems, yItems, credentials } of sources) {
+  if (mode === 'fill') {
+    const added: string[] = [];
+    const yItems = infoItems(account.data);
+    for (const [key, dv] of infoItems(def.data)) {
+      const [top, name] = JSON.parse(key) as string[];
+      if (top !== 'mcpServers' || yItems.has(key) || mergeItem(dv, undefined, base.get(key)) === undefined) continue;
+      setItem(account.data, key, dv);
+      dirty.add(account);
+      newBase.set(key, hashOf(dv)!);
+      added.push(name);
+    }
+    result.added = added;
+    if (added.length) changed.add('mcpServers');
+  }
+  for (const { d, y, dItems, yItems, credentials } of mode === 'fill' ? [] : sources) {
     const isCredential = (key: string): boolean => MCP_AUTH_KEYS.includes((JSON.parse(key) as string[])[0]);
     const keys = new Set([...dItems.keys(), ...yItems.keys(), ...[...base.keys()].filter((key) => isCredential(key) === credentials)]);
     for (const key of keys) {
@@ -789,7 +812,7 @@ export function syncClaudeAccount(fromJson: string, dir: string, mode: SyncMode 
   const oauth = account.data.oauthAccount;
   const signedIn = (isPlainObject(oauth) && typeof oauth.emailAddress === 'string' && oauth.emailAddress !== '')
     || fs.existsSync(path.join(path.resolve(dir), '.credentials.json'));
-  if (signedIn) {
+  if (signedIn && mode !== 'fill') {
     for (const k of ONBOARDING_KEYS) {
       if (!selected(k) || !Object.hasOwn(def.data, k) || Object.hasOwn(account.data, k)) continue;
       changed.add(k);

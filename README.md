@@ -101,7 +101,7 @@ Signing in to a new account never signs out the others. The [user guide](docs/us
 | Sign-in | Its own | Its own |
 | Claude MCP servers, MCP sign-ins and project trust | Kept in sync with the default account, in both directions, when you switch | A copy of the servers, changed separately; its own sign-ins |
 
-You can change an account's mode later, and **Re-link** in Tools checks linked accounts after you change the default setup and offers **Repair** for what it finds. PlanSwap also runs this check in the background and notifies you when something can be repaired ([user guide](docs/user-guide.md#change-an-existing-account-mode)).
+You can change an account's mode later, and **Re-link** in Tools checks linked accounts after you change the default setup and offers **Repair** for what it finds. PlanSwap also runs this check in the background, adds the default account's MCP servers that a linked Claude account lacks, and notifies you when something else can be repaired ([user guide](docs/user-guide.md#change-an-existing-account-mode)).
 
 ## Known limitations
 

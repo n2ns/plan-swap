@@ -67,7 +67,7 @@ describe('Claude repair scope', LINUX_ONLY, () => {
       assert.equal(warning.mock.callCount(), 0);
       await runTool('claude', 'sync', { claudeDirs: () => dirs });
       assert.equal(warning.mock.callCount(), 1);
-      assert.match(String(warning.mock.calls[0].arguments[0]), /\.claude\.json \(projects:\/p\)/);
+      assert.ok(String(warning.mock.calls[0].arguments[0]).includes(t('linkCheck.mirror', { list: t('linkCheck.g.project', { path: '/p' }) })));
       // An MCP difference in the same project is still announced
       fs.writeFileSync(source, JSON.stringify({ projects: { '/p': { hasTrustDialogAccepted: true, enabledMcpjsonServers: ['s'] } } }));
       await checkSharedInBackground('claude', { claudeDirs: () => dirs, linkNotices: new LinkCheckNotices(new MemoryMemento()) });
@@ -138,7 +138,7 @@ describe('Claude repair scope', LINUX_ONLY, () => {
       const warning = ctx.mock.method(window, 'showWarningMessage', async (_m: string, ...items: string[]) => items.find((i) => i === t('linkCheck.repair')));
       ctx.mock.method(window, 'showInformationMessage', async () => undefined);
       await runTool('claude', 'sync', { claudeDirs: () => [dirs[0]] });
-      assert.ok(String(warning.mock.calls[0].arguments[0]).includes('.claude.json (mcpServers)'));
+      assert.ok(String(warning.mock.calls[0].arguments[0]).includes(t('linkCheck.mirror', { list: t('linkCheck.g.mcpServers') })));
       const actual = JSON.parse(fs.readFileSync(path.join(dirs[0], '.claude.json'), 'utf8'));
       assert.deepEqual(actual, { ...personal, mcpServers: { ...personal.mcpServers, shared: { command: 'shared' } } });
       assert.equal(fs.existsSync(path.join(def, 'uploads')), false);
@@ -153,9 +153,9 @@ describe('Claude repair scope', LINUX_ONLY, () => {
       setConfig('claudeCode', 'environmentVariables', [{ name: 'CLAUDE_CONFIG_DIR', value: dirs[0] }]);
       const warning = ctx.mock.method(window, 'showWarningMessage', async () => undefined);
       await runTool('claude', 'sync', { claudeDirs: () => dirs });
-      const mirror = t('linkCheck.mirror', { list: '.claude.json (mcpServers)' });
-      const items = ['a', 'b'].map((name) => t('sync.item', { name, notes: mirror }));
-      assert.equal(warning.mock.calls[0].arguments[0], t('linkCheck.claudeFound', { list: items.join(t('common.listSep')) }));
+      const mirror = t('linkCheck.mirror', { list: t('linkCheck.g.mcpServers') });
+      const items = ['a', 'b'].map((name) => t('linkCheck.line', { name, notes: mirror }));
+      assert.equal(warning.mock.calls[0].arguments[0], joinSentences(t('linkCheck.claudeFound'), ...items));
 
       warning.mock.mockImplementation(async (_m: string, ...choices: string[]) => choices.find((i) => i === t('linkCheck.repair')));
       ctx.mock.method(window, 'showInformationMessage', async () => undefined);
@@ -168,6 +168,78 @@ describe('Claude repair scope', LINUX_ONLY, () => {
     }
   });
 
+
+  test('the background check adds missing default MCP servers to the current and another account and names them', async (ctx) => {
+    const { tmp, source, dirs } = fixture();
+    try {
+      const defText = JSON.stringify({ mcpServers: { 'n2n-nexus': { command: 'nexus' }, shared: { command: 'default' } } });
+      fs.writeFileSync(source, defText);
+      const own = [{ shared: { command: 'own-a' } }, { mine: { command: 'mine' } }];
+      dirs.forEach((dir, i) => fs.writeFileSync(path.join(dir, '.claude.json'), JSON.stringify({ mcpServers: own[i] })));
+      setConfig('claudeCode', 'environmentVariables', [{ name: 'CLAUDE_CONFIG_DIR', value: dirs[0] }]);
+      const info = ctx.mock.method(window, 'showInformationMessage', async () => undefined);
+      const warning = ctx.mock.method(window, 'showWarningMessage', async () => undefined);
+      await checkSharedInBackground('claude', { claudeDirs: () => dirs, linkNotices: new LinkCheckNotices(new MemoryMemento()) });
+      const mcp = (dir: string) => JSON.parse(fs.readFileSync(path.join(dir, '.claude.json'), 'utf8')).mcpServers;
+      // Added only: the current account keeps its own differing server, the other one its extra server
+      assert.deepEqual(mcp(dirs[0]), { shared: { command: 'own-a' }, 'n2n-nexus': { command: 'nexus' } });
+      assert.deepEqual(mcp(dirs[1]), { mine: { command: 'mine' }, 'n2n-nexus': { command: 'nexus' }, shared: { command: 'default' } });
+      assert.equal(fs.readFileSync(source, 'utf8'), defText, 'the default account is never written');
+      assert.equal(info.mock.callCount(), 1);
+      const items = [t('linkCheck.mcpFilledItem', { name: 'a', servers: 'n2n-nexus' }), t('linkCheck.mcpFilledItem', { name: 'b', servers: ['n2n-nexus', 'shared'].join(t('common.nameSep')) })];
+      assert.equal(info.mock.calls[0].arguments[0], t('linkCheck.mcpFilledMany', { list: items.join(t('common.nameSep')) }));
+      // The current account's own version of a server wins without a base, so nothing is left for Repair
+      assert.equal(warning.mock.callCount(), 0);
+    } finally {
+      resetConfig();
+      tmp.restore();
+    }
+  });
+
+  test('zh-cn: one filled account gets the short notice, and a server it removed later is not added again', async (ctx) => {
+    const { tmp, source, dirs } = fixture();
+    try {
+      fs.writeFileSync(source, JSON.stringify({ mcpServers: { 'n2n-nexus': { command: 'nexus' } } }));
+      await inLocale('zh-cn', async () => {
+        const info = ctx.mock.method(window, 'showInformationMessage', async () => undefined);
+        const warning = ctx.mock.method(window, 'showWarningMessage', async () => undefined);
+        const deps = { claudeDirs: () => [dirs[0]], labelOf: () => 'naidou', linkNotices: new LinkCheckNotices(new MemoryMemento()) };
+        await checkSharedInBackground('claude', deps);
+        assert.equal(info.mock.calls[0].arguments[0], '已为 naidou 补上默认账号的 MCP 服务器：n2n-nexus。新开的 Claude 对话即可使用。');
+        assert.equal(warning.mock.callCount(), 0, 'nothing left for Repair');
+        const file = path.join(dirs[0], '.claude.json');
+        fs.writeFileSync(file, JSON.stringify({ mcpServers: {} }));
+        await checkSharedInBackground('claude', deps);
+        assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')).mcpServers, {});
+        assert.equal(info.mock.callCount(), 1);
+        assert.equal(warning.mock.callCount(), 0, 'a removal by the account is no difference to repair');
+      });
+    } finally { tmp.restore(); }
+  });
+
+  test('zh-cn and en: the repair notice names the account and the difference in plain words', async (ctx) => {
+    const { tmp, def, source, dirs } = fixture();
+    try {
+      fs.writeFileSync(source, JSON.stringify({ projects: { '/w': { enabledMcpjsonServers: ['s'] } } }));
+      fs.mkdirSync(path.join(def, 'skills', 'reverse-engineer-anything'), { recursive: true });
+      fs.mkdirSync(path.join(dirs[0], 'skills', 'reverse-engineer-anything'));
+      fs.symlinkSync(path.join(def, 'skills', 'reverse-engineer-anything'), path.join(dirs[1], 'skills', 'reverse-engineer-anything'));
+      fs.unlinkSync(path.join(dirs[1], 'rules'));
+      const labels: Record<string, string> = { [dirs[0]]: 'naidou', [dirs[1]]: 'Xiaoni' };
+      const expected = {
+        en: "Some Claude accounts differ from the default account. Repair brings them in line and never overwrites anything in the default account. naidou: differs from the default account in the settings of project /w; keeps its own skills/reverse-engineer-anything. Xiaoni: does not share rules with the default account; differs from the default account in the settings of project /w.",
+        'zh-cn': '有 Claude 账号与默认账号不一致。“修复”会让它们与默认账号保持一致，不会覆盖默认账号的任何内容。naidou：项目 /w 的设置与默认账号不同；使用自己的 skills/reverse-engineer-anything。Xiaoni：没有共享默认账号的 rules；项目 /w 的设置与默认账号不同。',
+      } as const;
+      for (const locale of ['en', 'zh-cn'] as const) {
+        await inLocale(locale, async () => {
+          const warning = ctx.mock.method(window, 'showWarningMessage', async () => undefined);
+          await runTool('claude', 'sync', { claudeDirs: () => dirs, labelOf: (_m, dir) => labels[dir] });
+          assert.equal(warning.mock.calls[0].arguments[0], expected[locale]);
+          warning.mock.restore();
+        });
+      }
+    } finally { tmp.restore(); }
+  });
 
   test('an account made current while Repair is open keeps its latest MCP configuration', async (ctx) => {
     const { tmp, source, dirs } = fixture();
@@ -310,7 +382,7 @@ describe('re-link result messages', () => {
     });
     assert.equal(warning.mock.callCount(), 0);
     const notes = [t('linkCheck.elsewhere', { list: 'rules' }), t('linkCheck.conflict', { list: 'AGENTS.md' })].join(t('common.listSep'));
-    assert.equal(info.mock.calls[0].arguments[0], t('linkCheck.okNotes', { count: 1, vendor: 'Codex', list: t('sync.item', { name: 'a', notes }) }));
+    assert.equal(info.mock.calls[0].arguments[0], joinSentences(t('linkCheck.ok', { count: 1, vendor: 'Codex' }), t('linkCheck.line', { name: 'a', notes })));
   });
 
   test('problems shown without choosing Repair change nothing', async (ctx) => {
@@ -344,10 +416,10 @@ describe('re-link result messages', () => {
     assert.equal(warning.mock.calls[0].arguments.length, 1);
     const sep = t('common.listSep');
     const lines = [
-      t('sync.item', { name: 'a', notes: [t('linkCheck.busy', { list: 'history.jsonl' }), t('linkCheck.elsewhere', { list: 'hooks' }), t('linkCheck.conflict', { list: 'rules' })].join(sep) }),
-      t('sync.item', { name: 'b', notes: t('linkCheck.error', { error: 'Fixture check failure' }) }),
+      t('linkCheck.line', { name: 'a', notes: [t('linkCheck.busy', { list: 'history.jsonl' }), t('linkCheck.elsewhere', { list: 'hooks' }), t('linkCheck.conflict', { list: 'rules' })].join(sep) }),
+      t('linkCheck.line', { name: 'b', notes: t('linkCheck.error', { error: 'Fixture check failure' }) }),
     ];
-    assert.equal(warning.mock.calls[0].arguments[0], t('linkCheck.foundNoFix', { vendor: 'Codex', list: lines.join(sep) }));
+    assert.equal(warning.mock.calls[0].arguments[0], joinSentences(t('linkCheck.foundNoFix', { vendor: 'Codex' }), ...lines));
   });
 });
 

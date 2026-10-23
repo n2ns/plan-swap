@@ -579,9 +579,10 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     },
     linkNotices: new LinkCheckNotices(state),
   };
-  // Read-only link check of the linked accounts in the focused window, at most every LINK_CHECK_MIN_MS: on activation
+  // Link check of the linked accounts in the focused window, at most every LINK_CHECK_MIN_MS: on activation
   // and on regaining focus. Problems are announced once per change (or again after a day) across windows
-  // (LinkCheckNotices); nothing is repaired without the user's Repair
+  // (LinkCheckNotices); Claude's missing default MCP servers are added first (add only, checkSharedInBackground),
+  // nothing else is repaired without the user's Repair
   let lastLinkCheck: number | undefined;
   const checkLinks = (): void => {
     if (!vscode.window.state.focused || (lastLinkCheck !== undefined && Date.now() - lastLinkCheck < LINK_CHECK_MIN_MS)) return;
