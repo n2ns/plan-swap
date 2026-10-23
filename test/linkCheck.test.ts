@@ -158,7 +158,7 @@ describe('Claude read-only link check', LINUX_ONLY, () => {
     assert.deepEqual(fullSnapshot(home), before);
     assert.deepEqual(checked, ['mcpServers', 'projects:/p']);
     assert.deepEqual(fixableOf({ linked: [], created: [], conflicts: [], refused: [] }, checked), ['mirror']);
-    assert.deepEqual(syncClaudeAccount(from, acc, 'pull', checked).changed, checked);
+    assert.deepEqual(syncClaudeAccount(from, acc, 'pull', { groups: checked }).changed, checked);
     assert.deepEqual(syncClaudeAccount(from, acc, 'check').changed, []);
   });
 

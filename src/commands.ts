@@ -158,11 +158,11 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
       void vscode.window.showErrorMessage(t('account.dirMissing', { dir: account.dir }));
       return false;
     }
-    // A shared current account syncs with the default account first, so the incoming account gets what it changed.
-    // A failure cancels the switch, so nothing is left half synced behind the user's back
+    // A shared current account syncs with the default account first (as the account in use), so the incoming account
+    // gets what it changed. A failure cancels the switch, so nothing is left half synced behind the user's back
     const outgoing = currentDir();
     try {
-      if (isSharedClaudeAccount(outgoing)) syncClaudeAccount(defaultJson(), outgoing);
+      if (isSharedClaudeAccount(outgoing)) syncClaudeAccount(defaultJson(), outgoing, 'full', { inUse: true });
     } catch (err) {
       const all = store.all();
       const i = findSameDir(all.map((a) => a.dir), outgoing);
@@ -227,8 +227,9 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
         // The folder may already exist (kept from an earlier removal, its terminal possibly still open)
         const report = ensureClaudeLinks(account.dir, '/proc', { ...linkOptions, busy: linkBusy(account) });
         // An existing folder that could not be linked stays independent: it only gains the default MCP servers. A
-        // shared one syncs both ways, so what it changed on its own (e.g. as the current external account) is kept
-        syncClaudeInto(defaultJson(), account.dir);
+        // shared one syncs both ways, so what it changed on its own (e.g. as the current external account, which is
+        // the account in use) is kept
+        syncClaudeInto(defaultJson(), account.dir, sameRealPath(account.dir, currentDir()));
         const notes = describeShareReport(report);
         if (notes) void vscode.window.showWarningMessage(t(isSharedClaudeAccount(account.dir) ? 'share.addNotes' : 'share.addNotLinked', { name, notes }));
       } else {

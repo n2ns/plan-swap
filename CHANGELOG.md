@@ -9,7 +9,7 @@
 
 ### Fixed
 
-- An MCP server or project setting added to the default Claude account while a linked account was in use (for example with `claude mcp add` in a terminal outside PlanSwap) is no longer removed when switching away from the linked account. Switching now syncs each linked account with the default account item by item in both directions: a change made on one side since the last sync is kept, a removal included, and of two changes the account's wins.
+- An MCP server or project setting added to the default Claude account while a linked account was in use (for example with `claude mcp add` in a terminal outside PlanSwap) is no longer removed when switching away from the linked account. Switching now syncs each linked account with the default account item by item in both directions: a change made on one side since the last sync is kept, a removal included, and of two changes the account's wins. The first sync of an account by this version has no record of the last one yet: nothing is removed, and a server or setting the two sides differ in takes the version of the account that was in use (the linked account when switching away from it, otherwise the default account).
 
 ## [0.4.3] - 2026-10-22
 

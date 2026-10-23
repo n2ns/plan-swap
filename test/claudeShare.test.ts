@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import fsModule from 'node:fs';
 import * as path from 'node:path';
 import { setLocale, t } from '../src/i18n';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { pidAlive } from '../src/platform';
 import {
   CLAUDE_SHARED_ENTRIES, claudeAccountBusy, copyClaudeIndependent, copyTree, ensureClaudeLinks, isSharedClaudeAccount, lstatOrUndefined,
@@ -556,8 +556,8 @@ describe('syncClaudeAccount', () => {
       projects: { '/p': { allowedTools: [], lastCost: 3 }, '/q': { allowedTools: ['Q'] } },
     }));
     fs.chmodSync(path.join(acc, '.claude.json'), 0o640);
-    // No base yet: nothing is removed, the account wins a differing server
-    const r = syncClaudeAccount(src(), acc);
+    // No base yet: nothing is removed, the account in use wins a differing server
+    const r = syncClaudeAccount(src(), acc, 'full', { inUse: true });
     assert.deepEqual(r.changed, ['mcpServers', 'projects:/p']);
     assert.deepEqual(r.defaultChanged, ['mcpServers', 'projects:/q']);
     const data = info(acc);
@@ -604,6 +604,27 @@ describe('syncClaudeAccount', () => {
     }
   });
 
+  test('without a base a value differing on both sides takes the side in use, and nothing is removed', () => {
+    // Before this version the account's copy was a mirror; the default changed a server and removed one meanwhile
+    const defaults = { api: { url: 'v2' }, keep: { command: 'k' } };
+    write(src(), JSON.stringify({ mcpServers: defaults }));
+    const idle = accountDir('idle');
+    write(path.join(idle, '.claude.json'), JSON.stringify({ mcpServers: { api: { url: 'v1' }, gone: { command: 'g' } } }));
+    assert.deepEqual(syncClaudeAccount(src(), idle, 'check'), { changed: ['mcpServers'], quiet: [] });
+    syncClaudeAccount(src(), idle);
+    const expected = { api: { url: 'v2' }, gone: { command: 'g' }, keep: { command: 'k' } };
+    assert.deepEqual(info(idle).mcpServers, expected);
+    assert.deepEqual(JSON.parse(read(src())).mcpServers, expected);
+    // The account in use (the outgoing account of a switch) holds the latest value
+    write(src(), JSON.stringify({ mcpServers: defaults }));
+    const used = accountDir('used');
+    write(path.join(used, '.claude.json'), JSON.stringify({ mcpServers: { api: { url: 'v1' } } }));
+    assert.deepEqual(syncClaudeAccount(src(), used, 'check', { inUse: true }), { changed: ['mcpServers'], quiet: [] });
+    syncClaudeAccount(src(), used, 'full', { inUse: true });
+    assert.deepEqual(info(used).mcpServers, { api: { url: 'v1' }, keep: { command: 'k' } });
+    assert.deepEqual(JSON.parse(read(src())).mcpServers, { api: { url: 'v1' }, keep: { command: 'k' } });
+  });
+
   test('a server the default gained while the account was current survives switching away (regression)', () => {
     write(src(), JSON.stringify({ projects: { '/w': { mcpServers: {} } } }));
     const acc = accountDir('current');
@@ -636,7 +657,7 @@ describe('syncClaudeAccount', () => {
     assert.deepEqual(checked, { changed: ['mcpServers', 'projects:/selected', 'projects:/unselected', 'projects:/trust', 'hasCompletedOnboarding'], quiet: ['projects:/trust'] });
     assert.equal(read(path.join(acc, '.claude.json')), accountBefore);
     assert.ok(!exists(path.join(acc, '.planswap-sync.json')));
-    assert.deepEqual(syncClaudeAccount(src(), acc, 'pull', ['mcpServers', 'projects:/selected']).changed, ['mcpServers', 'projects:/selected']);
+    assert.deepEqual(syncClaudeAccount(src(), acc, 'pull', { groups: ['mcpServers', 'projects:/selected'] }).changed, ['mcpServers', 'projects:/selected']);
     const data = info(acc);
     assert.deepEqual(data.mcpServers, { own: { command: 'own' }, added: { command: 'new' } });
     // Without a base the arrays are united
@@ -644,7 +665,7 @@ describe('syncClaudeAccount', () => {
     assert.deepEqual(data.projects['/unselected'], { allowedTools: ['account'] });
     assert.equal(data.hasCompletedOnboarding, undefined);
     assert.equal(read(src()), sourceBefore);
-    assert.deepEqual(syncClaudeAccount(src(), acc, 'check', ['mcpServers', 'projects:/selected']).changed, []);
+    assert.deepEqual(syncClaudeAccount(src(), acc, 'check', { groups: ['mcpServers', 'projects:/selected'] }).changed, []);
     // The default still lacks 'own': the next full sync still gives it, nothing is lost
     syncClaudeAccount(src(), acc);
     assert.deepEqual(JSON.parse(read(src())).mcpServers, { added: { command: 'new' }, own: { command: 'own' } });
@@ -752,6 +773,27 @@ describe('syncClaudeAccount', () => {
     assert.equal(JSON.parse(read(path.join(acc, '.planswap-sync.json'))).defaultDir, realPath(def));
   });
 
+  test('an info file that gains its firstStartTime on Claude Code\'s first start keeps its base', () => {
+    write(src(), JSON.stringify({ firstStartTime: 'd', mcpServers: { a: { command: 'a' }, b: { command: 'b' } } }));
+    const acc = accountDir('first-start');
+    fs.mkdirSync(acc);
+    // Adding the account creates its info file without firstStartTime; Claude Code adds one at its first start
+    syncClaudeAccount(src(), acc);
+    assert.equal(info(acc).firstStartTime, undefined);
+    const data = info(acc);
+    data.firstStartTime = 'y';
+    delete data.mcpServers.b;
+    write(path.join(acc, '.claude.json'), JSON.stringify(data));
+    syncClaudeAccount(src(), acc, 'full', { inUse: true });
+    assert.deepEqual(JSON.parse(read(src())).mcpServers, { a: { command: 'a' } });
+    assert.deepEqual(info(acc).mcpServers, { a: { command: 'a' } });
+    // A file recorded with a firstStartTime and now without one is another file
+    write(path.join(acc, '.claude.json'), JSON.stringify({ mcpServers: {} }));
+    syncClaudeAccount(src(), acc);
+    assert.deepEqual(info(acc).mcpServers, { a: { command: 'a' } });
+    assert.deepEqual(JSON.parse(read(src())).mcpServers, { a: { command: 'a' } });
+  });
+
   test('sign-ins are not synced while either credentials file is missing, and none is created', () => {
     write(src(), '{}');
     const defCred = path.join(def, '.credentials.json');
@@ -792,6 +834,14 @@ describe('syncClaudeAccount', () => {
     write(accCred, '{}');
     const lock = path.join(acc, '.storage-write.lock');
     fs.mkdirSync(lock);
+    // Another process (a Claude Code credentials write) releases the lock while the commit waits for it
+    spawn(process.execPath, ['-e', "setTimeout(() => require('node:fs').rmSync(process.argv[1], { recursive: true, force: true }), 200)", lock], { stdio: 'ignore' });
+    syncClaudeAccount(src(), acc);
+    assert.deepEqual(JSON.parse(read(accCred)).mcpOAuth, { 'stripe|1': { accessToken: 'd1' } });
+    assert.ok(!exists(lock));
+    fs.rmSync(path.join(acc, '.planswap-sync.json'));
+    write(accCred, '{}');
+    fs.mkdirSync(lock);
     assert.throws(() => syncClaudeAccount(src(), acc), { message: t('mcp.changed', { file: accCred }) });
     assert.equal(read(accCred), '{}');
     const old = new Date(Date.now() - 60_000);
@@ -804,7 +854,7 @@ describe('syncClaudeAccount', () => {
 
   test('an empty group selection does not read any file', (ctx) => {
     const readSpy = ctx.mock.method(fsModule, 'readFileSync', () => { throw new Error('unexpected read'); });
-    assert.deepEqual(syncClaudeAccount(src(), accountDir('empty'), 'pull', []), { changed: [] });
+    assert.deepEqual(syncClaudeAccount(src(), accountDir('empty'), 'pull', { groups: [] }), { changed: [] });
     assert.equal(readSpy.mock.callCount(), 0);
   });
 
@@ -892,9 +942,9 @@ describe('syncClaudeAccount', () => {
     write(external, '{}');
     write(src(), JSON.stringify({ mcpServers: { a: { command: 'a' }, b: { command: 'b' } } }));
     const credential = path.join(acc, '.credentials.json'); write(credential, '{}');
-    assert.throws(() => syncClaudeAccount(src(), acc, 'full', undefined, () => {
+    assert.throws(() => syncClaudeAccount(src(), acc, 'full', { beforeCommit: () => {
       if (!fs.lstatSync(external).isSymbolicLink()) { fs.unlinkSync(external); fs.symlinkSync(credential, external); }
-    }), { message: t('mcp.unsafeTarget', { file }) });
+    } }), { message: t('mcp.unsafeTarget', { file }) });
     assert.equal(read(credential), '{}');
     assert.ok(fs.lstatSync(external).isSymbolicLink());
     assert.ok(!fs.readdirSync(home).some((name) => name.includes('.planswap-') && name.endsWith('.tmp')));
@@ -906,7 +956,7 @@ describe('syncClaudeAccount', () => {
     const file = path.join(acc, '.claude.json');
     write(file, JSON.stringify({ userID: 'u' }));
     const rewritten = JSON.stringify({ userID: 'u', numStartups: 2 });
-    assert.throws(() => syncClaudeAccount(src(), acc, 'full', undefined, () => fs.writeFileSync(file, rewritten)), { message: t('mcp.changed', { file: realPath(file) }) });
+    assert.throws(() => syncClaudeAccount(src(), acc, 'full', { beforeCommit: () => fs.writeFileSync(file, rewritten) }), { message: t('mcp.changed', { file: realPath(file) }) });
     assert.equal(read(file), rewritten);
     assert.deepEqual(fs.readdirSync(acc), ['.claude.json']);
     assert.deepEqual(syncClaudeAccount(src(), acc).changed, ['mcpServers']);
@@ -915,7 +965,7 @@ describe('syncClaudeAccount', () => {
     // The default rewritten meanwhile: refused as well, the account stays as it was
     write(path.join(acc, '.claude.json'), JSON.stringify({ mcpServers: { a: { command: 'a' }, own: { command: 'o' } } }));
     const defRewritten = JSON.stringify({ mcpServers: { a: { command: 'a' } }, numStartups: 5 });
-    assert.throws(() => syncClaudeAccount(src(), acc, 'full', undefined, () => fs.writeFileSync(src(), defRewritten)), { message: t('mcp.changed', { file: realPath(src()) }) });
+    assert.throws(() => syncClaudeAccount(src(), acc, 'full', { beforeCommit: () => fs.writeFileSync(src(), defRewritten) }), { message: t('mcp.changed', { file: realPath(src()) }) });
     assert.equal(read(src()), defRewritten);
   });
 

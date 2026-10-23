@@ -234,7 +234,7 @@ describe('renameReplacing re-checks before every attempt', () => {
     const file = path.join(acc, '.claude.json');
     write(file, '{"x":1}');
     const cli = (): void => fs.writeFileSync(file, '{"x":2}');
-    assert.throws(() => syncClaudeAccount(from, acc, 'full', undefined, cli), { message: t('mcp.changed', { file: realPath(file) }) });
+    assert.throws(() => syncClaudeAccount(from, acc, 'full', { beforeCommit: cli }), { message: t('mcp.changed', { file: realPath(file) }) });
     assert.equal(read(file), '{"x":2}');
     assert.throws(() => syncMcpServers(from, acc, () => fs.writeFileSync(file, '{"x":3}')), { message: t('mcp.changed', { file: realPath(file) }) });
     assert.equal(read(file), '{"x":3}');

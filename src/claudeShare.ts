@@ -591,8 +591,9 @@ function hashOf(value: unknown): string | undefined {
 /** Three-way merge of one item: d (default account), y (account) and base (hash of the last synced value, undefined
  *  when unknown). Only one side changed since the base → that side's value (a removal included); both changed → the
  *  account's. Unknown base → nothing is removed: the side that has the item wins, two arrays are united and other
- *  differing values take the account's. */
-export function mergeItem(d: unknown, y: unknown, base: string | undefined): unknown {
+ *  differing values take the side in use since (inUse: the account; otherwise the default, whose copy an account
+ *  not in use cannot be newer than). */
+export function mergeItem(d: unknown, y: unknown, base: string | undefined, inUse = false): unknown {
   const hd = hashOf(d);
   const hy = hashOf(y);
   if (hd === hy) return d;
@@ -600,7 +601,7 @@ export function mergeItem(d: unknown, y: unknown, base: string | undefined): unk
     if (y === undefined) return d;
     if (d === undefined) return y;
     if (Array.isArray(d) && Array.isArray(y)) return [...y, ...d.filter((v) => !y.some((w) => isDeepStrictEqual(v, w)))];
-    return y;
+    return inUse ? y : d;
   }
   return hy === base ? d : y;
 }
@@ -613,9 +614,10 @@ function groupOf(key: string): string {
   return `mcpOAuth:${name}`;
 }
 
-// What a base belongs to: the default dir, and the info files by their firstStartTime, which Claude Code writes once
-// when it creates the file, so a deleted and recreated info file (whose missing items are no removals) is told apart
-interface BaseOrigin { defaultDir: string; info: string }
+// What a base belongs to: the default dir, and the info files by the hash of their firstStartTime (null when absent),
+// which Claude Code writes at a start that finds it missing (research fact 20), so a deleted and recreated info file
+// (whose missing items are no removals) is told apart; a file that had none at the last sync may have gained one since
+interface BaseOrigin { defaultDir: string; starts: [string | null, string | null] }
 
 // The last synced item hashes of an account, keeping only those that still apply to origin: none for another default
 // dir, none of the info file items after either info file was recreated; unreadable or invalid = all unknown
@@ -629,7 +631,8 @@ function readBase(dir: string, origin: BaseOrigin): { items: Map<string, string>
   const stored = isPlainObject(data) && isPlainObject(data.items) ? data.items : {};
   const items = new Map(Object.entries(stored).filter((e): e is [string, string] => typeof e[1] === 'string'));
   if (!isPlainObject(data) || data.defaultDir !== origin.defaultDir) return { items: new Map(), stale: true };
-  if (data.info !== origin.info) {
+  const starts: unknown[] = Array.isArray(data.starts) ? data.starts : [];
+  if (origin.starts.some((start, i) => starts[i] !== null && starts[i] !== start)) {
     for (const key of items.keys()) if (!MCP_AUTH_KEYS.includes((JSON.parse(key) as string[])[0])) items.delete(key);
     return { items, stale: true };
   }
@@ -688,6 +691,12 @@ function withStorageLock(target: SyncFile, commit: () => void): void {
 
 export type SyncMode = 'full' | 'pull' | 'check';
 
+export interface SyncOptions {
+  groups?: readonly string[];  // limits what is written into the account (and listed) to these groups; [] → no-op without reading
+  inUse?: boolean;             // the account, not the default, has been in use since the last sync (the current account): an item without a recorded hash that differs on both sides takes its value instead of the default's
+  beforeCommit?: () => void;   // runs between writing each temporary file and the change check (tests simulate a concurrent CLI write)
+}
+
 export interface SyncResult {
   changed: string[];         // groups of the account that change (check: would change): 'mcpServers', 'projects:<path>', 'mcpOAuth:<server key>', onboarding keys
   defaultChanged?: string[]; // full: groups changed in the default account
@@ -699,7 +708,8 @@ export interface SyncResult {
  * the default's, <dir>/.claude.json) and the MCP sign-ins (MCP_AUTH_KEYS) of both .credentials.json files. Each item
  * (a server, a project key, a sign-in) is merged three-way (mergeItem) against <dir>/SYNC_BASE, the item hashes of the
  * last sync, so a change made on either side since then survives, a removal included; both sides changed → the account
- * wins. The base applies only to the same default dir and, for the info file items, to the same info files (BaseOrigin).
+ * wins; no hash yet → nothing is removed and a value differing on both sides takes the side in use (options.inUse).
+ * The base applies only to the same default dir and, for the info file items, to the same info files (BaseOrigin).
  * A sign-in removed on one side is not removed on the other: a new Claude sign-in writes a fresh credentials file
  * without them, which is no removal. Sign-ins are synced only when both credentials files exist; the Claude sign-in and
  * every other key stay.
@@ -707,7 +717,7 @@ export interface SyncResult {
  * - full (switching to or away from the account, adding or converting it): writes the merge into both accounts and
  *   records the new base;
  * - pull (Repair): writes into the account only what it lacks of the default (the changes a full sync would make
- *   there), limited to the given groups; the default stays as it is;
+ *   there), limited to options.groups; the default stays as it is;
  * - check: read only; lists what pull would change, with the quiet groups.
  * Writes replace atomically, keep the mode, follow an info file's symlink (validated like accountInfoTarget) and refuse
  * with t('mcp.changed') a file changed since it was read; credentials commits hold Claude Code's storage lock. A
@@ -716,7 +726,7 @@ export interface SyncResult {
  * t('share.badSource') (default info not a JSON object), t('mcp.badTarget'), t('mcp.unsafeTarget') (before any
  * account info content is read, check mode included). The default dir, or groups = [], → no-op without reading.
  */
-export function syncClaudeAccount(fromJson: string, dir: string, mode: SyncMode = 'full', groups?: readonly string[], beforeCommit?: () => void): SyncResult {
+export function syncClaudeAccount(fromJson: string, dir: string, mode: SyncMode = 'full', { groups, inUse = false, beforeCommit }: SyncOptions = {}): SyncResult {
   const result: SyncResult = { changed: [] };
   if (groups?.length === 0 || isDefault(dir)) return result;
   assertNotDefaultAncestor(dir);
@@ -728,8 +738,8 @@ export function syncClaudeAccount(fromJson: string, dir: string, mode: SyncMode 
   const def = readDefaultInfo(fromJson);
   const defCred = readCredentials(defaultDir());
   const accCred = defCred && readCredentials(dir);
-  const startOf = (data: Record<string, unknown>): unknown => data.firstStartTime ?? null;
-  const origin: BaseOrigin = { defaultDir: realPath(defaultDir()), info: hashOf([startOf(def.data), startOf(account.data)])! };
+  const startOf = (data: Record<string, unknown>): string | null => hashOf(data.firstStartTime) ?? null;
+  const origin: BaseOrigin = { defaultDir: realPath(defaultDir()), starts: [startOf(def.data), startOf(account.data)] };
   const { items: base, stale } = readBase(dir, origin);
 
   // Every item key of both sides and the base, merged; credentials only when both files exist
@@ -749,7 +759,7 @@ export function syncClaudeAccount(fromJson: string, dir: string, mode: SyncMode 
       const dv = dItems.get(key);
       const yv = yItems.get(key);
       // A sign-in missing on one side is kept from the other (the file may have been rewritten by a new sign-in)
-      const merged = mergeItem(dv, yv, base.get(key)) ?? (credentials ? yv ?? dv : undefined);
+      const merged = mergeItem(dv, yv, base.get(key), inUse) ?? (credentials ? yv ?? dv : undefined);
       const group = groupOf(key);
       const intoAccount = hashOf(merged) !== hashOf(yv);
       if (intoAccount && selected(group)) {

@@ -52,12 +52,12 @@ export interface ToolDeps {
 export type TerminalCheck = (dir: string) => boolean;
 
 /**
- * Syncs a shared account with the default account in both directions (syncClaudeAccount, full). An account that is
- * not shared (e.g. an existing folder that could not be linked) only gets the default MCP servers added, so its own
- * servers are never replaced and the default account is not changed.
+ * Syncs a shared account with the default account in both directions (syncClaudeAccount, full; inUse: the account is
+ * the one in use, see SyncOptions). An account that is not shared (e.g. an existing folder that could not be linked)
+ * only gets the default MCP servers added, so its own servers are never replaced and the default account is not changed.
  */
-export function syncClaudeInto(fromJson: string, dir: string): void {
-  if (isSharedClaudeAccount(dir)) syncClaudeAccount(fromJson, dir);
+export function syncClaudeInto(fromJson: string, dir: string, inUse = false): void {
+  if (isSharedClaudeAccount(dir)) syncClaudeAccount(fromJson, dir, 'full', { inUse });
   else syncMcpServers(fromJson, dir);
 }
 
@@ -137,7 +137,7 @@ const claudeShareOps: ShareOps = {
   refresh(dir, options) {
     const report = ensureClaudeLinks(dir, '/proc', options);
     const def = defaultDir();
-    syncClaudeInto(claudeJsonPath(def, isExplicitConfigDir(def)), dir);
+    syncClaudeInto(claudeJsonPath(def, isExplicitConfigDir(def)), dir, sameRealPath(dir, currentDir()));
     return report;
   },
   check(dir, options) {
@@ -145,7 +145,7 @@ const claudeShareOps: ShareOps = {
     const def = defaultDir();
     // Only shared accounts are checked, which syncClaudeInto syncs with syncClaudeAccount. The current account is
     // checked too: what the default account gained meanwhile is missing in the account in use
-    const { changed, quiet } = syncClaudeAccount(claudeJsonPath(def, isExplicitConfigDir(def)), dir, 'check');
+    const { changed, quiet } = syncClaudeAccount(claudeJsonPath(def, isExplicitConfigDir(def)), dir, 'check', { inUse: sameRealPath(dir, currentDir()) });
     return { report, mirror: changed, mirrorQuiet: quiet };
   },
   defaultDir,
@@ -243,7 +243,7 @@ async function repairClaudeChecks(deps: ToolDeps, offered: AccountCheck[]): Prom
       const report = ensureClaudeLinks(check.dir, '/proc', { ...options, busy: accounts.busyOf(check.dir), entries: scope.entries });
       if (scope.mirror.length) {
         const def = defaultDir();
-        syncClaudeAccount(claudeJsonPath(def, isExplicitConfigDir(def)), check.dir, 'pull', scope.mirror);
+        syncClaudeAccount(claudeJsonPath(def, isExplicitConfigDir(def)), check.dir, 'pull', { groups: scope.mirror, inUse: sameRealPath(check.dir, currentDir()) });
       }
       const notes = describeShareReport(report);
       if (notes) issues.push(t('sync.item', { name: accounts.nameOf(check.dir), notes }));

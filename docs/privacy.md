@@ -26,7 +26,7 @@ The CLI then contacts Anthropic's or OpenAI's service as it always does. Sign-in
 - **Claude usage**: PlanSwap keeps no separate usage store; it reads Claude Code's official cache, including eligible historical values after a failed query. Confirmed subscription-access rejections hide those values. Availability and probe cooldowns stay in memory for the current window session.
 - **Codex selection**: the selected Codex account is saved in `~/.config/planswap/codex-home`, and per editor in `codex-home.vscode` / `codex-home.vscodium` for VS Code and VSCodium WSL windows, while Codex switching is enabled.
 - **Sidebar tab**: the selected tab is saved in the editor's extension storage.
-- **Linked Claude sync state**: each linked Claude account keeps `.planswap-sync.json` in its directory: the default account's directory path and a SHA-256 fingerprint of each synced MCP server, project setting and MCP sign-in as of the last sync (and of when each `.claude.json` was created), so PlanSwap can tell which side changed one. It holds no values and no tokens.
+- **Linked Claude sync state**: each linked Claude account keeps `.planswap-sync.json` in its directory: the default account's directory path and a SHA-256 fingerprint of each synced MCP server, project setting and MCP sign-in as of the last sync (and of when each `.claude.json` was first started), so PlanSwap can tell which side changed one. Each fingerprint is listed under the item's name: the MCP server name, the project folder path and the setting name, or the MCP server key of the sign-in. It holds no values and no tokens.
 
 ## What PlanSwap changes
 
