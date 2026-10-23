@@ -261,7 +261,6 @@ PlanSwap 启动或刷新时，会把在你的主目录中找到的、名称有�
 | `planswap.usageAutoRefreshCurrentOnly` | `false` | 自动查询只查当前 Claude 和当前生效的 Codex 账号。关闭时也查询其他已登录账号。手动刷新不受影响。 |
 | `planswap.notifications.enabled` | `true` | 当前账号的 5 小时或 7 天额度达到通知门槛时提醒。每项额度重置前只提醒一次；用完后不提醒。 |
 | `planswap.notifications.threshold` | `20` | 剩余百分比小于或等于此值时提醒。需开启用量通知。范围：1–99。 |
-| `planswap.sidebar.shortFormat` | `false` | 在侧边栏使用简短额度标签和重置倒计时，如 5d 12h。悬停提示和无障碍文本保留当前语言的完整说明。 |
 | `planswap.sidebar.showEmail` | `true` | 在侧边栏和状态栏悬浮提示中显示邮箱。隐藏时，悬浮提示改为显示账号的别名或名称；名称和别名本身不变。 |
 | `planswap.sidebar.showFiveHourLimit` | `true` | 在侧边栏显示各账号的 5 小时额度。 |
 | `planswap.sidebar.showWeeklyLimit` | `true` | 在侧边栏显示各账号的 7 天额度。 |

@@ -8,6 +8,10 @@
 - Linked Claude accounts now also share their sign-ins to MCP servers (for example Stripe or Notion) with the default account, so an MCP server authorized in one linked account works in the others without authorizing again. Only those entries of `.credentials.json` are synced; each account keeps its own Claude sign-in.
 - **Re-link** and the background check now also report what the Claude account in use lacks of the default account, and **Repair** adds it.
 
+### Removed
+
+- The setting `planswap.sidebar.shortFormat`: the window labels are now the bare durations in every language, so the short format no longer had a purpose of its own. Reset countdowns keep their localized form (English `2d 5h`); a value left in your settings is ignored.
+
 ### Fixed
 
 - An MCP server or project setting added to the default Claude account while a linked account was in use (for example with `claude mcp add` in a terminal outside PlanSwap) is no longer removed when switching away from the linked account. Switching now syncs each linked account with the default account item by item in both directions: a change made on one side since the last sync is kept, a removal included, and of two changes the account's wins. The first sync of an account by this version has no record of the last one yet: nothing is removed, and a server or setting the two sides differ in takes the version of the account that was in use (the linked account when switching away from it, otherwise the default account).

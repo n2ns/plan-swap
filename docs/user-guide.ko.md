@@ -261,7 +261,6 @@ PlanSwap이 홈 디렉터리에서 찾은 올바른 이름의 계정 디렉터�
 | `planswap.usageAutoRefreshCurrentOnly` | `false` | 자동 확인 시 현재 Claude 계정과 현재 적용된 Codex 계정만 조회합니다. 끄면 로그인된 다른 계정도 확인합니다. 수동 새로 고침에는 영향을 주지 않습니다. |
 | `planswap.notifications.enabled` | `true` | 현재 계정의 5시간 한도 또는 7일 한도가 알림 임계값에 도달하면 알립니다. 초기화될 때까지 한도마다 한 번만 알리며, 모두 소진된 한도는 알리지 않습니다. |
 | `planswap.notifications.threshold` | `20` | 남은 비율이 이 값 이하가 되면 알립니다. 사용량 알림을 켜야 합니다. 범위: 1–99. |
-| `planswap.sidebar.shortFormat` | `false` | 사이드바의 한도 레이블과 초기화 시간을 5d 12h처럼 짧게 표시합니다. 도구 설명과 접근성 텍스트에는 현재 언어로 된 전체 설명이 그대로 표시됩니다. |
 | `planswap.sidebar.showEmail` | `true` | 사이드바와 상태 표시줄 도구 설명에 이메일을 표시합니다. 숨기면 도구 설명에 계정 레이블이 표시되며, 이름과 별칭은 바뀌지 않습니다. |
 | `planswap.sidebar.showFiveHourLimit` | `true` | 사이드바에 각 계정의 5시간 한도를 표시합니다. |
 | `planswap.sidebar.showWeeklyLimit` | `true` | 사이드바에 각 계정의 7일 한도를 표시합니다. |

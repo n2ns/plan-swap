@@ -52,7 +52,6 @@
   "config.notificationsEnabled.description": "현재 계정의 5시간 한도 또는 7일 한도가 알림 임계값에 도달하면 알립니다. 초기화될 때까지 한도마다 한 번만 알리며, 모두 소진된 한도는 알리지 않습니다.",
   "config.notificationsThreshold.description": "남은 비율이 이 값 이하가 되면 알립니다. 사용량 알림을 켜야 합니다.",
   "config.sidebarModelLimits.description": "Claude의 일반 한도 아래에 모델별 한도를 표시합니다.",
-  "config.sidebarShortFormat.description": "사이드바의 한도 레이블과 초기화 시간을 5d 12h처럼 짧게 표시합니다. 도구 설명과 접근성 텍스트에는 현재 언어로 된 전체 설명이 그대로 표시됩니다.",
   "config.sidebarEmail.description": "사이드바와 상태 표시줄 도구 설명에 이메일을 표시합니다. 숨기면 도구 설명에 계정 레이블이 표시되며, 이름과 별칭은 바뀌지 않습니다.",
   "config.sidebarFiveHour.description": "사이드바에 각 계정의 5시간 한도를 표시합니다.",
   "config.sidebarWeekly.description": "사이드바에 각 계정의 7일 한도를 표시합니다.",
