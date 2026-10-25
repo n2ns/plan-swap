@@ -19,6 +19,7 @@ Which document owns which kind of information, and the rules for keeping them. R
 | [Claude design](design.md) | Claude switching and shared UI architecture, data model (storage keys included), message protocol, algorithms, rationale, limitations, and the conclusions drawn from upstream facts (not the dated evidence itself, build steps, module inventories or acceptance scripts). |
 | [Codex design](codex-design.md) | Codex switching, shell/env propagation, editor restart, sharing design, Codex storage keys, limitations, and the conclusions drawn from upstream facts (not the dated evidence itself, shared contracts or developer setup). |
 | [Development](development.md) | Repository layout, setup, dependencies, build/test/package, release checks, localization terminology, editor troubleshooting (not feature specs or acceptance scripts). |
+| [Third-party notices](../THIRD_PARTY_NOTICES.md) | Attribution and license location for redistributed source/assets (not feature behavior or provider compatibility). |
 | [Manual verification](manual-verification.md) | Preview requirements, WSL acceptance setup, user-operated account checks, expected observations, cleanup (not results of checks; pending verification goes in TODO). |
 | [TODO](../TODO.md) | Open work, missing evidence, deferred decisions, pending user actions (not verified behavior, acceptance results or release history). |
 

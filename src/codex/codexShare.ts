@@ -4,6 +4,8 @@
 // types and the link / merge helpers of claudeShare (same semantics). The public entry points that write
 // (ensureCodexLinks, migrateCodexToShared, copyCodexIndependent, makeCodexIndependent) throw
 // t('account.containsDefaultDir') before any write when the account dir contains ~/.codex after resolving links.
+// Provider cards keep config.toml, models.json and their marker local throughout every operation; invalid markers
+// and linked provider-owned files stop writes. Unmarked DeepSeek config is preserved without adopting it as a card.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { t } from '../i18n';
@@ -15,6 +17,7 @@ import {
   unlinkChildLinks, unlinkIfLinksTo,
 } from '../claudeShare';
 import { blockedConfigReason, CODEX_IDENTITY_CONFIG_KEYS, codexDaemonAlive, codexDefaultDir, copyCodexSeed } from './codexPaths';
+import { assertProviderFilesLocal, preserveProviderConfig } from './codexProvider';
 
 export type { MigrateReport, ShareReport };
 
@@ -163,11 +166,13 @@ export function isSharedCodexAccount(dir: string): boolean {
  *  `refused` and `unlinked`, or `busy` when a side file is in use). options.check: read only, as in ensureClaudeLinks
  *  (a Windows database link is expected to be removable). Absent optional themes are omitted from checks, but
  *  initialized on refresh; existing themes must resolve to an accessible directory. dir === default → empty report.
- *  procRoot is for tests. */
+ *  Provider-local config is omitted rather than linked or created in the default home. procRoot is for tests. */
 export function ensureCodexLinks(dir: string, options: LinkOptions = {}, procRoot = '/proc'): ShareReport {
   const report = emptyReport();
   if (isDefault(dir)) return report;
   assertNotContainingDefault(dir);
+  assertProviderFilesLocal(dir);
+  const keepConfig = preserveProviderConfig(dir);
   const check = !!options.check;
   const def = codexDefaultDir();
   const acc = path.resolve(dir);
@@ -186,6 +191,8 @@ export function ensureCodexLinks(dir: string, options: LinkOptions = {}, procRoo
   const unlinked: string[] = [];
 
   for (const { name, kind } of CODEX_SHARED_ENTRIES) {
+    // Provider configuration and keys never participate in link repair or default-file creation.
+    if (name === 'config.toml' && keepConfig) continue;
     const target = path.join(def, name);
     const link = path.join(acc, name);
     if (name === 'themes') {
@@ -372,7 +379,7 @@ function backupSqlite(src: string, rel: string, ctx: MergeCtx): void {
  *  - history.jsonl / session_index.jsonl: missing lines merged into the default file;
  *  - config.toml / AGENTS.md / hooks.json / .tmp/rollout-maintenance.lock: moved into ~/.codex when it lacks the file
  *    (a config.toml with identity keys/tables stays, unlinked), dropped when identical, else renamed to
- *    '<name>.independent-backup'; config.toml also stays when the default config is refused;
+ *    '<name>.independent-backup'; config.toml also stays when the default config is refused or belongs to a provider;
  *  - sqlite dbs: renamed with -wal / -shm to '<db>.independent-backup' (-2, -3… when taken); kept on win32;
  *  - skills / plugins/cache children merged (excludes kept); nested entries only inside a real account folder;
  *  - a file the default entry resolves to stays (a conflict of ensureCodexLinks);
@@ -382,6 +389,8 @@ export function migrateCodexToShared(dir: string, accountName: string, procRoot 
   const report: MigrateReport = { ...emptyReport(), moved: 0, duplicates: 0, keptBoth: [], backups: [] };
   if (isDefault(dir)) return report;
   assertNotContainingDefault(dir);
+  assertProviderFilesLocal(dir);
+  const keepConfig = preserveProviderConfig(dir);
   if (codexAccountBusy(dir, procRoot) || options.busy?.()) throw new Error(t('share.busyCodex', { name: accountName }));
   const def = codexDefaultDir();
   const acc = path.resolve(dir);
@@ -391,6 +400,7 @@ export function migrateCodexToShared(dir: string, accountName: string, procRoot 
   const fileLinks = fileLinksAvailable(acc);
 
   for (const { name, kind } of CODEX_SHARED_ENTRIES) {
+    if (name === 'config.toml' && keepConfig) continue;
     const parent = path.dirname(name);
     // Nested entries only inside a real account folder (a linked '.tmp' is never followed)
     if (parent !== '.' && !isRealFolder(acc, parent)) continue;
@@ -475,7 +485,7 @@ export function migrateCodexToShared(dir: string, accountName: string, procRoot 
   return report;
 }
 
-/** Independent creation: copyCodexSeed (config.toml without identity keys), then copies AGENTS.md, hooks.json
+/** Independent creation: copyCodexSeed (config.toml without identity keys, omitted for provider cards), then copies AGENTS.md, hooks.json
  *  (0600), rules/ hooks/ agents/ themes/ and the skills/ children except .system from the default dir. A linked
  *  folder or skills child is copied from its real location; a dangling child link is skipped. Never overwrites; no
  *  symlinks followed inside copied folders; `skipped` comes from copyCodexSeed. The default dir → nothing copied. */
@@ -484,6 +494,7 @@ export function copyCodexIndependent(dir: string): { copied: string[]; skipped: 
   const skipped: Array<{ file: string; reason: string }> = [];
   if (isDefault(dir)) return { copied, skipped };
   assertNotContainingDefault(dir);
+  assertProviderFilesLocal(dir);
   const def = codexDefaultDir();
   const acc = path.resolve(dir);
   fs.mkdirSync(acc, { recursive: true, mode: 0o700 });
@@ -540,6 +551,8 @@ const INDEPENDENT_CONFIG_ENTRIES = new Set(['config.toml', ...INDEPENDENT_COPY_F
 export function makeCodexIndependent(dir: string, accountName: string, procRoot = '/proc'): { removed: string[]; copied: string[]; skipped: Array<{ file: string; reason: string }> } {
   if (isDefault(dir)) throw new Error(t('unshare.default', { dir }));
   assertNotContainingDefault(dir);
+  assertProviderFilesLocal(dir);
+  const keepConfig = preserveProviderConfig(dir);
   if (!isSharedCodexAccount(dir)) throw new Error(t('unshare.notShared', { dir }));
   if (codexAccountBusy(dir, procRoot)) throw new Error(t('share.busyCodex', { name: accountName }));
   const def = codexDefaultDir();
@@ -557,6 +570,7 @@ export function makeCodexIndependent(dir: string, accountName: string, procRoot 
   }
   const unlinkEntries = (config: boolean): void => {
     for (const { name } of CODEX_SHARED_ENTRIES) {
+      if (name === 'config.toml' && keepConfig) continue;
       if (INDEPENDENT_CONFIG_ENTRIES.has(name) !== config) continue;
       const parent = path.dirname(name);
       // Nested entries only inside a real account folder (a linked '.tmp' is never followed)

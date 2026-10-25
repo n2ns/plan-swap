@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { startPreview } from './preview/server.mjs';
+import { run as deepseekCards } from '../test/preview/checks/deepseek.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const output = path.join(root, '.test-out', 'ui');
@@ -1120,6 +1121,24 @@ try {
   await resetDateStates();
   await interactions();
   await updatedAgoTicks();
+  for (const locale of locales) for (const width of widths) {
+    await deepseekCards({
+      page, locale, width,
+      step: async (label, ok, detail) => {
+        assert.ok(ok, `${label} at ${locale}-${width}: ${JSON.stringify(detail)}`);
+        results.interactions.push(`${locale}-${width}: ${label}`);
+      },
+      shot: (file) => shot(`deepseek-${file}`, 'codex'),
+      apply: async (mutate, active) => {
+        await page.evaluate(({ locale, width, active, source }) => {
+          window.preview.apply({ locale, width, active });
+          const state = structuredClone(window.preview.state());
+          new Function(`return (${source})`)()(state);
+          window.preview.post({ type: 'state', state });
+        }, { locale, width, active, source: mutate.toString() });
+      },
+    });
+  }
   assert.deepEqual(results.consoleErrors, [], 'preview console must have no errors or warnings');
   console.log(`UI preview passed: ${results.cases.length} layout cases, ${codexShots} Codex screenshots, ${results.interactions.length} interactions`);
 } catch (error) {

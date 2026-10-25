@@ -4,6 +4,8 @@ Open issues left over from the shared / independent accounts work (2026-09-26). 
 
 ## Known gaps
 
+- **Codex DeepSeek cards (2026-10-25).** Implementation acceptance remains pending: unit checks, localized Webview checks, and user-operated real-client verification in VS Code and VSCodium WSL windows, plus native Windows separately. The user has prohibited test execution and IDE operations during development. Verify native provider/model selection, streaming and tool calls, linked/independent conversion, effects on other windows, and return to the original subscription account ([procedure](docs/manual-verification.md#codex-deepseek-api-cards)). Configuration status is not evidence of provider connectivity; the actual CLI and IDE-bundled runtime versions need acceptance.
+
 - **Claude URI switching.** Real-account acceptance in VS Code Remote-WSL and VSCodium n2ns.wsl-remote remains pending: named account and default, WSL Machine settings, fresh official Claude process environment, and optional reload ([procedure](docs/manual-verification.md#external-claude-uri-acceptance)). Do not run while the editors are in use by other work.
 
 - **Per-editor Codex selection (2026-10-18).** VS Code and VSCodium in one distribution keep separate selections through their `server-env-setup` hooks ([Codex design 4a](docs/codex-design.md#4a-per-editor-selection-and-the-server-env-setup-hook)); Antigravity still uses the shared selection. Pending: whether Antigravity sources such a file ([fact 31](docs/research/codex.md#facts)); if it does, `HOOK_KINDS` can gain `antigravity` with its data directory.

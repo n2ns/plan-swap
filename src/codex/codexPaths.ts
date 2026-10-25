@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { realPathInside, samePath, sameRealPath } from '../paths';
 import { isWindows, pidAlive, stripBom, unlinkLinks, isPlainObject } from '../platform';
 import { t } from '../i18n';
+import { assertProviderFilesLocal, preserveProviderConfig } from './codexProvider';
 // Codex account directories, read-only account info from auth.json, the config.toml seed copy and deletion safety.
 // No vscode import. Credential rules (auth.json read-only, identity never displayed, logged, persisted or sent to the
 // Webview): AGENTS.md "Account and data safety". samePath / sameRealPath come from ../paths.
@@ -283,9 +284,14 @@ export function blockedConfigReason(text: string, roots: readonly string[] = COD
  * Seed copy for a new independent account: only config.toml (the rest is copied by codexShare.copyCodexIndependent;
  * auth.json is never copied). Skipped, with a localized reason, when the source is missing or unreadable, the target
  * already exists, or blockedConfigReason finds a blocked key or table. Written with mode 0600 and flag 'wx'.
+ * Provider targets keep their own config: no copy or repair from the default home, even when config.toml is missing.
  */
 export function copyCodexSeed(fromDir: string, toDir: string): CopyResult {
   const result: CopyResult = { copied: [], skipped: [] };
+  if (preserveProviderConfig(toDir)) {
+    assertProviderFilesLocal(toDir);
+    return result;
+  }
   for (const file of SEED_FILES) {
     const src = path.join(fromDir, file);
     const dst = path.join(toDir, file);

@@ -436,6 +436,7 @@ html:lang(ko) { word-break: keep-all; }
 .row-tags { flex: 0 1 auto; margin-left: auto; max-width: 100%; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 4px; min-width: 0; }
 .row-tags:empty { display: none; }
 .row-hint { grid-area: hint; color: var(--secondary); font-size: max(11px, 0.8em); margin-top: 4px; min-width: 0; overflow-wrap: anywhere; }
+.row-hint.provider-error { color: var(--error); }
 .row-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px; flex: none; max-width: 100%; margin-left: auto; }
 /* Log in stays fully visible; icon buttons are dimmed until the row is hovered or focused */
 .row-actions .icon-btn { opacity: 0.75; transition: opacity var(--ease); }

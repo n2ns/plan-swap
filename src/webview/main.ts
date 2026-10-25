@@ -184,8 +184,15 @@ function planClass(plan: string | undefined, mode: PanelMode): string {
   return 'none';
 }
 
-// Without an email, show "Logged in" based on loggedIn; nothing when the email line is turned off in the settings
+// API cards show configuration status independently of email visibility. Subscription rows without an email show
+// "Logged in" based on loggedIn; their identity line is hidden when email display is turned off.
 function loginStatus(a: AccountView, hideEmail?: boolean): HTMLElement | null {
+  if (a.provider === 'deepseek') {
+    return h('div', { class: 'row-sub provider-details' },
+      h('div', {}, a.providerModel ? t('provider.model', { model: a.providerModel }) : t('provider.modelMissing')),
+      h('div', { title: a.providerConfigured ? t('provider.configuredHint') : undefined }, t(a.providerConfigured ? 'provider.configured' : 'provider.incomplete')),
+    );
+  }
   if (hideEmail) return null;
   if (a.email) return h('div', { class: 'row-sub row-identity' }, h('span', { class: 'row-email' }, a.email));
   if (a.loggedIn) return h('div', { class: 'row-sub ok' }, t('account.loggedIn'));
@@ -341,6 +348,9 @@ class Page {
   private readonly addMode: HTMLElement;
   private readonly addLinked: HTMLElement & { checked: boolean };
   private readonly addIndependent: HTMLElement & { checked: boolean };
+  private readonly addProvider?: HTMLElement;
+  private readonly addCodex?: HTMLElement & { checked: boolean };
+  private readonly addDeepseek?: HTMLElement & { checked: boolean };
   private readonly addHelp = h('div', { class: 'help' });
   private tools: HTMLElement;
   private syncButton!: HTMLElement;
@@ -380,9 +390,22 @@ class Page {
     this.addLinked.checked = true;
     this.addIndependent = radio('independent');
     this.addMode = h('vscode-radio-group', { class: 'add-mode', variant: 'vertical' }, this.addLinked, this.addIndependent);
+    if (mode === 'codex') {
+      const providerRadio = (value: string): HTMLElement & { checked: boolean } =>
+        h('vscode-radio', { class: 'add-mode-option', name: 'add-provider-codex', value }) as HTMLElement & { checked: boolean };
+      this.addCodex = providerRadio('codex');
+      this.addCodex.checked = true;
+      this.addDeepseek = providerRadio('deepseek');
+      this.addProvider = h('vscode-radio-group', { class: 'add-mode', variant: 'vertical' }, this.addCodex, this.addDeepseek);
+      this.addProvider.addEventListener('change', () => {
+        this.addError = undefined;
+        this.updateAddHelp();
+      });
+    }
     this.addSection = h(
       'div',
       { class: 'add', id: `add-${mode}`, hidden: true },
+      this.addProvider,
       h('div', { class: 'input-group' }, this.addField, this.addButton),
       this.addMode,
       this.addHelp,
@@ -454,13 +477,14 @@ class Page {
       button.setAttribute('title', t(key));
     }
     this.addMode.setAttribute('aria-label', t('add.mode.ariaLabel'));
-    this.addLinked.textContent = t('add.mode.linked');
-    this.addIndependent.textContent = t('add.mode.independent');
+    this.addProvider?.setAttribute('aria-label', t('provider.type'));
+    if (this.addCodex) this.addCodex.textContent = t('provider.codex');
+    if (this.addDeepseek) this.addDeepseek.textContent = t('provider.deepseek');
     // A host add error is in the old locale; drop it so the help line shows the local validation in the new one
     if (this.addError) {
       this.addError = undefined;
-      this.updateAddHelp();
     }
+    this.updateAddHelp();
     const tools = this.renderTools();
     this.tools.replaceWith(tools);
     this.tools = tools;
@@ -483,6 +507,10 @@ class Page {
   }
 
   private send(msg: PageMessage): void {
+    if (msg.type === 'editProvider') {
+      if (this.mode === 'codex') send({ ...msg, mode: 'codex' });
+      return;
+    }
     send({ ...msg, mode: this.mode });
   }
 
@@ -654,16 +682,20 @@ class Page {
   }
 
   private updateAddHelp(): void {
+    const deepseek = this.mode === 'codex' && this.addDeepseek?.checked === true;
+    this.addLinked.textContent = t(deepseek ? 'provider.addLinked' : 'add.mode.linked');
+    this.addIndependent.textContent = t(deepseek ? 'provider.addIndependent' : 'add.mode.independent');
     const name = this.addField.value.trim();
     const error = this.addError ?? this.validateName(name);
     this.addField.invalid = !!error;
     this.addButton.disabled = this.adding || !name || !!error;
     this.addHelp.className = error ? 'help error' : 'help';
-    const createKey = !this.addLinked.checked ? 'add.help.independent'
+    const createKey = deepseek ? 'provider.addHelp'
+      : !this.addLinked.checked ? 'add.help.independent'
       : this.mode === 'codex' && codexRestart().userEnv ? 'codex.addHelpSharedWin'
         : (`${this.mode}.addHelpShared` as const);
-    this.addHelp.textContent =
-      error ?? (name ? t(createKey, { dir: this.dirPrefix() + name }) : t('add.helpIdle', { prefix: this.dirPrefix() }));
+    const help = name ? t(createKey, { dir: this.dirPrefix() + name }) : t('add.helpIdle', { prefix: this.dirPrefix() });
+    this.addHelp.textContent = error ?? (deepseek ? joinSentences(help, t('provider.addNext')) : help);
   }
 
   private submitAdd(): void {
@@ -671,7 +703,7 @@ class Page {
     if (this.adding || this.addError || !name || this.validateName(name)) return;
     this.adding = true;
     this.updateAddHelp();
-    this.send({ type: 'add', name, shared: this.addLinked.checked });
+    this.send({ type: 'add', name, shared: this.addLinked.checked, ...(this.mode === 'codex' && this.addDeepseek?.checked ? { provider: 'deepseek' as const } : {}) });
   }
 
   // ---------- Rendering ----------
@@ -753,7 +785,7 @@ class Page {
   // data-dir: focus restore must not take it for the recommended account's row
   private renderRecommendation(): HTMLElement | null {
     if (this.mode === 'claude' ? this.tab.switchedTo : this.tab.pendingDir) return null;
-    const a = this.tab.recommended !== undefined && !this.tab.hideRecommendation ? this.tab.accounts.find((x) => x.dir === this.tab.recommended) : undefined;
+    const a = this.tab.recommended !== undefined && !this.tab.hideRecommendation ? this.tab.accounts.find((x) => x.dir === this.tab.recommended && !x.provider) : undefined;
     if (!a) return null;
     const display = state.usageDisplay ?? 'remaining';
     const windows = (a.usage?.windows ?? []).filter((w) => !w.scope).map((w) => {
@@ -818,6 +850,7 @@ class Page {
 
     const unavailable = this.mode === 'claude' && a.subscriptionUnavailable === true;
     const checking = this.mode === 'claude' && a.subscriptionChecking === true;
+    const provider = this.mode === 'codex' && a.provider === 'deepseek';
     const editing = this.renamingDir === a.dir && !!this.renameField;
     const selected = this.mode === 'codex' && a.isSelected === true;
     // The host refuses a Codex switch to the external directory (it never becomes the selection), so it offers none
@@ -845,10 +878,10 @@ class Page {
           ),
         );
       }
-      // Not logged in: a "Log in" text button; logged in: a terminal icon to run the CLI with this account (neither while
-      // the host refuses Codex terminals, runsInWsl)
+      // Subscription accounts offer sign-in when logged out; API cards always use a terminal icon and let the host
+      // validate their configuration. Neither appears while the host refuses Codex terminals (runsInWsl).
       const terminals = !this.tab.runsInWsl;
-      if (!a.loggedIn && terminals) {
+      if (!provider && !a.loggedIn && terminals) {
         textButtons.append(
           onClick(
             h('vscode-button', { class: 'row-btn', title: t(`${this.mode}.loginTitle`), 'data-action': 'terminal' }, t('row.login')),
@@ -858,17 +891,20 @@ class Page {
       }
       // Independent account: offer converting it to a shared one (the host confirms)
       if (convertible && a.shared === false) {
-        iconButtons.append(withAction(toolbarButton('link', t('row.share'), () => this.send({ type: 'share', dir: a.dir })), 'share'));
+        iconButtons.append(withAction(toolbarButton('link', t(provider ? 'provider.share' : 'row.share'), () => this.send({ type: 'share', dir: a.dir })), 'share'));
       }
       // Shared account: offer converting it back to an independent one (the host confirms)
       if (convertible && a.shared === true) {
-        iconButtons.append(withAction(toolbarButton('debug-disconnect', t('row.unshare'), () => this.send({ type: 'unshare', dir: a.dir })), 'unshare'));
+        iconButtons.append(withAction(toolbarButton('debug-disconnect', t(provider ? 'provider.unshare' : 'row.unshare'), () => this.send({ type: 'unshare', dir: a.dir })), 'unshare'));
       }
-      if (a.loggedIn && terminals) {
+      if (provider && a.kind === 'named') {
+        iconButtons.append(withAction(toolbarButton('settings-gear', t('provider.edit'), () => this.send({ type: 'editProvider', dir: a.dir })), 'editProvider'));
+      }
+      if ((a.loggedIn || provider) && terminals) {
         iconButtons.append(withAction(toolbarButton('terminal', t(`${this.mode}.terminalTitle`), () => this.send({ type: 'terminal', dir: a.dir })), 'terminal'));
       }
       // Registered accounts with usage limits can be left out of recommendations (the host keeps the mark)
-      if (this.tab.accounts.length > 1 && a.kind !== 'external' && a.usageEligible && !unavailable && !this.tab.hideRecommendation) {
+      if (!provider && this.tab.accounts.length > 1 && a.kind !== 'external' && a.usageEligible && !unavailable && !this.tab.hideRecommendation) {
         const excluded = a.recommendExcluded === true;
         // A toggle button (role switch); the host's answer re-renders it, so the component's own flip is overridden
         const toggle = toolbarButton(excluded ? 'lightbulb-empty' : 'lightbulb', t(excluded ? 'row.recommendInclude' : 'row.recommendExclude'), () => this.send({ type: 'recommendExclude', dir: a.dir, excluded: !excluded }));
@@ -893,7 +929,7 @@ class Page {
 
     // Shared account: a link badge right after the name
     const sharedIcon =
-      a.kind === 'named' && a.shared === true && !editing && h('span', { class: 'shared-icon', title: t('account.sharedBadge'), role: 'img', 'aria-label': t('account.sharedBadge') }, h('vscode-icon', { name: 'link', size: '10' }));
+      a.kind === 'named' && a.shared === true && !editing && h('span', { class: 'shared-icon', title: t(provider ? 'provider.sharedBadge' : 'account.sharedBadge'), role: 'img', 'aria-label': t(provider ? 'provider.sharedBadge' : 'account.sharedBadge') }, h('vscode-icon', { name: 'link', size: '10' }));
     // Named account: a small pencil after the name (and the shared badge), shown on row hover / focus; it follows the
     // last line of a wrapped name because it is inline in the name's text flow
     const renameButton =
@@ -924,7 +960,7 @@ class Page {
     const inlineActions = !textButtons.hasChildNodes();
     if (inlineActions) classes.push('inline-actions');
     const actions = h('div', { class: 'row-actions' }, textButtons.hasChildNodes() && textButtons, iconButtons.hasChildNodes() && iconButtons);
-    const tags = h('div', { class: 'row-tags' }, planPill(a, unavailable), !a.loggedIn && h('span', { class: 'pill warn' }, t('account.notLoggedIn')));
+    const tags = h('div', { class: 'row-tags' }, provider ? h('span', { class: 'pill plan' }, t('provider.deepseek')) : planPill(a, unavailable), !provider && !a.loggedIn && h('span', { class: 'pill warn' }, t('account.notLoggedIn')));
 
     // .row-main is display: contents, so its lines land directly in the .row grid below the name line
     const row = h(
@@ -939,9 +975,10 @@ class Page {
         'div',
         { class: 'row-main' },
         loginStatus(a, this.tab.hideEmail),
-        !unavailable && usageHistory(a),
+        !provider && !unavailable && usageHistory(a),
         !inlineActions && actions,
-        !a.loggedIn && !a.isCurrent && !this.tab.runsInWsl && h('div', { class: 'row-hint' }, t(`${this.mode}.loginHint`)),
+        provider && a.providerError && h('div', { class: 'row-hint provider-error' }, a.providerError),
+        !provider && !a.loggedIn && !a.isCurrent && !this.tab.runsInWsl && h('div', { class: 'row-hint' }, t(`${this.mode}.loginHint`)),
         editing && this.renameError && h('div', { class: 'row-error', role: 'alert' }, this.renameError),
       ),
     );
@@ -1068,8 +1105,8 @@ class Page {
   // a refresh already running is joined by the host, so a repeated click starts nothing new
   private updateUsageButtons(): void {
     const accounts = receivedState && this.tab.enabled ? this.tab.accounts : [];
-    this.refreshButton.hidden = !accounts.some((a) => a.isCurrent && a.usageEligible);
-    this.refreshAllButton.hidden = !accounts.some((a) => a.kind !== 'external' && a.usageEligible);
+    this.refreshButton.hidden = !accounts.some((a) => !a.provider && a.isCurrent && a.usageEligible);
+    this.refreshAllButton.hidden = !accounts.some((a) => !a.provider && a.kind !== 'external' && a.usageEligible);
   }
 
   private renderList(): void {

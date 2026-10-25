@@ -9,12 +9,14 @@
 // (Codex itself, another window) moves the accepted stamp without a query, and a shared observation younger than
 // staleMs (cachedUsage) stands in for a scheduled query, so several windows share one schedule. adoptCached shows the
 // shared observation without any query at all, so the status bar shows it even with automatic checks off.
+// Provider homes bypass snapshots, cached observations and queries, even if auth.json exists there.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { samePath } from '../paths';
 import { readCodexAccountInfo } from './codexPaths';
 import { readCodexUsage, type CodexUsage, type UsageResult } from './codexUsage';
 import { FUTURE_TOLERANCE_MS } from '../usageTime';
+import { preserveProviderConfig } from './codexProvider';
 
 export interface CodexUsageState {
   // A query is running (a previous result stays visible only for the same known identity)
@@ -73,6 +75,7 @@ export async function queryCodexAccount(
   onAccepted: (dir: string, result: UsageResult, stamp: string) => Promise<void> | void,
   options: Pick<UsageMonitorOptions, 'authStamp' | 'authIdentity'> = {},
 ): Promise<UsageResult> {
+  if (preserveProviderConfig(dir)) return { ok: false, reason: 'noRateLimits' };
   const authStamp = options.authStamp ?? authFileStamp;
   const authIdentity = options.authIdentity ?? ((d: string) => readCodexAccountInfo(d).identity);
   const snapshot = (): AuthSnapshot => ({ dir, stamp: authStamp(dir), identity: authIdentity(dir) });
@@ -83,6 +86,7 @@ export async function queryCodexAccount(
   } catch (e) {
     result = { ok: false, reason: 'failed', detail: e instanceof Error ? e.message : String(e) };
   }
+  if (preserveProviderConfig(dir)) return { ok: false, reason: 'noRateLimits' };
   const after = snapshot();
   if (!sameAuth(before, after)) return { ok: false, reason: 'failed', detail: 'discarded' };
   try { await onAccepted(dir, result, after.stamp); } catch { /* a history failure does not turn the query into an error */ }
@@ -126,6 +130,7 @@ export class CodexUsageMonitor {
   /** Queries dirOf() now; a call while a query runs joins it instead of starting a second codex process. A thrown
    *  read becomes 'failed'. */
   refresh(): Promise<void> {
+    if (this.skipProvider()) return Promise.resolve();
     this.running ??= this.run().finally(() => {
       this.running = undefined;
       this.queryAuth = undefined;
@@ -140,6 +145,7 @@ export class CodexUsageMonitor {
    * result when it is newer than the shown one, so a window opened after another's query shows its values at once.
    */
   refreshIfStale(): Promise<void> {
+    if (this.skipProvider()) return Promise.resolve();
     if (this.running) return this.running;
     if (this.needsRefresh) return this.refresh();
     const now = this.now();
@@ -162,6 +168,7 @@ export class CodexUsageMonitor {
    * or an earlier session observed, as the sidebar row does.
    */
   adoptCached(): boolean {
+    if (this.skipProvider()) return false;
     if (this.running) return false;
     const shared = this.cachedUsage(this.dirOf());
     if (!shared || shared.checkedAt > this.now() + FUTURE_TOLERANCE_MS) return false;
@@ -181,6 +188,7 @@ export class CodexUsageMonitor {
    * joined, and a changed sign-in marks its response for discarding (a shown result is dropped while checking).
    */
   async refreshIfAuthChanged(): Promise<void> {
+    if (this.skipProvider()) return;
     if (this.running) {
       if (this.queryAuth && !sameAuth(this.queryAuth, this.snapshot())) {
         this.needsRefresh = true;
@@ -208,6 +216,7 @@ export class CodexUsageMonitor {
    * the next refreshIfStale / refreshIfAuthChanged due at once.
    */
   clearIfAuthChanged(): void {
+    if (this.skipProvider()) return;
     if (this.running || !this.accepted || sameAuth(this.accepted, this.snapshot())) return;
     this.needsRefresh = true;
     if (this.state.result) this.set({ checking: false });
@@ -215,12 +224,24 @@ export class CodexUsageMonitor {
 
   private snapshot(): AuthSnapshot {
     const dir = this.dirOf();
+    if (preserveProviderConfig(dir)) return { dir, stamp: 'provider' };
     return { dir, stamp: this.authStamp(dir), identity: this.authIdentity(dir) };
+  }
+
+  // Provider cards have no subscription quota, including when auth.json happens to exist in their home.
+  private skipProvider(): boolean {
+    if (!preserveProviderConfig(this.dirOf())) return false;
+    this.accepted = undefined;
+    this.needsRefresh = false;
+    this.lastAttempt = undefined;
+    if (this.state.checking || this.state.result) this.set({ checking: false });
+    return true;
   }
 
   private async run(): Promise<void> {
     // One follow-up for a newly identified account; repeated changes wait for the next refresh trigger.
     for (let attempt = 0; attempt < 2; attempt++) {
+      if (this.skipProvider()) return;
       const before = this.snapshot();
       this.queryAuth = before;
       this.lastAttempt = this.now();
@@ -233,10 +254,12 @@ export class CodexUsageMonitor {
       } catch (e) {
         result = { ok: false, reason: 'failed', detail: e instanceof Error ? e.message : String(e) };
       }
+      if (this.skipProvider()) return;
       const after = this.snapshot();
       if (sameAuth(before, after)) {
         // The callback gets the verified stamp, never a newly sampled stamp for an older response.
         try { await this.onAccepted?.(before.dir, result, after.stamp); } catch { /* history failure does not hide live usage */ }
+        if (this.skipProvider()) return;
         const current = this.snapshot();
         if (sameAuth(after, current)) {
           this.accepted = current;

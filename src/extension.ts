@@ -31,6 +31,7 @@ import { CodexUsageMonitor, queryCodexAccount } from './codex/codexUsageMonitor'
 import { CodexUsageHistory } from './codex/codexUsageHistory';
 import { findBundledCodex, readCodexUsageWithFallback, type UsageResult } from './codex/codexUsage';
 import { codexDefaultDir, readCodexAccountInfo } from './codex/codexPaths';
+import { preserveProviderConfig } from './codex/codexProvider';
 import { IdentityWarnings, claudeIdentity, codexIdentity, type IdentitySource } from './identityWarnings';
 import { UsageCooldown } from './usageCooldown';
 import { OtherAccountChecks } from './usageOthers';
@@ -216,7 +217,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     const ext = vscode.extensions.getExtension(CODEX_EXTENSION_ID);
     return ext && findBundledCodex(ext.extensionPath);
   };
-  const readCodex = async (dir: string, signal?: AbortSignal): Promise<UsageResult> => readCodexAccountInfo(dir).plan === 'API key'
+  const readCodex = async (dir: string, signal?: AbortSignal): Promise<UsageResult> => preserveProviderConfig(dir) || readCodexAccountInfo(dir).plan === 'API key'
     ? { ok: false, reason: 'notLoggedIn' }
     : readCodexUsageWithFallback(dir, bundledCodex, { clientVersion: version, signal, timeoutMs: usageTimeoutMs('codex') });
   // Every query of an account (scheduled, manual, refresh-all) starts its manual-refresh cooldown
@@ -240,7 +241,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
       read: (dir) => codexQuery(dir),
       staleMs: () => usageSchedule('codex').staleMs,
       onAccepted: (dir, result, stamp) => usageHistory.record(dir, result, stamp),
-      cachedUsage: (dir) => usageHistory.get(dir),
+      cachedUsage: (dir) => preserveProviderConfig(dir) ? undefined : usageHistory.get(dir),
     })
     : undefined;
   if (usage) statusBar.setCodexUsage(usage.current());
@@ -311,7 +312,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     const claudeWindows = readAccountInfo(dir, explicit).identity !== undefined && !subscriptionState(dir).unavailable ? readClaudeUsage(dir, explicit)?.windows : undefined;
     if (claudeWindows) void announceLowUsage('claude', dir, claudeWindows, false, settings.threshold, store.all(), claudeLabels);
     const result = usage?.current().result;
-    const codexUsage = codex && result?.ok && !codexRunsInWsl() ? liveCodexUsage(result.usage) : undefined;
+    const codexUsage = codex && result?.ok && !codexRunsInWsl() && !preserveProviderConfig(effectiveDir()) ? liveCodexUsage(result.usage) : undefined;
     if (codex && codexUsage) void announceLowUsage('codex', effectiveDir(), codexUsage.windows, codexUsage.limitReached, settings.threshold, codex.store.all(), codexLabels);
   };
   const claudeUsage = new ClaudeUsageMonitor(currentDir, (s) => {
@@ -416,6 +417,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     }
     const eligible = codex.store.all()
       .filter((a) => {
+        if (preserveProviderConfig(a.dir)) return false;
         const info = readCodexAccountInfo(a.dir);
         return info.loggedIn && info.plan !== 'API key';
       })
@@ -509,9 +511,10 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   const otherCodexChecks = new OtherAccountChecks({
     allowed: codexOthersAllowed,
     staleMs: () => usageSchedule('codex').staleMs,
-    checkedAt: (dir) => latest(usageHistory.get(dir)?.checkedAt, codexCooldown.lastQueried(dir)),
+    checkedAt: (dir) => preserveProviderConfig(dir) ? undefined : latest(usageHistory.get(dir)?.checkedAt, codexCooldown.lastQueried(dir)),
     query: (dir) => codexQueue(async () => {
       if (!codexOthersAllowed()) return false;
+      if (preserveProviderConfig(dir)) return 'skipped' as const;
       await queryCodexAccount(dir, (d) => runCodexQuery(d), (d, r, stamp) => usageHistory.record(d, r, stamp));
       // The history is not watched: show this account's row now
       panel.refresh();
@@ -521,7 +524,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   const otherClaudeDirs = (): string[] => store.all().map((a) => a.dir)
     .filter((dir) => !samePath(dir, currentDir()) && readAccountInfo(dir, isExplicitConfigDir(dir)).identity !== undefined && !subscriptionState(dir).unavailable);
   const otherCodexDirs = (): string[] => (codex?.store.all() ?? []).map((a) => a.dir).filter((dir) => {
-    if (samePath(dir, effectiveDir())) return false;
+    if (samePath(dir, effectiveDir()) || preserveProviderConfig(dir)) return false;
     const info = readCodexAccountInfo(dir);
     return info.loggedIn && info.plan !== 'API key';
   });
@@ -556,7 +559,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   ];
   if (codex) {
     const c = codex;
-    identitySources.push({ vendor: 'Codex', accounts: () => c.store.all().map((a) => ({ dir: a.dir, label: labelFor(a.name, codexLabels) })), identityOf: codexIdentity });
+    identitySources.push({ vendor: 'Codex', accounts: () => c.store.all().map((a) => ({ dir: a.dir, label: labelFor(a.name, codexLabels) })), identityOf: (dir) => preserveProviderConfig(dir) ? undefined : codexIdentity(dir) });
   }
   const identityWarnings = new IdentityWarnings(identitySources);
   identityWarnings.check();
@@ -666,6 +669,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     vscode.commands.registerCommand(CLAUDE_REFRESH_ALL_USAGE_COMMAND, () => refreshAllClaudeUsage()),
     ...(usage
       ? [vscode.commands.registerCommand(REFRESH_USAGE_COMMAND, async () => {
+        if (preserveProviderConfig(effectiveDir())) return;
         if (codexRunsInWsl()) {
           warnCodexRunsInWsl();
           return;

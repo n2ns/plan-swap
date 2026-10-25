@@ -47,6 +47,11 @@ import { codexRunsInWsl, warnCodexRunsInWsl } from './codexSettings';
 import { runTool, type TerminalCheck, type ToolDeps } from '../tools';
 import { joinSentences, t } from '../i18n';
 import type { CodexUsageHistory } from './codexUsageHistory';
+import {
+  DEEPSEEK_MODELS, PROVIDER_FILES, ProviderConfigError, createDeepSeekConfig, editDeepSeekConfig,
+  preserveProviderConfig, readDeepSeekEditState, readProviderInfo, validateProviderConfig,
+  type DeepSeekModel, type ProviderErrorCode,
+} from './codexProvider';
 // Codex commands, panel message handling and the Codex panel data source. Command ids and restart behavior:
 // codex-design.md section 8 and docs/features.md. QuickPick items, messages and terminal names use labelFor; logic
 // uses account name and dir. Panel account messages resolve their directory through panel.resolve.
@@ -173,16 +178,34 @@ export async function restartServerInteractive(): Promise<void> {
   restart(kind);
 }
 
+function providerErrorText(code: ProviderErrorCode): string {
+  return t(`codex.provider.error.${code}`);
+}
+
+// Only safe provider status enters the view. Provider homes never need a subscription credential read.
+function codexRowInfo(dir: string): Pick<AccountView, 'email' | 'plan' | 'loggedIn' | 'provider' | 'providerModel' | 'providerConfigured' | 'providerError'> {
+  const provider = readProviderInfo(dir);
+  if (!provider) return viewInfo(readCodexAccountInfo(dir));
+  return {
+    loggedIn: provider.configured,
+    plan: t('codex.provider.label'),
+    provider: provider.provider,
+    providerModel: provider.model,
+    providerConfigured: provider.configured,
+    providerError: provider.error ? providerErrorText(provider.error) : undefined,
+  };
+}
+
 /**
  * Data source of the Codex panel tab.
- * - accounts(): store.all() rows with readCodexAccountInfo; current and selected rows by findSameDir (alternate
+ * - accounts(): store.all() rows with subscription info or secret-free provider status; current and selected rows by findSameDir (alternate
  *   spellings match), isSelected independent of isCurrent; shared only for named rows; when effectiveDir() matches no
  *   row, an extra current 'external' row. Usage history only for signed-in non-API-key rows, and none while
  *   codexRunsInWsl().
  * - enabled(): isEnabled(); errors count as not enabled.
  * - pendingDir(): when the selected dir (default when unset) differs from effectiveDir(), the account's display name,
  *   or the path for an unregistered dir; display text only.
- * - watchTargets(): auth.json of each row's dir plus this editor's state files (watchedStateFiles).
+ * - watchTargets(): auth.json and provider files of each row's dir plus this editor's state files (watchedStateFiles).
  */
 export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, history?: CodexUsageHistory, exclusions?: RecommendExclusions): PanelSource {
   const accounts = (): AccountView[] => {
@@ -197,7 +220,7 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, h
       label: labelFor(a.name, labels),
       dir: a.dir,
       dirLabel: tildify(a.dir),
-      ...viewInfo(readCodexAccountInfo(a.dir)),
+      ...codexRowInfo(a.dir),
       isCurrent: i === curIdx,
       isSelected: i === selIdx,
       shared: a.name === CODEX_DEFAULT_NAME ? undefined : isSharedCodexAccount(a.dir),
@@ -210,14 +233,14 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, h
         label: labelFor(EXTERNAL_NAME, labels),
         dir: cur,
         dirLabel: tildify(cur),
-        ...viewInfo(readCodexAccountInfo(cur)),
+        ...codexRowInfo(cur),
         isCurrent: true,
         isSelected: findSameDir([cur], selected) === 0,
       });
     }
     if (!codexRunsInWsl()) {
       for (const row of rows) {
-        if (row.loggedIn && row.plan !== 'API key') {
+        if (!row.provider && row.loggedIn && row.plan !== 'API key') {
           row.usage = history?.get(row.dir);
           row.usageEligible = true;
         }
@@ -227,7 +250,7 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, h
   };
   return {
     accounts,
-    identityOf: (dir) => readCodexAccountInfo(dir).identity,
+    identityOf: (dir) => preserveProviderConfig(dir) ? undefined : readCodexAccountInfo(dir).identity,
     runsInWsl: () => codexRunsInWsl(),
     // Treat errors such as unreadable rc files as not enabled so panel rendering is not interrupted; a broken block
     // (start marker without end marker) counts as not enabled so the Enable button leads to preCheck's repair guidance
@@ -250,7 +273,7 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, h
       const cur = effectiveDir();
       const dirs = store.all().map((a) => a.dir);
       if (!dirs.some((d) => samePath(d, cur))) dirs.push(cur);
-      return [...dirs.map((d) => path.join(d, 'auth.json')), ...watchedStateFiles()];
+      return [...dirs.flatMap((d) => ['auth.json', ...PROVIDER_FILES].map((file) => path.join(d, file))), ...watchedStateFiles()];
     },
     restart: () => restartInfo(),
   };
@@ -266,6 +289,10 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, h
  * - add: validateName, create the dir; shared asks for the Windows copy fallback then ensureCodexLinks with the
  *   terminal-busy callback, independent runs copyCodexIndependent; link/copy failures only warn. Add and rename always
  *   post addResult / renameResult, also when they throw.
+ * - DeepSeek add: a new directory only, model QuickPick and password input on the host; writes provider files before
+ *   sharing or registration. No key enters panel state. editProvider uses a revision captured before prompts and
+ *   preserves the key on an empty replacement. Creation/edit never selects or restarts. Switch/terminal/conversion
+ *   validate provider files, including after prompts; provider terminals never start subscription sign-in.
  * - recommendExclude: registered rows only (the external row is ignored); sets or clears the recommendation mark and
  *   refreshes the panel. The mark is cleared with the account (remove, or a pruned directory on sync).
  * - reorder: the rows that resolve to registered accounts, in the order sent, become the stored order (store.setOrder);
@@ -313,7 +340,8 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     const picked = await vscode.window.showQuickPick(
       accounts.map((account) => ({
         label: labelOf(account),
-        description: codexLoggedIn(account.dir) ? t('common.loggedIn') : t('common.notLoggedIn'),
+        description: preserveProviderConfig(account.dir) ? t('codex.provider.label')
+          : codexLoggedIn(account.dir) ? t('common.loggedIn') : t('common.notLoggedIn'),
         detail: account.dir,
         account,
       })),
@@ -445,6 +473,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
   }
 
   async function doSwitch(account: CodexAccount): Promise<void> {
+    if (!providerReady(account.dir)) return;
     if (isEffective(account) && isSelected(account)) {
       void vscode.window.showInformationMessage(t('account.alreadyCurrent', { label: labelOf(account) }));
       return;
@@ -485,6 +514,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       panel.refresh();
       return;
     }
+    if (!providerReady(account.dir)) return;
     // A shared account is re-linked first; a problem only warns, the switch still happens
     if (account.name !== CODEX_DEFAULT_NAME && isSharedCodexAccount(account.dir)) {
       try {
@@ -494,6 +524,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
         void vscode.window.showWarningMessage(t('share.refreshWarning', { label: labelOf(account), notes: errText(err) }));
       }
     }
+    if (!providerReady(account.dir)) return;
     try {
       writeSelection(account.name === CODEX_DEFAULT_NAME ? undefined : account.dir);
     } catch (err) {
@@ -503,6 +534,47 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     panel.refresh();
     // Manual kinds already showed the instructions in the confirmation
     if (auto) restart(kind);
+  }
+
+  function providerReady(dir: string): boolean {
+    if (!preserveProviderConfig(dir)) return true;
+    try {
+      validateProviderConfig(dir);
+      return true;
+    } catch (err) {
+      const reason = providerErrorText(err instanceof ProviderConfigError ? err.code : 'file');
+      void vscode.window.showErrorMessage(t('codex.provider.unavailable', { reason }));
+      return false;
+    }
+  }
+
+  async function pickProviderModel(current?: DeepSeekModel): Promise<DeepSeekModel | undefined> {
+    const selected = await vscode.window.showQuickPick(
+      DEEPSEEK_MODELS.map((model) => ({ label: model, picked: model === current })),
+      { placeHolder: t('codex.provider.modelPrompt') },
+    );
+    return selected?.label;
+  }
+
+  async function editProvider(account: CodexAccount): Promise<void> {
+    if (account.name === CODEX_DEFAULT_NAME || !preserveProviderConfig(account.dir)) return;
+    try {
+      const before = readDeepSeekEditState(account.dir);
+      const model = await pickProviderModel(before.model);
+      if (!model) return;
+      const replacement = await vscode.window.showInputBox({
+        prompt: t('codex.provider.keyEditPrompt'), password: true, ignoreFocusOut: true,
+      });
+      if (replacement === undefined) return;
+      const registered = store.find(account.name);
+      if (!registered || !samePath(registered.dir, account.dir)) return;
+      editDeepSeekConfig(account.dir, model, replacement, before.revision);
+      void vscode.window.showInformationMessage(t('codex.provider.edited'));
+    } catch (err) {
+      const reason = providerErrorText(err instanceof ProviderConfigError ? err.code : 'write');
+      void vscode.window.showErrorMessage(joinSentences(t('codex.provider.editFailed'), reason));
+    }
+    panel.refresh();
   }
 
   // Rename: only named rows (the default and external rows cannot be renamed); label equal to name clears the alias
@@ -519,9 +591,10 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
   }
 
   // shared: link everything but the login to the default account; otherwise copy its configuration once
-  async function addAccount(name: string, shared: boolean): Promise<string | undefined> {
+  async function addAccount(name: string, shared: boolean, provider?: 'deepseek'): Promise<string | undefined> {
     const error = validateName(name, store, labels);
     if (error) return error;
+    if (provider === 'deepseek') return addProviderAccount(name, shared);
     const account: CodexAccount = { name, dir: codexAccountDir(name) };
     try {
       ensureCodexDir(account.dir);
@@ -557,15 +630,61 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     return undefined;
   }
 
+  async function addProviderAccount(name: string, shared: boolean): Promise<string | undefined> {
+    const account: CodexAccount = { name, dir: codexAccountDir(name) };
+    if (lstatOrUndefined(account.dir)) return t('codex.provider.dirExists', { dir: account.dir });
+    const model = await pickProviderModel();
+    if (!model) return t('codex.provider.cancelled');
+    const key = await vscode.window.showInputBox({
+      prompt: t('codex.provider.keyPrompt'), password: true, ignoreFocusOut: true,
+      validateInput: (value) => value.trim() ? undefined : t('codex.provider.keyRequired'),
+    });
+    if (key === undefined) return t('codex.provider.cancelled');
+    if (!key.trim()) return t('codex.provider.keyRequired');
+    const error = validateName(name, store, labels);
+    if (error) return error;
+    if (lstatOrUndefined(account.dir)) return t('codex.provider.dirExists', { dir: account.dir });
+    try {
+      // Unlike ordinary account registration, a provider card never adopts an existing directory.
+      fs.mkdirSync(account.dir, { mode: 0o700 });
+      const seeded = createDeepSeekConfig(account.dir, model, key, codexDefaultDir());
+      if (shared) {
+        const options = await askCopyFallback(account.dir, 'Codex');
+        validateProviderConfig(account.dir);
+        const report = ensureCodexLinks(account.dir, { ...options, busy: linkBusy(account) });
+        if (!isSharedCodexAccount(account.dir)) {
+          return t('codex.provider.createFailed', { dir: account.dir });
+        }
+        const notes = describeShareReport(report);
+        if (notes) void vscode.window.showWarningMessage(t('share.addNotes', { name, notes }));
+      } else {
+        copyCodexIndependent(account.dir);
+      }
+      validateProviderConfig(account.dir);
+      await store.add(account);
+      if (seeded.skipped.length) {
+        void vscode.window.showInformationMessage(t('codex.provider.seedSkipped', { list: seeded.skipped.join(', ') }));
+      }
+      panel.refresh();
+      return undefined;
+    } catch (err) {
+      // Provider write failures never serialize config input or an arbitrary exception into the Webview.
+      const reason = err instanceof ProviderConfigError ? providerErrorText(err.code) : t('codex.provider.error.write');
+      return joinSentences(t('codex.provider.createFailed', { dir: account.dir }), reason);
+    }
+  }
+
   // Converts an independent account to a shared one after a modal confirmation
   async function shareAccount(account: CodexAccount): Promise<void> {
     if (account.name === CODEX_DEFAULT_NAME || isSharedCodexAccount(account.dir)) return;
+    if (!providerReady(account.dir)) return;
     if (effectiveAlias(account) || selectedAlias(account)) {
       void vscode.window.showWarningMessage(t('share.current', { label: labelOf(account) }));
       return;
     }
     const ok = t('share.confirmButton');
-    const picked = await vscode.window.showWarningMessage(t(isWindows() ? 'share.confirmCodexWindows' : 'share.confirmCodex', { label: labelOf(account), dir: account.dir }), { modal: true }, ok);
+    const picked = await vscode.window.showWarningMessage(t(preserveProviderConfig(account.dir) ? 'codex.provider.shareConfirm'
+      : isWindows() ? 'share.confirmCodexWindows' : 'share.confirmCodex', { label: labelOf(account), dir: account.dir }), { modal: true }, ok);
     if (picked !== ok) return;
     // Re-checked after the modal: another window may have selected the account meanwhile
     if (effectiveAlias(account) || selectedAlias(account)) {
@@ -592,6 +711,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       return;
     }
     try {
+      if (!providerReady(account.dir)) return;
       const report = migrateCodexToShared(account.dir, account.name, '/proc', { ...linkOptions, busy: linkBusy(account) });
       void vscode.window.showInformationMessage(t(isSharedCodexAccount(account.dir) ? 'share.done' : 'share.incomplete', { label: labelOf(account), summary: describeShareReport(report) || t('share.nothingElse') }));
     } catch (err) {
@@ -603,12 +723,14 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
   // Converts a shared account back to an independent one after a modal confirmation; sessions stay in ~/.codex
   async function unshareAccount(account: CodexAccount): Promise<void> {
     if (account.name === CODEX_DEFAULT_NAME || !isSharedCodexAccount(account.dir)) return;
+    if (!providerReady(account.dir)) return;
     if (effectiveAlias(account) || selectedAlias(account)) {
       void vscode.window.showWarningMessage(t('unshare.current', { label: labelOf(account) }));
       return;
     }
     const ok = t('unshare.confirmButton');
-    const picked = await vscode.window.showWarningMessage(t(isWindows() ? 'unshare.confirmCodexWindows' : 'unshare.confirmCodex', { label: labelOf(account), dir: account.dir }), { modal: true }, ok);
+    const picked = await vscode.window.showWarningMessage(t(preserveProviderConfig(account.dir) ? 'codex.provider.unshareConfirm'
+      : isWindows() ? 'unshare.confirmCodexWindows' : 'unshare.confirmCodex', { label: labelOf(account), dir: account.dir }), { modal: true }, ok);
     if (picked !== ok) return;
     if (effectiveAlias(account) || selectedAlias(account)) {
       void vscode.window.showWarningMessage(t('unshare.current', { label: labelOf(account) }));
@@ -619,6 +741,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       return;
     }
     try {
+      if (!providerReady(account.dir)) return;
       const r = makeCodexIndependent(account.dir, account.name);
       const done = t('unshare.done', { label: labelOf(account), removed: r.removed.length, copied: r.copied.join(', ') || t('unshare.nothingCopied') });
       const skipped = r.skipped.length ? t('unshare.skipped', { list: r.skipped.map((s) => `${s.file} (${s.reason})`).join(', ') }) : '';
@@ -686,6 +809,8 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       warnCodexRunsInWsl();
       return;
     }
+    if (!providerReady(account.dir)) return;
+    if (preserveProviderConfig(account.dir)) login = false;
     const isDefault = account.name === CODEX_DEFAULT_NAME;
     // Linux types the folder into the shell (the env prefix is needed: the rc block re-exports CODEX_HOME); a control
     // character (a newline) would end the command line early
@@ -721,7 +846,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       }
       case 'terminal': {
         const a = panel.resolve(MODE, msg.dir);
-        if (a) openTerminal(a, !codexLoggedIn(a.dir));
+        if (a) openTerminal(a, !preserveProviderConfig(a.dir) && !codexLoggedIn(a.dir));
         return;
       }
       case 'remove': {
@@ -733,11 +858,16 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
         // Any failure still answers, so the panel never keeps waiting for the result
         let error: string | undefined;
         try {
-          error = await addAccount(msg.name.trim(), msg.shared !== false);
+          error = await addAccount(msg.name.trim(), msg.shared !== false, msg.provider);
         } catch (err) {
-          error = errText(err);
+          error = msg.provider === 'deepseek' ? t('codex.provider.createFailed', { dir: codexAccountDir(msg.name.trim()) }) : errText(err);
         }
         panel.post({ type: 'addResult', mode: MODE, error });
+        return;
+      }
+      case 'editProvider': {
+        const a = panel.resolve(MODE, msg.dir);
+        if (a?.kind === 'named' && preserveProviderConfig(a.dir)) await editProvider(a);
         return;
       }
       case 'share': {
@@ -762,7 +892,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       }
       case 'recommendExclude': {
         const a = panel.resolve(MODE, msg.dir);
-        if (!a || a.kind === 'external') return;
+        if (!a || a.kind === 'external' || preserveProviderConfig(a.dir)) return;
         await exclusions?.set(a.name, msg.excluded !== false);
         panel.refresh();
         return;
@@ -815,7 +945,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
         return;
       }
       const a = await pickAccount(allWithExternal(), t('codex.pick.terminal'));
-      if (a) openTerminal(a, !codexLoggedIn(a.dir));
+      if (a) openTerminal(a, !preserveProviderConfig(a.dir) && !codexLoggedIn(a.dir));
     }),
     vscode.commands.registerCommand('planswap.codex.restartServer', () => restartServerInteractive()),
     vscode.window.onDidCloseTerminal((terminal) => {

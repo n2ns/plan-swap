@@ -68,3 +68,34 @@ Scope: installed standalone Codex 0.162.1 and the VS Code extension's bundled 0.
 - **Plugin cache paths.** The [plugin store](https://github.com/openai/codex/blob/rust-v0.162.1/codex-rs/core-plugins/src/store.rs#L554) stages and renames installations under the marketplace directory; the store and installed-version selection files were identical in the two corresponding upstream tags. A temporary HOME experiment used actual PlanSwap links and filesystem operations matching that structure. Installation, version replacement, manifest reads and MCP regular-file/containment checks worked through a linked marketplace directory; uninstalling there removed the shared cached plugin, and the marketplace link survived. `openai-curated-remote` remained excluded. This is a filesystem compatibility check, not acceptance of official-client installation, loading, authentication or remote marketplace synchronization. The [official plugin guide](https://developers.openai.com/plugins/build/plugins) documents the marketplace/plugin/version cache layout.
 
 All experiment directories were temporary and removed. Real-client acceptance remains in [TODO](../../TODO.md).
+
+
+## DeepSeek provider configuration (2026-10-25)
+
+Official documentation and source review only; no installed client, API request or editor was used. These facts support [Codex design 8.8](../codex-design.md#88-deepseek-api-cards), with runtime acceptance still pending.
+
+### Native configuration
+
+DeepSeek documents Responses API support and configuration shared by Codex CLI and the VS Code extension. Its manual setup uses a provider definition, an inline bearer token and a JSON model catalog. The listed models are `deepseek-flash` and `deepseek-v4-pro`; catalog entries declare `minimal_client_version` as `0.144.0`. This metadata is not an independently verified compatibility floor for every IDE extension. The example disables built-in web search. Its automatic installer changes the default Codex home, so running that installer would not establish isolation between PlanSwap cards. Source: [DeepSeek Codex integration](https://api-docs.deepseek.com/quick_start/agent_integrations/codex/).
+
+### Codex provider settings
+
+The configuration reference documents custom providers with `base_url`, `wire_api = "responses"`, and `experimental_bearer_token`. It supports that direct token setting but recommends `env_key` instead. `requires_openai_auth` defaults to false. Command-backed authentication must not be combined with the other authentication mechanisms. `model_catalog_json` is loaded at startup. Source: [OpenAI configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference).
+
+OpenAI also documents selecting custom providers through `model_provider`, including examples for third-party services. This supports a native configuration approach; it does not establish window isolation or certify every DeepSeek tool interaction. Source: [OpenAI advanced configuration](https://learn.chatgpt.com/docs/config-file/config-advanced#custom-model-providers).
+
+### Evidence limits
+
+These documents establish a configuration path, not successful streaming, tool execution, session recovery, or model selection in the user's installed versions. They also do not constitute a blanket legal assurance covering every client distribution, organization policy or usage pattern. This integration makes no such assurance and does not extend its conclusions to Claude Code.
+
+Before implementation acceptance, record the actual CLI and IDE extension versions and recheck the provider fields and model catalog against their applicable documentation. Live verification remains user-operated under [Manual verification](../manual-verification.md).
+
+### Bundled catalog instructions
+
+Source inspection on 2026-10-25: the [Codex model deserializer](https://github.com/openai/codex/blob/main/codex-rs/protocol/src/openai_models.rs) rejects a custom catalog model lacking both legacy `base_instructions` and `model_messages.instructions_template`. Omitting instructions therefore is not a safe way to inherit the client defaults in this source version.
+
+The DeepSeek example's instruction text matches the `gpt-5.6-sol` template in the [OpenAI Codex catalog](https://github.com/openai/codex/blob/main/codex-rs/models-manager/models.json), except for one heading's capitalization. The bundled template is the unmodified OpenAI text from Git blob `72a78e0eacf94103f4babda2a5245aba4ce848c1`, under Apache-2.0; [notices and license](../../THIRD_PARTY_NOTICES.md) are included. The catalog combines that template with the documented DeepSeek capability metadata. No remote installer was executed, and no PlanSwap-specific coding prompt was substituted. This is source/data comparison, not verification of a live tool call or IDE session.
+
+### Native configuration writes
+
+Source inspection on 2026-10-25: Codex's [configuration editor](https://github.com/openai/codex/blob/main/codex-rs/core/src/config/edit.rs) writes project trust into `projects.<path>.trust_level` and persists model/reasoning selections. The [TUI configuration update code](https://github.com/openai/codex/blob/main/codex-rs/tui/src/config_update.rs) can also clear the reasoning-effort setting when selecting the native default. These are ordinary client writes to user configuration, not necessarily manual edits or corruption. A reader that accepts only PlanSwap's initial generated text would reject this supported path. This conclusion comes from source inspection, not running the installed client.

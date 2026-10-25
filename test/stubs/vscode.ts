@@ -140,6 +140,7 @@ export const window = {
   async showWarningMessage(..._args: unknown[]): Promise<string | undefined> { return undefined; },
   async showErrorMessage(..._args: unknown[]): Promise<string | undefined> { return undefined; },
   async showQuickPick<T>(_items: T[], _options?: unknown): Promise<T | undefined> { return undefined; },
+  async showInputBox(_options?: unknown): Promise<string | undefined> { return undefined; },
   createTerminal(options: { name: string }): StubTerminal {
     const terminal: StubTerminal = {
       name: options.name,

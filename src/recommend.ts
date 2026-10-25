@@ -29,12 +29,13 @@ export function lowestRemaining(usage: AccountView['usage']): number | undefined
  */
 export function recommend(rows: readonly AccountView[], recommendationThreshold: number, identityOf?: (dir: string) => string | undefined): string | undefined {
   const current = rows.find((r) => r.isCurrent);
+  if (current?.provider) return undefined;
   const currentLowest = lowestRemaining(current?.usage);
   if (currentLowest === undefined || currentLowest > recommendationThreshold) return undefined;
   let best: { dir: string; lowest: number; checkedAt: number } | undefined;
   let currentIdentity: string | undefined | null = null;
   for (const row of rows) {
-    if (row.kind === 'external' || row.isCurrent || row.isSelected || row.recommendExcluded || row.subscriptionUnavailable || row.usage?.limitReached) continue;
+    if (row.provider || row.kind === 'external' || row.isCurrent || row.isSelected || row.recommendExcluded || row.subscriptionUnavailable || row.usage?.limitReached) continue;
     const lowest = lowestRemaining(row.usage);
     if (lowest === undefined || lowest <= 0 || lowest <= currentLowest) continue;
     if (identityOf) {

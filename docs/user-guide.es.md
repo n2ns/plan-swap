@@ -13,6 +13,7 @@ Los nombres de botones de esta guía son los de la interfaz en español. Pasa el
 - [Añadir una cuenta e iniciar sesión](#añadir-una-cuenta-e-iniciar-sesión)
 - [Cambiar de cuenta de Claude](#cambiar-de-cuenta-de-claude)
 - [Activar y cambiar cuentas de Codex](#activar-y-cambiar-cuentas-de-codex)
+- [Usar una tarjeta DeepSeek API](#usar-una-tarjeta-deepseek-api)
 - [Elegir cuentas vinculadas o independientes](#elegir-cuentas-vinculadas-o-independientes)
 - [Consultar y actualizar los límites de uso](#consultar-y-actualizar-los-límites-de-uso)
 - [Renombrar o quitar cuentas](#renombrar-o-quitar-cuentas)
@@ -147,6 +148,18 @@ Reiniciar un servidor WSL desconecta sus ventanas del editor y cierra sus termin
 Hasta que se complete el reinicio, un aviso indica la cuenta seleccionada, y la fila resaltada sigue siendo la cuenta en vigor en esta ventana. Para volver a ver los pasos de reinicio, ejecuta **Aplicar cuenta de Codex: reiniciar o ver instrucciones** (Apply Codex Account: Restart or Show Instructions) desde la paleta de comandos (en la categoría **Cuenta de Codex**).
 
 ¿Cambiaste de idea antes de reiniciar? Haz clic en el icono de flecha de la fila resaltada (efectiva). Esto cancela la selección pendiente; no hace falta reiniciar.
+
+## Usar una tarjeta DeepSeek API
+
+En el formulario de Codex, elige **DeepSeek API**, introduce un nombre nuevo y elige el modo vinculado o independiente. Pulsa **Añadir**, selecciona el modelo e introduce tu clave API de DeepSeek en el campo oculto. Se requiere un directorio nuevo; no se convierte ninguna cuenta de suscripción existente ni se necesitan credenciales de suscripción de Claude o ChatGPT.
+
+La tarjeta muestra el modelo configurado y si tiene una clave. Es una comprobación local, no una prueba de conexión. Usa **Editar configuración de DeepSeek** para cambiar el modelo o la clave; deja la clave de sustitución vacía para conservarla. Los cambios manuales de configuración no compatibles se conservan y se notifican, sin sobrescribirlos. Una configuración ausente o inválida impide seleccionar la tarjeta o abrir su terminal.
+
+El terminal inicia Codex con el directorio de esta tarjeta, sin iniciar sesión en ChatGPT. El cambio sigue la confirmación y el reinicio habituales de Codex. Crear o editar no cambia la cuenta, reinicia ventanas ni modifica el modelo de una conversación activa. Selecciona la cuenta anterior para volver a su configuración de suscripción. Estas tarjetas no consultan cuotas de suscripción ni participan en recomendaciones por cuota.
+
+La clave se guarda en texto plano en el `config.toml` propio, nunca en la barra lateral ni en el estado de PlanSwap. Incluso en modo vinculado, la configuración del proveedor, la clave y el catálogo de modelos permanecen independientes. Solo se copian una vez los ajustes escalares compatibles de aprobación y sandbox; no se importan definiciones MCP ni confianza de proyectos, ni se sincronizan cambios posteriores de la configuración predeterminada. Las demás instrucciones, habilidades e historial permitidos siguen el modo elegido. Compartir historial no garantiza reanudarlo entre proveedores; hacerlo con DeepSeek puede enviarle ese contexto. Consulta [Privacidad](privacy.md).
+
+Las ventanas del mismo editor y distribución WSL comparten la selección de Codex; no hay aislamiento de backend por ventana de proyecto. VS Code y VSCodium conservan sus selecciones separadas. Windows nativo sigue necesitando reiniciar el editor por completo. La aceptación con clientes reales sigue pendiente en [TODO](../TODO.md).
 
 ## Elegir cuentas vinculadas o independientes
 

@@ -12,12 +12,15 @@ PlanSwap itself sends nothing. To show usage limits, it runs the official CLI fo
 
 The CLI then contacts Anthropic's or OpenAI's service as it always does. Sign-in, CLI updates and AI requests are handled by the official Claude Code and Codex clients, which have their own network behavior and privacy policies.
 
+For a DeepSeek API card, Codex sends model requests directly to DeepSeek using that card's API key. PlanSwap does not proxy requests or automatically probe the connection, check a balance or query subscription quotas for these cards. Resuming a shared conversation with DeepSeek may send its conversation context to DeepSeek; sharing files does not guarantee that the client can resume every conversation across providers.
+
 ## What PlanSwap reads
 
 - **Email and plan** of each account, read locally for display.
 - **Claude sign-in**: PlanSwap never uses or copies the Claude sign-in in `.credentials.json`. For linked accounts it reads that file only to sync the sign-ins to MCP servers (see below). It reads the CLI's structured usage report in memory to validate a refresh; displayed values and their fetch time come from the usage cache Claude Code keeps in the account's `.claude.json`. Raw CLI output and session metadata are never logged, saved or sent to the sidebar.
 - **Codex sign-in**: PlanSwap reads `auth.json` locally and decodes its `id_token` payload for account information and identity comparison. It never copies, swaps or rewrites the file, and never sends raw tokens to the sidebar.
 - **Account identifiers** used to detect duplicate sign-ins, attribute usage data and check for sign-in changes during a query stay in memory; they are never shown or saved.
+- **DeepSeek configuration**: PlanSwap reads the card's provider marker, model catalog and config locally to validate and edit it. The key is handled in host memory only; the sidebar receives the model and configuration status, never the key. Managed API-card display does not read subscription tokens from `auth.json`.
 
 ## What PlanSwap stores
 
@@ -26,11 +29,13 @@ The CLI then contacts Anthropic's or OpenAI's service as it always does. Sign-in
 - **Claude usage**: PlanSwap keeps no separate usage store; it reads Claude Code's official cache, including eligible historical values after a failed query. Confirmed subscription-access rejections hide those values. Availability and probe cooldowns stay in memory for the current window session.
 - **Codex selection**: the selected Codex account is saved in `~/.config/planswap/codex-home`, and per editor in `codex-home.vscode` / `codex-home.vscodium` for VS Code and VSCodium WSL windows, while Codex switching is enabled.
 - **Sidebar tab**: the selected tab is saved in the editor's extension storage.
+- **DeepSeek cards**: the key is stored in plaintext in that card's `config.toml`, with a local model catalog and a non-secret provider marker beside it. It is not stored in PlanSwap's state or an additional credential store. New secret-bearing files use mode `0600` and account directories use `0700` on WSL; native Windows uses the user-profile filesystem permissions, not a POSIX permission guarantee. Editing uses a temporary file beside the config before replacement and creates no automatic key backup.
 - **Linked Claude sync state**: each linked Claude account keeps `.planswap-sync.json` in its directory: the default account's directory path and a SHA-256 fingerprint of each synced MCP server, project setting and MCP sign-in as of the last sync (and of when each `.claude.json` was first started), so PlanSwap can tell which side changed one. Each fingerprint is listed under the item's name: the MCP server name, the project folder path and the setting name, or the MCP server key of the sign-in. It holds no values and no tokens.
 
 ## What PlanSwap changes
 
 - **Switching** updates the settings that select an account.
+- **DeepSeek creation/editing** writes only that card's provider files. The default account and existing subscription credentials are not changed. Linking and unlinking keep the provider config, key and catalog independent; later default-config edits do not propagate into them.
 - **Enabling Codex switching** adds configuration to `~/.profile` and `~/.bashrc` after you confirm (on Windows it sets your user environment variable `CODEX_HOME` instead); while it stays enabled, activation brings those blocks to the current version's text without asking, leaving the rest of the files unchanged; the first switch in a VS Code or VSCodium WSL window adds a block to that editor's `~/.vscode-server/server-env-setup` or `~/.vscodium-server/server-env-setup`.
 - **Linking** shares settings and history, and keeps a linked Claude account's MCP servers and project settings (`.claude.json`) and its sign-ins to MCP servers (the `mcpOAuth` and `mcpOAuthClientConfig` entries of `.credentials.json`) in sync with the default account in both directions when you switch to or away from it, add or link it, or repair it; it also adds the default account's first-run status. The Claude sign-in and all other data in these files stay unchanged, and sign-in files are never linked or copied as a whole. While writing a `.claude.json` or a `.credentials.json`, PlanSwap holds Claude Code's own lock folder for a moment (`.claude.json.lock` next to the `.claude.json`, `.storage-write.lock` next to the `.credentials.json`).
 - **Deleting accounts**: removing a row does not delete its files unless you separately confirm directory deletion. Deleting the directory permanently removes that account's sign-in and local data; linked data in the default account is kept.

@@ -13,6 +13,7 @@ Button names below use the English UI. Hover an icon to see its name in your lan
 - [Add and sign in to an account](#add-and-sign-in-to-an-account)
 - [Switch Claude accounts](#switch-claude-accounts)
 - [Enable and switch Codex accounts](#enable-and-switch-codex-accounts)
+- [Use a DeepSeek API card](#use-a-deepseek-api-card)
 - [Choose linked or independent accounts](#choose-linked-or-independent-accounts)
 - [Read and refresh usage limits](#read-and-refresh-usage-limits)
 - [Rename or remove accounts](#rename-or-remove-accounts)
@@ -147,6 +148,18 @@ Restarting a WSL server disconnects its editor windows and closes their integrat
 Until the restart is done, a banner names the selected account, and the highlighted row is still the account in effect in this window. To see the restart steps again, run **Apply Codex Account: Restart or Show Instructions** from the Command Palette (listed under **Codex Account**).
 
 Changed your mind before restarting? Click the arrow icon on the highlighted (effective) row. This cancels the pending selection; no restart is needed.
+
+## Use a DeepSeek API card
+
+In the Codex add form, choose **DeepSeek API**, enter a new account name and choose linked or independent. Click **Add**, choose the model, then enter your DeepSeek API key in the hidden input. This requires a new directory; an existing subscription account is not converted. No Claude or ChatGPT subscription credentials are needed.
+
+The card shows the configured model and whether a key is configured. This is a local configuration check, not a successful connection test. Use **Edit DeepSeek configuration** to change the model or key; leave the replacement key empty to keep it. Unsupported manual configuration edits are preserved and reported instead of overwritten. A missing/invalid configuration prevents switching or opening the account terminal.
+
+The terminal action starts Codex with this card's home without a ChatGPT login flow. Switching uses the existing Codex confirmation/restart procedure. Creating or editing a card does not switch accounts, restart a window or change an active conversation's model. Select your previous account to return to its existing subscription configuration. API cards have no subscription quota refresh or quota-based recommendation.
+
+The key is saved in plaintext in this card's own `config.toml`, never in the sidebar or PlanSwap state. Even when linked, the provider config, key and model catalog stay independent. Only supported scalar approval/sandbox settings are copied once from the default config; MCP definitions and project trust are not imported, and later default-config changes do not synchronize. Other permitted instructions, skills and history follow the selected sharing mode. Shared history may not resume across providers; resuming it with DeepSeek may send that context to DeepSeek. See [Privacy](privacy.md).
+
+Same-editor windows in one WSL distribution share the Codex selection; these cards do not isolate the backend per project window. VS Code and VSCodium keep their existing separate selections. Native Windows still requires a full editor restart. Real-client acceptance for this feature remains pending in [TODO](../TODO.md).
 
 ## Choose linked or independent accounts
 

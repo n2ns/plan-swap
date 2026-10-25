@@ -7,6 +7,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { Readable, Writable } from 'node:stream';
 import { isPlainObject, onPath, taskkillTree, truncateDetail } from '../platform';
+import { preserveProviderConfig } from './codexProvider';
 
 export interface UsageWindow { usedPercent: number; windowMinutes?: number; resetsAt?: number /* unix seconds */ }
 
@@ -192,6 +193,7 @@ const unfinishedChildren = new Set<UsageChild>();
  *   lines are never returned or logged. See UsageFailure for the failure mapping.
  */
 export async function readCodexUsage(dir: string, options: UsageOptions = {}): Promise<UsageResult> {
+  if (preserveProviderConfig(dir)) return { ok: false, reason: 'noRateLimits' };
   // Existence check only; the file is never read
   if (!fs.existsSync(path.join(dir, 'auth.json'))) return { ok: false, reason: 'notLoggedIn' };
   if (options.signal?.aborted) return CANCELLED;

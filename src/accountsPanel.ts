@@ -74,8 +74,7 @@ export interface PanelSource {
   enabled(): boolean;
   // Returns a display name
   pendingDir(): string | undefined;
-  // Absolute paths of files to watch (claude: claudeJsonPath(dir, isExplicitConfigDir(dir)) of each dir; codex: auth.json
-  // of each dir + the state file)
+  // Absolute paths to watch (Claude account info; Codex auth.json/provider files of each dir + selection state).
   watchTargets(): string[];
   // codex only; copied into TabState.restart on every push
   restart?(): RestartInfo;
@@ -388,6 +387,7 @@ const MESSAGE_FIELDS: Record<FromWebview['type'], readonly string[]> = {
   subscriptionCheck: ['dir'],
   remove: ['dir'],
   add: ['name'],
+  editProvider: ['dir'],
   share: ['dir'],
   unshare: ['dir'],
   rename: ['dir', 'label'],
@@ -415,6 +415,8 @@ export function checkMessage(raw: unknown): FromWebview | undefined {
   if (!MESSAGE_FIELDS[type].every((f) => typeof msg[f] === 'string')) return undefined;
   const isStringList = (v: unknown): boolean => Array.isArray(v) && v.every((s) => typeof s === 'string');
   if (!(LIST_FIELDS[type] ?? []).every((f) => isStringList(msg[f]))) return undefined;
+  if (type === 'editProvider' && msg.mode !== 'codex') return undefined;
+  if (type === 'add' && msg.provider !== undefined && (msg.mode !== 'codex' || msg.provider !== 'deepseek')) return undefined;
   return raw as FromWebview;
 }
 
