@@ -89,6 +89,32 @@ Codex の場合は、先に[切り替えを有効化](#codex-アカウントを�
 
 切り替えでは、同じマシン上のほかのウィンドウと共有されるエディター設定が変更されるため、それらのウィンドウも切り替わります。開いている Claude セッションで新しいアカウントを使いたいウィンドウは、それぞれ再読み込みしてください。
 
+### コマンドから Claude アカウントを切り替える
+
+`<scheme>://n2ns.planswap/switch?account=<name>` を使用します。スキームは VS Code では `vscode`、VSCodium では `vscodium` です。例の `work` を登録済みのアカウント名に置き換えてください。表示名ではなく元の名前を使い、大文字と小文字は区別しません。`default` で既定のアカウントに戻ります。アカウントのディレクトリは存在している必要があります。
+
+最初に対象の WSL ウィンドウにフォーカスします。既定の対象は `target=wsl` で、Windows のローカルウィンドウでは拒否されます。`distro=Ubuntu_26` はディストリビューション名の完全一致も要求します。これは受信したウィンドウを確認するだけで、別のウィンドウを選択したり開いたりしません。Windows のローカルアカウントを切り替える場合は `target=windows` を明示し、`distro` を省略してください。この URI 入口は他のリモート環境やローカル Linux に対応していません。
+
+Windows のコマンドプロンプト（`cmd`）から：
+
+```bat
+code.cmd --open-url "vscode://n2ns.planswap/switch?account=work&distro=Ubuntu_26&reload=1"
+codium.cmd --open-url "vscodium://n2ns.planswap/switch?account=work&distro=Ubuntu_26&reload=1"
+```
+
+WSL の Bash から（VSCodium ではスキームを変更）：
+
+```bash
+cmd.exe /c 'start "" "vscode://n2ns.planswap/switch?account=work&distro=Ubuntu_26&reload=1"'
+cmd.exe /c 'start "" "vscode://n2ns.planswap/switch?account=default&distro=Ubuntu_26&reload=1"'
+```
+
+URL 全体を二重引用符で囲んでください。引用符のない `&` は `cmd` のコマンド区切りになり、URI が途中で切れます。引用符を使わない引数では各区切りを `^&` にエスケープします。引用符で囲んだ URL にこのキャレットを入れないでください。WSL の例では外側の Bash の一重引用符で内側の `cmd` の二重引用符を保持します。`start` の空のタイトル `""` は省略できません。WSL ではこの Windows 起動方法を使用してください。WSL の `code --open-url` と `explorer.exe` ではこの URI を送れません。
+
+`reload=1` は切り替え成功後にだけウィンドウを再読み込みします。省略するとウィンドウは維持され、新しい Claude セッションが選択したアカウントを使います。既存のセッションは置き換えるまで元のアカウントを使います。サイドバーの確認が有効でも、PlanSwap の切り替え確認は表示されません。初回はエディターが拡張機能による URI の起動許可を求める場合があります。この拡張機能について今後確認しないオプションを選ぶと、以後のエディターの確認を省略できます。
+
+指定できるのは `account`、`reload`、`target`、`distro` で、それぞれ一度だけです。`account` は必須で、`reload` を指定する場合は `1` にします。未登録のアカウント、存在しないディレクトリ、対象やディストリビューションの不一致、無効なパラメーターはエラーとなり、切り替えも再読み込みも行いません。URI の送信はコマンドラインへの成功通知ではありません。切り替わらない場合はエディターの通知を確認してください。
+
 ## Codex アカウントを有効化して切り替える
 
 ### 一度だけ有効化する

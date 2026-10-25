@@ -12,6 +12,11 @@ interface ConfigurationGroup {
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
 const groups = manifest.contributes.configuration as ConfigurationGroup[];
 
+test('workspace extension activates when its URI is opened', () => {
+  assert.ok(manifest.activationEvents.includes('onUri'));
+  assert.deepEqual(manifest.extensionKind, ['workspace']);
+});
+
 test('five ordered groups contain exactly the 24 unique settings in their intended sections', () => {
   const expected = [
     ['planswap', ['language', 'usageDisplay', 'usageWarningThreshold', 'usageErrorThreshold', 'usageAutoRefreshCurrentOnly', 'notifications.enabled', 'notifications.threshold']],

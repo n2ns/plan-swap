@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Switch Claude accounts from an external URI without opening the sidebar, with optional window reload after success. Requests default to WSL, can require an exact distribution, and require an explicit target for native Windows to prevent accidental local switches.
+
 ## [0.4.5] - 2026-10-24
 
 ### Changed

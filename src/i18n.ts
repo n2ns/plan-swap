@@ -51,6 +51,13 @@ export function matchLocale(language: string): Locale {
 // English is the source of truth for the key set. Each translated table is typed Record<MessageKey, string>, so the
 // type checker enforces exactly the same keys.
 export const en = {
+  'uri.invalid': 'Invalid PlanSwap URI. Use this editor’s URI scheme with n2ns.planswap/switch and no fragment.',
+  'uri.parameters': 'Invalid PlanSwap URI parameters. Use account=<registered name>, optionally reload=1, target=wsl|windows and distro=<WSL distribution> (WSL only). Do not repeat parameters.',
+  'uri.wslRequired': 'This URI targets WSL. Open the intended WSL remote window and try again. To switch a Windows account, explicitly use target=windows.',
+  'uri.windowsRequired': 'This URI targets Windows. Open a local Windows window and try again.',
+  'uri.distroMismatch': 'This URI targets WSL distribution "{distro}". Open that distribution’s WSL window and try again.',
+  'uri.unknownAccount': 'Claude account "{name}" is not registered. Use its account name, not its display name.',
+  'uri.directory': 'Cannot switch Claude accounts: "{dir}" is missing, inaccessible or not a directory.',
   'diagnostics.title': 'PlanSwap diagnostics',
   'diagnostics.copy': 'Copy report',
   'diagnostics.previewHint': 'Preview this report and choose whether to copy it. PlanSwap does not upload it automatically.',
@@ -441,6 +448,13 @@ export const en = {
 export type MessageKey = keyof typeof en;
 
 export const zhCn: Record<MessageKey, string> = {
+  'uri.invalid': 'PlanSwap URI 无效。请使用当前编辑器的 URI 协议和 n2ns.planswap/switch，不要添加片段。',
+  'uri.parameters': 'PlanSwap URI 参数无效。请使用 account=<已登记的账号名>，可选参数为 reload=1、target=wsl|windows 和 distro=<WSL 发行版>（仅限 WSL）。参数不可重复。',
+  'uri.wslRequired': '此 URI 指向 WSL。请打开目标 WSL 远程窗口后重试。切换 Windows 账号时，请明确使用 target=windows。',
+  'uri.windowsRequired': '此 URI 指向 Windows。请打开 Windows 本地窗口后重试。',
+  'uri.distroMismatch': '此 URI 指向 WSL 发行版“{distro}”。请打开该发行版的 WSL 窗口后重试。',
+  'uri.unknownAccount': 'Claude 账号“{name}”未登记。请使用账号名，而非显示名称。',
+  'uri.directory': '无法切换 Claude 账号：“{dir}”不存在、无法访问或不是目录。',
   'diagnostics.title': 'PlanSwap 诊断报告',
   'diagnostics.copy': '复制报告',
   'diagnostics.previewHint': '请预览报告并自行决定是否复制。PlanSwap 不会自动上传报告。',
@@ -806,6 +820,13 @@ export const zhCn: Record<MessageKey, string> = {
 };
 
 export const zhTw: Record<MessageKey, string> = {
+  'uri.invalid': 'PlanSwap URI 無效。請使用目前編輯器的 URI 通訊協定和 n2ns.planswap/switch，不要加入片段。',
+  'uri.parameters': 'PlanSwap URI 參數無效。請使用 account=<已登記的帳號名稱>，選用參數為 reload=1、target=wsl|windows 和 distro=<WSL 發行版>（僅限 WSL）。參數不可重複。',
+  'uri.wslRequired': '此 URI 指向 WSL。請開啟目標 WSL 遠端視窗後重試。切換 Windows 帳號時，請明確使用 target=windows。',
+  'uri.windowsRequired': '此 URI 指向 Windows。請開啟 Windows 本機視窗後重試。',
+  'uri.distroMismatch': '此 URI 指向 WSL 發行版「{distro}」。請開啟該發行版的 WSL 視窗後重試。',
+  'uri.unknownAccount': 'Claude 帳號「{name}」尚未登記。請使用帳號名稱，而非顯示名稱。',
+  'uri.directory': '無法切換 Claude 帳號：「{dir}」不存在、無法存取或不是目錄。',
   'diagnostics.title': 'PlanSwap 診斷報告',
   'diagnostics.copy': '複製報告',
   'diagnostics.previewHint': '請預覽報告並自行決定是否複製。PlanSwap 不會自動上傳報告。',
@@ -1171,6 +1192,13 @@ export const zhTw: Record<MessageKey, string> = {
 };
 
 export const es: Record<MessageKey, string> = {
+  'uri.invalid': 'URI de PlanSwap no válido. Usa el esquema URI de este editor con n2ns.planswap/switch y sin fragmento.',
+  'uri.parameters': 'Parámetros URI de PlanSwap no válidos. Usa account=<nombre registrado> y, opcionalmente, reload=1, target=wsl|windows y distro=<distribución WSL> (solo WSL). No repitas parámetros.',
+  'uri.wslRequired': 'Este URI apunta a WSL. Abre la ventana remota WSL correspondiente y vuelve a intentarlo. Para cambiar una cuenta de Windows, usa explícitamente target=windows.',
+  'uri.windowsRequired': 'Este URI apunta a Windows. Abre una ventana local de Windows y vuelve a intentarlo.',
+  'uri.distroMismatch': 'Este URI apunta a la distribución WSL "{distro}". Abre una ventana WSL de esa distribución y vuelve a intentarlo.',
+  'uri.unknownAccount': 'La cuenta Claude "{name}" no está registrada. Usa el nombre de la cuenta, no su nombre para mostrar.',
+  'uri.directory': 'No se puede cambiar de cuenta Claude: "{dir}" no existe, no es accesible o no es un directorio.',
   'diagnostics.title': 'Diagnóstico de PlanSwap',
   'diagnostics.copy': 'Copiar informe',
   'diagnostics.previewHint': 'Revise el informe y decida si desea copiarlo. PlanSwap no lo sube automáticamente.',
@@ -1520,6 +1548,13 @@ export const es: Record<MessageKey, string> = {
 };
 
 export const ja: Record<MessageKey, string> = {
+  'uri.invalid': 'PlanSwap URI が無効です。このエディターの URI スキームと n2ns.planswap/switch を使用し、フラグメントは付けないでください。',
+  'uri.parameters': 'PlanSwap URI のパラメーターが無効です。account=<登録済みのアカウント名> を指定してください。reload=1、target=wsl|windows、distro=<WSL ディストリビューション>（WSL のみ）は省略可能です。パラメーターを重複させないでください。',
+  'uri.wslRequired': 'この URI の対象は WSL です。対象の WSL リモートウィンドウを開いて再試行してください。Windows のアカウントを切り替える場合は、target=windows を明示してください。',
+  'uri.windowsRequired': 'この URI の対象は Windows です。Windows のローカルウィンドウを開いて再試行してください。',
+  'uri.distroMismatch': 'この URI の対象は WSL ディストリビューション「{distro}」です。そのディストリビューションの WSL ウィンドウを開いて再試行してください。',
+  'uri.unknownAccount': 'Claude アカウント「{name}」は登録されていません。表示名ではなくアカウント名を使用してください。',
+  'uri.directory': 'Claude アカウントを切り替えられません。「{dir}」が存在しないか、アクセスできないか、ディレクトリではありません。',
   'diagnostics.title': 'PlanSwap 診断レポート',
   'diagnostics.copy': 'レポートをコピー',
   'diagnostics.previewHint': 'レポートを確認し、コピーするかどうかを選んでください。PlanSwap が自動でアップロードすることはありません。',
@@ -1869,6 +1904,13 @@ export const ja: Record<MessageKey, string> = {
 };
 
 export const ko: Record<MessageKey, string> = {
+  'uri.invalid': '잘못된 PlanSwap URI입니다. 이 편집기의 URI 스킴과 n2ns.planswap/switch를 사용하고 프래그먼트는 추가하지 마세요.',
+  'uri.parameters': '잘못된 PlanSwap URI 매개변수입니다. account=<등록된 계정 이름>을 사용하세요. reload=1, target=wsl|windows, distro=<WSL 배포판>(WSL 전용)은 선택 사항입니다. 매개변수를 중복하지 마세요.',
+  'uri.wslRequired': '이 URI는 WSL을 대상으로 합니다. 대상 WSL 원격 창을 열고 다시 시도하세요. Windows 계정을 전환하려면 target=windows를 명시하세요.',
+  'uri.windowsRequired': '이 URI는 Windows를 대상으로 합니다. Windows 로컬 창을 열고 다시 시도하세요.',
+  'uri.distroMismatch': '이 URI는 WSL 배포판 "{distro}"을(를) 대상으로 합니다. 해당 배포판의 WSL 창을 열고 다시 시도하세요.',
+  'uri.unknownAccount': 'Claude 계정 "{name}"이(가) 등록되어 있지 않습니다. 표시 이름이 아닌 계정 이름을 사용하세요.',
+  'uri.directory': 'Claude 계정을 전환할 수 없습니다. "{dir}"이(가) 없거나, 접근할 수 없거나, 디렉터리가 아닙니다.',
   'diagnostics.title': 'PlanSwap 진단 보고서',
   'diagnostics.copy': '보고서 복사',
   'diagnostics.previewHint': '보고서를 확인하고 복사할지 선택하세요. PlanSwap은 보고서를 자동으로 업로드하지 않습니다.',

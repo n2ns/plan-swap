@@ -110,6 +110,12 @@ Claude account commands are in the Command Palette category "Claude Account"; pa
 
 From the row (switch button, double-click or Enter, with a modal confirmation unless `planswap.claude.confirmSwitch` is off) or the palette (non-current registered accounts; the pick is the confirmation). New sessions use the target, in every window (section 10); open sessions keep the old account until a reload, offered by the reload banner (or a notification while the sidebar is hidden). A missing named directory is refused; a shared target is re-linked first and problems only warn. A failed settings write is reported and the account stays unchanged.
 
+### 5.1a Switch Claude accounts from a command
+
+An external URI can select `default` or a registered Claude account by its original name, ignoring letter case; display aliases are not accepted. It performs the same linked-account synchronization and reports the same switching failures as the sidebar, without PlanSwap's confirmation dialog. The editor may still ask permission the first time it opens a URI for this extension. An optional reload runs only after success; otherwise existing sessions keep their account until reloaded.
+
+The entry point defaults to WSL and rejects a local Windows window instead of switching its accounts. A caller can restrict it to an exact WSL distribution, or explicitly request native Windows. A distribution restriction checks the receiving window and does not choose one. Invalid parameters, unknown accounts, and missing or non-directory account folders show errors without switching or reloading. Codex is unaffected. See the [user guide](user-guide.md#switch-claude-accounts-from-a-command) for Windows/WSL commands and [Claude design](design.md#61a-external-uri-switching) for the routing guard.
+
 ### 5.2 Add account `planswap.addAccount`
 
 The palette entry only focuses the sidebar's add form, which shows validation errors. `~/.claude-<name>` is created or reused as is; if creation fails nothing is registered. A shared account is linked to the default account, an independent one gets a one-time copy of the default configuration; a failure there only warns and the account is still added ([Claude design 6.2](design.md#62-add)).

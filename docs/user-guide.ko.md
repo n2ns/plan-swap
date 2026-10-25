@@ -89,6 +89,32 @@ Codex는 먼저 [전환을 활성화](#codex-계정-전환-활성화-및-전환)
 
 전환하면 같은 컴퓨터의 다른 창과 공유되는 편집기 설정이 바뀌므로 그 창들도 함께 전환됩니다. 열려 있는 Claude 세션이 새 계정을 사용해야 하는 창은 각각 다시 로드하세요.
 
+### 명령으로 Claude 계정 전환
+
+`<scheme>://n2ns.planswap/switch?account=<name>`을 사용합니다. 스킴은 VS Code에서 `vscode`, VSCodium에서 `vscodium`입니다. 예제의 `work`를 등록된 계정 이름으로 바꾸세요. 표시 별칭은 사용할 수 없으며 이름은 대소문자를 구분하지 않습니다. `default`로 기본 계정으로 돌아갑니다. 계정 디렉터리가 이미 있어야 합니다.
+
+먼저 대상 WSL 창에 포커스를 두세요. 기본 대상은 `target=wsl`이며 Windows 로컬 창에서는 거부합니다. `distro=Ubuntu_26`은 배포판 이름도 정확히 일치해야 합니다. 수신 창만 확인하며 다른 창을 선택하거나 열지 않습니다. Windows 로컬 계정을 전환하려면 `target=windows`를 명시하고 `distro`를 생략하세요. 이 URI 진입점은 다른 원격 환경이나 로컬 Linux를 지원하지 않습니다.
+
+Windows 명령 프롬프트(`cmd`)에서:
+
+```bat
+code.cmd --open-url "vscode://n2ns.planswap/switch?account=work&distro=Ubuntu_26&reload=1"
+codium.cmd --open-url "vscodium://n2ns.planswap/switch?account=work&distro=Ubuntu_26&reload=1"
+```
+
+WSL Bash에서(VSCodium은 해당 스킴으로 변경):
+
+```bash
+cmd.exe /c 'start "" "vscode://n2ns.planswap/switch?account=work&distro=Ubuntu_26&reload=1"'
+cmd.exe /c 'start "" "vscode://n2ns.planswap/switch?account=default&distro=Ubuntu_26&reload=1"'
+```
+
+URL 전체를 큰따옴표로 감싸세요. 따옴표 없는 `&`는 `cmd`에서 명령 구분자로 처리되어 URI가 잘립니다. 따옴표 없는 인수에서는 각 구분자를 `^&`로 이스케이프하세요. 큰따옴표로 감싼 URL 안에는 이 캐럿을 넣지 마세요. WSL 예제는 바깥쪽 Bash 작은따옴표로 안쪽 `cmd` 큰따옴표를 유지합니다. `start` 뒤의 빈 제목 `""`는 생략하면 안 됩니다. WSL에서는 이 Windows 실행 방식을 사용하세요. WSL의 `code --open-url`과 `explorer.exe`는 이 URI를 전달하지 못합니다.
+
+`reload=1`은 전환 성공 후에만 창을 다시 로드합니다. 생략하면 창을 유지하고 새 Claude 세션이 선택한 계정을 사용합니다. 기존 세션은 교체될 때까지 이전 계정을 사용합니다. 사이드바 전환 확인이 켜져 있어도 PlanSwap 확인 대화 상자는 표시되지 않습니다. 처음에는 편집기가 확장 프로그램의 URI 열기를 허용할지 물을 수 있습니다. 이 확장 프로그램에 대해 다시 묻지 않는 옵션을 선택하면 이후 편집기 확인을 생략합니다.
+
+`account`, `reload`, `target`, `distro`만 각각 한 번씩 사용할 수 있습니다. `account`는 필수이며 `reload`를 지정하면 값은 `1`이어야 합니다. 등록되지 않은 계정, 없는 디렉터리, 대상 또는 배포판 불일치, 잘못된 매개변수는 오류를 표시하고 전환이나 다시 로드를 하지 않습니다. URI 전달은 명령줄에 성공을 알리는 응답이 아닙니다. 계정이 바뀌지 않으면 편집기 알림을 확인하세요.
+
 ## Codex 계정 전환 활성화 및 전환
 
 ### 한 번만 활성화

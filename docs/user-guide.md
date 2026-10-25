@@ -89,6 +89,32 @@ The Command Palette command **Claude Account: Switch Account** shows an account 
 
 Switching changes an editor setting shared by other windows on the same machine, so those windows switch too. Reload each window whose open Claude sessions should use the new account.
 
+### Switch Claude accounts from a command
+
+Use `<scheme>://n2ns.planswap/switch?account=<name>`. The scheme follows the editor: `vscode` for VS Code, `vscodium` for VSCodium. Replace `work` below with a registered account name, not its display alias; names are case-insensitive. Use `default` to switch back. The account directory must already exist.
+
+Focus the intended WSL window first. Requests default to `target=wsl`; a local Windows window refuses them. `distro=Ubuntu_26` additionally requires that exact distribution name; it checks the receiving window and does not route to a different one. To intentionally switch native Windows accounts, use `target=windows` and omit `distro`. Other remote environments and local Linux are not supported by this URI entry point.
+
+From Windows Command Prompt (`cmd`):
+
+```bat
+code.cmd --open-url "vscode://n2ns.planswap/switch?account=work&distro=Ubuntu_26&reload=1"
+codium.cmd --open-url "vscodium://n2ns.planswap/switch?account=work&distro=Ubuntu_26&reload=1"
+```
+
+From a WSL Bash shell (replace the scheme for VSCodium):
+
+```bash
+cmd.exe /c 'start "" "vscode://n2ns.planswap/switch?account=work&distro=Ubuntu_26&reload=1"'
+cmd.exe /c 'start "" "vscode://n2ns.planswap/switch?account=default&distro=Ubuntu_26&reload=1"'
+```
+
+Keep the whole URL in double quotes: an unquoted `&` separates commands in `cmd` and truncates the URI. In an unquoted argument, escape each separator as `^&`; do not put those carets into a quoted URL. The WSL example uses outer Bash single quotes to preserve the inner `cmd` quotes; `start` needs the empty `""` window title. Use this Windows launcher from WSL; WSL `code --open-url` and `explorer.exe` do not deliver this URI.
+
+`reload=1` reloads the window only after successful switching; omit it to keep the window open and let new Claude sessions use the new account. Existing sessions retain their old account until replaced. No PlanSwap confirmation is shown, even when sidebar confirmation is enabled. The editor may ask whether to let the extension open its first URI; selecting “Do not ask me again for this extension” suppresses later editor prompts.
+
+Only `account`, `reload`, `target` and `distro` are accepted, once each. `account` is required; `reload` must be `1` if supplied. Unknown accounts, missing directories, wrong targets/distributions or invalid parameters show an error without switching or reloading. URI delivery is not a command-line success receipt: inspect the editor notification if the account does not change.
+
 ## Enable and switch Codex accounts
 
 ### Enable once

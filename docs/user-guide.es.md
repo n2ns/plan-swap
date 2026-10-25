@@ -89,6 +89,32 @@ El comando **Cuenta de Claude: Cambiar de cuenta** (Claude Account: Switch Accou
 
 Cambiar de cuenta modifica un ajuste del editor compartido por las demás ventanas del mismo equipo, así que esas ventanas también cambian. Recarga cada ventana cuyas sesiones de Claude abiertas deban usar la nueva cuenta.
 
+### Cambiar cuentas Claude desde un comando
+
+Usa `<scheme>://n2ns.planswap/switch?account=<name>`. El esquema depende del editor: `vscode` para VS Code y `vscodium` para VSCodium. Sustituye `work` por un nombre de cuenta registrado, no su alias visible; no se distinguen mayúsculas y minúsculas. Usa `default` para volver a la cuenta predeterminada. La carpeta debe existir.
+
+Enfoca primero la ventana WSL de destino. Las solicitudes usan `target=wsl` por defecto; una ventana local de Windows las rechaza. `distro=Ubuntu_26` exige además ese nombre exacto de distribución: comprueba la ventana receptora, no elige ni abre otra. Para cambiar cuentas locales de Windows, indica `target=windows` y omite `distro`. Esta entrada URI no admite otros entornos remotos ni Linux local.
+
+Desde el símbolo del sistema de Windows (`cmd`):
+
+```bat
+code.cmd --open-url "vscode://n2ns.planswap/switch?account=work&distro=Ubuntu_26&reload=1"
+codium.cmd --open-url "vscodium://n2ns.planswap/switch?account=work&distro=Ubuntu_26&reload=1"
+```
+
+Desde Bash en WSL (cambia el esquema para VSCodium):
+
+```bash
+cmd.exe /c 'start "" "vscode://n2ns.planswap/switch?account=work&distro=Ubuntu_26&reload=1"'
+cmd.exe /c 'start "" "vscode://n2ns.planswap/switch?account=default&distro=Ubuntu_26&reload=1"'
+```
+
+Encierra toda la URL entre comillas dobles: un `&` sin comillas separa comandos en `cmd` y corta el URI. En un argumento sin comillas, escapa cada separador como `^&`; no añadas esos caracteres a una URL entre comillas. El ejemplo WSL usa comillas simples de Bash para conservar las comillas de `cmd`; `start` necesita el título vacío `""`. Usa este lanzador de Windows desde WSL; `code --open-url` y `explorer.exe` en WSL no entregan este URI.
+
+`reload=1` recarga la ventana solo tras un cambio correcto. Omítelo para conservar la ventana; las nuevas sesiones Claude usarán la cuenta elegida. Las sesiones existentes mantienen su cuenta hasta ser reemplazadas. No aparece la confirmación de PlanSwap, aunque esté activada para la barra lateral. El editor puede pedir permiso la primera vez que la extensión abre un URI; marca la opción de no volver a preguntar para esta extensión para evitar futuros avisos del editor.
+
+Solo se aceptan `account`, `reload`, `target` y `distro`, una vez cada uno. `account` es obligatorio y `reload`, si aparece, debe ser `1`. Las cuentas desconocidas, carpetas ausentes, destinos o distribuciones incorrectos y parámetros no válidos muestran un error sin cambiar ni recargar. La entrega del URI no confirma el éxito por línea de comandos: consulta la notificación del editor si la cuenta no cambia.
+
 ## Activar y cambiar cuentas de Codex
 
 ### Activar una vez

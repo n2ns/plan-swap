@@ -40,6 +40,7 @@ import { syncClaudeInto, runTool, type TerminalCheck, type ToolDeps } from './to
 import { t } from './i18n';
 import { isWindows, errText } from './platform';
 import { askCopyFallback } from './linkPolicy';
+import { parseAccountUri } from './accountUri';
 import { accountTerminalShell, bundledPathAssignment, hasControlChars, shQuote, windowsAccountEnv, windowsTerminalEnvSetting } from './terminalShell';
 
 // planswap.claude.confirmSwitch: whether a switch from the panel asks a modal first (default on)
@@ -75,6 +76,9 @@ export interface Deps {
  *   confirmation); a missing non-default folder is an error; a shared account is re-linked and mirrored first (problems
  *   only warn); then setConfigDir, the reload banner (plus a notification while the panel is hidden). A failed settings
  *   write is reported.
+ * - URI: validates the request and receiving host, resolves a registered name (case-insensitive, never an alias),
+ *   and checks that its directory exists before switchTo, including the default/current account. No switch modal;
+ *   reload=1 reloads only after switchTo succeeds. The URI registration is disposed with the commands.
  * - Add: always answers addResult, also when the flow throws. Linking or copying failures only warn and the account is
  *   still registered. A shared add creates the folder, then asks askCopyFallback (Windows) before anything is linked.
  * - Share / unshare: named, non-current accounts only, after a modal; current-account and busy state are re-checked
@@ -498,6 +502,30 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
   };
 
   return [
+    vscode.window.registerUriHandler({
+      async handleUri(uri) {
+        try {
+          const request = parseAccountUri(uri, {
+            uriScheme: vscode.env.uriScheme,
+            platform: process.platform,
+            remoteName: vscode.env.remoteName,
+            distro: process.env.WSL_DISTRO_NAME,
+          });
+          const account = store.all().find((a) => sameName(a.name, request.account));
+          if (!account) throw new Error(t('uri.unknownAccount', { name: request.account }));
+          let isDirectory = false;
+          try {
+            isDirectory = fs.statSync(account.dir).isDirectory();
+          } catch {
+            // A missing or inaccessible directory must never change the selected account, even for default.
+          }
+          if (!isDirectory) throw new Error(t('uri.directory', { dir: account.dir }));
+          if (await switchTo(account) && request.reload) await reloadWindow();
+        } catch (err) {
+          void vscode.window.showErrorMessage(errText(err));
+        }
+      },
+    }),
     vscode.commands.registerCommand('planswap.switchAccount', async () => {
       const all = store.all();
       const cur = currentIndex(all);

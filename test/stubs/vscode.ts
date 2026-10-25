@@ -62,8 +62,9 @@ export const workspace = {
   },
 };
 
-export const env: { remoteName: string | undefined; language: string; clipboard: { writeText(text: string): Promise<void> }; openExternal(uri: { toString(): string }): Promise<boolean> } = {
+export const env: { remoteName: string | undefined; uriScheme: string; language: string; clipboard: { writeText(text: string): Promise<void> }; openExternal(uri: { toString(): string }): Promise<boolean> } = {
   remoteName: undefined,
+  uriScheme: 'vscode',
   language: 'en',
   clipboard: { async writeText(_text: string) {} },
   async openExternal() { return true; },
@@ -117,8 +118,17 @@ export function tooltipText(tooltip: string | MarkdownString): string {
 }
 
 export const statusBarItems: Array<{ alignment: number; text: string; tooltip: string | MarkdownString; command: string; name?: string; backgroundColor?: ThemeColor; accessibilityInformation?: { label: string; role?: string }; visible: boolean; disposed?: boolean; show(): void; hide(): void; dispose(): void }> = [];
+export const uriHandlers = new Set<import('vscode').UriHandler>();
+/** Delivers a URI to the registered extension handler and waits for its work. */
+export async function dispatchUri(uri: import('vscode').Uri): Promise<void> {
+  for (const handler of uriHandlers) await handler.handleUri(uri);
+}
 export const window = {
   state: { focused: true },
+  registerUriHandler(handler: import('vscode').UriHandler) {
+    uriHandlers.add(handler);
+    return { dispose() { uriHandlers.delete(handler); } };
+  },
   async showTextDocument<T>(document: T): Promise<T> { return document; },
   createStatusBarItem(alignment: number) {
     const item: (typeof statusBarItems)[number] = { alignment, text: '', tooltip: '', command: '', visible: false,

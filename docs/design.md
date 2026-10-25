@@ -143,6 +143,14 @@ Panel actions call the flow functions in `commands.ts` directly through Webview 
 4. On success the panel's `switchedTo` is set and the reload banner appears; when the panel is not visible, a non-modal notification with "Reload Window" is shown instead (not awaited). The status bar is updated.
 5. A signed-out target shows the official panel's sign-in screen (fact 6).
 
+### 6.1a External URI switching
+
+The workspace extension registers one `vscode.window.registerUriHandler` through `registerCommands`; its disposable belongs to the extension context, and `onUri` activates it on demand. The endpoint is `<vscode.env.uriScheme>://n2ns.planswap/switch`. It resolves a registered account name (case-insensitive, never a display alias or arbitrary directory) and calls the existing `switchTo()` closure, preserving outgoing/incoming shared-account synchronization, settings writes and failure messages. It bypasses only the panel confirmation. `reload=1` calls `workbench.action.reloadWindow` only after `switchTo()` returns success; an already-current valid account also permits a reload. No parameter means no automatic reload. Existing Claude processes keep their old environment until replaced.
+
+The URI cannot reliably reveal which shell sent it. To prevent a WSL request delivered to a Windows window from switching local accounts, an omitted `target` means `wsl`. That target requires all three: a Linux extension host, `vscode.env.remoteName === 'wsl'`, and a non-empty `WSL_DISTRO_NAME`. Both Microsoft Remote-WSL and n2ns.wsl-remote use that remote name. An optional `distro` must exactly equal `WSL_DISTRO_NAME`; it validates the receiving window, not routes to another window. A caller must explicitly use `target=windows` for a native Windows host with no remote name; `distro` is invalid with that target. Local Linux and other remote environments are refused by this entry point. The sidebar and palette keep their existing platform behavior.
+
+`account` is required and follows the existing account-name character rules. `reload`, when supplied, must be `1`; `target` must be `wsl` or `windows`. Unknown or duplicate query parameters, malformed encoding, fragments, wrong endpoints, empty values, unknown accounts, and missing/non-directory account paths produce localized errors before any switching or reload. Directory validation includes the default and already-current accounts. The URI never creates or registers an account. Editor-level URI approval remains under the editor's control; PlanSwap does not suppress it. Multiple open windows are subject to the editor's URI routing; callers should focus the intended window and include `distro` for WSL. See the [VS Code URI handler API](https://code.visualstudio.com/api/references/vscode-api#window.registerUriHandler) and [calling instructions](user-guide.md#switch-claude-accounts-from-a-command).
+
 ### 6.2 Add
 
 1. The input lives in the panel; `planswap.addAccount` only focuses it.

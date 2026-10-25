@@ -89,6 +89,32 @@ Claude 帳號名稱旁的警告圖示表示訂閱存取遭拒。將游標停留�
 
 切換會修改同一台電腦上其他視窗共用的編輯器設定，因此這些視窗也會一起切換。凡是希望已開啟的 Claude 工作階段改用新帳號的視窗，都需要分別重新載入。
 
+### 從命令切換 Claude 帳號
+
+使用 `<scheme>://n2ns.planswap/switch?account=<name>`。通訊協定依編輯器而定：VS Code 為 `vscode`，VSCodium 為 `vscodium`。將下例的 `work` 換成已登記的帳號名稱，而非顯示別名；名稱不區分大小寫。使用 `default` 切回預設帳號。帳號目錄必須已存在。
+
+先將焦點移至目標 WSL 視窗。請求預設為 `target=wsl`，Windows 本機視窗會拒絕。`distro=Ubuntu_26` 還要求發行版名稱完全相符；它只檢查接收視窗，不會選取或開啟另一個視窗。若要切換 Windows 本機帳號，請明確使用 `target=windows`，並省略 `distro`。此 URI 入口不支援其他遠端環境或本機 Linux。
+
+在 Windows 命令提示字元（`cmd`）中：
+
+```bat
+code.cmd --open-url "vscode://n2ns.planswap/switch?account=work&distro=Ubuntu_26&reload=1"
+codium.cmd --open-url "vscodium://n2ns.planswap/switch?account=work&distro=Ubuntu_26&reload=1"
+```
+
+在 WSL Bash 中（VSCodium 使用對應通訊協定）：
+
+```bash
+cmd.exe /c 'start "" "vscode://n2ns.planswap/switch?account=work&distro=Ubuntu_26&reload=1"'
+cmd.exe /c 'start "" "vscode://n2ns.planswap/switch?account=default&distro=Ubuntu_26&reload=1"'
+```
+
+請用雙引號包住完整 URL：未加引號的 `&` 會被 `cmd` 視為命令分隔符號，截斷 URI。未加引號的參數須將每個分隔符號逸出為 `^&`；不要在已加雙引號的 URL 內加入這些符號。WSL 範例外層使用 Bash 單引號，以保留內層 `cmd` 雙引號；`start` 後的空標題 `""` 不可省略。從 WSL 請使用此 Windows 啟動方式；WSL 中的 `code --open-url` 和 `explorer.exe` 無法傳遞此 URI。
+
+`reload=1` 只在切換成功後重新載入視窗；省略時保留視窗，新的 Claude 工作階段使用新帳號。既有工作階段在被取代前仍使用原帳號。即使已開啟側邊欄切換確認，URI 入口也不顯示 PlanSwap 確認對話方塊。編輯器首次可能詢問是否允許擴充功能開啟 URI；勾選「不再詢問此擴充功能」後，便不再顯示後續系統確認。
+
+只接受 `account`、`reload`、`target` 和 `distro`，每個參數只能出現一次。`account` 必填，提供 `reload` 時值必須為 `1`。未知帳號、目錄缺失、目標或發行版不符、無效參數都會顯示錯誤，不切換、不重新載入。URI 傳遞不代表命令列已收到切換成功回覆；帳號未變更時請查看編輯器通知。
+
 ## 啟用並切換 Codex 帳號
 
 ### 首次啟用
