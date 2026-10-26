@@ -2,7 +2,7 @@
   "name": "planswap",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.4.6",
+  "version": "0.5.0",
   "publisher": "n2ns",
   "private": true,
   "license": "Apache-2.0",

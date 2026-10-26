@@ -1,10 +1,14 @@
 # Changelog
 
-## [Unreleased]
+## [0.5.0] - 2026-10-26
 
 ### Added
 
 - Independent DeepSeek API cards in the Codex list, with model and API-key editing, account terminals and the existing account-switching flow. Linked cards keep their provider configuration and plaintext key separate from the default account. API cards do not query subscription quotas or appear in quota-based recommendations.
+
+### Changed
+
+- PlanSwap is now licensed under Apache-2.0 instead of MIT.
 
 ### Fixed
 
