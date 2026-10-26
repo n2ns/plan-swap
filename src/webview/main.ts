@@ -189,7 +189,8 @@ function planClass(plan: string | undefined, mode: PanelMode): string {
 function loginStatus(a: AccountView, hideEmail?: boolean): HTMLElement | null {
   if (a.provider === 'deepseek') {
     return h('div', { class: 'row-sub provider-details' },
-      h('div', {}, a.providerModel ? t('provider.model', { model: a.providerModel }) : t('provider.modelMissing')),
+      // An unreadable configuration has no model to report; its error line below says why
+      a.providerModel && h('div', {}, t('provider.model', { model: a.providerModel })),
       h('div', { title: a.providerConfigured ? t('provider.configuredHint') : undefined }, t(a.providerConfigured ? 'provider.configured' : 'provider.incomplete')),
     );
   }
@@ -695,7 +696,8 @@ class Page {
       : this.mode === 'codex' && codexRestart().userEnv ? 'codex.addHelpSharedWin'
         : (`${this.mode}.addHelpShared` as const);
     const help = name ? t(createKey, { dir: this.dirPrefix() + name }) : t('add.helpIdle', { prefix: this.dirPrefix() });
-    this.addHelp.textContent = error ?? (deepseek ? joinSentences(help, t('provider.addNext')) : help);
+    // The next-steps note follows the creation sentence; the idle hint is not a sentence it can extend
+    this.addHelp.textContent = error ?? (deepseek && name ? joinSentences(help, t('provider.addNext')) : help);
   }
 
   private submitAdd(): void {

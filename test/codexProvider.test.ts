@@ -92,9 +92,9 @@ describe('native DeepSeek card configuration', () => {
     assert.equal(readProviderInfo(dir)?.configured, true);
   });
 
-  test('unsupported manual edits and a damaged catalog are preserved and reported without source text', () => {
+  test('owned fields in unsupported forms and a damaged catalog are preserved and reported without source text', () => {
     create();
-    fs.appendFileSync(path.join(dir, 'config.toml'), '\n[another]\nsecret = "do-not-show"\n');
+    fs.writeFileSync(path.join(dir, 'config.toml'), 'approval_policy = { secret = "do-not-show" }\n' + config());
     const before = snapshot(dir);
     assert.equal(readProviderInfo(dir)?.configured, true);
     assert.throws(() => readDeepSeekEditState(dir), (error: unknown) => fails('format')(error) && !(error as Error).message.includes('do-not-show'));
@@ -147,14 +147,52 @@ describe('native DeepSeek card configuration', () => {
     }
   });
 
-  test('operational reads skip unrelated complete values but editing refuses arbitrary fields', () => {
+  test('operational reads and editing both skip unrelated complete values', () => {
     create();
     const extra = 'notes = """\n[model_providers.deepseek]\nexperimental_bearer_token = "ignored"\n"""\n';
     fs.writeFileSync(path.join(dir, 'config.toml'), extra + config()
       + '\n[notice]\nflag = true\n[[skills.config]]\npath = "one"\n[[skills.config]]\npath = "two"\n');
     validateProviderConfig(dir);
     assert.equal(readProviderInfo(dir)?.configured, true);
-    assert.throws(() => readDeepSeekEditState(dir), fails('format'));
+    assert.equal(readDeepSeekEditState(dir).model, 'deepseek-flash');
+  });
+
+  test('tables Codex writes on its own do not block editing and stay byte-identical', () => {
+    create();
+    const source = config() + '\n[tui]\nscreen_reader_detection_done = true\n[tui.model_availability_nux]\n"deepseek-flash" = 1\n'
+      + '[notice]\nhide_full_access_warning = true\n[hooks.state."hook:one"]\ntrusted_hash = "abc"\n'
+      + '[mcp_servers.tool]\ncommand = "tool"\nargs = [\n  "--flag",\n]\n';
+    fs.writeFileSync(path.join(dir, 'config.toml'), source);
+    const state = readDeepSeekEditState(dir);
+    editDeepSeekConfig(dir, 'deepseek-v4-pro', 'replacement', state.revision);
+    assert.equal(config(), source.replace('model = "deepseek-flash"', 'model = "deepseek-v4-pro"').replace('sk-test-key', 'replacement'));
+  });
+
+  test('editing leaves look-alike lines inside multiline values untouched', () => {
+    create();
+    const extra = 'notes = """\nmodel = "inside"\n[model_providers.deepseek]\nexperimental_bearer_token = "ignored"\n"""\n';
+    const source = extra + config();
+    fs.writeFileSync(path.join(dir, 'config.toml'), source);
+    const state = readDeepSeekEditState(dir);
+    editDeepSeekConfig(dir, 'deepseek-v4-pro', 'replacement', state.revision);
+    assert.equal(config(), extra + source.slice(extra.length).replace('model = "deepseek-flash"', 'model = "deepseek-v4-pro"').replace('sk-test-key', 'replacement'));
+  });
+
+  test('a missing key is inserted under the real provider table, not a look-alike inside a multiline value', () => {
+    create();
+    const extra = 'notes = """\n[model_providers.deepseek]\n"""\n';
+    fs.writeFileSync(path.join(dir, 'config.toml'), extra + config().replace(/^experimental_bearer_token = .*\n/m, ''));
+    assert.equal(readProviderInfo(dir)?.error, 'key');
+    const state = readDeepSeekEditState(dir);
+    editDeepSeekConfig(dir, state.model, 'replacement', state.revision);
+    assert.equal(readProviderInfo(dir)?.configured, true);
+    assert.ok(config().startsWith(extra));
+  });
+
+  test('generated config holds only settings the Codex CLI recognizes', () => {
+    create();
+    assert.equal(config().includes('preferred_auth_method'), false);
+    assert.match(config(), /^forced_login_method = "api"$/m);
   });
 
   test('alternate authentication or routing is still refused by operational validation', () => {

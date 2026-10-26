@@ -29,6 +29,7 @@ export async function run(ctx) {
     const card = state.codex.accounts.find((a) => a.name === 'work');
     card.providerConfigured = false;
     card.providerError = 'Synthetic provider configuration error';
+    delete card.providerModel; // as the host reports an unreadable configuration
     card.isSelected = true;
     state.codex.accounts.find((a) => a.name === 'default').isSelected = false;
     state.codex.pendingDir = 'Work';
@@ -36,12 +37,17 @@ export async function run(ctx) {
   });
   await step('Invalid provider shows an explicit error, not a sign-in action', await card.locator('.provider-error').textContent() === 'Synthetic provider configuration error' && await card.locator('.row-btn').count() === 0);
   await step('Email visibility does not hide provider configuration status', await card.locator('.provider-details').isVisible());
+  await step('Invalid provider shows no model line it cannot read', await card.locator('.provider-details > div').count() === 1);
   await step('Pending provider selection is not presented as current', await card.getAttribute('aria-current') === null && await page.locator('#panel-codex .row[data-dir="/fixture/.codex"]').getAttribute('aria-current') === 'true');
 
   const toggle = page.locator('#panel-codex .add-toggle');
   if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
-  await page.locator('#panel-codex vscode-radio[name="add-provider-codex"][value="deepseek"]').click();
+  const help = page.locator('#panel-codex .add .help');
   const input = page.locator('#panel-codex .add .input-group vscode-textfield input');
+  await input.fill('');
+  const idleHelp = await help.textContent();
+  await page.locator('#panel-codex vscode-radio[name="add-provider-codex"][value="deepseek"]').click();
+  await step('Provider choice keeps the idle help a single sentence until a name is entered', await help.textContent() === idleHelp, await help.textContent());
   await input.fill('deepseek-new');
   await page.locator('#panel-codex vscode-radio[value="independent"]').click();
   await step('Provider form collects no API key in the Webview', await page.locator('#panel-codex .add vscode-textfield').count() === 1 && await page.locator('#panel-codex input[type="password"]').count() === 0);

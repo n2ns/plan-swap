@@ -18,7 +18,7 @@ import {
   deleteCodexDir,
   ensureCodexDir,
 } from './codexPaths';
-import { codexAccountBusy, copyCodexIndependent, ensureCodexLinks, isSharedCodexAccount, makeCodexIndependent, migrateCodexToShared } from './codexShare';
+import { codexAccountBusy, codexBusyText, copyCodexIndependent, ensureCodexLinks, isSharedCodexAccount, makeCodexIndependent, migrateCodexToShared } from './codexShare';
 import { describeShareReport } from '../shareReport';
 import {
   STATE_FILE,
@@ -692,7 +692,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       return;
     }
     if (busy(account)) {
-      void vscode.window.showWarningMessage(t('share.busyCodex', { name: labelOf(account) }));
+      void vscode.window.showWarningMessage(codexBusyText(account.dir, labelOf(account)));
       return;
     }
     const linkOptions = await askCopyFallback(account.dir, 'Codex');
@@ -707,7 +707,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       return;
     }
     if (busy(account)) {
-      void vscode.window.showWarningMessage(t('share.busyCodex', { name: labelOf(account) }));
+      void vscode.window.showWarningMessage(codexBusyText(account.dir, labelOf(account)));
       return;
     }
     try {
@@ -737,7 +737,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       return;
     }
     if (busy(account)) {
-      void vscode.window.showWarningMessage(t('share.busyCodex', { name: labelOf(account) }));
+      void vscode.window.showWarningMessage(codexBusyText(account.dir, labelOf(account)));
       return;
     }
     try {
@@ -769,7 +769,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
         return true;
       }
       if (busy(account)) {
-        void vscode.window.showWarningMessage(t('share.busyCodex', { name: label }));
+        void vscode.window.showWarningMessage(codexBusyText(account.dir, label));
         return true;
       }
       return false;

@@ -1,6 +1,7 @@
 // PlanSwap-owned Codex provider cards. Native config.toml holds the plaintext DeepSeek key; no auth.json reads,
 // runtime vscode import, network calls or provider credentials leave this module. Public status and edit snapshots
-// are secret-free. Only the generated TOML subset is editable; unsupported manual changes are never overwritten.
+// are secret-free. Editing replaces only the model and key values in place; unrelated native settings are kept as
+// they are, and owned fields in unsupported forms are reported, never overwritten.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -204,8 +205,8 @@ function advanceValue(text: string, state: ValueState): void {
   }
 }
 
-// Operational reads validate routing fields but leave unrelated native tables to Codex. Editing additionally
-// accepts only the generated fields and native project trust tables, so it cannot reinterpret arbitrary TOML.
+// Reads validate routing fields but leave unrelated native settings (complete values, including the tables Codex
+// writes itself) to Codex. Editing additionally requires the owned fields in the plain forms it can replace in place.
 function parseConfig(source: string, dir: string, requireKey = true, editable = false): Config {
   const root: Record<string, string> = {};
   const provider: Record<string, string> = {};
@@ -228,7 +229,6 @@ function parseConfig(source: string, dir: string, requireKey = true, editable = 
       if (section[0] === 'model_providers') {
         if (array || section.length !== 2 || section[1] !== 'deepseek') throw new ProviderConfigError('format');
       } else if (ROUTING_KEYS.has(section[0]) || ROOT_KEYS.has(section[0])) throw new ProviderConfigError('format');
-      else if (editable && (array || section.length !== 2 || section[0] !== 'projects')) throw new ProviderConfigError('format');
       continue;
     }
     const assignment = keyPath(line);
@@ -238,16 +238,13 @@ function parseConfig(source: string, dir: string, requireKey = true, editable = 
     if (!text || text.startsWith('#')) throw new ProviderConfigError('format');
     const own = section.length === 0 ? ROOT_KEYS.has(name) : section[0] === 'model_providers';
     const id = JSON.stringify([...section, ...assignment.segments]);
-    if (own || editable) {
+    if (own) {
       if (assignments.has(id)) throw new ProviderConfigError('format');
       assignments.add(id);
     }
     if (section.length === 0 && ROUTING_KEYS.has(name)) throw new ProviderConfigError('format');
     if (!own) {
-      if (editable) {
-        if (section[0] !== 'projects' || assignment.segments.length !== 1 || name !== 'trust_level'
-          || !['trusted', 'untrusted'].includes(stringValue(text) ?? '')) throw new ProviderConfigError('format');
-      } else advanceValue(text, valueState);
+      advanceValue(text, valueState);
       continue;
     }
     const target = section.length ? provider : root;
@@ -264,7 +261,7 @@ function parseConfig(source: string, dir: string, requireKey = true, editable = 
   }
   if (valueState.depth || valueState.multiline) throw new ProviderConfigError('format');
   const fixedRoot: Record<string, string> = {
-    model_provider: 'deepseek', preferred_auth_method: 'apikey', forced_login_method: 'api',
+    model_provider: 'deepseek', forced_login_method: 'api',
     web_search: 'disabled', model_catalog_json: path.join(path.resolve(dir), 'models.json'),
   };
   const fixedProvider: Record<string, string> = { name: 'deepseek', base_url: 'https://api.deepseek.com/', wire_api: 'responses' };
@@ -281,19 +278,28 @@ function parseConfig(source: string, dir: string, requireKey = true, editable = 
 }
 
 // Called only after editable-format validation. Replace two known scalar values in-place, preserving native
-// project trust, reasoning effort (including absence), comments and line endings instead of regenerating the file.
+// settings, reasoning effort (including absence), comments and line endings instead of regenerating the file. Lines
+// inside multiline values of unrelated settings are never read as headers or assignments.
 function editConfigSource(source: string, selectedModel: DeepSeekModel, apiKey: string): string {
   let section: string[] = [];
   let keyWritten = false;
+  // The real provider header, for a missing key line; never a look-alike inside a multiline value
+  let header = -1;
+  const valueState: ValueState = { depth: 0 };
   const lines = source.split(/(?<=\n)/);
   const replace = (line: string, value: string): string => line.replace(
     /^(\s*(?:[A-Za-z_]+|"[A-Za-z_]+"|'[A-Za-z_]+')\s*=\s*)("(?:[^"\\]|\\.)*"|'[^']*')/,
     (_match, prefix: string) => prefix + JSON.stringify(value),
   );
-  const result = lines.map((line) => {
+  const result = lines.map((line, index) => {
+    if (valueState.depth || valueState.multiline) {
+      advanceValue(line, valueState);
+      return line;
+    }
     const trimmed = line.replace(/^\uFEFF/, '').trim();
     if (trimmed.startsWith('[')) {
-      section = keyPath(trimmed.slice(1))!.segments;
+      section = keyPath(trimmed.slice(trimmed.startsWith('[[') ? 2 : 1))!.segments;
+      if (section.join('.') === 'model_providers.deepseek') header = index;
       return line;
     }
     const assignment = keyPath(trimmed);
@@ -303,13 +309,10 @@ function editConfigSource(source: string, selectedModel: DeepSeekModel, apiKey: 
       keyWritten = true;
       return replace(line, apiKey);
     }
+    advanceValue(assignment.rest.slice(1), valueState);
     return line;
   });
   if (!keyWritten) {
-    const header = result.findIndex((line) => {
-      const trimmed = line.trim();
-      return trimmed.startsWith('[') && keyPath(trimmed.slice(1))?.segments.join('.') === 'model_providers.deepseek';
-    });
     if (header < 0) throw new ProviderConfigError('format');
     const newline = source.includes('\r\n') ? '\r\n' : '\n';
     if (!result[header].endsWith('\n')) result[header] += newline;
@@ -320,7 +323,7 @@ function editConfigSource(source: string, selectedModel: DeepSeekModel, apiKey: 
 
 function renderConfig(dir: string, config: Config): string {
   const fields: Record<string, string> = {
-    model: config.model, model_provider: 'deepseek', preferred_auth_method: 'apikey', forced_login_method: 'api',
+    model: config.model, model_provider: 'deepseek', forced_login_method: 'api',
     model_reasoning_effort: 'high', web_search: 'disabled', model_catalog_json: path.join(path.resolve(dir), 'models.json'),
   };
   if (config.approval_policy !== undefined) fields.approval_policy = config.approval_policy;

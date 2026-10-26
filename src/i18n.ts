@@ -367,6 +367,7 @@ export const en = {
   'share.badEntry': 'The shared source is not the expected file or directory: {file}',
   'share.badSource': "The default account's info file is not a valid JSON object; nothing was synced: {file}",
   'share.busyCodex': 'Account {name} still has Codex or a PlanSwap terminal open. Close its Codex sessions (including the editor panel) and PlanSwap terminal tabs, then try again.',
+  'share.busyCodexDaemon': 'The codex daemon of account {name} is still running. Run "codex app-server daemon stop" in this account\'s terminal (CODEX_HOME={dir}), close that terminal, then try again.',
   'del.daemonAlive': "This account's codex daemon is still running; refusing to delete: {dir}",
 
   // tools.ts
@@ -766,6 +767,7 @@ export const zhCn: Record<MessageKey, string> = {
   'share.badEntry': '共享源不是预期的文件或目录：{file}',
   'share.badSource': '默认账号的信息文件不是有效的 JSON 对象，未作同步：{file}',
   'share.busyCodex': '账号 {name} 仍有 Codex 或 PlanSwap 终端打开，请关闭该账号的 Codex 会话（包括编辑器面板中的会话）及 PlanSwap 终端标签页后重试。',
+  'share.busyCodexDaemon': '账号 {name} 的 codex 守护进程仍在运行。请在该账号的终端（CODEX_HOME={dir}）中运行 "codex app-server daemon stop"，关闭该终端后重试。',
   'del.daemonAlive': '该账号的 codex 守护进程仍在运行，拒绝删除：{dir}',
 
   'tools.updateCli': '更新 {vendor} CLI',
@@ -1162,6 +1164,7 @@ export const zhTw: Record<MessageKey, string> = {
   'share.badEntry': '共用來源不是預期的檔案或目錄：{file}',
   'share.badSource': '預設帳號的資訊檔案不是有效的 JSON 物件，未進行同步：{file}',
   'share.busyCodex': '帳號 {name} 仍有 Codex 或 PlanSwap 終端機開啟中。請關閉該帳號的 Codex 工作階段（包括編輯器面板中的工作階段）及 PlanSwap 終端機索引標籤後再試一次。',
+  'share.busyCodexDaemon': '帳號 {name} 的 codex 常駐程式仍在執行。請在該帳號的終端機（CODEX_HOME={dir}）中執行「codex app-server daemon stop」，關閉該終端機後再試一次。',
   'del.daemonAlive': '此帳號的 codex 常駐程式仍在執行，拒絕刪除：{dir}',
 
   'tools.updateCli': '更新 {vendor} CLI',
@@ -1543,6 +1546,7 @@ export const es: Record<MessageKey, string> = {
   'share.badEntry': 'El origen compartido no es el archivo o directorio esperado: {file}',
   'share.badSource': 'El archivo de información de la cuenta predeterminada no es un objeto JSON válido; no se sincronizó nada: {file}',
   'share.busyCodex': 'La cuenta {name} aún tiene Codex o una terminal de PlanSwap abierta. Cierra sus sesiones de Codex (incluidas las del panel del editor) y pestañas de terminal de PlanSwap y vuelve a intentarlo.',
+  'share.busyCodexDaemon': 'El daemon de codex de la cuenta {name} sigue activo. Ejecuta "codex app-server daemon stop" en la terminal de esta cuenta (CODEX_HOME={dir}), cierra esa terminal y vuelve a intentarlo.',
   'del.daemonAlive': 'El daemon de codex de esta cuenta sigue activo; no se eliminará: {dir}',
   'tools.updateCli': 'Actualizar {vendor} CLI',
   'tools.syncNotInit': '{vendor} no está inicializado; no se pueden revincular las cuentas.',
@@ -1923,6 +1927,7 @@ export const ja: Record<MessageKey, string> = {
   'share.badEntry': '共有元が想定されたファイルまたはディレクトリではありません: {file}',
   'share.badSource': '既定のアカウントの情報ファイルが有効な JSON オブジェクトではないため同期しません: {file}',
   'share.busyCodex': 'アカウント {name} の Codex または PlanSwap ターミナルが開いています。エディターのパネル内を含むこのアカウントの Codex セッションと PlanSwap のターミナルタブを閉じてから再試行してください。',
+  'share.busyCodexDaemon': 'アカウント {name} の codex daemon がまだ動作しています。このアカウントのターミナル (CODEX_HOME={dir}) で "codex app-server daemon stop" を実行し、そのターミナルを閉じてから再試行してください。',
   'del.daemonAlive': 'このアカウントの codex daemon が動作中のため削除しません: {dir}',
   'tools.updateCli': '{vendor} CLI を更新',
   'tools.syncNotInit': '{vendor} が初期化されていないためアカウントを再リンクできません。',
@@ -2303,6 +2308,7 @@ export const ko: Record<MessageKey, string> = {
   'share.badEntry': '공유 원본이 예상한 파일이나 디렉터리가 아닙니다: {file}',
   'share.badSource': '기본 계정의 정보 파일이 유효한 JSON 개체가 아니므로 아무것도 동기화하지 않았습니다: {file}',
   'share.busyCodex': '{name} 계정의 Codex나 PlanSwap 터미널이 아직 열려 있습니다. 해당 Codex 세션(편집기 패널 포함)과 PlanSwap 터미널 탭을 닫은 후 다시 시도하세요.',
+  'share.busyCodexDaemon': '{name} 계정의 codex daemon이 아직 실행 중입니다. 이 계정의 터미널(CODEX_HOME={dir})에서 "codex app-server daemon stop"을 실행하고 그 터미널을 닫은 후 다시 시도하세요.',
   'del.daemonAlive': '이 계정의 codex daemon이 아직 실행 중이므로 삭제하지 않습니다: {dir}',
   'tools.updateCli': '{vendor} CLI 업데이트',
   'tools.syncNotInit': '{vendor} 부분이 초기화되지 않아 연결된 계정을 다시 연결할 수 없습니다.',

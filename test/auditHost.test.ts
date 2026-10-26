@@ -336,6 +336,23 @@ describe('removal and conversion re-check the account after every modal', () => 
     }
   });
 
+  test('Codex: a refusal caused by a live daemon says how to stop it', async (ctx) => {
+    const a = codexNamed('daemon');
+    const h = await codexHarness([a]);
+    writeSelectedDir(undefined);
+    const shown: string[] = [];
+    ctx.mock.method(window, 'showWarningMessage', async (message: string) => { shown.push(message); return undefined; });
+    try {
+      codexDaemonRunning(a.dir);
+      await h.handle({ type: 'remove', mode: 'codex', dir: a.dir });
+      assert.equal(shown.length, 1);
+      assert.ok(shown[0].includes('codex app-server daemon stop'), shown[0]);
+      assert.ok(h.store.find('daemon'));
+    } finally {
+      h.dispose();
+    }
+  });
+
   test('Codex: a busy account is refused before any modal and again right before deletion', async (ctx) => {
     const a = codexNamed('busy');
     const b = codexNamed('later');
@@ -351,12 +368,12 @@ describe('removal and conversion re-check the account after every modal', () => 
     try {
       codexDaemonRunning(a.dir);
       await h.handle({ type: 'remove', mode: 'codex', dir: a.dir });
-      assert.deepEqual(shown, [t('share.busyCodex', { name: 'busy' })]);
+      assert.deepEqual(shown, [t('share.busyCodexDaemon', { name: 'busy', dir: a.dir })]);
       assert.ok(h.store.find('busy'));
       assert.ok(fs.existsSync(a.dir));
 
       await h.handle({ type: 'remove', mode: 'codex', dir: b.dir });
-      assert.equal(shown.at(-1), t('share.busyCodex', { name: 'later' }));
+      assert.equal(shown.at(-1), t('share.busyCodexDaemon', { name: 'later', dir: b.dir }));
       assert.ok(fs.existsSync(b.dir), 'the directory survives');
       assert.equal(h.store.find('later'), undefined);
     } finally {

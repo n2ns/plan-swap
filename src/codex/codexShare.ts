@@ -287,6 +287,12 @@ export function ensureCodexLinks(dir: string, options: LinkOptions = {}, procRoo
   return report;
 }
 
+/** The refusal for a busy account: how to stop its codex daemon when one is alive (it outlives every editor window
+ *  and terminal), else the general text about open Codex sessions and terminals. */
+export function codexBusyText(dir: string, name: string): string {
+  return codexDaemonAlive(path.resolve(dir)) ? t('share.busyCodexDaemon', { name, dir: path.resolve(dir) }) : t('share.busyCodex', { name });
+}
+
 /** true when a Codex process uses this dir: codexDaemonAlive(dir), or a <procRoot>/<pid> whose exe basename is
  *  'codex' (a ' (deleted)' suffix ignored) and whose environ CODEX_HOME resolves to dir (for the default dir: unset,
  *  empty or ~/.codex). Environment alone never matches, since shells and MCP servers inherit CODEX_HOME.
@@ -373,7 +379,7 @@ function backupSqlite(src: string, rel: string, ctx: MergeCtx): void {
 }
 
 /** Converts an independent account into a shared one; ends with ensureCodexLinks(dir, options, procRoot) and merges
- *  its report. Throws t('share.busyCodex') before writing when codexAccountBusy(dir, procRoot) or options.busy() (the
+ *  its report. Throws codexBusyText before writing when codexAccountBusy(dir, procRoot) or options.busy() (the
  *  host's terminal check, read after its copy-fallback prompt; see migrateClaudeToShared). The default dir → empty report.
  *  - dirs: merged recursively into the default folder (mergeEntry);
  *  - history.jsonl / session_index.jsonl: missing lines merged into the default file;
@@ -391,7 +397,7 @@ export function migrateCodexToShared(dir: string, accountName: string, procRoot 
   assertNotContainingDefault(dir);
   assertProviderFilesLocal(dir);
   const keepConfig = preserveProviderConfig(dir);
-  if (codexAccountBusy(dir, procRoot) || options.busy?.()) throw new Error(t('share.busyCodex', { name: accountName }));
+  if (codexAccountBusy(dir, procRoot) || options.busy?.()) throw new Error(codexBusyText(dir, accountName));
   const def = codexDefaultDir();
   const acc = path.resolve(dir);
   fs.mkdirSync(def, { recursive: true, mode: 0o700 });
@@ -547,14 +553,14 @@ const INDEPENDENT_CONFIG_ENTRIES = new Set(['config.toml', ...INDEPENDENT_COPY_F
  *  databases, the sessions marker, the other folders and the plugins/cache children — so a failed copy leaves the
  *  account shared and ensureCodexLinks re-creates the missing links. Sessions, history and thread databases stay in
  *  the default directory. Throws t('unshare.default') for the default directory, t('unshare.notShared') for an
- *  account that is not shared and, as migrateCodexToShared, t('share.busyCodex') when codexAccountBusy(dir, procRoot). */
+ *  account that is not shared and, as migrateCodexToShared, codexBusyText when codexAccountBusy(dir, procRoot). */
 export function makeCodexIndependent(dir: string, accountName: string, procRoot = '/proc'): { removed: string[]; copied: string[]; skipped: Array<{ file: string; reason: string }> } {
   if (isDefault(dir)) throw new Error(t('unshare.default', { dir }));
   assertNotContainingDefault(dir);
   assertProviderFilesLocal(dir);
   const keepConfig = preserveProviderConfig(dir);
   if (!isSharedCodexAccount(dir)) throw new Error(t('unshare.notShared', { dir }));
-  if (codexAccountBusy(dir, procRoot)) throw new Error(t('share.busyCodex', { name: accountName }));
+  if (codexAccountBusy(dir, procRoot)) throw new Error(codexBusyText(dir, accountName));
   const def = codexDefaultDir();
   const acc = path.resolve(dir);
   const removed: string[] = [];
