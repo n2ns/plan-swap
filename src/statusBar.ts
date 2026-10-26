@@ -8,7 +8,7 @@ import { EXTERNAL_NAME, labelFor, type LabelStore } from './labels';
 import { getLocale, LOCALE_INFO, t, type MessageKey } from './i18n';
 import type { CodexAccountStore } from './codex/codexStore';
 import { codexDefaultDir, readCodexAccountInfo } from './codex/codexPaths';
-import { readProviderInfo } from './codex/codexProvider';
+import { providerLabel, readProviderInfo } from './codex/codexProvider';
 import { effectiveDir, isEnabled, readSelectedDir } from './codex/codexState';
 import { codexRunsInWsl } from './codex/codexSettings';
 import type { CodexUsageState } from './codex/codexUsageMonitor';
@@ -461,7 +461,7 @@ export class StatusBar implements vscode.Disposable {
       const account = sameDirAccount(all, codexDir);
       const label = labelFor(account ? account.name : EXTERNAL_NAME, this.codex.labels);
       const provider = readProviderInfo(codexDir);
-      const info = provider ? { loggedIn: provider.configured, plan: t('codex.provider.label'), email: undefined } : readCodexAccountInfo(codexDir);
+      const info = provider ? { loggedIn: provider.configured, plan: providerLabel(provider.provider), email: undefined } : readCodexAccountInfo(codexDir);
       const apiKey = provider !== undefined || info.plan === 'API key';
       const usage: UsageParts = { rows: [], notes: [] };
       const selected = readSelectedDir() ?? codexDefaultDir();
@@ -488,7 +488,7 @@ export class StatusBar implements vscode.Disposable {
       products.push(part);
       blocks.push({
         product: 'Codex',
-        identity: provider ? `${label} (${t('codex.provider.label')})` : apiKey ? 'API key' : (showEmail ? info.email : undefined) ?? (info.loggedIn ? label : t('common.notLoggedIn')),
+        identity: provider ? `${label} (${providerLabel(provider.provider)})` : apiKey ? 'API key' : (showEmail ? info.email : undefined) ?? (info.loggedIn ? label : t('common.notLoggedIn')),
         plan: apiKey ? undefined : info.plan,
         refresh: showUsage && this.codexUsage !== undefined ? REFRESH_USAGE_COMMAND : undefined,
         usage,

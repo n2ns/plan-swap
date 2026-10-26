@@ -8,7 +8,7 @@ Purpose: repository layout, build, test and release mechanics, localization term
 |---|---|
 | `src/` | Extension activation, Claude flows and shared host modules. |
 | `src/codex/` | Codex account, environment and restart modules. |
-| `src/codex/codexProvider.ts` | DeepSeek card recognition, local native configuration, safe creation/editing and provider configuration-sharing exclusions. |
+| `src/codex/codexProvider.ts` | API card services (DeepSeek, presets, custom endpoints), recognition, local native configuration, safe creation/editing and provider configuration-sharing exclusions. |
 | `src/webview/` | Sidebar frontend; shared message types come from `src/protocol.ts`. |
 | `test/` | Unit tests, temporary-HOME helpers, in-memory Memento and the VS Code stub; `test/integration/` holds the real-editor smoke suite. |
 | `scripts/` | Test, UI-test, preview and measurement runners. |

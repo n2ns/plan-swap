@@ -187,10 +187,11 @@ function planClass(plan: string | undefined, mode: PanelMode): string {
 // API cards show configuration status independently of email visibility. Subscription rows without an email show
 // "Logged in" based on loggedIn; their identity line is hidden when email display is turned off.
 function loginStatus(a: AccountView, hideEmail?: boolean): HTMLElement | null {
-  if (a.provider === 'deepseek') {
+  if (a.provider) {
     return h('div', { class: 'row-sub provider-details' },
       // An unreadable configuration has no model to report; its error line below says why
       a.providerModel && h('div', {}, t('provider.model', { model: a.providerModel })),
+      a.providerHost && h('div', {}, t('provider.host', { host: a.providerHost })),
       h('div', { title: a.providerConfigured ? t('provider.configuredHint') : undefined }, t(a.providerConfigured ? 'provider.configured' : 'provider.incomplete')),
     );
   }
@@ -352,7 +353,7 @@ class Page {
   private readonly addIndependent: HTMLElement & { checked: boolean };
   private readonly addProvider?: HTMLElement;
   private readonly addCodex?: HTMLElement & { checked: boolean };
-  private readonly addDeepseek?: HTMLElement & { checked: boolean };
+  private readonly addApi?: HTMLElement & { checked: boolean };
   private readonly addHelp = h('div', { class: 'help' });
   private tools: HTMLElement;
   private syncButton!: HTMLElement;
@@ -398,8 +399,8 @@ class Page {
         h('vscode-radio', { class: 'add-mode-option', name: 'add-provider-codex', value }) as HTMLElement & { checked: boolean };
       this.addCodex = providerRadio('codex');
       this.addCodex.checked = true;
-      this.addDeepseek = providerRadio('deepseek');
-      this.addProvider = h('vscode-radio-group', { class: 'add-mode', variant: 'vertical' }, this.addCodex, this.addDeepseek);
+      this.addApi = providerRadio('api');
+      this.addProvider = h('vscode-radio-group', { class: 'add-mode', variant: 'vertical' }, this.addCodex, this.addApi);
       this.addProvider.addEventListener('change', () => {
         this.addError = undefined;
         this.updateAddHelp();
@@ -481,7 +482,7 @@ class Page {
     this.addMode.setAttribute('aria-label', t('add.mode.ariaLabel'));
     this.addProvider?.setAttribute('aria-label', t('provider.type'));
     if (this.addCodex) this.addCodex.textContent = t('provider.codex');
-    if (this.addDeepseek) this.addDeepseek.textContent = t('provider.deepseek');
+    if (this.addApi) this.addApi.textContent = t('provider.api');
     // A host add error is in the old locale; drop it so the help line shows the local validation in the new one
     if (this.addError) {
       this.addError = undefined;
@@ -692,21 +693,21 @@ class Page {
   }
 
   private updateAddHelp(): void {
-    const deepseek = this.mode === 'codex' && this.addDeepseek?.checked === true;
-    this.addLinked.textContent = t(deepseek ? 'provider.addLinked' : 'add.mode.linked');
-    this.addIndependent.textContent = t(deepseek ? 'provider.addIndependent' : 'add.mode.independent');
+    const api = this.mode === 'codex' && this.addApi?.checked === true;
+    this.addLinked.textContent = t(api ? 'provider.addLinked' : 'add.mode.linked');
+    this.addIndependent.textContent = t(api ? 'provider.addIndependent' : 'add.mode.independent');
     const name = this.addField.value.trim();
     const error = this.addError ?? this.validateName(name);
     this.addField.invalid = !!error;
     this.addButton.disabled = this.adding || !name || !!error;
     this.addHelp.className = error ? 'help error' : 'help';
-    const createKey = deepseek ? 'provider.addHelp'
+    const createKey = api ? 'provider.addHelp'
       : !this.addLinked.checked ? 'add.help.independent'
       : this.mode === 'codex' && codexRestart().userEnv ? 'codex.addHelpSharedWin'
         : (`${this.mode}.addHelpShared` as const);
     const help = name ? t(createKey, { dir: this.dirPrefix() + name }) : t('add.helpIdle', { prefix: this.dirPrefix() });
     // The next-steps note follows the creation sentence; the idle hint is not a sentence it can extend
-    this.addHelp.textContent = error ?? (deepseek && name ? joinSentences(help, t('provider.addNext')) : help);
+    this.addHelp.textContent = error ?? (api && name ? joinSentences(help, t('provider.addNext')) : help);
   }
 
   private submitAdd(): void {
@@ -714,7 +715,7 @@ class Page {
     if (this.adding || this.addError || !name || this.validateName(name)) return;
     this.adding = true;
     this.updateAddHelp();
-    this.send({ type: 'add', name, shared: this.addLinked.checked, ...(this.mode === 'codex' && this.addDeepseek?.checked ? { provider: 'deepseek' as const } : {}) });
+    this.send({ type: 'add', name, shared: this.addLinked.checked, ...(this.mode === 'codex' && this.addApi?.checked ? { provider: 'api' as const } : {}) });
   }
 
   // ---------- Rendering ----------
@@ -863,7 +864,7 @@ class Page {
 
     const unavailable = this.mode === 'claude' && a.subscriptionUnavailable === true;
     const checking = this.mode === 'claude' && a.subscriptionChecking === true;
-    const provider = this.mode === 'codex' && a.provider === 'deepseek';
+    const provider = this.mode === 'codex' && !!a.provider;
     const editing = this.renamingDir === a.dir && !!this.renameField;
     const selected = this.mode === 'codex' && a.isSelected === true;
     // The host refuses a Codex switch to the external directory (it never becomes the selection), so it offers none
@@ -973,7 +974,7 @@ class Page {
     const inlineActions = !textButtons.hasChildNodes();
     if (inlineActions) classes.push('inline-actions');
     const actions = h('div', { class: 'row-actions' }, textButtons.hasChildNodes() && textButtons, iconButtons.hasChildNodes() && iconButtons);
-    const tags = h('div', { class: 'row-tags' }, provider ? h('span', { class: 'pill plan' }, t('provider.deepseek')) : planPill(a, unavailable), !provider && !a.loggedIn && h('span', { class: 'pill warn' }, t('account.notLoggedIn')));
+    const tags = h('div', { class: 'row-tags' }, provider ? h('span', { class: 'pill plan' }, a.provider!) : planPill(a, unavailable), !provider && !a.loggedIn && h('span', { class: 'pill warn' }, t('account.notLoggedIn')));
 
     // .row-main is display: contents, so its lines land directly in the .row grid below the name line
     const row = h(

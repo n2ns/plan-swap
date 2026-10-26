@@ -13,7 +13,7 @@ Button names below use the English UI. Hover an icon to see its name in your lan
 - [Add and sign in to an account](#add-and-sign-in-to-an-account)
 - [Switch Claude accounts](#switch-claude-accounts)
 - [Enable and switch Codex accounts](#enable-and-switch-codex-accounts)
-- [Use a DeepSeek API card](#use-a-deepseek-api-card)
+- [Use an API card](#use-an-api-card)
 - [Choose linked or independent accounts](#choose-linked-or-independent-accounts)
 - [Read and refresh usage limits](#read-and-refresh-usage-limits)
 - [Rename or remove accounts](#rename-or-remove-accounts)
@@ -149,17 +149,25 @@ Until the restart is done, a banner names the selected account, and the highligh
 
 Changed your mind before restarting? Click the arrow icon on the highlighted (effective) row. This cancels the pending selection; no restart is needed.
 
-## Use a DeepSeek API card
+## Use an API card
 
-In the Codex add form, choose **DeepSeek API**, enter a new account name and choose linked or independent. Click the check mark (**Add**), choose the model, then enter your DeepSeek API key in the hidden input. This requires a new directory; an existing subscription account is not converted. No Claude or ChatGPT subscription credentials are needed.
+An API card lets the official Codex extension and CLI use another AI service instead of a ChatGPT sign-in: DeepSeek, OpenRouter, Z.ai, Kimi, xAI, Ollama or LM Studio on this machine, or any custom endpoint that serves the OpenAI Responses API, such as a LiteLLM gateway. Codex accepts only the Responses API, so services that offer only Chat Completions cannot be used.
 
-The card shows the configured model and whether a key is configured. This is a local configuration check, not a successful connection test. Use **Edit DeepSeek configuration** to change the model or key; leave the replacement key empty to keep it. Settings Codex adds to the file itself are kept when editing; unsupported changes to the provider, authentication or the model and key lines are preserved and reported instead of overwritten. A missing/invalid configuration prevents switching or opening the account terminal.
+In the Codex add form, choose **API service**, enter a new account name and choose linked or independent. Click the check mark (**Add**), then:
+
+1. Choose the service from the list, or choose **Custom endpoint…**. You can also type an address such as `https://gateway.example.com/v1` into the list and pick **Use** with that address. A custom endpoint chosen without a typed address asks for it. Addresses must start with `https://`; `http://` is accepted only for this machine (`localhost`).
+2. Choose the model. DeepSeek offers its models in a list; for every other service, enter the model ID exactly as the service lists it. PlanSwap does not download model lists.
+3. Enter the API key in the hidden input. It is required for DeepSeek, OpenRouter, Z.ai, Kimi and xAI; for Ollama, LM Studio and custom endpoints you can leave it empty when the endpoint needs none.
+
+This requires a new directory; an existing subscription account is not converted. No Claude or ChatGPT subscription credentials are needed.
+
+The card shows the service, the configured model, the endpoint host (except for DeepSeek) and whether the configuration is complete. This is a local configuration check, not a successful connection test. Use **Edit API configuration** to change the model, the endpoint (except for DeepSeek) or the key; leave the replacement key empty to keep it. Settings Codex adds to the file itself are kept when editing; unsupported changes to the provider, authentication or the model and key lines are preserved and reported instead of overwritten. A missing/invalid configuration prevents switching or opening the account terminal. Services other than DeepSeek have no model catalog in the card, so Codex starts with a warning about an unknown model and uses default model settings.
 
 The terminal action starts Codex with this card's home without a ChatGPT login flow. Switching uses the existing Codex confirmation/restart procedure. Creating or editing a card does not switch accounts, restart a window or change an active conversation's model. Select your previous account to return to its existing subscription configuration. API cards have no subscription quota refresh or quota-based recommendation.
 
-The key is saved in plaintext in this card's own `config.toml`, never in the sidebar or PlanSwap state. Even when linked, the provider config, key and model catalog stay independent. Only supported scalar approval/sandbox settings are copied once from the default config; MCP definitions and project trust are not imported, and later default-config changes do not synchronize. Other permitted instructions, skills and history follow the selected sharing mode. Shared history may not resume across providers; resuming it with DeepSeek may send that context to DeepSeek. See [Privacy](privacy.md).
+The key is saved in plaintext in this card's own `config.toml`, never in the sidebar or PlanSwap state, and is sent only to the card's endpoint. Even when linked, the provider config, key and model catalog stay independent. Only supported scalar approval/sandbox settings are copied once from the default config; MCP definitions and project trust are not imported, and later default-config changes do not synchronize. Other permitted instructions, skills and history follow the selected sharing mode. Shared history may not resume across providers; resuming it with an API service may send that context to that service. See [Privacy](privacy.md).
 
-Same-editor windows in one WSL distribution share the Codex selection; these cards do not isolate the backend per project window. VS Code and VSCodium keep their existing separate selections. Native Windows still requires a full editor restart. Real-client acceptance for this feature remains pending in [TODO](../TODO.md).
+Same-editor windows in one WSL distribution share the Codex selection; these cards do not isolate the backend per project window. VS Code and VSCodium keep their existing separate selections. Native Windows still requires a full editor restart. Real-client acceptance that is still pending is listed in [TODO](../TODO.md).
 
 ## Choose linked or independent accounts
 

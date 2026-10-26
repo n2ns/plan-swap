@@ -3,7 +3,7 @@ export async function run(ctx) {
   const { page, locale, width, step, shot } = ctx;
   await ctx.apply((state) => {
     const card = state.codex.accounts.find((a) => a.name === 'work');
-    card.provider = 'deepseek';
+    card.provider = 'DeepSeek API';
     card.providerModel = 'deepseek-flash';
     card.providerConfigured = true;
     card.plan = 'DeepSeek API';
@@ -11,9 +11,17 @@ export async function run(ctx) {
     card.email = undefined;
     card.usage = undefined;
     card.usageEligible = false;
+    // A custom endpoint card (a gateway) next to it: its endpoint host is shown, never a key
+    const gateway = state.codex.accounts.find((a) => a.name === 'empty');
+    Object.assign(gateway, { provider: 'Custom API', providerModel: 'gateway-model', providerHost: 'gateway.example.test', providerConfigured: true,
+      plan: 'Custom API', loggedIn: true, email: undefined, usage: undefined, usageEligible: false });
   }, 'codex');
   const card = page.locator('#panel-codex .row[data-dir="/fixture/.codex-work"]');
   await step('DeepSeek card shows provider, configured model and configuration-only status', await card.locator('.pill.plan').textContent() === 'DeepSeek API' && (await card.locator('.provider-details').textContent()).includes('deepseek-flash') && await card.locator('.provider-details [title]').count() === 1);
+  const gatewayCard = page.locator('#panel-codex .row[data-dir="/fixture/.codex-empty"]');
+  await step('A custom endpoint card shows its label, model and endpoint host', await gatewayCard.locator('.pill.plan').textContent() === 'Custom API'
+    && (await gatewayCard.locator('.provider-details').textContent()).includes('gateway.example.test')
+    && (await gatewayCard.locator('.provider-details').textContent()).includes('gateway-model'));
   await step('DeepSeek has no subscription sign-in, quota or recommendation controls', await card.locator('.pill.warn, .row-btn, .row-usage, [data-action="recommendExclude"]').count() === 0);
   await step('Subscription cards retain account identity', await page.locator('#panel-codex .row[data-dir="/fixture/.codex"] .row-email').textContent() === 'codex-default@example.invalid');
   await page.evaluate(() => window.preview.clearMessages());
@@ -46,7 +54,7 @@ export async function run(ctx) {
   const input = page.locator('#panel-codex .add .input-group vscode-textfield input');
   await input.fill('');
   const idleHelp = await help.textContent();
-  await page.locator('#panel-codex vscode-radio[name="add-provider-codex"][value="deepseek"]').click();
+  await page.locator('#panel-codex vscode-radio[name="add-provider-codex"][value="api"]').click();
   await step('Provider choice keeps the idle help a single sentence until a name is entered', await help.textContent() === idleHelp, await help.textContent());
   await input.fill('deepseek-new');
   await page.locator('#panel-codex vscode-radio[value="independent"]').click();
@@ -57,7 +65,7 @@ export async function run(ctx) {
   await page.evaluate(() => window.preview.clearMessages());
   await page.locator('#panel-codex .add .input-group vscode-button').click();
   const add = await page.evaluate(() => window.preview.messages.at(-1));
-  await step('Create requests the provider and sharing mode without credentials', add?.type === 'add' && add.mode === 'codex' && add.provider === 'deepseek' && add.name === 'deepseek-new' && add.shared === false && Object.keys(add).length === 5, add);
+  await step('Create requests the provider and sharing mode without credentials', add?.type === 'add' && add.mode === 'codex' && add.provider === 'api' && add.name === 'deepseek-new' && add.shared === false && Object.keys(add).length === 5, add);
   await page.evaluate(() => window.preview.post({ type: 'addResult', mode: 'codex' }));
   await step('Claude add flow has no provider choice', await page.locator('#panel-claude vscode-radio[name="add-provider-codex"]').count() === 0);
 }

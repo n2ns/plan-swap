@@ -36,7 +36,7 @@ function harness() {
 }
 
 test('provider actions are Codex-only and reject unsupported provider values', () => {
-  const add = { type: 'add', mode: 'codex', name: 'deepseek', shared: false, provider: 'deepseek' };
+  const add = { type: 'add', mode: 'codex', name: 'deepseek', shared: false, provider: 'api' };
   assert.deepEqual(checkMessage(add), add);
   assert.equal(checkMessage({ ...add, mode: 'claude' }), undefined);
   assert.equal(checkMessage({ ...add, provider: 'another' }), undefined);
@@ -46,15 +46,16 @@ test('provider actions are Codex-only and reject unsupported provider values', (
 
 test('creation uses a password prompt and exposes only configuration status without selecting an account', async (ctx) => {
   const h = harness();
+  ctx.mock.method(window, 'quickPickChoice', async (quickPick: { items: readonly unknown[] }) => quickPick.items[0]);
   ctx.mock.method(window, 'showQuickPick', async <T>(items: T[]): Promise<T | undefined> => items[0]);
   const input = ctx.mock.method(window, 'showInputBox', async (_options?: unknown) => 'synthetic-provider-key');
   try {
-    await h.handle({ type: 'add', mode: 'codex', name: 'deepseek', shared: false, provider: 'deepseek' });
+    await h.handle({ type: 'add', mode: 'codex', name: 'deepseek', shared: false, provider: 'api' });
     assert.deepEqual(h.messages.at(-1), { type: 'addResult', mode: 'codex', error: undefined });
     assert.equal((input.mock.calls[0].arguments[0] as { password: boolean }).password, true);
     const dir = path.join(h.home, '.codex-deepseek');
     const row = h.source.accounts().find((r) => r.dir === dir);
-    assert.equal(row?.provider, 'deepseek');
+    assert.equal(row?.provider, 'DeepSeek API');
     assert.equal(row?.providerConfigured, true);
     assert.equal(row?.usageEligible, undefined);
     assert.equal(row?.email, undefined);
@@ -77,7 +78,7 @@ test('cancelling key entry leaves no new directory or registered card', async (c
   ctx.mock.method(window, 'showQuickPick', async <T>(items: T[]): Promise<T | undefined> => items[0]);
   ctx.mock.method(window, 'showInputBox', async () => undefined);
   try {
-    await h.handle({ type: 'add', mode: 'codex', name: 'cancelled', shared: false, provider: 'deepseek' });
+    await h.handle({ type: 'add', mode: 'codex', name: 'cancelled', shared: false, provider: 'api' });
     assert.equal(fs.existsSync(path.join(h.home, '.codex-cancelled')), false);
     assert.equal(h.store.find('cancelled'), undefined);
     assert.equal(readSelectedDir(), undefined);
@@ -104,7 +105,7 @@ test('invalid provider cards cannot switch or open a subscription sign-in termin
     assert.equal(terminal.mock.callCount(), 0);
     assert.equal(error.mock.callCount(), 2);
     const row = h.source.accounts().find((r) => r.dir === dir);
-    assert.equal(row?.provider, 'deepseek');
+    assert.equal(row?.provider, 'Custom API', 'an unreadable marker shows as a custom card');
     assert.equal(row?.providerConfigured, false);
     assert.equal(row?.usage, undefined);
   } finally { env.remoteName = previousRemote; h.close(); }
@@ -130,4 +131,51 @@ test('provider homes with auth files bypass subscription reads, cached quota and
     assert.deepEqual(await queryCodexAccount(dir, never, never, { authStamp: never, authIdentity: never }), { ok: false, reason: 'noRateLimits' });
     assert.deepEqual(await readCodexUsage(dir, { spawn: never }), { ok: false, reason: 'noRateLimits' });
   } finally { tmp.restore(); }
+});
+
+test('a typed endpoint address creates a custom card; a local preset takes an empty key', async (ctx) => {
+  const h = harness();
+  const typedAddress = 'https://gateway.example.test/v1';
+  ctx.mock.method(window, 'quickPickChoice', async (quickPick: { items: readonly { label: string }[] }, type: (value: string) => void) => {
+    type(typedAddress);
+    return quickPick.items[0];
+  });
+  const prompts: string[] = [];
+  ctx.mock.method(window, 'showInputBox', async (options?: { prompt?: string; password?: boolean }) => {
+    prompts.push(options?.prompt ?? '');
+    return options?.password ? '' : 'gateway-model';
+  });
+  try {
+    await h.handle({ type: 'add', mode: 'codex', name: 'gateway', shared: false, provider: 'api' });
+    assert.deepEqual(h.messages.at(-1), { type: 'addResult', mode: 'codex', error: undefined });
+    const dir = path.join(h.home, '.codex-gateway');
+    const config = fs.readFileSync(path.join(dir, 'config.toml'), 'utf8');
+    assert.match(config, /^base_url = "https:\/\/gateway\.example\.test\/v1"$/m);
+    assert.match(config, /^model = "gateway-model"$/m);
+    assert.equal(config.includes('experimental_bearer_token'), false);
+    assert.equal(prompts.length, 2, 'a typed address needs no separate address prompt');
+    const row = h.source.accounts().find((r) => r.dir === dir);
+    assert.deepEqual([row?.provider, row?.providerHost, row?.providerConfigured], ['Custom API', 'gateway.example.test', true]);
+
+    ctx.mock.method(window, 'quickPickChoice', async (quickPick: { items: readonly { label: string }[] }) => quickPick.items.find((item) => item.label === 'Ollama'));
+    await h.handle({ type: 'add', mode: 'codex', name: 'local', shared: false, provider: 'api' });
+    assert.deepEqual(h.messages.at(-1), { type: 'addResult', mode: 'codex', error: undefined });
+    const local = h.source.accounts().find((r) => r.dir === path.join(h.home, '.codex-local'));
+    assert.deepEqual([local?.provider, local?.providerHost, local?.providerConfigured], ['Ollama API', 'localhost:11434', true]);
+  } finally { h.close(); }
+});
+
+test('a typed address that cannot be used is explained in the list and creates nothing', async (ctx) => {
+  const h = harness();
+  let shown: string | undefined;
+  ctx.mock.method(window, 'quickPickChoice', async (quickPick: { items: readonly { label: string }[] }, type: (value: string) => void) => {
+    type('http://remote.example.test/v1');
+    shown = quickPick.items[0]?.label;
+    return undefined;
+  });
+  try {
+    await h.handle({ type: 'add', mode: 'codex', name: 'remote', shared: false, provider: 'api' });
+    assert.equal(shown, 'Enter an https:// address, or an http:// address on this machine (localhost), without a user name, query or fragment.');
+    assert.equal(fs.existsSync(path.join(h.home, '.codex-remote')), false);
+  } finally { h.close(); }
 });

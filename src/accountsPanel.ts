@@ -443,7 +443,7 @@ export function checkMessage(raw: unknown): FromWebview | undefined {
   const isStringList = (v: unknown): boolean => Array.isArray(v) && v.every((s) => typeof s === 'string');
   if (!(LIST_FIELDS[type] ?? []).every((f) => isStringList(msg[f]))) return undefined;
   if (type === 'editProvider' && msg.mode !== 'codex') return undefined;
-  if (type === 'add' && msg.provider !== undefined && (msg.mode !== 'codex' || msg.provider !== 'deepseek')) return undefined;
+  if (type === 'add' && msg.provider !== undefined && (msg.mode !== 'codex' || msg.provider !== 'api')) return undefined;
   return raw as FromWebview;
 }
 

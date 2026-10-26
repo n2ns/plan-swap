@@ -25,8 +25,10 @@ export interface AccountView {
   plan?: string;
   loggedIn: boolean;
   // Codex provider cards: configuration status only, never a credential or a live connectivity/model observation.
-  provider?: 'deepseek';
+  // API cards: the service label ("DeepSeek API", "OpenRouter API", or the localized custom label) and the endpoint host
+  provider?: string;
   providerModel?: string;
+  providerHost?: string;
   providerConfigured?: boolean;
   providerError?: string;
   // Claude only: confirmed subscription rejection and an in-flight availability probe.
@@ -115,7 +117,7 @@ export type FromWebview =
   // Sent after the frontend's inline confirmation; the host only handles named rows
   | { type: 'remove'; mode: PanelMode; dir: string }
   // shared: the add section's checkbox; the host treats a missing value as true
-  | { type: 'add'; mode: PanelMode; name: string; shared: boolean; provider?: 'deepseek' }
+  | { type: 'add'; mode: PanelMode; name: string; shared: boolean; provider?: 'api' }
   // Codex only: model and API key are collected by the host; no key crosses this protocol.
   | { type: 'editProvider'; mode: 'codex'; dir: string }
   // Convert an independent named account into one shared with the default account (the host confirms with a modal)

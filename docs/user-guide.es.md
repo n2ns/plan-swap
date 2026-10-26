@@ -13,7 +13,7 @@ Los nombres de botones de esta guía son los de la interfaz en español. Pasa el
 - [Añadir una cuenta e iniciar sesión](#añadir-una-cuenta-e-iniciar-sesión)
 - [Cambiar de cuenta de Claude](#cambiar-de-cuenta-de-claude)
 - [Activar y cambiar cuentas de Codex](#activar-y-cambiar-cuentas-de-codex)
-- [Usar una tarjeta DeepSeek API](#usar-una-tarjeta-deepseek-api)
+- [Usar una tarjeta API](#usar-una-tarjeta-api)
 - [Elegir cuentas vinculadas o independientes](#elegir-cuentas-vinculadas-o-independientes)
 - [Consultar y actualizar los límites de uso](#consultar-y-actualizar-los-límites-de-uso)
 - [Renombrar o quitar cuentas](#renombrar-o-quitar-cuentas)
@@ -149,17 +149,25 @@ Hasta que se complete el reinicio, un aviso indica la cuenta seleccionada, y la 
 
 ¿Cambiaste de idea antes de reiniciar? Haz clic en el icono de flecha de la fila resaltada (efectiva). Esto cancela la selección pendiente; no hace falta reiniciar.
 
-## Usar una tarjeta DeepSeek API
+## Usar una tarjeta API
 
-En el formulario de Codex, elige **DeepSeek API**, introduce un nombre nuevo y elige el modo vinculado o independiente. Pulsa la marca de verificación (**Añadir**), selecciona el modelo e introduce tu clave API de DeepSeek en el campo oculto. Se requiere un directorio nuevo; no se convierte ninguna cuenta de suscripción existente ni se necesitan credenciales de suscripción de Claude o ChatGPT.
+Una tarjeta API permite que la extensión oficial de Codex y la CLI usen otro servicio de IA en lugar de un inicio de sesión de ChatGPT: DeepSeek, OpenRouter, Z.ai, Kimi, xAI, Ollama o LM Studio en este equipo, o cualquier endpoint personalizado que ofrezca la API Responses de OpenAI, como una pasarela LiteLLM. Codex solo admite la API Responses, por lo que no se pueden usar servicios que solo ofrecen Chat Completions.
 
-La tarjeta muestra el modelo configurado y si tiene una clave. Es una comprobación local, no una prueba de conexión. Usa **Editar configuración de DeepSeek** para cambiar el modelo o la clave; deja la clave de sustitución vacía para conservarla. Al editar se conservan los ajustes que Codex añade al archivo por su cuenta; los cambios no compatibles en el proveedor, la autenticación o las líneas del modelo y la clave se conservan y se notifican, sin sobrescribirlos. Una configuración ausente o inválida impide seleccionar la tarjeta o abrir su terminal.
+En el formulario de Codex, elige **Servicio de API**, introduce un nombre nuevo y elige el modo vinculado o independiente. Pulsa la marca de verificación (**Añadir**) y después:
 
-El terminal inicia Codex con el directorio de esta tarjeta, sin iniciar sesión en ChatGPT. El cambio sigue la confirmación y el reinicio habituales de Codex. Crear o editar no cambia la cuenta, reinicia ventanas ni modifica el modelo de una conversación activa. Selecciona la cuenta anterior para volver a su configuración de suscripción. Estas tarjetas no consultan cuotas de suscripción ni participan en recomendaciones por cuota.
+1. Elige el servicio de la lista o **Endpoint personalizado…**. También puedes escribir una dirección como `https://gateway.example.com/v1` en la lista y elegir **Usar** con esa dirección. Un endpoint personalizado elegido sin dirección escrita la pide a continuación. Las direcciones deben empezar por `https://`; `http://` solo se acepta para este equipo (`localhost`).
+2. Elige el modelo. DeepSeek ofrece sus modelos en una lista; para los demás servicios, introduce el ID del modelo tal como lo indica el servicio. PlanSwap no descarga listas de modelos.
+3. Introduce la clave API en el campo oculto. Es obligatoria para DeepSeek, OpenRouter, Z.ai, Kimi y xAI; para Ollama, LM Studio y endpoints personalizados puedes dejarla vacía si el endpoint no la necesita.
 
-La clave se guarda en texto plano en el `config.toml` propio, nunca en la barra lateral ni en el estado de PlanSwap. Incluso en modo vinculado, la configuración del proveedor, la clave y el catálogo de modelos permanecen independientes. Solo se copian una vez los ajustes escalares compatibles de aprobación y sandbox; no se importan definiciones MCP ni confianza de proyectos, ni se sincronizan cambios posteriores de la configuración predeterminada. Las demás instrucciones, habilidades e historial permitidos siguen el modo elegido. Compartir historial no garantiza reanudarlo entre proveedores; hacerlo con DeepSeek puede enviarle ese contexto. Consulta [Privacidad](privacy.md).
+Requiere un directorio nuevo; una cuenta de suscripción existente no se convierte. No se necesitan credenciales de suscripción de Claude ni de ChatGPT.
 
-Las ventanas del mismo editor y distribución WSL comparten la selección de Codex; no hay aislamiento de backend por ventana de proyecto. VS Code y VSCodium conservan sus selecciones separadas. Windows nativo sigue necesitando reiniciar el editor por completo. La aceptación con clientes reales sigue pendiente en [TODO](../TODO.md).
+La tarjeta muestra el servicio, el modelo configurado, el host del endpoint (salvo en DeepSeek) y si la configuración está completa. Es una comprobación local, no una prueba de conexión. Usa **Editar configuración de API** para cambiar el modelo, el endpoint (salvo en DeepSeek) o la clave; deja la clave de sustitución vacía para conservarla. Al editar se conservan los ajustes que Codex añade al archivo por su cuenta; los cambios no compatibles en el proveedor, la autenticación o las líneas del modelo y la clave se conservan y se notifican, sin sobrescribirlos. Una configuración ausente o inválida impide cambiar a la tarjeta o abrir su terminal. Los servicios distintos de DeepSeek no tienen catálogo de modelos en la tarjeta, así que Codex arranca con un aviso de modelo desconocido y usa ajustes de modelo predeterminados.
+
+La acción de terminal inicia Codex con el directorio de esta tarjeta sin el flujo de inicio de sesión de ChatGPT. El cambio usa el procedimiento existente de confirmación y reinicio de Codex. Crear o editar una tarjeta no cambia de cuenta, no reinicia ventanas ni cambia el modelo de una conversación activa. Selecciona tu cuenta anterior para volver a su configuración de suscripción. Las tarjetas API no tienen actualización de cuota de suscripción ni recomendación basada en cuota.
+
+La clave se guarda en texto plano en el `config.toml` propio de esta tarjeta, nunca en la barra lateral ni en el estado de PlanSwap, y solo se envía al endpoint de la tarjeta. Incluso en modo vinculado, la configuración del proveedor, la clave y el catálogo de modelos siguen independientes. Solo se copian una vez los ajustes escalares compatibles de aprobación y sandbox de la configuración predeterminada; no se importan definiciones MCP ni la confianza de proyectos, y los cambios posteriores en la configuración predeterminada no se sincronizan. Las demás instrucciones, habilidades e historial permitidos siguen el modo de uso compartido elegido. Puede que el historial compartido no se pueda reanudar entre proveedores; reanudarlo con un servicio de API puede enviarle ese contexto. Consulta [Privacidad](privacy.md).
+
+Las ventanas del mismo editor en una distribución WSL comparten la selección de Codex; estas tarjetas no aíslan el backend por ventana de proyecto. VS Code y VSCodium mantienen sus selecciones separadas. Windows nativo sigue requiriendo reiniciar el editor por completo. La aceptación pendiente con clientes reales figura en [TODO](../TODO.md).
 
 ## Elegir cuentas vinculadas o independientes
 

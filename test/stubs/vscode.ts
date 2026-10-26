@@ -141,6 +141,29 @@ export const window = {
   async showErrorMessage(..._args: unknown[]): Promise<string | undefined> { return undefined; },
   async showQuickPick<T>(_items: T[], _options?: unknown): Promise<T | undefined> { return undefined; },
   async showInputBox(_options?: unknown): Promise<string | undefined> { return undefined; },
+  /** Drives createQuickPick: called when it is shown, with the quick pick and a way to type into it; returns the item
+   *  to accept, or undefined to dismiss. Tests mock it; by default every quick pick is dismissed */
+  async quickPickChoice(_quickPick: { items: readonly unknown[] }, _type: (value: string) => void): Promise<unknown> { return undefined; },
+  createQuickPick<T>() {
+    let accept = (): void => {};
+    let hidden = (): void => {};
+    let changed = (_value: string): void => {};
+    const quickPick = {
+      items: [] as T[], selectedItems: [] as T[], value: '', placeholder: '', ignoreFocusOut: false,
+      onDidAccept(listener: () => void) { accept = listener; return { dispose() {} }; },
+      onDidHide(listener: () => void) { hidden = listener; return { dispose() {} }; },
+      onDidChangeValue(listener: (value: string) => void) { changed = listener; return { dispose() {} }; },
+      show() {
+        void window.quickPickChoice(quickPick, (value) => { quickPick.value = value; changed(value); }).then((choice) => {
+          if (choice === undefined) hidden();
+          else { quickPick.selectedItems = [choice as T]; accept(); }
+        });
+      },
+      hide() { hidden(); },
+      dispose() {},
+    };
+    return quickPick;
+  },
   createTerminal(options: { name: string }): StubTerminal {
     const terminal: StubTerminal = {
       name: options.name,

@@ -111,13 +111,13 @@ You can change an account's mode later, and **Re-link** in Tools checks linked a
 - **Some sign-ins apply to every account**, such as an `ANTHROPIC_API_KEY` in the environment; PlanSwap warns you ([details](docs/user-guide.md#sign-ins-that-apply-to-every-account)).
 - **On Windows**, linking single files needs Developer Mode, and Codex thread databases stay per account ([details](docs/user-guide.md#linking-on-windows)). While the Codex extension runs Codex inside WSL (`chatgpt.runCodexInWindowsSubsystemForLinux`), manage Codex accounts from a WSL window ([details](docs/user-guide.md#enable-once)).
 - **Not yet verified everywhere**: switching and usage limits have been tested end to end with real accounts in Antigravity IDE, VS Code and VSCodium in WSL, on native Windows and on a local Linux desktop. Other remote windows have not been tested with real accounts.
-- **DeepSeek API cards** use independent Codex configuration and do not provide per-window backend isolation. Their real-client acceptance remains pending; see the [guide](docs/user-guide.md#use-a-deepseek-api-card) and [TODO](TODO.md).
+- **API cards** (DeepSeek, OpenRouter, Z.ai, Kimi, xAI, Ollama, LM Studio or a custom Responses endpoint such as a LiteLLM gateway) use independent Codex configuration and do not provide per-window backend isolation. Real-client acceptance is partly pending; see the [guide](docs/user-guide.md#use-an-api-card) and [TODO](TODO.md).
 
 ## Privacy
 
 PlanSwap has no telemetry and makes no network requests of its own. Usage limits are read through the official `claude` and `codex` CLIs, which contact their own services as usual. When Claude usage is unavailable, a minimal official CLI model request can check subscription access; it may consume a small amount of quota. PlanSwap never copies, moves or sends your Claude or Codex sign-in; between linked Claude accounts it syncs only the sign-ins to MCP servers, and it changes your shell or environment configuration only after you confirm (afterwards it keeps the blocks it added up to date). Details: [privacy](docs/privacy.md).
 
-DeepSeek keys entered for API cards are saved in plaintext in each card's own Codex configuration. Codex sends those cards' model requests directly to DeepSeek; PlanSwap does not proxy requests or check subscription quotas for them.
+API keys entered for API cards are saved in plaintext in each card's own Codex configuration. Codex sends those cards' model requests directly to the card's service; PlanSwap does not proxy requests, fetch model lists or check subscription quotas for them.
 
 ## Uninstall
 

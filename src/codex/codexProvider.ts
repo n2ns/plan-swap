@@ -1,4 +1,5 @@
-// PlanSwap-owned Codex provider cards. Native config.toml holds the plaintext DeepSeek key; no auth.json reads,
+// PlanSwap-owned Codex API cards (DeepSeek, the other presets of API_SERVICES and custom Responses endpoints). Native
+// config.toml holds the plaintext key; no auth.json reads,
 // runtime vscode import, network calls or provider credentials leave this module. Public status and edit snapshots
 // are secret-free. Editing replaces only the model and key values in place; unrelated native settings are kept as
 // they are, and owned fields in unsupported forms are reported, never overwritten.
@@ -10,8 +11,28 @@ import { DEEPSEEK_CATALOG } from './deepseekCatalog';
 
 export const DEEPSEEK_MODELS = ['deepseek-flash', 'deepseek-v4-pro'] as const;
 export type DeepSeekModel = typeof DEEPSEEK_MODELS[number];
+/**
+ * API services an API card can use. DeepSeek keeps its own provider table, fixed endpoint and bundled model catalog
+ * (format of 0.5.0). Every other service writes one `planswap` provider with an editable Responses endpoint
+ * (baseUrl prefilled for the presets, entered for custom) and no model catalog, so Codex uses its fallback model
+ * metadata; keyRequired false lets local servers and gateways run without a key.
+ */
+export const API_SERVICES = ['deepseek', 'openrouter', 'zai', 'kimi', 'xai', 'ollama', 'lmstudio', 'custom'] as const;
+export type ApiService = typeof API_SERVICES[number];
+export const SERVICE_INFO: Record<ApiService, { name: string; baseUrl?: string; keyRequired: boolean }> = {
+  deepseek: { name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/', keyRequired: true },
+  openrouter: { name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', keyRequired: true },
+  zai: { name: 'Z.ai', baseUrl: 'https://api.z.ai/api/v1', keyRequired: true },
+  kimi: { name: 'Kimi', baseUrl: 'https://api.moonshot.ai/v1', keyRequired: true },
+  xai: { name: 'xAI', baseUrl: 'https://api.x.ai/v1', keyRequired: true },
+  ollama: { name: 'Ollama', baseUrl: 'http://localhost:11434/v1', keyRequired: false },
+  lmstudio: { name: 'LM Studio', baseUrl: 'http://localhost:1234/v1', keyRequired: false },
+  custom: { name: 'Custom', keyRequired: false },
+};
+// The provider table id of every non-DeepSeek card; Codex reserves openai, ollama and lmstudio
+const GENERIC_PROVIDER = 'planswap';
 export const PROVIDER_FILES = ['.planswap-provider.json', 'config.toml', 'models.json'] as const;
-export type ProviderErrorCode = 'marker' | 'unmanaged' | 'file' | 'format' | 'model' | 'key' | 'catalog' | 'changed' | 'exists' | 'write';
+export type ProviderErrorCode = 'marker' | 'unmanaged' | 'file' | 'format' | 'model' | 'key' | 'url' | 'catalog' | 'changed' | 'exists' | 'write';
 export class ProviderConfigError extends Error {
   constructor(readonly code: ProviderErrorCode) {
     super(t(`codex.provider.error.${code}`));
@@ -20,14 +41,18 @@ export class ProviderConfigError extends Error {
 }
 
 export interface ProviderInfo {
-  provider: 'deepseek';
+  provider: ApiService;
   configured: boolean;
-  model?: DeepSeekModel;
+  model?: string;
+  // Host of the endpoint (non-DeepSeek cards); never the full URL, which may carry a path the user chose
+  host?: string;
   error?: ProviderErrorCode;
 }
 interface Config {
-  model: DeepSeekModel;
+  service: ApiService;
+  model: string;
   key: string;
+  baseUrl: string;
   approval_policy?: string;
   sandbox_mode?: string;
 }
@@ -36,8 +61,9 @@ interface Snapshot {
   source: string;
   revision: string;
 }
-const MARKER = JSON.stringify({ version: 1, provider: 'deepseek' }) + '\n';
-const CONFIG_HEADER = '# PlanSwap DeepSeek API card. API key is stored in plaintext.\n';
+const markerFor = (service: ApiService): string => JSON.stringify({ version: 1, provider: service }) + '\n';
+const CONFIG_HEADER = '# PlanSwap API card. API key is stored in plaintext.\n';
+const DEEPSEEK_HEADER = '# PlanSwap DeepSeek API card. API key is stored in plaintext.\n';
 const POLICY_VALUES = ['never', 'on-request', 'on-failure'];
 const SANDBOX_VALUES = ['read-only', 'workspace-write', 'danger-full-access'];
 
@@ -63,15 +89,15 @@ function localText(dir: string, name: string): string {
   try { return fs.readFileSync(file, 'utf8'); } catch { throw new ProviderConfigError('file'); }
 }
 
-function markerText(dir: string): string {
+function markerText(dir: string): { source: string; service: ApiService } {
   const source = localText(dir, PROVIDER_FILES[0]);
   try {
     const value = JSON.parse(source) as unknown;
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error();
     const record = value as Record<string, unknown>;
-    if (record.version !== 1 || record.provider !== 'deepseek' || Object.keys(record).length !== 2) throw new Error();
+    if (record.version !== 1 || !(API_SERVICES as readonly unknown[]).includes(record.provider) || Object.keys(record).length !== 2) throw new Error();
+    return { source, service: record.provider as ApiService };
   } catch { throw new ProviderConfigError('marker'); }
-  return source;
 }
 
 // Only top-level selection counts: an unused provider definition or profile must not reclassify a subscription.
@@ -137,14 +163,34 @@ export function assertProviderFilesLocal(dir: string): void {
   }
 }
 
-function model(value: string | undefined): DeepSeekModel {
-  if (!(DEEPSEEK_MODELS as readonly string[]).includes(value ?? '')) throw new ProviderConfigError('model');
-  return value as DeepSeekModel;
+function model(service: ApiService, value: string | undefined): string {
+  if (service === 'deepseek') {
+    if (!(DEEPSEEK_MODELS as readonly string[]).includes(value ?? '')) throw new ProviderConfigError('model');
+  } else if (!value || value.length > 200 || /\s|[\x00-\x1f\x7f]/u.test(value)) throw new ProviderConfigError('model');
+  return value!;
+}
+
+/** An https endpoint, or http on this machine only (local servers), without credentials, query or fragment; the key
+ *  is sent to it, so a plain-http remote host or a userinfo part is refused. */
+export function checkBaseUrl(value: string | undefined): string {
+  let url: URL;
+  try { url = new URL(value ?? ''); } catch { throw new ProviderConfigError('url'); }
+  const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+  // The raw text too: an empty query or fragment ("…/v1?") parses to empty search/hash but would still be written
+  if ((url.protocol !== 'https:' && !(url.protocol === 'http:' && local)) || url.username || url.password || /[?#\s\x00-\x1f\x7f]/u.test(value!)) {
+    throw new ProviderConfigError('url');
+  }
+  return value!;
 }
 
 function key(value: string | undefined): string {
   if (!value || /\s|[\x00-\x1f\x7f]/u.test(value)) throw new ProviderConfigError('key');
   return value;
+}
+
+// A required key must be valid; an optional one (local servers, gateways) may be empty
+function serviceKey(service: ApiService, value: string): string {
+  return value || SERVICE_INFO[service].keyRequired ? key(value) : '';
 }
 
 // Single-line basic/literal strings only. JSON basic strings form the subset this writer emits; unsupported TOML
@@ -207,7 +253,8 @@ function advanceValue(text: string, state: ValueState): void {
 
 // Reads validate routing fields but leave unrelated native settings (complete values, including the tables Codex
 // writes itself) to Codex. Editing additionally requires the owned fields in the plain forms it can replace in place.
-function parseConfig(source: string, dir: string, requireKey = true, editable = false): Config {
+function parseConfig(source: string, dir: string, service: ApiService, requireKey = true, editable = false): Config {
+  const providerId = service === 'deepseek' ? 'deepseek' : GENERIC_PROVIDER;
   const root: Record<string, string> = {};
   const provider: Record<string, string> = {};
   const tables = new Set<string>();
@@ -227,7 +274,7 @@ function parseConfig(source: string, dir: string, requireKey = true, editable = 
       if (!array && tables.has(id)) throw new ProviderConfigError('format');
       tables.add(id);
       if (section[0] === 'model_providers') {
-        if (array || section.length !== 2 || section[1] !== 'deepseek') throw new ProviderConfigError('format');
+        if (array || section.length !== 2 || section[1] !== providerId) throw new ProviderConfigError('format');
       } else if (ROUTING_KEYS.has(section[0]) || ROOT_KEYS.has(section[0])) throw new ProviderConfigError('format');
       continue;
     }
@@ -260,27 +307,35 @@ function parseConfig(source: string, dir: string, requireKey = true, editable = 
     target[name] = value;
   }
   if (valueState.depth || valueState.multiline) throw new ProviderConfigError('format');
-  const fixedRoot: Record<string, string> = {
-    model_provider: 'deepseek', forced_login_method: 'api',
-    web_search: 'disabled', model_catalog_json: path.join(path.resolve(dir), 'models.json'),
+  // DeepSeek: fixed endpoint and the card's own catalog. Others: the card's endpoint and no catalog (Codex falls back
+  // to its default model metadata); the provider name is the label Codex shows and stays free text
+  const deepseek = service === 'deepseek';
+  const fixedRoot: Record<string, string | undefined> = {
+    model_provider: providerId, forced_login_method: 'api', web_search: 'disabled',
+    model_catalog_json: deepseek ? path.join(path.resolve(dir), 'models.json') : undefined,
   };
-  const fixedProvider: Record<string, string> = { name: 'deepseek', base_url: 'https://api.deepseek.com/', wire_api: 'responses' };
+  const fixedProvider: Record<string, string> = deepseek ? { name: 'deepseek', base_url: 'https://api.deepseek.com/', wire_api: 'responses' } : { wire_api: 'responses' };
   if (Object.entries(fixedRoot).some(([name, value]) => root[name] !== value)
-    || Object.entries(fixedProvider).some(([name, value]) => provider[name] !== value)) throw new ProviderConfigError('format');
+    || Object.entries(fixedProvider).some(([name, value]) => provider[name] !== value)
+    || (!deepseek && !provider.name)) throw new ProviderConfigError('format');
   if (editable && root.approval_policy !== undefined && !POLICY_VALUES.includes(root.approval_policy)) throw new ProviderConfigError('format');
   if (editable && root.sandbox_mode !== undefined && !SANDBOX_VALUES.includes(root.sandbox_mode)) throw new ProviderConfigError('format');
-  const result: Config = { model: model(root.model), key: provider.experimental_bearer_token ?? '',
-    approval_policy: root.approval_policy, sandbox_mode: root.sandbox_mode };
-  const efforts: readonly { effort: string }[] = DEEPSEEK_CATALOG.models.find((entry) => entry.slug === result.model)!.supported_reasoning_levels;
-  if (root.model_reasoning_effort !== undefined && !efforts.some((level) => level.effort === root.model_reasoning_effort)) throw new ProviderConfigError('format');
-  if (requireKey) key(result.key);
+  const result: Config = { service, model: model(service, root.model), key: provider.experimental_bearer_token ?? '',
+    baseUrl: deepseek ? provider.base_url : checkBaseUrl(provider.base_url), approval_policy: root.approval_policy, sandbox_mode: root.sandbox_mode };
+  if (deepseek) {
+    const efforts: readonly { effort: string }[] = DEEPSEEK_CATALOG.models.find((entry) => entry.slug === result.model)!.supported_reasoning_levels;
+    if (root.model_reasoning_effort !== undefined && !efforts.some((level) => level.effort === root.model_reasoning_effort)) throw new ProviderConfigError('format');
+  }
+  if (requireKey) serviceKey(service, result.key);
   return result;
 }
 
-// Called only after editable-format validation. Replace two known scalar values in-place, preserving native
-// settings, reasoning effort (including absence), comments and line endings instead of regenerating the file. Lines
-// inside multiline values of unrelated settings are never read as headers or assignments.
-function editConfigSource(source: string, selectedModel: DeepSeekModel, apiKey: string): string {
+// Called only after editable-format validation. Replace the known scalar values in-place (model, key and, for
+// non-DeepSeek cards, the endpoint), preserving native settings, reasoning effort (including absence), comments and
+// line endings instead of regenerating the file. Lines inside multiline values of unrelated settings are never read as
+// headers or assignments. An empty key is not written (optional keys of local servers and gateways).
+function editConfigSource(source: string, service: ApiService, next: { model: string; key: string; baseUrl?: string }): string {
+  const providerTable = `model_providers.${service === 'deepseek' ? 'deepseek' : GENERIC_PROVIDER}`;
   let section: string[] = [];
   let keyWritten = false;
   // The real provider header, for a missing key line; never a look-alike inside a multiline value
@@ -299,41 +354,52 @@ function editConfigSource(source: string, selectedModel: DeepSeekModel, apiKey: 
     const trimmed = line.replace(/^\uFEFF/, '').trim();
     if (trimmed.startsWith('[')) {
       section = keyPath(trimmed.slice(trimmed.startsWith('[[') ? 2 : 1))!.segments;
-      if (section.join('.') === 'model_providers.deepseek') header = index;
+      if (section.join('.') === providerTable) header = index;
       return line;
     }
     const assignment = keyPath(trimmed);
     if (!assignment?.rest.startsWith('=')) return line;
-    if (section.length === 0 && assignment.segments[0] === 'model') return replace(line, selectedModel);
+    if (section.length === 0 && assignment.segments[0] === 'model') return replace(line, next.model);
     if (section[0] === 'model_providers' && assignment.segments[0] === 'experimental_bearer_token') {
       keyWritten = true;
-      return replace(line, apiKey);
+      return replace(line, next.key);
     }
+    if (next.baseUrl !== undefined && section[0] === 'model_providers' && assignment.segments[0] === 'base_url') return replace(line, next.baseUrl);
     advanceValue(assignment.rest.slice(1), valueState);
     return line;
   });
-  if (!keyWritten) {
+  if (!keyWritten && next.key) {
     if (header < 0) throw new ProviderConfigError('format');
     const newline = source.includes('\r\n') ? '\r\n' : '\n';
     if (!result[header].endsWith('\n')) result[header] += newline;
-    result.splice(header + 1, 0, `experimental_bearer_token = ${JSON.stringify(apiKey)}${newline}`);
+    result.splice(header + 1, 0, `experimental_bearer_token = ${JSON.stringify(next.key)}${newline}`);
   }
   return result.join('');
 }
 
 function renderConfig(dir: string, config: Config): string {
-  const fields: Record<string, string> = {
-    model: config.model, model_provider: 'deepseek', forced_login_method: 'api',
-    model_reasoning_effort: 'high', web_search: 'disabled', model_catalog_json: path.join(path.resolve(dir), 'models.json'),
-  };
+  const deepseek = config.service === 'deepseek';
+  const fields: Record<string, string> = deepseek
+    ? {
+      model: config.model, model_provider: 'deepseek', forced_login_method: 'api',
+      model_reasoning_effort: 'high', web_search: 'disabled', model_catalog_json: path.join(path.resolve(dir), 'models.json'),
+    }
+    : { model: config.model, model_provider: GENERIC_PROVIDER, forced_login_method: 'api', web_search: 'disabled' };
   if (config.approval_policy !== undefined) fields.approval_policy = config.approval_policy;
   if (config.sandbox_mode !== undefined) fields.sandbox_mode = config.sandbox_mode;
   const lines = Object.entries(fields).map(([name, value]) => `${name} = ${JSON.stringify(value)}`);
-  lines.push('', '[model_providers.deepseek]', 'name = "deepseek"', 'base_url = "https://api.deepseek.com/"',
-    'wire_api = "responses"', `experimental_bearer_token = ${JSON.stringify(config.key)}`);
+  if (deepseek) {
+    lines.push('', '[model_providers.deepseek]', 'name = "deepseek"', 'base_url = "https://api.deepseek.com/"',
+      'wire_api = "responses"', `experimental_bearer_token = ${JSON.stringify(config.key)}`);
+    return DEEPSEEK_HEADER + lines.join('\n') + '\n';
+  }
+  lines.push('', `[model_providers.${GENERIC_PROVIDER}]`, `name = ${JSON.stringify(SERVICE_INFO[config.service].name)}`,
+    `base_url = ${JSON.stringify(config.baseUrl)}`, 'wire_api = "responses"');
+  if (config.key) lines.push(`experimental_bearer_token = ${JSON.stringify(config.key)}`);
   return CONFIG_HEADER + lines.join('\n') + '\n';
 }
 
+// DeepSeek cards only; other cards have no catalog (a models.json there is left alone and not read)
 function catalogText(dir: string): string {
   let source: string;
   try { source = localText(dir, 'models.json'); } catch { throw new ProviderConfigError('catalog'); }
@@ -349,20 +415,36 @@ function snapshot(dir: string, requireKey = true, editable = false): Snapshot {
   if (!hasProviderMarker(dir)) throw new ProviderConfigError('unmanaged');
   const marker = markerText(dir);
   const source = localText(dir, 'config.toml');
-  const config = parseConfig(source, dir, requireKey, editable);
-  const catalog = catalogText(dir);
-  return { config, source, revision: createHash('sha256').update(JSON.stringify([marker, source, catalog])).digest('hex') };
+  const config = parseConfig(source, dir, marker.service, requireKey, editable);
+  const catalog = marker.service === 'deepseek' ? catalogText(dir) : '';
+  return { config, source, revision: createHash('sha256').update(JSON.stringify([marker.source, source, catalog])).digest('hex') };
 }
 
-/** Secret-free status. Invalid/unmanaged provider cards must never fall back to subscription credential reads. */
+// The service of a readable marker, for status display while the rest of the card is broken
+function markedService(dir: string): ApiService | undefined {
+  try { return markerText(dir).service; } catch { return undefined; }
+}
+
+/** Label of a card's service: "<service> API", or the localized custom label */
+export function providerLabel(service: ApiService): string {
+  return service === 'custom' ? t('codex.provider.customLabel') : `${SERVICE_INFO[service].name} API`;
+}
+
+const hostOf = (url: string): string | undefined => { try { return new URL(url).host; } catch { return undefined; } };
+
+/** Secret-free status. Invalid/unmanaged provider cards must never fall back to subscription credential reads. An
+ *  unreadable marker shows as a custom card with its error; an unmarked config (only a DeepSeek one is preserved) as
+ *  DeepSeek. */
 export function readProviderInfo(dir: string): ProviderInfo | undefined {
   if (!preserveProviderConfig(dir)) return undefined;
   try {
     const { config } = snapshot(dir, false);
-    return { provider: 'deepseek', model: config.model, configured: !!config.key && !/\s|[\x00-\x1f\x7f]/u.test(config.key),
-      error: !config.key || /\s|[\x00-\x1f\x7f]/u.test(config.key) ? 'key' : undefined };
+    let error: ProviderErrorCode | undefined;
+    try { serviceKey(config.service, config.key); } catch { error = 'key'; }
+    return { provider: config.service, model: config.model, host: config.service === 'deepseek' ? undefined : hostOf(config.baseUrl),
+      configured: !error, error };
   } catch (error) {
-    return { provider: 'deepseek', configured: false, error: error instanceof ProviderConfigError ? error.code : 'file' };
+    return { provider: markedService(dir) ?? (hasProviderMarker(dir) ? 'custom' : 'deepseek'), configured: false, error: error instanceof ProviderConfigError ? error.code : 'file' };
   }
 }
 
@@ -398,8 +480,9 @@ function seed(defaultDir: string): { values: Pick<Config, 'approval_policy' | 's
 }
 
 /** Host creates a NEW account directory first. All provider files are exclusive writes; auth.json is untouched.
- * The marker is written first so an interrupted creation cannot later inherit the default provider config. */
-export function createDeepSeekConfig(dir: string, selectedModel: string, apiKey: string, defaultDir: string): { skipped: string[] } {
+ * The marker is written first so an interrupted creation cannot later inherit the default provider config. DeepSeek
+ * cards also get the bundled model catalog; other services take input.baseUrl (the preset's when omitted). */
+export function createProviderConfig(dir: string, service: ApiService, input: { model: string; key: string; baseUrl?: string }, defaultDir: string): { skipped: string[] } {
   const root = stat(dir);
   if (!root?.isDirectory() || root.isSymbolicLink()) throw new ProviderConfigError('file');
   const realDir = fs.realpathSync(dir);
@@ -411,24 +494,27 @@ export function createDeepSeekConfig(dir: string, selectedModel: string, apiKey:
   }
   if (PROVIDER_FILES.some((name) => stat(path.join(dir, name)))) throw new ProviderConfigError('exists');
   const copied = seed(defaultDir);
-  const config = renderConfig(dir, { ...copied.values, model: model(selectedModel), key: key(apiKey) });
-  parseConfig(config, dir);
+  const baseUrl = service === 'deepseek' ? SERVICE_INFO.deepseek.baseUrl! : checkBaseUrl(input.baseUrl ?? SERVICE_INFO[service].baseUrl);
+  const config = renderConfig(dir, { ...copied.values, service, model: model(service, input.model), key: serviceKey(service, input.key), baseUrl });
+  parseConfig(config, dir, service);
   try {
-    fs.writeFileSync(path.join(dir, PROVIDER_FILES[0]), MARKER, { mode: 0o600, flag: 'wx' });
+    fs.writeFileSync(path.join(dir, PROVIDER_FILES[0]), markerFor(service), { mode: 0o600, flag: 'wx' });
     fs.writeFileSync(path.join(dir, 'config.toml'), config, { mode: 0o600, flag: 'wx' });
-    fs.writeFileSync(path.join(dir, 'models.json'), JSON.stringify(DEEPSEEK_CATALOG, null, 2) + '\n', { mode: 0o600, flag: 'wx' });
+    if (service === 'deepseek') fs.writeFileSync(path.join(dir, 'models.json'), JSON.stringify(DEEPSEEK_CATALOG, null, 2) + '\n', { mode: 0o600, flag: 'wx' });
   } catch { throw new ProviderConfigError('write'); }
   return { skipped: copied.skipped };
 }
 
-/** Capture before prompts. The revision covers config, marker and catalog but contains no raw key. */
-export function readDeepSeekEditState(dir: string): { model: DeepSeekModel; revision: string } {
+/** Capture before prompts. The revision covers config, marker and catalog but contains no raw key; hasKey says
+ *  whether a key is saved, so an optional key can be offered as "keep". */
+export function readProviderEditState(dir: string): { service: ApiService; model: string; baseUrl: string; hasKey: boolean; revision: string } {
   const state = snapshot(dir, false, true);
-  return { model: state.config.model, revision: state.revision };
+  return { service: state.config.service, model: state.config.model, baseUrl: state.config.baseUrl, hasKey: !!state.config.key, revision: state.revision };
 }
 
-/** Empty replacement preserves the current key. Unsupported edits and competing PlanSwap edits are refused. */
-export function editDeepSeekConfig(dir: string, selectedModel: string, replacementKey: string, revision: string): void {
+/** Empty replacement preserves the current key; baseUrl applies to non-DeepSeek cards only. Unsupported edits and
+ *  competing PlanSwap edits are refused. */
+export function editProviderConfig(dir: string, next: { model: string; key: string; baseUrl?: string }, revision: string): void {
   // Establish that the root and owned files are local before creating the per-card edit lock.
   snapshot(dir, false, true);
   const lock = path.join(dir, '.planswap-provider.lock');
@@ -438,13 +524,15 @@ export function editDeepSeekConfig(dir: string, selectedModel: string, replaceme
   try {
     const current = snapshot(dir, false, true);
     if (current.revision !== revision) throw new ProviderConfigError('changed');
-    const nextModel = model(selectedModel);
-    const nextKey = key(replacementKey || current.config.key);
-    const config = editConfigSource(current.source, nextModel, nextKey);
-    const edited = parseConfig(config, dir, true, true);
+    const service = current.config.service;
+    const nextModel = model(service, next.model);
+    const nextKey = serviceKey(service, next.key || current.config.key);
+    const nextUrl = service === 'deepseek' ? undefined : checkBaseUrl(next.baseUrl ?? current.config.baseUrl);
+    const config = editConfigSource(current.source, service, { model: nextModel, key: nextKey, baseUrl: nextUrl });
+    const edited = parseConfig(config, dir, service, true, true);
     // Accepted TOML spellings may be outside the narrow scalar replacement syntax. Never report a successful
-    // edit unless the re-parsed values match both requested changes.
-    if (edited.model !== nextModel || edited.key !== nextKey) throw new ProviderConfigError('format');
+    // edit unless the re-parsed values match every requested change.
+    if (edited.model !== nextModel || edited.key !== nextKey || (nextUrl !== undefined && edited.baseUrl !== nextUrl)) throw new ProviderConfigError('format');
     temporary = path.join(dir, `.planswap-provider-${randomUUID()}.tmp`);
     fs.writeFileSync(temporary, config, { mode: 0o600, flag: 'wx' });
     if (snapshot(dir, false, true).revision !== revision) throw new ProviderConfigError('changed');
