@@ -7,7 +7,7 @@ import { accountTerminalShell, bundledPathAssignment, hasControlChars, shQuote, 
 import { type AccountsPanel, type PanelSource, viewInfo } from '../accountsPanel';
 import { labelFor, sameName, type LabelStore, EXTERNAL_NAME } from '../labels';
 import type { RecommendExclusions } from '../recommend';
-import type { AccountView, FromWebview, RestartInfo } from '../protocol';
+import type { AccountView, ApiCardInput, ApiServiceView, FromWebview, RestartInfo } from '../protocol';
 import {
   CODEX_DEFAULT_NAME,
   type CodexAccount,
@@ -49,9 +49,11 @@ import { joinSentences, t } from '../i18n';
 import type { CodexUsageHistory } from './codexUsageHistory';
 import {
   API_SERVICES, DEEPSEEK_MODELS, PROVIDER_FILES, ProviderConfigError, SERVICE_INFO, checkBaseUrl, createProviderConfig,
-  editProviderConfig, preserveProviderConfig, providerLabel, readProviderEditState, readProviderInfo, validateProviderConfig,
-  type ApiService, type ProviderErrorCode,
+  editProviderConfig, preserveProviderConfig, providerLabel, readProviderEditState, readProviderInfo, readProviderKey,
+  validateProviderConfig, type ApiService, type ProviderErrorCode,
 } from './codexProvider';
+import { fetchModels, ModelListError } from './providerModels';
+import type { ModelCache } from './modelCache';
 // Codex commands, panel message handling and the Codex panel data source. Command ids and restart behavior:
 // codex-design.md section 8 and docs/features.md. QuickPick items, messages and terminal names use labelFor; logic
 // uses account name and dir. Panel account messages resolve their directory through panel.resolve.
@@ -67,6 +69,8 @@ export interface CodexDeps {
   tools: ToolDeps;
   // The Codex extension's bundled CLI (findBundledCodex), the account terminals' fallback when `codex` is not on PATH
   bundledCodex?: () => string | undefined;
+  // Model lists of the API card services (codex.modelCache); a list a form loads for a preset is stored there
+  modelCache?: ModelCache;
   // Receives this module's "account terminal open" check, so the toolbar's Re-link can treat such an account as busy
   provideTerminalCheck?: (check: TerminalCheck) => void;
 }
@@ -183,15 +187,18 @@ function providerErrorText(code: ProviderErrorCode): string {
 }
 
 // Only safe provider status enters the view. Provider homes never need a subscription credential read.
-function codexRowInfo(dir: string): Pick<AccountView, 'email' | 'plan' | 'loggedIn' | 'provider' | 'providerModel' | 'providerHost' | 'providerConfigured' | 'providerError'> {
+function codexRowInfo(dir: string): Pick<AccountView, 'email' | 'plan' | 'loggedIn' | 'provider' | 'providerService' | 'providerModel' | 'providerBaseUrl' | 'providerHost' | 'providerHasKey' | 'providerConfigured' | 'providerError'> {
   const provider = readProviderInfo(dir);
   if (!provider) return viewInfo(readCodexAccountInfo(dir));
   return {
     loggedIn: provider.configured,
     plan: providerLabel(provider.provider),
     provider: providerLabel(provider.provider),
+    providerService: provider.provider,
     providerModel: provider.model,
+    providerBaseUrl: provider.baseUrl,
     providerHost: provider.host,
+    providerHasKey: provider.hasKey,
     providerConfigured: provider.configured,
     providerError: provider.error ? providerErrorText(provider.error) : undefined,
   };
@@ -208,7 +215,7 @@ function codexRowInfo(dir: string): Pick<AccountView, 'email' | 'plan' | 'logged
  *   or the path for an unregistered dir; display text only.
  * - watchTargets(): auth.json and provider files of each row's dir plus this editor's state files (watchedStateFiles).
  */
-export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, history?: CodexUsageHistory, exclusions?: RecommendExclusions): PanelSource {
+export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, history?: CodexUsageHistory, exclusions?: RecommendExclusions, modelCache?: ModelCache): PanelSource {
   const accounts = (): AccountView[] => {
     const cur = effectiveDir();
     const selected = readSelectedDir() ?? codexDefaultDir();
@@ -251,6 +258,10 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, h
   };
   return {
     accounts,
+    apiServices: (): ApiServiceView[] => API_SERVICES.map((id) => ({
+      id, name: id === 'custom' ? '' : SERVICE_INFO[id].name, baseUrl: SERVICE_INFO[id].baseUrl, keyRequired: SERVICE_INFO[id].keyRequired,
+      models: id === 'deepseek' ? [...DEEPSEEK_MODELS] : modelCache?.get(id),
+    })),
     identityOf: (dir) => preserveProviderConfig(dir) ? undefined : readCodexAccountInfo(dir).identity,
     runsInWsl: () => codexRunsInWsl(),
     // Treat errors such as unreadable rc files as not enabled so panel rendering is not interrupted; a broken block
@@ -290,12 +301,13 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, h
  * - add: validateName, create the dir; shared asks for the Windows copy fallback then ensureCodexLinks with the
  *   terminal-busy callback, independent runs copyCodexIndependent; link/copy failures only warn. Add and rename always
  *   post addResult / renameResult, also when they throw.
- * - API card add: a new directory only; on the host a service QuickPick (presets, a custom endpoint, or a typed address),
- *   the endpoint for a custom service, the model (DeepSeek QuickPick, otherwise typed) and a password input (optional
- *   for local servers and custom endpoints); writes provider files before
- *   sharing or registration. No key enters panel state. editProvider (model, endpoint for non-DeepSeek
- *   cards, key) uses a revision captured before prompts and preserves the key on an empty replacement. Creation/edit never selects or restarts. Switch/terminal/conversion
- *   validate provider files, including after prompts; provider terminals never start subscription sign-in.
+ * - API card add: a new directory only; the sidebar form sends the service, endpoint (custom), key and the model chosen
+ *   from the loaded list; the host validates them again, refusing a missing required key or an unusable endpoint before
+ *   any directory exists, and writes provider files before sharing or registration. No key enters panel state.
+ *   providerModels answers with DeepSeek's catalog models or fetchModels of the endpoint (the typed key, else the saved
+ *   key of the card being edited). saveProvider (model, endpoint for non-DeepSeek cards, key; empty keeps it) uses a
+ *   fresh revision. Creation/edit never selects or restarts. Switch/terminal/conversion validate provider files;
+ *   provider terminals never start subscription sign-in.
  * - recommendExclude: registered rows only (the external row is ignored); sets or clears the recommendation mark and
  *   refreshes the panel. The mark is cleared with the account (remove, or a pruned directory on sync).
  * - reorder: the rows that resolve to registered accounts, in the order sent, become the stored order (store.setOrder);
@@ -551,101 +563,60 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     }
   }
 
-  // DeepSeek: its listed models; other services: the model ID as typed (no list is fetched)
-  async function pickProviderModel(service: ApiService, current?: string): Promise<string | undefined> {
-    if (service === 'deepseek') {
-      const selected = await vscode.window.showQuickPick(
-        DEEPSEEK_MODELS.map((model) => ({ label: model, picked: model === current })),
-        { placeHolder: t('codex.provider.modelPrompt') },
-      );
-      return selected?.label;
+  const isService = (value: string): value is ApiService => (API_SERVICES as readonly string[]).includes(value);
+
+  // The model list for a form: DeepSeek's listed models (bound to its catalog), otherwise GET <endpoint>/models with the
+  // key typed in the form, or the saved key of the card being edited (dir) when none was typed
+  async function listProviderModels(msg: { service: string; baseUrl?: string; key: string; dir?: string }): Promise<{ models?: string[]; error?: string }> {
+    if (!isService(msg.service)) return { error: providerErrorText('format') };
+    if (msg.service === 'deepseek') return { models: [...DEEPSEEK_MODELS] };
+    let baseUrl: string;
+    let key = msg.key.trim();
+    try {
+      baseUrl = checkBaseUrl(msg.baseUrl?.trim() || SERVICE_INFO[msg.service].baseUrl);
+      if (!key && msg.dir) {
+        // A saved key goes only to its own card's service and endpoint; another one needs the key typed again
+        const card = panel.resolve(MODE, msg.dir);
+        if (card?.kind === 'named' && preserveProviderConfig(card.dir)) {
+          const saved = readProviderEditState(card.dir);
+          if (saved.service !== msg.service || saved.baseUrl !== baseUrl) return { error: t('codex.provider.newEndpointNeedsKey') };
+          key = readProviderKey(card.dir);
+        }
+      }
+    } catch (err) {
+      return { error: providerErrorText(err instanceof ProviderConfigError ? err.code : 'file') };
     }
-    const typed = await vscode.window.showInputBox({
-      prompt: t('codex.provider.modelInputPrompt', { service: serviceName(service) }), value: current, ignoreFocusOut: true,
-      validateInput: (value) => (!value.trim() || /\s|[\x00-\x1f\x7f]/u.test(value.trim()) ? t('codex.provider.error.model') : undefined),
-    });
-    return typed?.trim() || undefined;
+    if (/\s|[\x00-\x1f\x7f]/u.test(key)) return { error: providerErrorText('key') };
+    try {
+      const models = await fetchModels(baseUrl, key);
+      // A preset's list at its own endpoint is the service's list: keep it for the next form
+      if (msg.service !== 'custom' && baseUrl === SERVICE_INFO[msg.service].baseUrl) {
+        void deps.modelCache?.set(msg.service, models).then(() => panel.refresh()).catch(() => undefined);
+      }
+      return { models };
+    } catch (err) {
+      const e = err instanceof ModelListError ? err : new ModelListError('network');
+      return { error: e.code === 'http' ? t('codex.provider.modelsHttp', { status: e.status ?? 0 }) : t(e.code === 'format' ? 'codex.provider.modelsFormat' : 'codex.provider.modelsNetwork') };
+    }
   }
 
-  const serviceName = (service: ApiService): string => (service === 'custom' ? t('codex.provider.customName') : SERVICE_INFO[service].name);
-  const urlError = (value: string): string | undefined => {
-    try { checkBaseUrl(value.trim()); return undefined; } catch { return t('codex.provider.error.url'); }
-  };
-
-  // The service list, also accepting a typed endpoint address (a custom service at that address)
-  async function pickService(): Promise<{ service: ApiService; baseUrl?: string } | undefined> {
-    // invalid: the explanation shown for a typed address that cannot be used; accepting it does nothing
-    type Item = vscode.QuickPickItem & { service: ApiService; baseUrl?: string; invalid?: boolean };
-    const presets: Item[] = API_SERVICES.filter((service) => service !== 'custom').map((service) => ({
-      label: SERVICE_INFO[service].name, service,
-      description: SERVICE_INFO[service].keyRequired ? undefined : t('codex.provider.local'), detail: SERVICE_INFO[service].baseUrl,
-    }));
-    const custom: Item = { label: t('codex.provider.customItem'), detail: t('codex.provider.customDetail'), service: 'custom' };
-    const quickPick = vscode.window.createQuickPick<Item>();
-    quickPick.placeholder = t('codex.provider.servicePrompt');
-    quickPick.ignoreFocusOut = true;
-    quickPick.items = [...presets, custom];
-    quickPick.onDidChangeValue((value) => {
-      const typed = value.trim();
-      const error = /^https?:\/\//i.test(typed) ? urlError(typed) : undefined;
-      const address: Item[] = !/^https?:\/\//i.test(typed) ? []
-        : error ? [{ label: error, service: 'custom', invalid: true, alwaysShow: true }]
-        : [{ label: t('codex.provider.useAddress', { url: typed }), service: 'custom', baseUrl: typed, alwaysShow: true }];
-      quickPick.items = [...address, ...presets, custom];
-    });
-    const picked = await new Promise<Item | undefined>((resolve) => {
-      quickPick.onDidAccept(() => {
-        if (quickPick.selectedItems[0]?.invalid) return;
-        resolve(quickPick.selectedItems[0]);
-        quickPick.hide();
-      });
-      quickPick.onDidHide(() => resolve(undefined));
-      quickPick.show();
-    });
-    quickPick.dispose();
-    if (!picked) return undefined;
-    if (picked.service !== 'custom' || picked.baseUrl) return { service: picked.service, baseUrl: picked.baseUrl };
-    const typed = await vscode.window.showInputBox({
-      prompt: t('codex.provider.urlPrompt', { service: serviceName('custom') }), ignoreFocusOut: true, validateInput: urlError,
-    });
-    return typed === undefined ? undefined : { service: 'custom', baseUrl: typed.trim() };
-  }
-
-  // Required keys must be entered; an optional key may stay empty. When editing, empty keeps the saved key.
-  async function askKey(service: ApiService, editing?: { hasKey: boolean }): Promise<string | undefined> {
-    const required = SERVICE_INFO[service].keyRequired;
-    const prompt = editing?.hasKey ? 'codex.provider.keyEditPrompt' : required ? 'codex.provider.keyPrompt' : 'codex.provider.keyOptionalPrompt';
-    return vscode.window.showInputBox({
-      prompt: t(prompt, { service: serviceName(service) }), password: true, ignoreFocusOut: true,
-      validateInput: (value) => (!editing && required && !value.trim() ? t('codex.provider.keyRequired') : undefined),
-    });
-  }
-
-  async function editProvider(account: CodexAccount): Promise<void> {
-    if (account.name === CODEX_DEFAULT_NAME || !preserveProviderConfig(account.dir)) return;
+  // The edit form's values; key '' keeps the saved key. Errors carry no config text
+  async function saveProvider(account: CodexAccount, msg: { model: string; baseUrl?: string; key: string }): Promise<string | undefined> {
     try {
       const before = readProviderEditState(account.dir);
-      const model = await pickProviderModel(before.service, before.model);
-      if (!model) return;
-      let baseUrl: string | undefined;
-      if (before.service !== 'deepseek') {
-        const typed = await vscode.window.showInputBox({
-          prompt: t('codex.provider.urlPrompt', { service: serviceName(before.service) }), value: before.baseUrl, ignoreFocusOut: true, validateInput: urlError,
-        });
-        if (typed === undefined) return;
-        baseUrl = typed.trim();
-      }
-      const replacement = await askKey(before.service, { hasKey: before.hasKey });
-      if (replacement === undefined) return;
       const registered = store.find(account.name);
-      if (!registered || !samePath(registered.dir, account.dir)) return;
-      editProviderConfig(account.dir, { model, key: replacement.trim(), baseUrl }, before.revision);
-      void vscode.window.showInformationMessage(t('codex.provider.edited'));
+      if (!registered || !samePath(registered.dir, account.dir)) return providerErrorText('changed');
+      // Moving the saved key to another endpoint needs it typed again, as for the model list
+      if (before.service !== 'deepseek' && !msg.key.trim() && before.hasKey && msg.baseUrl !== undefined && msg.baseUrl.trim() !== before.baseUrl) {
+        return t('codex.provider.newEndpointNeedsKey');
+      }
+      editProviderConfig(account.dir, { model: msg.model.trim(), key: msg.key.trim(), baseUrl: before.service === 'deepseek' ? undefined : msg.baseUrl?.trim() }, before.revision);
+      return undefined;
     } catch (err) {
-      const reason = providerErrorText(err instanceof ProviderConfigError ? err.code : 'write');
-      void vscode.window.showErrorMessage(joinSentences(t('codex.provider.editFailed'), reason));
+      return joinSentences(t('codex.provider.editFailed'), providerErrorText(err instanceof ProviderConfigError ? err.code : 'write'));
+    } finally {
+      panel.refresh();
     }
-    panel.refresh();
   }
 
   // Rename: only named rows (the default and external rows cannot be renamed); label equal to name clears the alias
@@ -662,10 +633,10 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
   }
 
   // shared: link everything but the login to the default account; otherwise copy its configuration once
-  async function addAccount(name: string, shared: boolean, provider?: 'api'): Promise<string | undefined> {
+  async function addAccount(name: string, shared: boolean, provider?: ApiCardInput): Promise<string | undefined> {
     const error = validateName(name, store, labels);
     if (error) return error;
-    if (provider === 'api') return addProviderAccount(name, shared);
+    if (provider) return addProviderAccount(name, shared, provider);
     const account: CodexAccount = { name, dir: codexAccountDir(name) };
     try {
       ensureCodexDir(account.dir);
@@ -701,16 +672,20 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     return undefined;
   }
 
-  async function addProviderAccount(name: string, shared: boolean): Promise<string | undefined> {
+  async function addProviderAccount(name: string, shared: boolean, input: ApiCardInput): Promise<string | undefined> {
     const account: CodexAccount = { name, dir: codexAccountDir(name) };
     if (lstatOrUndefined(account.dir)) return t('codex.provider.dirExists', { dir: account.dir });
-    const target = await pickService();
-    if (!target) return t('codex.provider.cancelled');
-    const model = await pickProviderModel(target.service);
-    if (!model) return t('codex.provider.cancelled');
-    const key = await askKey(target.service);
-    if (key === undefined) return t('codex.provider.cancelled');
+    if (!isService(input.service)) return providerErrorText('format');
+    const target = { service: input.service, baseUrl: input.service === 'custom' ? input.baseUrl?.trim() : undefined };
+    const model = input.model.trim();
+    const key = input.key;
+    if (!model) return providerErrorText('model');
     if (SERVICE_INFO[target.service].keyRequired && !key.trim()) return t('codex.provider.keyRequired');
+    if (/\s|[\x00-\x1f\x7f]/u.test(key.trim())) return providerErrorText('key');
+    // Fails before any directory is made, so a rejected form leaves nothing behind
+    if (target.service === 'custom') {
+      try { checkBaseUrl(target.baseUrl); } catch { return providerErrorText('url'); }
+    }
     const error = validateName(name, store, labels);
     if (error) return error;
     if (lstatOrUndefined(account.dir)) return t('codex.provider.dirExists', { dir: account.dir });
@@ -930,14 +905,20 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
         try {
           error = await addAccount(msg.name.trim(), msg.shared !== false, msg.provider);
         } catch (err) {
-          error = msg.provider === 'api' ? t('codex.provider.createFailed', { dir: codexAccountDir(msg.name.trim()) }) : errText(err);
+          error = msg.provider ? t('codex.provider.createFailed', { dir: codexAccountDir(msg.name.trim()) }) : errText(err);
         }
         panel.post({ type: 'addResult', mode: MODE, error });
         return;
       }
-      case 'editProvider': {
+      case 'providerModels': {
+        const result = await listProviderModels(msg);
+        panel.post({ type: 'providerModelsResult', mode: MODE, request: msg.request, ...result });
+        return;
+      }
+      case 'saveProvider': {
         const a = panel.resolve(MODE, msg.dir);
-        if (a?.kind === 'named' && preserveProviderConfig(a.dir)) await editProvider(a);
+        const error = a?.kind === 'named' && preserveProviderConfig(a.dir) ? await saveProvider(a, msg) : providerErrorText('unmanaged');
+        panel.post({ type: 'saveProviderResult', mode: MODE, dir: msg.dir, error });
         return;
       }
       case 'share': {

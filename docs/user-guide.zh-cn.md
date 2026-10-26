@@ -153,15 +153,16 @@ cmd.exe /c 'start "" "vscode://n2ns.planswap/switch?account=default&distro=Ubunt
 
 API 卡片让官方 Codex 扩展和 CLI 改用其他 AI 服务，而不是 ChatGPT 登录：DeepSeek、OpenRouter、Z.ai、Kimi、xAI、本机上的 Ollama 或 LM Studio，或者任何提供 OpenAI Responses API 的自定义地址，例如 LiteLLM 网关。Codex 只支持 Responses API，只提供 Chat Completions 的服务无法使用。
 
-在 Codex 添加表单中选择 **API 服务**，输入新账号名称并选择链接或独立模式。点击对号（**添加**）后：
+在 Codex 添加表单中选择 **API 服务**，输入新账号名称并选择链接或独立模式。所有操作都在侧边栏完成：
 
-1. 从列表中选择服务，或选择 **自定义地址…**。也可以直接在列表里输入地址，例如 `https://gateway.example.com/v1`，然后选择带该地址的 **使用** 一项。选择自定义地址但没有输入时，会再询问地址。地址必须以 `https://` 开头；`http://` 只允许本机（`localhost`）。
-2. 选择模型。DeepSeek 提供模型列表；其他服务请按服务商列出的模型 ID 原样输入。PlanSwap 不会下载模型列表。
-3. 在隐藏输入框中输入 API Key。DeepSeek、OpenRouter、Z.ai、Kimi 和 xAI 必须填写；Ollama、LM Studio 和自定义地址在不需要 Key 时可以留空。
+1. 在列表中选择服务。选择 **自定义地址** 时，输入地址，例如 `https://gateway.example.com/v1`。地址必须以 `https://` 开头；`http://` 只允许本机（`localhost`）。
+2. 在 Key 输入框中输入 API Key（显示为圆点）。DeepSeek、OpenRouter、Z.ai、Kimi 和 xAI 必须填写；Ollama、LM Studio 和自定义地址在不需要 Key 时可以留空。
+3. 选择模型。DeepSeek、OpenRouter（编辑器启动后 PlanSwap 会在后台更新它的公开列表），以及正在运行的 Ollama 和 LM Studio，列表会立即可用。Kimi、xAI 和 Z.ai 在你停止输入 Key 后加载，并保存供下次使用；自定义地址在你停止输入地址或 Key 后加载。默认选中第一个模型，可以改选。在列表中选择模型（可输入文字筛选）。获取失败时，下方会显示原因；修正后列表会重新加载，也可以点 **获取模型** 重试。如果接口不提供模型列表，这时也可以在列表里直接输入模型 ID，再选择 `Add "…"` 那一项。
+4. 点击对号（**添加**）。要取消，点 **×** 关闭表单。
 
 此操作需要新目录；已有的订阅账号不会被转换。不需要 Claude 或 ChatGPT 订阅凭据。
 
-卡片显示服务、配置的模型、地址主机（DeepSeek 除外）以及配置是否完整。这只是本地配置检查，不代表连接已验证。通过 **编辑 API 配置** 更换模型、地址（DeepSeek 除外）或 Key；替换 Key 留空时保留原 Key。编辑时会保留 Codex 自己写入该文件的设置；对 provider、认证或模型与密钥行的不支持修改会保留并报错，不会被覆盖。配置缺失或无效时，不能切换到该卡片或打开其账号终端。DeepSeek 以外的服务在卡片中没有模型目录，Codex 启动时会提示未知模型并使用默认模型设置。
+卡片显示服务、配置的模型、地址主机（DeepSeek 除外）以及配置是否完整。这只是本地配置检查，不代表连接已验证。点击 **编辑 API 配置**（齿轮）即可在卡片中编辑：地址（DeepSeek 除外）、新的 Key（留空则保留已保存的 Key）和模型，模型列表会立即用已保存的 Key 获取。点击 **保存**。更换地址时需要重新输入 Key：已保存的 Key 只会发送给原来的地址。编辑时会保留 Codex 自己写入该文件的设置；对 provider、认证或模型与密钥行的不支持修改会保留并报错，不会被覆盖。配置缺失或无效时，不能切换到该卡片或打开其账号终端。DeepSeek 以外的服务在卡片中没有模型目录，Codex 启动时会提示未知模型并使用默认模型设置。
 
 终端操作会以该卡片的目录启动 Codex，不会进入 ChatGPT 登录流程。切换沿用现有的 Codex 确认和重启步骤。创建或编辑卡片不会切换账号、重启窗口，也不会更改正在进行的对话所用的模型。选择原来的账号即可恢复其订阅配置。API 卡片没有订阅额度刷新，也不参与基于额度的推荐。
 

@@ -29,6 +29,7 @@ import { migrateLegacyLanguage, resolveLocale, watchLocale } from './i18nVscode'
 import { effectiveDir, migrateLegacyCodex, upgradeRcBlocks } from './codex/codexState';
 import { CodexUsageMonitor, queryCodexAccount } from './codex/codexUsageMonitor';
 import { CodexUsageHistory } from './codex/codexUsageHistory';
+import { ModelCache } from './codex/modelCache';
 import { findBundledCodex, readCodexUsageWithFallback, type UsageResult } from './codex/codexUsage';
 import { codexDefaultDir, readCodexAccountInfo } from './codex/codexPaths';
 import { preserveProviderConfig } from './codex/codexProvider';
@@ -171,6 +172,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   const codexLabels = new LabelStore(state, 'codex.labels');
   const codexExclusions = new RecommendExclusions(state, 'codex.recommendExcluded');
   const usageHistory = new CodexUsageHistory(state);
+  const modelCache = new ModelCache(state);
 
   // A Codex init failure is only logged and does not affect Claude: the Codex tab renders as "not enabled, no accounts"
   let codex: { store: CodexAccountStore; labels: LabelStore; exclusions: RecommendExclusions } | undefined;
@@ -200,7 +202,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
       if (!stateError || error !== stateError.message) throw err;
       console.error('[planswap] Codex account sync failed:', err);
     }
-    codexSource = codexPanelSource(codexStore, codexLabels, usageHistory, codexExclusions);
+    codexSource = codexPanelSource(codexStore, codexLabels, usageHistory, codexExclusions, modelCache);
     codex = { store: codexStore, labels: codexLabels, exclusions: codexExclusions };
   } catch (err) {
     codexInitError = err instanceof Error ? err.message : String(err);
@@ -599,6 +601,8 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
 
   const panel = new AccountsPanel(ctx.extensionUri, { claude: claudePanelSource(store, claudeLabels, claudeExclusions, subscriptionState), codex: codexSource }, ctx.globalState,
     { claude: new RecommendDismissals(state, 'claude.recommendDismissed'), codex: new RecommendDismissals(state, 'codex.recommendDismissed') });
+  // Model lists that need no key load in the background after activation, so the API card forms offer them at once
+  void modelCache.refreshPublic().then((changed) => { if (changed) panel.refresh(); }).catch(() => undefined);
   // A stored observation of the effective Codex account (another window, an earlier session) is shown from the start
   usage?.adoptCached();
   // Re-render expiry even when no query is due, including accounts other than the effective one.
@@ -630,7 +634,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
       }));
     }, bundledClaude, provideTerminalCheck: (check) => { terminalChecks.claude = check; } }),
     ...(codex
-      ? registerCodexCommands({ store: codex.store, panel, labels: codexLabels, exclusions: codexExclusions, tools, bundledCodex, provideTerminalCheck: (check) => { terminalChecks.codex = check; } })
+      ? registerCodexCommands({ store: codex.store, panel, labels: codexLabels, exclusions: codexExclusions, tools, bundledCodex, modelCache, provideTerminalCheck: (check) => { terminalChecks.codex = check; } })
       : []),
     ...registerToolCommands(tools),
     registerDiagnosticsCommand({ store, codexStore: codex?.store, extensionVersion: version }),

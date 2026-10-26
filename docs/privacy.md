@@ -1,6 +1,6 @@
 # Privacy
 
-PlanSwap manages your accounts locally, in your WSL environment, Linux account or Windows user profile. It includes no telemetry or analytics and makes no network requests of its own.
+PlanSwap manages your accounts locally, in your WSL environment, Linux account or Windows user profile. It includes no telemetry or analytics. Its only network requests of its own are API card model lists (`GET <endpoint>/models`). After the editor starts it asks, without any key, OpenRouter (at most once a day) and Ollama and LM Studio on this machine for their model lists. When an API card form needs a list that is not saved yet, it asks the endpoint you chose with the key you entered there, or with that card's saved key when you leave the key field empty while editing. It sends nothing else and follows no redirect. The lists (model names only) are saved in PlanSwap's state file so the forms show them at once; a custom endpoint's list is not saved.
 
 ## What goes over the network
 
@@ -20,7 +20,7 @@ For an API card, Codex sends model requests directly to the card's service (Deep
 - **Claude sign-in**: PlanSwap never uses or copies the Claude sign-in in `.credentials.json`. For linked accounts it reads that file only to sync the sign-ins to MCP servers (see below). It reads the CLI's structured usage report in memory to validate a refresh; displayed values and their fetch time come from the usage cache Claude Code keeps in the account's `.claude.json`. Raw CLI output and session metadata are never logged, saved or sent to the sidebar.
 - **Codex sign-in**: PlanSwap reads `auth.json` locally and decodes its `id_token` payload for account information and identity comparison. It never copies, swaps or rewrites the file, and never sends raw tokens to the sidebar.
 - **Account identifiers** used to detect duplicate sign-ins, attribute usage data and check for sign-in changes during a query stay in memory; they are never shown or saved.
-- **API card configuration**: PlanSwap reads the card's provider marker, config and (DeepSeek) model catalog locally to validate and edit it. The key is handled in host memory only; the sidebar receives the service, model, endpoint host and configuration status, never the key or the full endpoint address. Managed API-card display does not read subscription tokens from `auth.json`.
+- **API card configuration**: PlanSwap reads the card's provider marker, config and (DeepSeek) model catalog locally to validate and edit it. You type the key in a password field of the sidebar; it is sent to the extension host only to create the card, save an edit or load the model list, is never sent back to the sidebar, and the field is cleared when the form closes. The sidebar receives the service, model, endpoint and configuration status, never a saved key. Managed API-card display does not read subscription tokens from `auth.json`.
 
 ## What PlanSwap stores
 

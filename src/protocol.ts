@@ -25,10 +25,14 @@ export interface AccountView {
   plan?: string;
   loggedIn: boolean;
   // Codex provider cards: configuration status only, never a credential or a live connectivity/model observation.
-  // API cards: the service label ("DeepSeek API", "OpenRouter API", or the localized custom label) and the endpoint host
+  // API cards: the service label ("DeepSeek API", "OpenRouter API", or the localized custom label), the service id
+  // (ApiServiceView.id), the endpoint and its host (non-DeepSeek cards) and whether a key is saved, for the edit form
   provider?: string;
+  providerService?: string;
   providerModel?: string;
+  providerBaseUrl?: string;
   providerHost?: string;
+  providerHasKey?: boolean;
   providerConfigured?: boolean;
   providerError?: string;
   // Claude only: confirmed subscription rejection and an in-flight availability probe.
@@ -80,6 +84,27 @@ export interface TabState {
   recommended?: string;
   // Setting planswap.sidebar.showRecommendation off: no card and no per-row exclude buttons
   hideRecommendation?: boolean;
+  // codex only: the services an API card can use, in the order the add form lists them
+  apiServices?: ApiServiceView[];
+}
+
+/** One API card service as the forms list it: id (codexProvider API_SERVICES), display name ('' for custom, which the
+ *  page labels itself), the preset endpoint (none for custom), whether a key is required and its cached models. */
+export interface ApiServiceView {
+  id: string;
+  name: string;
+  baseUrl?: string;
+  keyRequired: boolean;
+  // The cached model list (DeepSeek: its catalog models), offered at once; absent until one was loaded
+  models?: string[];
+}
+
+/** The API card fields the add form sends; key '' means none (local servers, gateways) */
+export interface ApiCardInput {
+  service: string;
+  baseUrl?: string;
+  key: string;
+  model: string;
 }
 
 export interface PanelState {
@@ -104,7 +129,11 @@ export type ToWebview =
   // The webview switches to that tab and focuses the input
   | { type: 'focusAdd'; mode: PanelMode }
   // CLI and extension versions, shown in a card at the bottom of the panel
-  | { type: 'versions'; items: Array<{ label: string; value: string }> };
+  | { type: 'versions'; items: Array<{ label: string; value: string }> }
+  // Answer to 'providerModels' with the same request number: the model IDs, or a localized error
+  | { type: 'providerModelsResult'; mode: 'codex'; request: number; models?: string[]; error?: string }
+  // Answer to 'saveProvider' for the card `dir`; error undefined means saved
+  | { type: 'saveProviderResult'; mode: 'codex'; dir: string; error?: string };
 
 // Every message except 'ready' carries the page's mode; the host dispatches by it
 export type FromWebview =
@@ -116,10 +145,14 @@ export type FromWebview =
   | { type: 'subscriptionCheck'; mode: PanelMode; dir: string }
   // Sent after the frontend's inline confirmation; the host only handles named rows
   | { type: 'remove'; mode: PanelMode; dir: string }
-  // shared: the add section's checkbox; the host treats a missing value as true
-  | { type: 'add'; mode: PanelMode; name: string; shared: boolean; provider?: 'api' }
-  // Codex only: model and API key are collected by the host; no key crosses this protocol.
-  | { type: 'editProvider'; mode: 'codex'; dir: string }
+  // shared: the add section's checkbox; the host treats a missing value as true. provider: a Codex API card, with the
+  // key typed in the sidebar (sent only in this message, providerModels and saveProvider; never posted back)
+  | { type: 'add'; mode: PanelMode; name: string; shared: boolean; provider?: ApiCardInput }
+  // Codex only: list the models of a service's endpoint for a form. dir: the card being edited, whose saved key is used
+  // when key is ''. request: echoed in the answer so a stale list is ignored
+  | { type: 'providerModels'; mode: 'codex'; request: number; service: string; baseUrl?: string; key: string; dir?: string }
+  // Codex only: the edit form's values; key '' keeps the saved key, baseUrl applies to non-DeepSeek cards
+  | { type: 'saveProvider'; mode: 'codex'; dir: string; model: string; baseUrl?: string; key: string }
   // Convert an independent named account into one shared with the default account (the host confirms with a modal)
   | { type: 'share'; mode: PanelMode; dir: string }
   // Convert a shared named account back into an independent one (links removed, default configuration copied; the host

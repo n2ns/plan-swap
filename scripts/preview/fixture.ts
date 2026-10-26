@@ -75,6 +75,16 @@ function makeState(nextLocale: Locale, nextActive: PanelMode): PanelState {
     codex: {
       enabled: true, accounts: ['default', 'work', 'empty'].map((name) => account('codex', name as 'default' | 'work' | 'empty')),
       restart: { context: 'wsl', auto: true }, dirPrefix: '/fixture/.codex-',
+      apiServices: [
+        { id: 'deepseek', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/', keyRequired: true, models: ['deepseek-flash', 'deepseek-v4-pro'] },
+        { id: 'kimi', name: 'Kimi', baseUrl: 'https://api.moonshot.ai/v1', keyRequired: true },
+        { id: 'lmstudio', name: 'LM Studio', baseUrl: 'http://localhost:1234/v1', keyRequired: false },
+        { id: 'ollama', name: 'Ollama', baseUrl: 'http://localhost:11434/v1', keyRequired: false },
+        { id: 'openrouter', name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', keyRequired: true, models: ['anthropic/model-a', 'openai/model-b', 'z-ai/model-c'] },
+        { id: 'xai', name: 'xAI', baseUrl: 'https://api.x.ai/v1', keyRequired: true },
+        { id: 'zai', name: 'Z.ai', baseUrl: 'https://api.z.ai/api/v1', keyRequired: true },
+        { id: 'custom', name: '', keyRequired: false },
+      ],
     },
   };
 }

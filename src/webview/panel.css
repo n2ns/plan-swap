@@ -640,6 +640,19 @@ html:lang(ko) { word-break: keep-all; }
 .input-group vscode-button:not([disabled]):focus-visible::part(base),
 .input-group vscode-button:not([disabled])[focused]::part(base) { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
 /* Linked / independent choice under the input: full width, each label wraps on narrow panels */
+/* API card fields (add form and a card's edit area): one column, controls full width, the model list next to its
+   load button */
+.api-fields { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
+.api-fields[hidden], .api-fields [hidden] { display: none; }
+.api-fields vscode-single-select, .api-fields vscode-textfield { width: 100%; min-width: 0; }
+.api-model-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-width: 0; }
+.api-model-row vscode-single-select { flex: 1 1 120px; }
+.api-model-row vscode-button { flex: none; }
+.api-status { color: var(--muted); font-size: max(11px, 0.8em); padding: 0 2px; min-width: 0; overflow-wrap: anywhere; }
+.api-status.error { color: var(--error); }
+.api-status:empty { display: none; }
+.provider-edit { display: flex; flex-direction: column; gap: var(--gap); margin-top: 6px; min-width: 0; }
+.provider-edit-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .add-mode { display: block; max-width: 100%; min-width: 0; }
 .add-mode-option { display: block; max-width: 100%; min-width: 0; overflow-wrap: anywhere; }
 .help { color: var(--muted); font-size: max(11px, 0.8em); padding: 0 2px; min-width: 0; overflow-wrap: anywhere; }

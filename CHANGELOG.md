@@ -4,7 +4,7 @@
 
 ### Added
 
-- Codex API cards for more services: besides DeepSeek, the add flow offers OpenRouter, Z.ai, Kimi, xAI, and Ollama and LM Studio on this machine, or any custom Responses endpoint such as a LiteLLM gateway, chosen from a list or typed as an address. Cards for local servers and custom endpoints can run without a key, and editing can change the endpoint. The add form's **DeepSeek API** option is now **API service**.
+- Codex API cards for more services: besides DeepSeek, an API card can use OpenRouter, Z.ai, Kimi, xAI, Ollama and LM Studio on this machine, or any custom Responses endpoint such as a LiteLLM gateway. Adding and editing happen entirely in the sidebar: choose the service, enter the key, pick a model from the service's model list, which is ready at once (OpenRouter, Ollama and LM Studio lists are kept up to date in the background) or loads by itself (when the list cannot be loaded, the model ID can be typed instead). Cards for local servers and custom endpoints can run without a key, and editing can change the endpoint. The add form's **DeepSeek API** option is now **API service**.
 - A close button (**×**) on the recommended-account card hides it until the recommendation changes: another account is recommended, another account is current, or the current account recovers and runs low again.
 
 ### Changed

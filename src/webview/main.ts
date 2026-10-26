@@ -7,9 +7,10 @@ import '@vscode-elements/elements/dist/vscode-button/index.js';
 import '@vscode-elements/elements/dist/vscode-radio/index.js';
 import '@vscode-elements/elements/dist/vscode-radio-group/index.js';
 import '@vscode-elements/elements/dist/vscode-textfield/index.js';
+import '@vscode-elements/elements/dist/vscode-single-select/index.js';
 import '@vscode-elements/elements/dist/vscode-toolbar-button/index.js';
 import '@vscode-elements/elements/dist/vscode-icon/index.js';
-import type { AccountView, FromWebview, PanelMode, PanelState, RestartInfo, TabState, ToolId, ToWebview, UsageDisplay } from '../protocol';
+import type { AccountView, ApiServiceView, FromWebview, PanelMode, PanelState, RestartInfo, TabState, ToolId, ToWebview, UsageDisplay } from '../protocol';
 import { getLocale, intlLocale, joinSentences, matchLocale, setLocale, t, WEB_LOCALE_INFO, type MessageKey } from './i18n';
 
 declare const __PLANSWAP_VERSION__: string;
@@ -32,6 +33,7 @@ const MAX_LABEL_LENGTH = 32;
 const MODES: PanelMode[] = ['claude', 'codex'];
 
 type TextField = HTMLElement & { value: string; invalid: boolean; focus(): void };
+type Select = HTMLElement & { value: string; disabled: boolean; combobox: boolean; creatable: boolean; filter: string; options: Array<{ label: string; value: string; selected?: boolean }> };
 type DistributiveOmit<T, K extends keyof any> = T extends unknown ? Omit<T, K> : never;
 // Messages sent from a page: all except ready / setTab carry a mode, which Page fills in
 type PageMessage = DistributiveOmit<Exclude<FromWebview, { type: 'ready' } | { type: 'setTab' }>, 'mode'>;
@@ -327,6 +329,251 @@ function usageHistory(a: AccountView): HTMLElement | null {
   return h('div', { class: 'row-usage' }, ...[...general, ...scoped].map((w) => usageWindow(w, display)));
 }
 
+// Pause after the last keystroke in an endpoint or key field before the model list loads by itself
+const AUTO_LOAD_DELAY = 1000;
+// Model-list requests in flight, by request number: the answer goes to the form that asked, a stale one is dropped
+const modelRequests = new Map<number, (models?: string[], error?: string) => void>();
+let lastModelRequest = 0;
+
+/**
+ * The API card fields of the add form (service list) and of a card's edit area (fixed service): the endpoint (custom
+ * service; editable for any non-DeepSeek card), the key (a password field; when editing, empty keeps the saved key) and
+ * the model, chosen from the list the host loads from the endpoint (DeepSeek: its two catalog models), or typed only after
+ * that load failed (an endpoint without a usable /models). Created once per
+ * form so typed values survive re-renders. The key leaves the page only in the messages that need it and is cleared
+ * with clear().
+ */
+class ApiFields {
+  readonly root = h('div', { class: 'api-fields' });
+  private readonly service = h('vscode-single-select', { class: 'api-service' }) as Select;
+  private readonly url = h('vscode-textfield', { class: 'api-url' }) as TextField;
+  private readonly key = h('vscode-textfield', { class: 'api-key', type: 'password' }) as TextField;
+  private readonly model = h('vscode-single-select', { class: 'api-model' }) as Select;
+  private readonly load = h('vscode-button', { secondary: true, icon: 'refresh', class: 'api-load' }) as HTMLElement & { disabled: boolean };
+  private readonly status = h('div', { class: 'api-status', role: 'status' });
+  private services: ApiServiceView[] = [];
+  private request = 0;
+  private loading = false;
+  // Models load by themselves: at once for a service choice, after typing pauses in the endpoint or key field, and when
+  // such a field loses focus; the button only retries. loadedFor skips a repeat of the request that already answered
+  private autoTimer?: ReturnType<typeof setTimeout>;
+  private loadedFor?: string;
+
+  constructor(private readonly onChange: () => void, private readonly editing?: { dir: string; service: string; baseUrl?: string; model?: string; hasKey?: boolean }) {
+    this.model.combobox = true;
+    this.model.filter = 'contains';
+    this.model.disabled = true;
+    if (editing) {
+      if (editing.baseUrl) this.url.value = editing.baseUrl;
+      if (editing.model) {
+        this.model.options = [{ label: editing.model, value: editing.model, selected: true }];
+        this.model.value = editing.model;
+      }
+      this.model.disabled = !editing.model;
+    }
+    const changed = (resetModels: boolean, autoDelay?: number) => () => {
+      if (resetModels) this.resetModels();
+      this.updateVisibility();
+      this.onChange();
+      if (autoDelay !== undefined) this.scheduleLoad(autoDelay);
+    };
+    this.service.addEventListener('change', () => {
+      this.resetModels();
+      this.updateVisibility();
+      this.applyCached();
+      this.scheduleLoad(0);
+    });
+    this.url.addEventListener('input', changed(true, AUTO_LOAD_DELAY));
+    // A typed key keeps a cached list; without one it loads the list once typing pauses
+    this.key.addEventListener('input', () => {
+      if (!editing && !this.serviceInfo()?.models?.length) this.resetModels();
+      this.updateVisibility();
+      this.onChange();
+      this.scheduleLoad(AUTO_LOAD_DELAY);
+    });
+    for (const field of [this.url, this.key]) field.addEventListener('focusout', () => this.scheduleLoad(0));
+    this.model.addEventListener('change', changed(false));
+    // A typed model ID (after a failed load): the component's own create event may name an option it created earlier,
+    // so keep the text typed into its input and set the list and the choice from that
+    let typedModel = '';
+    this.model.addEventListener('input', (e) => {
+      const input = e.composedPath()[0];
+      if (input instanceof HTMLInputElement) typedModel = input.value;
+    });
+    this.model.addEventListener('vsc-single-select-create-option', () => {
+      const typed = typedModel.trim();
+      if (!typed) return;
+      this.model.options = [{ label: typed, value: typed, selected: true }];
+      this.model.value = typed;
+      this.onChange();
+    });
+    onClick(this.load, () => this.loadModels());
+    this.root.append(...(editing ? [] : [this.service]), this.url, this.key, h('div', { class: 'api-model-row' }, this.model, this.load), this.status);
+    this.applyLocale();
+  }
+
+  setServices(services: ApiServiceView[] | undefined): void {
+    if (!services || JSON.stringify(services) === JSON.stringify(this.services)) return;
+    if (this.editing) {
+      this.services = services;
+      this.applyCached();
+      return;
+    }
+    const chosen = services.some((s) => s.id === this.service.value) ? this.service.value : services[0]?.id ?? '';
+    this.services = services;
+    this.service.options = services.map((s) => ({
+      label: s.id === 'custom' ? t('api.custom') : s.keyRequired ? s.name : `${s.name} (${t('api.local')})`,
+      value: s.id, selected: s.id === chosen,
+    }));
+    // The component takes no value from the selected option; set it, so the first service counts as chosen
+    this.service.value = chosen;
+    this.updateVisibility();
+    this.applyCached();
+    if (!this.root.hidden) this.scheduleLoad(0);
+  }
+
+  // The service's cached list (TabState.apiServices models), offered at once without a request while the model list is
+  // still empty; a service without one that needs a key says so
+  private applyCached(): void {
+    // Not over a loaded list, nor after a failed load whose model ID may already be typed
+    if (this.model.creatable || (!this.model.disabled && this.model.options.length > 1)) return;
+    const cached = this.cachedModels();
+    if (cached?.length) {
+      this.showModels(cached);
+      this.status.className = 'api-status';
+      this.status.textContent = t('api.modelsLoaded', { count: cached.length });
+    } else if (!this.editing && this.serviceInfo()?.keyRequired && !this.key.value.trim() && !this.loading) {
+      this.status.className = 'api-status';
+      this.status.textContent = t('api.keyFirst');
+    }
+    this.onChange();
+  }
+
+  // The cached list of a preset service, valid only for its preset endpoint (a card edited to another endpoint has none)
+  private cachedModels(): string[] | undefined {
+    const info = this.serviceInfo();
+    if (!info || info.id === 'custom' || (!this.url.hidden && this.url.value.trim() !== info.baseUrl)) return undefined;
+    return info.models;
+  }
+
+  private showModels(models: string[]): void {
+    // Keep the choice made so far, else the card's current model when editing, else the first model of the list. A card's
+    // current model the list lacks (typed earlier, or since withdrawn) stays offered, so saving only a new key keeps it
+    const keep = this.model.value || this.editing?.model;
+    if (this.editing?.model && keep === this.editing.model && !models.includes(keep)) models = [keep, ...models];
+    const chosen = keep && models.includes(keep) ? keep : models[0];
+    this.model.options = models.map((m) => ({ label: m, value: m, selected: m === chosen }));
+    // The component does not take the selection from options in combobox mode; set it explicitly
+    this.model.value = chosen;
+    this.model.creatable = false;
+    this.model.disabled = false;
+  }
+
+  applyLocale(): void {
+    this.url.setAttribute('placeholder', t('api.urlPlaceholder'));
+    this.url.setAttribute('aria-label', t('api.url'));
+    this.service.setAttribute('aria-label', t('api.service'));
+    this.model.setAttribute('aria-label', t('api.model'));
+    this.load.textContent = t('api.loadModels');
+    this.load.title = t('api.loadModelsHint');
+    if (this.services.length) { const s = this.services; this.services = []; this.setServices(s); }
+    this.updateVisibility();
+  }
+
+  private serviceId(): string { return this.editing?.service ?? this.service.value; }
+  private serviceInfo(): ApiServiceView | undefined { return this.services.find((s) => s.id === this.serviceId()); }
+
+  private updateVisibility(): void {
+    const id = this.serviceId();
+    // The endpoint: typed for a custom service, editable on a non-DeepSeek card, fixed otherwise
+    this.url.hidden = this.editing ? id === 'deepseek' : id !== 'custom';
+    const required = this.editing ? false : this.serviceInfo()?.keyRequired ?? true;
+    this.key.setAttribute('placeholder', t(this.editing ? (this.editing.hasKey ? 'api.keyKeep' : 'api.keyOptional') : required ? 'api.key' : 'api.keyOptional'));
+    this.key.setAttribute('aria-label', t('api.key'));
+    this.load.disabled = this.loading || (!this.url.hidden && !this.url.value.trim());
+  }
+
+  // Whether a load can be asked for now: DeepSeek always (its catalog), else a complete endpoint and, when adding to a
+  // service that requires one, a key (an edit falls back to the saved key)
+  private loadReady(): boolean {
+    if (this.serviceId() === 'deepseek') return true;
+    if (!this.url.hidden && !/^https?:\/\/\S+/i.test(this.url.value.trim())) return false;
+    return !!this.editing || !(this.serviceInfo()?.keyRequired ?? true) || !!this.key.value.trim();
+  }
+
+  private loadSignature(): string {
+    return JSON.stringify([this.serviceId(), this.url.hidden ? '' : this.url.value.trim(), this.key.value.trim()]);
+  }
+
+  /** Loads the models after delayMs unless that exact request already answered with a list or nothing is complete yet */
+  scheduleLoad(delayMs: number): void {
+    clearTimeout(this.autoTimer);
+    this.autoTimer = undefined;
+    if (!this.loadReady() || (this.loadSignature() === this.loadedFor && !this.model.disabled)) return;
+    // A preset with a cached list needs no request while filling the form; Load models still refreshes it
+    if (this.cachedModels()?.length && !this.model.disabled) return;
+    this.autoTimer = setTimeout(() => { this.autoTimer = undefined; this.loadModels(); }, delayMs);
+  }
+
+  private resetModels(): void {
+    this.request = 0;
+    this.loadedFor = undefined;
+    this.loading = false;
+    this.model.options = [];
+    this.model.disabled = true;
+    this.model.creatable = false;
+    this.status.textContent = '';
+    this.status.className = 'api-status';
+  }
+
+  loadModels(): void {
+    clearTimeout(this.autoTimer);
+    this.autoTimer = undefined;
+    this.loadedFor = this.loadSignature();
+    const request = ++lastModelRequest;
+    this.request = request;
+    this.loading = true;
+    this.status.className = 'api-status';
+    this.status.textContent = t('api.loading');
+    this.updateVisibility();
+    modelRequests.set(request, (models, error) => {
+      if (this.request !== request) return;
+      this.loading = false;
+      if (models) {
+        this.showModels(models);
+        this.status.textContent = t('api.modelsLoaded', { count: models.length });
+      } else {
+        // Only after a failed load may the model ID be typed (an endpoint without a usable /models)
+        this.model.creatable = true;
+        this.model.disabled = false;
+        this.status.className = 'api-status error';
+        this.status.textContent = joinSentences(...[error, t('api.typeModel')].filter((s): s is string => !!s));
+      }
+      this.updateVisibility();
+      this.onChange();
+    });
+    send({ type: 'providerModels', mode: 'codex', request, service: this.serviceId(), key: this.key.value.trim(),
+      ...(this.url.hidden ? {} : { baseUrl: this.url.value.trim() }), ...(this.editing ? { dir: this.editing.dir } : {}) });
+  }
+
+  /** The values to send, or undefined while a required part is missing */
+  values(): { service: string; baseUrl?: string; key: string; model: string } | undefined {
+    const model = this.model.disabled ? '' : this.model.value;
+    if (!model || (!this.url.hidden && !this.url.value.trim())) return undefined;
+    if (!this.editing && (this.serviceInfo()?.keyRequired ?? true) && !this.key.value.trim()) return undefined;
+    return { service: this.serviceId(), key: this.key.value.trim(), model, ...(this.url.hidden ? {} : { baseUrl: this.url.value.trim() }) };
+  }
+
+  clear(): void {
+    clearTimeout(this.autoTimer);
+    this.autoTimer = undefined;
+    this.key.value = '';
+    this.url.value = this.editing?.baseUrl ?? '';
+    this.resetModels();
+    this.updateVisibility();
+  }
+}
+
 /** One tab page: its own add section, adding state, confirmingDir and inline-rename state */
 class Page {
   readonly text: (typeof TEXT)[PanelMode];
@@ -354,6 +601,14 @@ class Page {
   private readonly addProvider?: HTMLElement;
   private readonly addCodex?: HTMLElement & { checked: boolean };
   private readonly addApi?: HTMLElement & { checked: boolean };
+  // Codex: the API card fields of the add form, shown while "API service" is chosen
+  private readonly apiFields?: ApiFields;
+  // Codex: the API card being edited in place (one at a time); its fields and buttons are created once per edit
+  private editingDir?: string;
+  private editFields?: ApiFields;
+  private editSave?: HTMLElement & { disabled: boolean };
+  private editError?: string;
+  private saving = false;
   private readonly addHelp = h('div', { class: 'help' });
   private tools: HTMLElement;
   private syncButton!: HTMLElement;
@@ -404,6 +659,12 @@ class Page {
       this.addProvider.addEventListener('change', () => {
         this.addError = undefined;
         this.updateAddHelp();
+        if (this.addApi?.checked) this.apiFields?.scheduleLoad(0);
+      });
+      // A host error about these fields clears once one of them changes, like the name's
+      this.apiFields = new ApiFields(() => {
+        this.addError = undefined;
+        this.updateAddHelp();
       });
     }
     this.addSection = h(
@@ -411,6 +672,7 @@ class Page {
       { class: 'add', id: `add-${mode}`, hidden: true },
       this.addProvider,
       h('div', { class: 'input-group' }, this.addField, this.addButton),
+      this.apiFields?.root,
       this.addMode,
       this.addHelp,
     );
@@ -483,6 +745,8 @@ class Page {
     this.addProvider?.setAttribute('aria-label', t('provider.type'));
     if (this.addCodex) this.addCodex.textContent = t('provider.codex');
     if (this.addApi) this.addApi.textContent = t('provider.api');
+    this.apiFields?.applyLocale();
+    this.editFields?.applyLocale();
     // A host add error is in the old locale; drop it so the help line shows the local validation in the new one
     if (this.addError) {
       this.addError = undefined;
@@ -510,11 +774,65 @@ class Page {
   }
 
   private send(msg: PageMessage): void {
-    if (msg.type === 'editProvider') {
+    if (msg.type === 'providerModels' || msg.type === 'saveProvider') {
       if (this.mode === 'codex') send({ ...msg, mode: 'codex' });
       return;
     }
     send({ ...msg, mode: this.mode });
+  }
+
+  // ---------- API card edit area ----------
+  private startEdit(a: AccountView): void {
+    this.stopEdit();
+    this.editingDir = a.dir;
+    this.editError = undefined;
+    this.editFields = new ApiFields(() => this.updateEditButtons(),
+      { dir: a.dir, service: a.providerService ?? 'custom', baseUrl: a.providerBaseUrl, model: a.providerModel, hasKey: a.providerHasKey });
+    this.editSave = h('vscode-button', { icon: 'check', 'data-action': 'saveProvider' }, t('api.save')) as HTMLElement & { disabled: boolean };
+    onClick(this.editSave, () => this.submitEdit());
+    this.updateEditButtons();
+    // The cached list of the card's service shows at once; a custom endpoint loads its list with the saved key
+    this.editFields.setServices(this.tab.apiServices);
+    this.editFields.scheduleLoad(0);
+    this.render();
+  }
+
+  private stopEdit(): void {
+    this.editFields?.clear();
+    this.editingDir = undefined;
+    this.editFields = undefined;
+    this.editSave = undefined;
+    this.editError = undefined;
+    this.saving = false;
+  }
+
+  private updateEditButtons(): void {
+    if (this.editSave) this.editSave.disabled = this.saving || !this.editFields?.values();
+  }
+
+  private submitEdit(): void {
+    const values = this.editFields?.values();
+    if (!values || this.saving || !this.editingDir) return;
+    this.saving = true;
+    this.updateEditButtons();
+    this.send({ type: 'saveProvider', dir: this.editingDir, model: values.model, key: values.key, ...(values.baseUrl !== undefined ? { baseUrl: values.baseUrl } : {}) });
+  }
+
+  onSaveProviderResult(dir: string, error?: string): void {
+    if (dir !== this.editingDir) return;
+    this.saving = false;
+    if (error) {
+      this.editError = error;
+      this.updateEditButtons();
+    } else this.stopEdit();
+    this.render();
+  }
+
+  private renderEdit(): HTMLElement | null {
+    if (!this.editFields || !this.editSave) return null;
+    const cancel = onClick(h('vscode-button', { secondary: true, 'data-action': 'cancelEdit' }, t('confirm.cancel')), () => { this.stopEdit(); this.render(); });
+    return h('div', { class: 'provider-edit' }, this.editFields.root, h('div', { class: 'provider-edit-actions' }, this.editSave, cancel),
+      this.editError && h('div', { class: 'row-error', role: 'alert' }, this.editError));
   }
 
   private setAddOpen(open: boolean): void {
@@ -523,6 +841,9 @@ class Page {
     this.addToggle.setAttribute('aria-expanded', String(open));
     this.addToggle.classList.toggle('is-open', open);
     this.updateAddToggle();
+    // A closed form keeps no typed key; an opened one with API service chosen loads the models of its service
+    if (!open) this.apiFields?.clear();
+    else if (this.addApi?.checked) this.apiFields?.scheduleLoad(0);
   }
 
   private updateAddToggle(): void {
@@ -541,6 +862,9 @@ class Page {
   }
 
   onState(): void {
+    this.apiFields?.setServices(this.tab.apiServices);
+    this.editFields?.setServices(this.tab.apiServices);
+    if (this.editingDir && !this.tab.accounts.some((a) => a.dir === this.editingDir && a.provider)) this.stopEdit();
     if (this.confirmingDir && !this.tab.accounts.some((a) => a.dir === this.confirmingDir)) this.confirmingDir = undefined;
     if (this.renamingDir && !this.tab.accounts.some((a) => a.dir === this.renamingDir)) this.stopRename();
   }
@@ -699,7 +1023,9 @@ class Page {
     const name = this.addField.value.trim();
     const error = this.addError ?? this.validateName(name);
     this.addField.invalid = !!error;
-    this.addButton.disabled = this.adding || !name || !!error;
+    if (this.apiFields) this.apiFields.root.hidden = !api;
+    // An API card also needs its service fields complete, with a model chosen from the loaded list
+    this.addButton.disabled = this.adding || !name || !!error || (api && !this.apiFields?.values());
     this.addHelp.className = error ? 'help error' : 'help';
     const createKey = api ? 'provider.addHelp'
       : !this.addLinked.checked ? 'add.help.independent'
@@ -713,9 +1039,12 @@ class Page {
   private submitAdd(): void {
     const name = this.addField.value.trim();
     if (this.adding || this.addError || !name || this.validateName(name)) return;
+    const api = this.mode === 'codex' && this.addApi?.checked === true;
+    const provider = api ? this.apiFields?.values() : undefined;
+    if (api && !provider) return;
     this.adding = true;
     this.updateAddHelp();
-    this.send({ type: 'add', name, shared: this.addLinked.checked, ...(this.mode === 'codex' && this.addApi?.checked ? { provider: 'api' as const } : {}) });
+    this.send({ type: 'add', name, shared: this.addLinked.checked, ...(provider ? { provider } : {}) });
   }
 
   // ---------- Rendering ----------
@@ -912,7 +1241,7 @@ class Page {
         iconButtons.append(withAction(toolbarButton('debug-disconnect', t(provider ? 'provider.unshare' : 'row.unshare'), () => this.send({ type: 'unshare', dir: a.dir })), 'unshare'));
       }
       if (provider && a.kind === 'named') {
-        iconButtons.append(withAction(toolbarButton('settings-gear', t('provider.edit'), () => this.send({ type: 'editProvider', dir: a.dir })), 'editProvider'));
+        iconButtons.append(withAction(toolbarButton('settings-gear', t('provider.edit'), () => (this.editingDir === a.dir ? (this.stopEdit(), this.render()) : this.startEdit(a))), 'editProvider'));
       }
       if ((a.loggedIn || provider) && terminals) {
         iconButtons.append(withAction(toolbarButton('terminal', t(`${this.mode}.terminalTitle`), () => this.send({ type: 'terminal', dir: a.dir })), 'terminal'));
@@ -992,6 +1321,7 @@ class Page {
         !provider && !unavailable && usageHistory(a),
         !inlineActions && actions,
         provider && a.providerError && h('div', { class: 'row-hint provider-error' }, a.providerError),
+        provider && this.editingDir === a.dir && this.renderEdit(),
         !provider && !a.loggedIn && !a.isCurrent && !this.tab.runsInWsl && h('div', { class: 'row-hint' }, t(`${this.mode}.loginHint`)),
         editing && this.renameError && h('div', { class: 'row-error', role: 'alert' }, this.renameError),
       ),
@@ -1146,7 +1476,7 @@ class Page {
   /** The focused control inside the page's rows, banners or cards, identified by its row's dir and its action */
   private focusedControl(): { dir?: string; action?: string } | undefined {
     const active = document.activeElement;
-    if (!(active instanceof HTMLElement) || !this.root.contains(active) || active === this.renameField) return undefined;
+    if (!(active instanceof HTMLElement) || !this.root.contains(active) || active === this.renameField || this.editFields?.root.contains(active)) return undefined;
     const dir = active.closest<HTMLElement>('[data-dir]')?.dataset.dir;
     const action = active.closest<HTMLElement>('[data-action]')?.dataset.action;
     return dir === undefined && action === undefined ? undefined : { dir, action };
@@ -1175,6 +1505,9 @@ class Page {
     // A rebuild replaces the focused node; remember what it was so the replacement gets the focus back
     const focused = this.focusedControl();
     const renameFocused = this.renameField !== undefined && document.activeElement === this.renameField;
+    // A field of the card edit area is moved into the rebuilt row like the rename field; it gets the focus back too
+    const editFocused = this.editFields && document.activeElement instanceof HTMLElement && this.editFields.root.contains(document.activeElement)
+      ? document.activeElement : undefined;
     this.rendering = true;
     try {
       this.updateSyncButton();
@@ -1198,6 +1531,7 @@ class Page {
     }
     // Restore the moved rename field only when it actually held focus before the rebuild.
     if (renameFocused && this.renameField && !this.root.hidden) this.renameField.focus();
+    else if (editFocused && editFocused.isConnected && !this.root.hidden) editFocused.focus();
     else if (focused) this.focusControl(focused.dir, focused.action);
   }
 }
@@ -1345,6 +1679,12 @@ window.addEventListener('message', (e: MessageEvent<ToWebview>) => {
     pages[msg.mode].onRenameResult(msg.dir, msg.error);
   } else if (msg.type === 'versions') {
     showVersions(msg.items);
+  } else if (msg.type === 'providerModelsResult') {
+    const answer = modelRequests.get(msg.request);
+    modelRequests.delete(msg.request);
+    answer?.(msg.models, msg.error);
+  } else if (msg.type === 'saveProviderResult') {
+    pages.codex.onSaveProviderResult(msg.dir, msg.error);
   } else if (msg.type === 'focusAdd') {
     if (activeTab !== msg.mode) {
       setActiveTab(msg.mode);

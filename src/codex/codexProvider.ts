@@ -1,6 +1,7 @@
 // PlanSwap-owned Codex API cards (DeepSeek, the other presets of API_SERVICES and custom Responses endpoints). Native
 // config.toml holds the plaintext key; no auth.json reads,
-// runtime vscode import, network calls or provider credentials leave this module. Public status and edit snapshots
+// runtime vscode import or network calls (the model list is providerModels.ts); a saved key leaves this module only
+// through readProviderKey, for that request. Public status and edit snapshots
 // are secret-free. Editing replaces only the model and key values in place; unrelated native settings are kept as
 // they are, and owned fields in unsupported forms are reported, never overwritten.
 import * as fs from 'node:fs';
@@ -17,16 +18,18 @@ export type DeepSeekModel = typeof DEEPSEEK_MODELS[number];
  * (baseUrl prefilled for the presets, entered for custom) and no model catalog, so Codex uses its fallback model
  * metadata; keyRequired false lets local servers and gateways run without a key.
  */
-export const API_SERVICES = ['deepseek', 'openrouter', 'zai', 'kimi', 'xai', 'ollama', 'lmstudio', 'custom'] as const;
+// In the order the add form lists them: alphabetical by name, the custom endpoint last
+export const API_SERVICES = ['deepseek', 'kimi', 'lmstudio', 'ollama', 'openrouter', 'xai', 'zai', 'custom'] as const;
 export type ApiService = typeof API_SERVICES[number];
-export const SERVICE_INFO: Record<ApiService, { name: string; baseUrl?: string; keyRequired: boolean }> = {
+// publicModels: the service lists its models without a key, so modelCache.ts refreshes it in the background
+export const SERVICE_INFO: Record<ApiService, { name: string; baseUrl?: string; keyRequired: boolean; publicModels?: boolean }> = {
   deepseek: { name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/', keyRequired: true },
-  openrouter: { name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', keyRequired: true },
+  openrouter: { name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', keyRequired: true, publicModels: true },
   zai: { name: 'Z.ai', baseUrl: 'https://api.z.ai/api/v1', keyRequired: true },
   kimi: { name: 'Kimi', baseUrl: 'https://api.moonshot.ai/v1', keyRequired: true },
   xai: { name: 'xAI', baseUrl: 'https://api.x.ai/v1', keyRequired: true },
-  ollama: { name: 'Ollama', baseUrl: 'http://localhost:11434/v1', keyRequired: false },
-  lmstudio: { name: 'LM Studio', baseUrl: 'http://localhost:1234/v1', keyRequired: false },
+  ollama: { name: 'Ollama', baseUrl: 'http://localhost:11434/v1', keyRequired: false, publicModels: true },
+  lmstudio: { name: 'LM Studio', baseUrl: 'http://localhost:1234/v1', keyRequired: false, publicModels: true },
   custom: { name: 'Custom', keyRequired: false },
 };
 // The provider table id of every non-DeepSeek card; Codex reserves openai, ollama and lmstudio
@@ -44,8 +47,11 @@ export interface ProviderInfo {
   provider: ApiService;
   configured: boolean;
   model?: string;
-  // Host of the endpoint (non-DeepSeek cards); never the full URL, which may carry a path the user chose
+  // Endpoint of a non-DeepSeek card (no secret: credentials, query and fragment are refused) and its host
+  baseUrl?: string;
   host?: string;
+  // Whether a key is saved; the key itself never leaves this module except through readProviderKey
+  hasKey?: boolean;
   error?: ProviderErrorCode;
 }
 interface Config {
@@ -441,11 +447,17 @@ export function readProviderInfo(dir: string): ProviderInfo | undefined {
     const { config } = snapshot(dir, false);
     let error: ProviderErrorCode | undefined;
     try { serviceKey(config.service, config.key); } catch { error = 'key'; }
-    return { provider: config.service, model: config.model, host: config.service === 'deepseek' ? undefined : hostOf(config.baseUrl),
-      configured: !error, error };
+    const deepseek = config.service === 'deepseek';
+    return { provider: config.service, model: config.model, baseUrl: deepseek ? undefined : config.baseUrl, host: deepseek ? undefined : hostOf(config.baseUrl),
+      hasKey: !!config.key, configured: !error, error };
   } catch (error) {
     return { provider: markedService(dir) ?? (hasProviderMarker(dir) ? 'custom' : 'deepseek'), configured: false, error: error instanceof ProviderConfigError ? error.code : 'file' };
   }
+}
+
+/** The saved key of a valid card, for the host's model-list request to that card's endpoint only ('' without one). */
+export function readProviderKey(dir: string): string {
+  return snapshot(dir, false).config.key;
 }
 
 /** Local configuration validation only; no authentication request or client startup. */

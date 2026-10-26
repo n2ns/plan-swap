@@ -3,12 +3,13 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
-  checkBaseUrl, createProviderConfig, editProviderConfig, preserveProviderConfig, PROVIDER_FILES, ProviderConfigError,
-  readProviderEditState, readProviderInfo, validateProviderConfig,
+  API_SERVICES, SERVICE_INFO, checkBaseUrl, createProviderConfig, editProviderConfig, preserveProviderConfig, PROVIDER_FILES, ProviderConfigError,
+  readProviderEditState, readProviderKey, readProviderInfo, validateProviderConfig,
 } from '../src/codex/codexProvider';
+import { ModelCache } from '../src/codex/modelCache';
 import { copyCodexSeed } from '../src/codex/codexPaths';
 import { copyCodexIndependent, ensureCodexLinks, isSharedCodexAccount, makeCodexIndependent, migrateCodexToShared } from '../src/codex/codexShare';
-import { assertMode, FILE_SYMLINKS, makeTempHome, read, SHARING, snapshot, type TempHome } from './helpers';
+import { assertMode, FILE_SYMLINKS, makeTempHome, MemoryMemento, read, SHARING, snapshot, type TempHome } from './helpers';
 
 let temp: TempHome;
 let def: string;
@@ -258,7 +259,7 @@ describe('API services other than DeepSeek', () => {
     assert.equal(config().includes('model_catalog_json'), false);
     assert.equal(fs.existsSync(path.join(dir, 'models.json')), false);
     for (const file of ['.planswap-provider.json', 'config.toml']) assertMode(path.join(dir, file), '600');
-    assert.deepEqual(readProviderInfo(dir), { provider: 'openrouter', model: 'vendor/model-1', host: 'openrouter.ai', configured: true, error: undefined });
+    assert.deepEqual(readProviderInfo(dir), { provider: 'openrouter', model: 'vendor/model-1', baseUrl: 'https://openrouter.ai/api/v1', host: 'openrouter.ai', hasKey: true, configured: true, error: undefined });
     assert.equal(JSON.stringify(readProviderInfo(dir)).includes('sk-or-test'), false);
   });
 
@@ -398,4 +399,49 @@ test('hard-linked provider files are not edited or shared', () => {
   assert.throws(() => readProviderEditState(dir), fails('file'));
   assert.throws(() => ensureCodexLinks(dir, {}, proc), fails('file'));
   assert.deepEqual(snapshot(temp.home), before);
+});
+
+test('the saved key is readable for the host model-list request only, and an invalid card has none', () => {
+  createProviderConfig(dir, 'custom', { model: 'm', key: 'sk-saved', baseUrl: 'https://gw.example.test/v1' }, def);
+  assert.equal(readProviderKey(dir), 'sk-saved');
+  assert.equal(JSON.stringify(readProviderInfo(dir)).includes('sk-saved'), false);
+  fs.writeFileSync(path.join(dir, 'config.toml'), 'broken');
+  assert.throws(() => readProviderKey(dir), (error: unknown) => error instanceof ProviderConfigError);
+});
+
+test('the add form lists the services alphabetically by name, the custom endpoint last', () => {
+  const named = API_SERVICES.filter((s) => s !== 'custom').map((s) => SERVICE_INFO[s].name);
+  assert.deepEqual(named, [...named].sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base' })));
+  assert.equal(API_SERVICES.at(-1), 'custom');
+});
+
+describe('model cache', () => {
+  test('refreshes the keyless lists in the background, keeps a fresh cloud list a day and every list it loaded', async () => {
+    const memento = new MemoryMemento();
+    let now = 1_000;
+    const cache = new ModelCache(memento, () => now);
+    const calls: Array<{ url: string; key: string }> = [];
+    const fake = async (url: string, key: string): Promise<string[]> => {
+      calls.push({ url, key });
+      if (url.includes('localhost:1234')) throw new Error('not running');
+      return url.includes('openrouter') ? ['b/model', 'a/model'] : ['local-model'];
+    };
+    assert.equal(await cache.refreshPublic(fake), true);
+    assert.deepEqual(calls.map((c) => [c.url, c.key]).sort(), [['http://localhost:11434/v1', ''], ['http://localhost:1234/v1', ''], ['https://openrouter.ai/api/v1', '']]);
+    assert.deepEqual(cache.get('openrouter'), ['b/model', 'a/model']);
+    assert.deepEqual(cache.get('ollama'), ['local-model']);
+    assert.equal(cache.get('lmstudio'), undefined, 'a server that is not running leaves nothing');
+    assert.deepEqual(cache.get('deepseek'), ['deepseek-flash', 'deepseek-v4-pro']);
+    assert.equal(cache.get('kimi'), undefined);
+    calls.length = 0;
+    now += 60 * 60 * 1000;
+    await cache.refreshPublic(fake);
+    assert.equal(calls.some((c) => c.url.includes('openrouter')), false, 'a cloud list younger than a day is kept');
+    assert.equal(calls.some((c) => c.url.includes('11434')), true, 'a local list is refreshed every time');
+    await cache.set('kimi', ['kimi-model']);
+    await cache.set('custom', ['never']);
+    assert.deepEqual(cache.get('kimi'), ['kimi-model']);
+    assert.equal(cache.get('custom'), undefined);
+    assert.equal(JSON.stringify(memento.data.get('codex.modelCache')).includes('never'), false);
+  });
 });

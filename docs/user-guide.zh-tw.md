@@ -153,15 +153,16 @@ cmd.exe /c 'start "" "vscode://n2ns.planswap/switch?account=default&distro=Ubunt
 
 API 卡片讓官方 Codex 擴充功能和 CLI 改用其他 AI 服務，而不是 ChatGPT 登入：DeepSeek、OpenRouter、Z.ai、Kimi、xAI、本機上的 Ollama 或 LM Studio，或任何提供 OpenAI Responses API 的自訂位址，例如 LiteLLM 閘道。Codex 只支援 Responses API，只提供 Chat Completions 的服務無法使用。
 
-在 Codex 新增表單中選擇 **API 服務**，輸入新帳號名稱並選擇連結或獨立模式。按一下勾號（**新增**）後：
+在 Codex 新增表單中選擇 **API 服務**，輸入新帳號名稱並選擇連結或獨立模式。所有操作都在側邊欄完成：
 
-1. 從清單中選擇服務，或選擇 **自訂位址…**。也可以直接在清單中輸入位址，例如 `https://gateway.example.com/v1`，再選擇帶有該位址的 **使用** 項目。選擇自訂位址但未輸入時，會再詢問位址。位址必須以 `https://` 開頭；`http://` 只允許本機（`localhost`）。
-2. 選擇模型。DeepSeek 提供模型清單；其他服務請依服務列出的模型 ID 原樣輸入。PlanSwap 不會下載模型清單。
-3. 在隱藏輸入框中輸入 API Key。DeepSeek、OpenRouter、Z.ai、Kimi 和 xAI 必須填寫；Ollama、LM Studio 和自訂位址在不需要 Key 時可留空。
+1. 在清單中選擇服務。選擇 **自訂位址** 時，輸入位址，例如 `https://gateway.example.com/v1`。位址必須以 `https://` 開頭；`http://` 只允許本機（`localhost`）。
+2. 在 Key 輸入框中輸入 API Key（顯示為圓點）。DeepSeek、OpenRouter、Z.ai、Kimi 和 xAI 必須填寫；Ollama、LM Studio 和自訂位址在不需要 Key 時可留空。
+3. 選擇模型。DeepSeek、OpenRouter（編輯器啟動後 PlanSwap 會在背景更新它的公開清單），以及正在執行的 Ollama 和 LM Studio，清單會立即可用。Kimi、xAI 和 Z.ai 在你停止輸入 Key 後載入，並保存供下次使用；自訂位址在你停止輸入位址或 Key 後載入。預設選取第一個模型，可以改選。在清單中選擇模型（可輸入文字篩選）。取得失敗時，下方會顯示原因；修正後清單會重新載入，也可以按 **取得模型** 重試。如果端點不提供模型清單，這時也可以在清單中直接輸入模型 ID，再選擇 `Add "…"` 項目。
+4. 按一下勾號（**新增**）。若要取消，按 **×** 關閉表單。
 
 此操作需要新目錄；既有的訂閱帳號不會被轉換。不需要 Claude 或 ChatGPT 訂閱憑證。
 
-卡片顯示服務、設定的模型、位址主機（DeepSeek 除外）以及設定是否完整。這只是本機設定檢查，不代表已驗證連線。透過 **編輯 API 設定** 更換模型、位址（DeepSeek 除外）或 Key；替換 Key 留空時保留原 Key。編輯時會保留 Codex 自行寫入該檔案的設定；對 provider、驗證或模型與金鑰行的不支援變更會保留並顯示錯誤，不會被覆寫。設定缺失或無效時，不能切換至該卡片或開啟其帳號終端機。DeepSeek 以外的服務在卡片中沒有模型目錄，Codex 啟動時會提示未知模型並使用預設模型設定。
+卡片顯示服務、設定的模型、位址主機（DeepSeek 除外）以及設定是否完整。這只是本機設定檢查，不代表已驗證連線。按一下 **編輯 API 設定**（齒輪）即可在卡片中編輯：位址（DeepSeek 除外）、新的 Key（留空則保留已儲存的 Key）和模型，模型清單會立即以已儲存的 Key 取得。按一下 **儲存**。變更位址時需要重新輸入 Key：已儲存的 Key 只會傳送給原本的位址。編輯時會保留 Codex 自行寫入該檔案的設定；對 provider、驗證或模型與金鑰行的不支援變更會保留並顯示錯誤，不會被覆寫。設定缺失或無效時，不能切換至該卡片或開啟其帳號終端機。DeepSeek 以外的服務在卡片中沒有模型目錄，Codex 啟動時會提示未知模型並使用預設模型設定。
 
 終端機操作會以該卡片的目錄啟動 Codex，不會進入 ChatGPT 登入流程。切換沿用既有的 Codex 確認和重新啟動步驟。建立或編輯卡片不會切換帳號、重新啟動視窗，也不會變更進行中對話所用的模型。選擇原本的帳號即可恢復其訂閱設定。API 卡片沒有訂閱額度重新整理，也不參與依額度的推薦。
 

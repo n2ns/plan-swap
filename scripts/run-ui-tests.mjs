@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { startPreview } from './preview/server.mjs';
-import { run as deepseekCards } from '../test/preview/checks/deepseek.mjs';
+import { cachedListGuards, run as deepseekCards } from '../test/preview/checks/deepseek.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const output = path.join(root, '.test-out', 'ui');
@@ -921,7 +921,7 @@ async function addFormAndTools() {
     const panel = `#panel-${mode}`;
     const toggle = page.locator(`${panel} .add-toggle`);
     const form = page.locator(`${panel} .add`);
-    const field = page.locator(`${panel} .add vscode-textfield input`);
+    const field = page.locator(`${panel} .add .input-group vscode-textfield input`);
     const fieldFocused = () => field.evaluate((el) => el.getRootNode().activeElement === el);
     assert.equal(await form.isVisible(), false, `${mode} add form must start collapsed`);
     assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
@@ -1072,7 +1072,7 @@ async function interactions() {
     const rename = page.locator(`${row(mode, 'work')} .rename-field input`);
     await rename.fill('');
     await page.locator(`#panel-${mode} .add-toggle`).click();
-    const add = page.locator(`#panel-${mode} .add vscode-textfield input`);
+    const add = page.locator(`#panel-${mode} .add .input-group vscode-textfield input`);
     await add.fill('fresh');
     await page.evaluate((mode) => {
       const state = structuredClone(window.preview.state());
@@ -1146,7 +1146,7 @@ try {
   await interactions();
   await updatedAgoTicks();
   for (const locale of locales) for (const width of widths) {
-    await deepseekCards({
+    const apiCtx = {
       page, locale, width,
       step: async (label, ok, detail) => {
         assert.ok(ok, `${label} at ${locale}-${width}: ${JSON.stringify(detail)}`);
@@ -1161,7 +1161,10 @@ try {
           window.preview.post({ type: 'state', state });
         }, { locale, width, active, source: mutate.toString() });
       },
-    });
+    };
+    await deepseekCards(apiCtx);
+    // Behavior rather than layout: one case is enough
+    if (locale === 'en' && width === 280) await cachedListGuards(apiCtx);
   }
   assert.deepEqual(results.consoleErrors, [], 'preview console must have no errors or warnings');
   console.log(`UI preview passed: ${results.cases.length} layout cases, ${codexShots} Codex screenshots, ${results.interactions.length} interactions`);

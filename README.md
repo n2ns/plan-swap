@@ -115,9 +115,9 @@ You can change an account's mode later, and **Re-link** in Tools checks linked a
 
 ## Privacy
 
-PlanSwap has no telemetry and makes no network requests of its own. Usage limits are read through the official `claude` and `codex` CLIs, which contact their own services as usual. When Claude usage is unavailable, a minimal official CLI model request can check subscription access; it may consume a small amount of quota. PlanSwap never copies, moves or sends your Claude or Codex sign-in; between linked Claude accounts it syncs only the sign-ins to MCP servers, and it changes your shell or environment configuration only after you confirm (afterwards it keeps the blocks it added up to date). Details: [privacy](docs/privacy.md).
+PlanSwap has no telemetry. Its only network requests of its own are model lists for API cards (`GET <endpoint>/models`): after the editor starts, without any key, for OpenRouter and for Ollama and LM Studio on this machine; and from an API card form, to the endpoint you chose with the key you entered, when no saved list covers it. Usage limits are read through the official `claude` and `codex` CLIs, which contact their own services as usual. When Claude usage is unavailable, a minimal official CLI model request can check subscription access; it may consume a small amount of quota. PlanSwap never copies, moves or sends your Claude or Codex sign-in; between linked Claude accounts it syncs only the sign-ins to MCP servers, and it changes your shell or environment configuration only after you confirm (afterwards it keeps the blocks it added up to date). Details: [privacy](docs/privacy.md).
 
-API keys entered for API cards are saved in plaintext in each card's own Codex configuration. Codex sends those cards' model requests directly to the card's service; PlanSwap does not proxy requests, fetch model lists or check subscription quotas for them.
+API keys entered for API cards are saved in plaintext in each card's own Codex configuration. Codex sends those cards' model requests directly to the card's service; PlanSwap does not proxy requests or check subscription quotas for them.
 
 ## Uninstall
 

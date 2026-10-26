@@ -6,7 +6,7 @@ import { DEFAULT_NAME, claudeJsonPath, findSameDir, readAccountInfo, samePath, t
 import { currentDir, isExplicitConfigDir } from './claudeSettings';
 import type { AccountStore } from './accounts';
 import { EXTERNAL_NAME, labelFor, type LabelStore } from './labels';
-import type { AccountView, FromWebview, PanelMode, PanelState, RestartInfo, TabState, ToWebview } from './protocol';
+import type { AccountView, FromWebview, PanelMode, PanelState, RestartInfo, TabState, ToWebview, ApiServiceView } from './protocol';
 import { isSharedClaudeAccount } from './claudeShare';
 import { readClaudeUsage } from './claudeUsage';
 import { threshold, usageDisplay, usageThresholds } from './usageSettings';
@@ -83,6 +83,8 @@ export interface PanelSource {
   // In-memory identity comparison key of a dir (never sent to the Webview): rows signed in to the current row's identity
   // are not recommended
   identityOf?(dir: string): string | undefined;
+  // codex only; copied into TabState.apiServices
+  apiServices?(): ApiServiceView[];
 }
 
 /**
@@ -331,6 +333,7 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
       pendingDir,
       restart: source.restart?.(),
       runsInWsl: source.runsInWsl?.() || undefined,
+      apiServices: source.apiServices?.(),
       // New account folders as the platform writes them: ~/.claude- on Linux, ~\.claude- on Windows
       dirPrefix: tildify(path.join(os.homedir(), mode === 'claude' ? '.claude-' : '.codex-')),
     };
@@ -413,7 +416,8 @@ const MESSAGE_FIELDS: Record<FromWebview['type'], readonly string[]> = {
   subscriptionCheck: ['dir'],
   remove: ['dir'],
   add: ['name'],
-  editProvider: ['dir'],
+  providerModels: ['service', 'key'],
+  saveProvider: ['dir', 'model', 'key'],
   share: ['dir'],
   unshare: ['dir'],
   rename: ['dir', 'label'],
@@ -442,8 +446,15 @@ export function checkMessage(raw: unknown): FromWebview | undefined {
   if (!MESSAGE_FIELDS[type].every((f) => typeof msg[f] === 'string')) return undefined;
   const isStringList = (v: unknown): boolean => Array.isArray(v) && v.every((s) => typeof s === 'string');
   if (!(LIST_FIELDS[type] ?? []).every((f) => isStringList(msg[f]))) return undefined;
-  if (type === 'editProvider' && msg.mode !== 'codex') return undefined;
-  if (type === 'add' && msg.provider !== undefined && (msg.mode !== 'codex' || msg.provider !== 'api')) return undefined;
+  const optionalString = (v: unknown): boolean => v === undefined || typeof v === 'string';
+  if ((type === 'providerModels' || type === 'saveProvider') && msg.mode !== 'codex') return undefined;
+  if (type === 'providerModels' && (typeof msg.request !== 'number' || !optionalString(msg.baseUrl) || !optionalString(msg.dir))) return undefined;
+  if (type === 'saveProvider' && !optionalString(msg.baseUrl)) return undefined;
+  if (type === 'add' && msg.provider !== undefined) {
+    const p = msg.provider as Record<string, unknown> | null;
+    if (msg.mode !== 'codex' || typeof p !== 'object' || p === null || typeof p.service !== 'string' || typeof p.key !== 'string'
+      || typeof p.model !== 'string' || !optionalString(p.baseUrl)) return undefined;
+  }
   return raw as FromWebview;
 }
 

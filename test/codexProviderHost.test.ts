@@ -9,6 +9,7 @@ import { CodexUsageMonitor, queryCodexAccount } from '../src/codex/codexUsageMon
 import { readCodexUsage } from '../src/codex/codexUsage';
 import { installRcBlocks, readSelectedDir } from '../src/codex/codexState';
 import { LabelStore } from '../src/labels';
+import { ModelCache } from '../src/codex/modelCache';
 import type { FromWebview, ToWebview } from '../src/protocol';
 import { LINUX_ONLY, makeTempHome, MemoryMemento } from './helpers';
 import { env, window } from './stubs/vscode';
@@ -35,55 +36,117 @@ function harness() {
   };
 }
 
-test('provider actions are Codex-only and reject unsupported provider values', () => {
-  const add = { type: 'add', mode: 'codex', name: 'deepseek', shared: false, provider: 'api' };
+const deepseekCard = { service: 'deepseek', key: 'synthetic-provider-key', model: 'deepseek-flash' };
+// A fetch stand-in for the model-list request: records the URL and headers it was called with
+function mockFetch(ctx: { mock: { method: typeof import('node:test').mock.method } }, answer: () => Promise<Response> | Response) {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  ctx.mock.method(globalThis, 'fetch', async (url: string | URL | Request, init?: RequestInit) => { calls.push({ url: String(url), init }); return answer(); });
+  return calls;
+}
+
+test('provider actions are Codex-only and carry well-formed API card fields', () => {
+  const add = { type: 'add', mode: 'codex', name: 'deepseek', shared: false, provider: deepseekCard };
   assert.deepEqual(checkMessage(add), add);
   assert.equal(checkMessage({ ...add, mode: 'claude' }), undefined);
-  assert.equal(checkMessage({ ...add, provider: 'another' }), undefined);
-  assert.equal(checkMessage({ type: 'editProvider', mode: 'claude', dir: '/unused' }), undefined);
-  assert.equal(checkMessage({ type: 'editProvider', mode: 'codex' }), undefined);
+  assert.equal(checkMessage({ ...add, provider: 'api' }), undefined);
+  assert.equal(checkMessage({ ...add, provider: { ...deepseekCard, model: 1 } }), undefined);
+  assert.equal(checkMessage({ ...add, provider: { ...deepseekCard, baseUrl: 2 } }), undefined);
+  const models = { type: 'providerModels', mode: 'codex', request: 1, service: 'custom', key: '' };
+  assert.deepEqual(checkMessage(models), models);
+  assert.equal(checkMessage({ ...models, mode: 'claude' }), undefined);
+  assert.equal(checkMessage({ ...models, request: '1' }), undefined);
+  assert.equal(checkMessage({ ...models, dir: 3 }), undefined);
+  const save = { type: 'saveProvider', mode: 'codex', dir: '/d', model: 'm', key: '' };
+  assert.deepEqual(checkMessage(save), save);
+  assert.equal(checkMessage({ ...save, mode: 'claude' }), undefined);
+  assert.equal(checkMessage({ type: 'saveProvider', mode: 'codex', dir: '/d', key: '' }), undefined);
 });
 
-test('creation uses a password prompt and exposes only configuration status without selecting an account', async (ctx) => {
+test('creation takes the sidebar fields, keeps the key out of every view and selects nothing; saving keeps the key', async () => {
   const h = harness();
-  ctx.mock.method(window, 'quickPickChoice', async (quickPick: { items: readonly unknown[] }) => quickPick.items[0]);
-  ctx.mock.method(window, 'showQuickPick', async <T>(items: T[]): Promise<T | undefined> => items[0]);
-  const input = ctx.mock.method(window, 'showInputBox', async (_options?: unknown) => 'synthetic-provider-key');
   try {
-    await h.handle({ type: 'add', mode: 'codex', name: 'deepseek', shared: false, provider: 'api' });
+    await h.handle({ type: 'add', mode: 'codex', name: 'deepseek', shared: false, provider: deepseekCard });
     assert.deepEqual(h.messages.at(-1), { type: 'addResult', mode: 'codex', error: undefined });
-    assert.equal((input.mock.calls[0].arguments[0] as { password: boolean }).password, true);
     const dir = path.join(h.home, '.codex-deepseek');
     const row = h.source.accounts().find((r) => r.dir === dir);
-    assert.equal(row?.provider, 'DeepSeek API');
-    assert.equal(row?.providerConfigured, true);
+    assert.deepEqual([row?.provider, row?.providerService, row?.providerHasKey, row?.providerConfigured], ['DeepSeek API', 'deepseek', true, true]);
     assert.equal(row?.usageEligible, undefined);
-    assert.equal(row?.email, undefined);
     assert.equal(readSelectedDir(), undefined);
     assert.equal(fs.existsSync(path.join(dir, 'auth.json')), false);
-    assert.doesNotMatch(JSON.stringify({ rows: h.source.accounts(), messages: h.messages }), /synthetic-provider-key/);
-    const config = fs.readFileSync(path.join(dir, 'config.toml'), 'utf8');
-    assert.match(config, /synthetic-provider-key/);
-    const pick = ctx.mock.method(window, 'showQuickPick', async <T>(items: T[]): Promise<T | undefined> => items[1]);
-    input.mock.mockImplementation(async () => '');
-    await h.handle({ type: 'editProvider', mode: 'codex', dir });
-    assert.equal(pick.mock.callCount(), 1);
+    await h.handle({ type: 'saveProvider', mode: 'codex', dir, model: 'deepseek-v4-pro', key: '' });
+    assert.deepEqual(h.messages.at(-1), { type: 'saveProviderResult', mode: 'codex', dir, error: undefined });
     assert.match(fs.readFileSync(path.join(dir, 'config.toml'), 'utf8'), /synthetic-provider-key/);
     assert.equal(h.source.accounts().find((r) => r.dir === dir)?.providerModel, 'deepseek-v4-pro');
+    assert.doesNotMatch(JSON.stringify({ rows: h.source.accounts(), messages: h.messages }), /synthetic-provider-key/);
   } finally { h.close(); }
 });
 
-test('cancelling key entry leaves no new directory or registered card', async (ctx) => {
+test('a missing required key, an unusable endpoint or an unknown service creates nothing', async () => {
   const h = harness();
-  ctx.mock.method(window, 'showQuickPick', async <T>(items: T[]): Promise<T | undefined> => items[0]);
-  ctx.mock.method(window, 'showInputBox', async () => undefined);
   try {
-    await h.handle({ type: 'add', mode: 'codex', name: 'cancelled', shared: false, provider: 'api' });
-    assert.equal(fs.existsSync(path.join(h.home, '.codex-cancelled')), false);
-    assert.equal(h.store.find('cancelled'), undefined);
-    assert.equal(readSelectedDir(), undefined);
-    const response = h.messages.at(-1);
-    assert.ok(response?.type === 'addResult' && response.error);
+    for (const [name, provider] of [
+      ['nokey', { service: 'openrouter', key: '', model: 'vendor/m' }],
+      ['remote', { service: 'custom', baseUrl: 'http://remote.example.test/v1', key: '', model: 'm' }],
+      ['unknown', { service: 'elsewhere', key: 'k', model: 'm' }],
+    ] as const) {
+      await h.handle({ type: 'add', mode: 'codex', name, shared: false, provider });
+      assert.ok((h.messages.at(-1) as { error?: string }).error, name);
+      assert.equal(fs.existsSync(path.join(h.home, `.codex-${name}`)), false, name);
+      assert.equal(h.store.find(name), undefined, name);
+    }
+  } finally { h.close(); }
+});
+
+test('a custom endpoint and a local preset take an empty key and show their endpoint host', async () => {
+  const h = harness();
+  try {
+    await h.handle({ type: 'add', mode: 'codex', name: 'gateway', shared: false, provider: { service: 'custom', baseUrl: 'https://gateway.example.test/v1', key: '', model: 'gateway-model' } });
+    await h.handle({ type: 'add', mode: 'codex', name: 'local', shared: false, provider: { service: 'ollama', key: '', model: 'qwen' } });
+    const rows = h.source.accounts();
+    const gateway = rows.find((r) => r.dir === path.join(h.home, '.codex-gateway'));
+    const local = rows.find((r) => r.dir === path.join(h.home, '.codex-local'));
+    assert.deepEqual([gateway?.provider, gateway?.providerBaseUrl, gateway?.providerHost, gateway?.providerHasKey, gateway?.providerConfigured],
+      ['Custom API', 'https://gateway.example.test/v1', 'gateway.example.test', false, true]);
+    assert.deepEqual([local?.provider, local?.providerHost, local?.providerConfigured], ['Ollama API', 'localhost:11434', true]);
+  } finally { h.close(); }
+});
+
+test('model lists: DeepSeek from its catalog, others from GET <endpoint>/models with the typed or the saved key', async (ctx) => {
+  const h = harness();
+  const answer = { current: (): Response => new Response(JSON.stringify({ object: 'list', data: [{ id: 'b-model' }, { id: 'a-model' }, { id: 'b-model' }, { id: 'bad id' }] })) };
+  const calls = mockFetch(ctx, () => answer.current());
+  const result = () => h.messages.at(-1) as { type: string; request: number; models?: string[]; error?: string };
+  try {
+    await h.handle({ type: 'providerModels', mode: 'codex', request: 1, service: 'deepseek', key: '' });
+    assert.deepEqual(result(), { type: 'providerModelsResult', mode: 'codex', request: 1, models: ['deepseek-flash', 'deepseek-v4-pro'] });
+    assert.equal(calls.length, 0, 'DeepSeek models come from its catalog');
+    await h.handle({ type: 'providerModels', mode: 'codex', request: 2, service: 'custom', baseUrl: 'https://gw.example.test/v1/', key: 'typed-key' });
+    assert.deepEqual(result().models, ['a-model', 'b-model']);
+    assert.equal(calls[0].url, 'https://gw.example.test/v1/models');
+    assert.equal((calls[0].init?.headers as Record<string, string>).Authorization, 'Bearer typed-key');
+    assert.equal(calls[0].init?.redirect, 'error');
+    await h.handle({ type: 'providerModels', mode: 'codex', request: 3, service: 'openrouter', key: 'k' });
+    assert.equal(calls[1].url, 'https://openrouter.ai/api/v1/models');
+    // Editing: an empty key uses the card's saved key, which never appears in a message
+    await h.handle({ type: 'add', mode: 'codex', name: 'saved', shared: false, provider: { service: 'custom', baseUrl: 'https://gw.example.test/v1', key: 'saved-key', model: 'a-model' } });
+    await h.handle({ type: 'providerModels', mode: 'codex', request: 4, service: 'custom', baseUrl: 'https://gw.example.test/v1', key: '', dir: path.join(h.home, '.codex-saved') });
+    assert.equal((calls.at(-1)?.init?.headers as Record<string, string>).Authorization, 'Bearer saved-key');
+    assert.doesNotMatch(JSON.stringify(h.messages), /saved-key|typed-key/);
+    // Failures name the status or the cause, never the body
+    answer.current = () => new Response('secret body', { status: 401 });
+    await h.handle({ type: 'providerModels', mode: 'codex', request: 5, service: 'custom', baseUrl: 'https://gw.example.test/v1', key: 'k' });
+    assert.match(result().error ?? '', /HTTP 401/);
+    assert.doesNotMatch(result().error ?? '', /secret body/);
+    answer.current = () => { throw new TypeError('fetch failed'); };
+    await h.handle({ type: 'providerModels', mode: 'codex', request: 6, service: 'custom', baseUrl: 'https://gw.example.test/v1', key: 'k' });
+    assert.match(result().error ?? '', /reach the endpoint/);
+    answer.current = () => new Response('{"models": []}');
+    await h.handle({ type: 'providerModels', mode: 'codex', request: 7, service: 'custom', baseUrl: 'https://gw.example.test/v1', key: 'k' });
+    assert.match(result().error ?? '', /OpenAI format/);
+    const before = calls.length;
+    await h.handle({ type: 'providerModels', mode: 'codex', request: 8, service: 'custom', baseUrl: 'http://remote.example.test/v1', key: 'k' });
+    assert.ok(result().error);
+    assert.equal(calls.length, before, 'a refused endpoint gets no request');
   } finally { h.close(); }
 });
 
@@ -133,49 +196,57 @@ test('provider homes with auth files bypass subscription reads, cached quota and
   } finally { tmp.restore(); }
 });
 
-test('a typed endpoint address creates a custom card; a local preset takes an empty key', async (ctx) => {
+test('a saved key is only sent to its own card endpoint; a new endpoint needs the key typed again', async (ctx) => {
   const h = harness();
-  const typedAddress = 'https://gateway.example.test/v1';
-  ctx.mock.method(window, 'quickPickChoice', async (quickPick: { items: readonly { label: string }[] }, type: (value: string) => void) => {
-    type(typedAddress);
-    return quickPick.items[0];
-  });
-  const prompts: string[] = [];
-  ctx.mock.method(window, 'showInputBox', async (options?: { prompt?: string; password?: boolean }) => {
-    prompts.push(options?.prompt ?? '');
-    return options?.password ? '' : 'gateway-model';
-  });
+  const calls = mockFetch(ctx, () => new Response(JSON.stringify({ data: [{ id: 'm' }] })));
   try {
-    await h.handle({ type: 'add', mode: 'codex', name: 'gateway', shared: false, provider: 'api' });
-    assert.deepEqual(h.messages.at(-1), { type: 'addResult', mode: 'codex', error: undefined });
-    const dir = path.join(h.home, '.codex-gateway');
-    const config = fs.readFileSync(path.join(dir, 'config.toml'), 'utf8');
-    assert.match(config, /^base_url = "https:\/\/gateway\.example\.test\/v1"$/m);
-    assert.match(config, /^model = "gateway-model"$/m);
-    assert.equal(config.includes('experimental_bearer_token'), false);
-    assert.equal(prompts.length, 2, 'a typed address needs no separate address prompt');
-    const row = h.source.accounts().find((r) => r.dir === dir);
-    assert.deepEqual([row?.provider, row?.providerHost, row?.providerConfigured], ['Custom API', 'gateway.example.test', true]);
-
-    ctx.mock.method(window, 'quickPickChoice', async (quickPick: { items: readonly { label: string }[] }) => quickPick.items.find((item) => item.label === 'Ollama'));
-    await h.handle({ type: 'add', mode: 'codex', name: 'local', shared: false, provider: 'api' });
-    assert.deepEqual(h.messages.at(-1), { type: 'addResult', mode: 'codex', error: undefined });
-    const local = h.source.accounts().find((r) => r.dir === path.join(h.home, '.codex-local'));
-    assert.deepEqual([local?.provider, local?.providerHost, local?.providerConfigured], ['Ollama API', 'localhost:11434', true]);
+    await h.handle({ type: 'add', mode: 'codex', name: 'own', shared: false, provider: { service: 'custom', baseUrl: 'https://own.example.test/v1', key: 'sk-own-saved', model: 'm' } });
+    const dir = path.join(h.home, '.codex-own');
+    for (const other of [{ service: 'custom', baseUrl: 'https://elsewhere.example.test/v1' }, { service: 'openrouter' }]) {
+      await h.handle({ type: 'providerModels', mode: 'codex', request: 9, key: '', dir, ...other });
+      assert.ok((h.messages.at(-1) as { error?: string }).error, JSON.stringify(other));
+    }
+    assert.equal(calls.length, 0, 'the saved key went nowhere');
+    await h.handle({ type: 'saveProvider', mode: 'codex', dir, model: 'm', key: '', baseUrl: 'https://elsewhere.example.test/v1' });
+    assert.ok((h.messages.at(-1) as { error?: string }).error);
+    assert.match(fs.readFileSync(path.join(dir, 'config.toml'), 'utf8'), /own\.example\.test/);
+    await h.handle({ type: 'saveProvider', mode: 'codex', dir, model: 'm', key: 'sk-new', baseUrl: 'https://elsewhere.example.test/v1' });
+    assert.equal((h.messages.at(-1) as { error?: string }).error, undefined, 'with the key typed again the endpoint changes');
   } finally { h.close(); }
 });
 
-test('a typed address that cannot be used is explained in the list and creates nothing', async (ctx) => {
+test('a key with inner whitespace is refused before any directory exists', async () => {
   const h = harness();
-  let shown: string | undefined;
-  ctx.mock.method(window, 'quickPickChoice', async (quickPick: { items: readonly { label: string }[] }, type: (value: string) => void) => {
-    type('http://remote.example.test/v1');
-    shown = quickPick.items[0]?.label;
-    return undefined;
-  });
   try {
-    await h.handle({ type: 'add', mode: 'codex', name: 'remote', shared: false, provider: 'api' });
-    assert.equal(shown, 'Enter an https:// address, or an http:// address on this machine (localhost), without a user name, query or fragment.');
-    assert.equal(fs.existsSync(path.join(h.home, '.codex-remote')), false);
+    await h.handle({ type: 'add', mode: 'codex', name: 'spaced', shared: false, provider: { service: 'openrouter', key: 'sk-abc def', model: 'm' } });
+    assert.ok((h.messages.at(-1) as { error?: string }).error);
+    assert.equal(fs.existsSync(path.join(h.home, '.codex-spaced')), false);
   } finally { h.close(); }
+});
+
+test('a preset list loaded with a key is cached for its service; a custom endpoint list is not', async (ctx) => {
+  const tmp = makeTempHome('provider-cache');
+  const state = new MemoryMemento();
+  const store = new CodexAccountStore(state);
+  const labels = new LabelStore(state, 'codex.labels');
+  const cache = new ModelCache(state);
+  const source = codexPanelSource(store, labels, undefined, undefined, cache);
+  const messages: ToWebview[] = [];
+  let handle!: (msg: FromWebview) => Promise<void>;
+  const panel = {
+    setHandler(_mode: string, callback: typeof handle) { handle = callback; },
+    resolve(_mode: string, dir: string) { return source.accounts().find((row) => row.dir === dir); },
+    refresh() {}, post(message: ToWebview) { messages.push(message); },
+  } as unknown as AccountsPanel;
+  const disposables = registerCodexCommands({ store, labels, panel, tools: {}, modelCache: cache });
+  mockFetch(ctx, () => new Response(JSON.stringify({ data: [{ id: 'kimi-model' }] })));
+  try {
+    await handle({ type: 'providerModels', mode: 'codex', request: 1, service: 'kimi', key: 'k' });
+    await handle({ type: 'providerModels', mode: 'codex', request: 2, service: 'custom', baseUrl: 'https://gw.example.test/v1', key: 'k' });
+    await new Promise((r) => setImmediate(r));
+    const services = source.apiServices!();
+    assert.deepEqual(services.find((s) => s.id === 'kimi')?.models, ['kimi-model']);
+    assert.equal(services.find((s) => s.id === 'custom')?.models, undefined);
+    assert.deepEqual(services.find((s) => s.id === 'deepseek')?.models, ['deepseek-flash', 'deepseek-v4-pro']);
+  } finally { disposables.forEach((d) => d.dispose()); tmp.restore(); }
 });
