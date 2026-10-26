@@ -337,8 +337,9 @@ class Page {
   private readonly listCount = h('span', { class: 'count' });
   private readonly listSection: HTMLElement;
   private readonly addToggle: HTMLElement;
-  private readonly addToggleText = h('span');
-  // Usage refresh buttons left of "Add"; shown only while the page has an account whose limits can be queried
+  // "+" while the add form is closed, "×" (Cancel) while it is open
+  private readonly addToggleIcon = h('vscode-icon', { name: 'add' });
+  // Usage refresh buttons left of the "+" add toggle; shown only while the page has an account whose limits can be queried
   private readonly refreshButton: HTMLElement;
   private readonly refreshAllButton: HTMLElement;
   private addOpen = false;
@@ -383,7 +384,8 @@ class Page {
   constructor(readonly mode: PanelMode) {
     this.text = TEXT[mode];
     this.addField = h('vscode-textfield') as TextField;
-    this.addButton = h('vscode-button', { icon: 'add' }) as HTMLElement & { disabled: boolean };
+    // Icon-only submit (a check mark), so the heading's "+" stays the only plus sign; its label is the aria-label
+    this.addButton = h('vscode-button', { icon: 'check' }) as HTMLElement & { disabled: boolean };
     // Radios of one group share a name; each tab has its own group in the same document
     const radio = (value: string): HTMLElement & { checked: boolean } =>
       h('vscode-radio', { class: 'add-mode-option', name: `add-mode-${mode}`, value }) as HTMLElement & { checked: boolean };
@@ -411,7 +413,7 @@ class Page {
       this.addMode,
       this.addHelp,
     );
-    this.addToggle = h('button', { type: 'button', class: 'add-toggle', 'aria-expanded': 'false', 'aria-controls': `add-${mode}` }, h('vscode-icon', { name: 'add', size: '12' }), this.addToggleText);
+    this.addToggle = h('button', { type: 'button', class: 'add-toggle', 'aria-expanded': 'false', 'aria-controls': `add-${mode}` }, this.addToggleIcon);
     this.addToggle.addEventListener('click', () => {
       this.setAddOpen(!this.addOpen);
       if (this.addOpen) this.focusAdd();
@@ -468,10 +470,9 @@ class Page {
   applyLocale(): void {
     this.addField.setAttribute('placeholder', t('add.placeholder'));
     this.addField.setAttribute('aria-label', t('add.ariaLabel'));
-    this.addButton.textContent = t('add.button');
-    this.addToggleText.textContent = t('add.button');
-    this.addToggle.setAttribute('aria-label', t('add.title'));
-    this.addToggle.title = t('add.title');
+    this.addButton.setAttribute('aria-label', t('add.button'));
+    this.addButton.title = t('add.button');
+    this.updateAddToggle();
     this.listTitle.textContent = t('list.title');
     for (const [button, key] of [[this.refreshButton, 'usage.refreshTitle'], [this.refreshAllButton, 'usage.refreshAllTitle']] as const) {
       button.setAttribute('label', t(key));
@@ -520,6 +521,14 @@ class Page {
     this.addSection.hidden = !open;
     this.addToggle.setAttribute('aria-expanded', String(open));
     this.addToggle.classList.toggle('is-open', open);
+    this.updateAddToggle();
+  }
+
+  private updateAddToggle(): void {
+    const label = t(this.addOpen ? 'confirm.cancel' : 'add.title');
+    this.addToggleIcon.setAttribute('name', this.addOpen ? 'close' : 'add');
+    this.addToggle.setAttribute('aria-label', label);
+    this.addToggle.title = label;
   }
 
   // Expands the add form and focuses its field (nothing to add to while the page is loading or disabled)

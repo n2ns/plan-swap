@@ -66,13 +66,13 @@ El pie, en la parte inferior del panel, sigue visible en ambas pestañas. Sus bo
 
 En Codex, [activa el cambio de cuenta](#activar-y-cambiar-cuentas-de-codex) primero.
 
-1. En la pestaña correspondiente, haz clic en **+ Añadir** junto a **Todas las cuentas**.
+1. En la pestaña correspondiente, haz clic en **+** (**Añadir cuenta**) junto a **Todas las cuentas**.
 2. Escribe un nombre, como `work`. Reglas para los nombres:
    - Usa letras, dígitos, guiones bajos o guiones.
    - `default` está reservado.
    - Un nombre no puede coincidir, sin distinguir mayúsculas y minúsculas, con el nombre o el nombre visible de otra cuenta de la misma pestaña.
 3. Deja seleccionada **Vinculada a la cuenta predeterminada (recomendada)** para seguir con el mismo trabajo con otra cuenta: la configuración, el historial y las sesiones se comparten, y solo el inicio de sesión es independiente. Elige **Independiente** para separar el trabajo de lo personal, empezando con una copia de la configuración actual. Lee los [modos de cuenta](#elegir-cuentas-vinculadas-o-independientes) antes de elegir.
-4. Haz clic en **Añadir** o pulsa Enter. PlanSwap crea el directorio de la cuenta, o reutiliza un directorio existente con ese nombre. Si informa de archivos que no pudo vincular o copiar, lee la lista: esos archivos se quedan como están.
+4. Haz clic en la marca de verificación (**Añadir**) o pulsa Enter. Para cancelar, haz clic en **×** (**Cancelar**), donde estaba **+**, o pulsa Esc. PlanSwap crea el directorio de la cuenta, o reutiliza un directorio existente con ese nombre. Si informa de archivos que no pudo vincular o copiar, lee la lista: esos archivos se quedan como están.
 5. Haz clic en **Acceder** en la nueva fila. Se abre un terminal; completa allí la configuración inicial y el inicio de sesión del cliente oficial. En Claude también puedes cambiar a la cuenta e iniciar sesión desde el panel de Claude Code.
 6. Si la fila sigue mostrando **Sin sesión**, haz clic en el botón de actualizar de la barra de título del panel. Cerrar el terminal de PlanSwap también actualiza la lista.
 
@@ -151,7 +151,7 @@ Hasta que se complete el reinicio, un aviso indica la cuenta seleccionada, y la 
 
 ## Usar una tarjeta DeepSeek API
 
-En el formulario de Codex, elige **DeepSeek API**, introduce un nombre nuevo y elige el modo vinculado o independiente. Pulsa **Añadir**, selecciona el modelo e introduce tu clave API de DeepSeek en el campo oculto. Se requiere un directorio nuevo; no se convierte ninguna cuenta de suscripción existente ni se necesitan credenciales de suscripción de Claude o ChatGPT.
+En el formulario de Codex, elige **DeepSeek API**, introduce un nombre nuevo y elige el modo vinculado o independiente. Pulsa la marca de verificación (**Añadir**), selecciona el modelo e introduce tu clave API de DeepSeek en el campo oculto. Se requiere un directorio nuevo; no se convierte ninguna cuenta de suscripción existente ni se necesitan credenciales de suscripción de Claude o ChatGPT.
 
 La tarjeta muestra el modelo configurado y si tiene una clave. Es una comprobación local, no una prueba de conexión. Usa **Editar configuración de DeepSeek** para cambiar el modelo o la clave; deja la clave de sustitución vacía para conservarla. Al editar se conservan los ajustes que Codex añade al archivo por su cuenta; los cambios no compatibles en el proveedor, la autenticación o las líneas del modelo y la clave se conservan y se notifican, sin sobrescribirlos. Una configuración ausente o inválida impide seleccionar la tarjeta o abrir su terminal.
 

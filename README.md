@@ -80,7 +80,7 @@ Open **PlanSwap** in the activity bar. The `default` row is your existing accoun
 
 **Claude**
 
-1. Click **+ Add**, type a name and press Enter. Keep **Linked to the default account (recommended)** selected to reuse your setup, or choose **Independent** to keep it separate.
+1. Click **+** (**Add account**), type a name and press Enter. Keep **Linked to the default account (recommended)** selected to reuse your setup, or choose **Independent** to keep it separate.
 2. Click the row's **Log in** button and sign in in the terminal.
 3. Click the **Switch to this account** arrow icon and confirm.
 

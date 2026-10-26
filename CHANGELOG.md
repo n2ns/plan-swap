@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- The add button next to **All accounts** shows only **+**. While the add form is open it turns into **×** to cancel, the form's submit button is a check mark, and the name field and submit button use smaller text.
+
 ## [0.5.0] - 2026-10-26
 
 ### Added

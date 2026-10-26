@@ -45,7 +45,6 @@ const refreshAllTitle = {
   es: 'Actualizar los límites de uso de todas las cuentas', ja: 'すべてのアカウントの使用量の上限を更新',
   ko: '모든 계정의 사용량 한도 새로 고침',
 };
-const addLabel = { en: 'Add', 'zh-cn': '添加', 'zh-tw': '新增', es: 'Añadir', ja: '追加', ko: '추가' };
 const durations = { en: ['5 hours', '7 days'], 'zh-cn': ['5小时', '7天'], 'zh-tw': ['5小時', '7天'], es: ['5 h', '7 días'], ja: ['5 時間', '7 日間'], ko: ['5시간', '7일'] };
 const scopedDurations = {
   en: ['5 hours', '7 days', '7 days · Fable'],
@@ -437,7 +436,7 @@ async function runCase(locale, width) {
   results.cases.push({ locale, width, mode: 'claude', passed: true, ...claude });
 }
 
-// Usage refresh icon buttons left of "+ Add": present with a title and aria-label, send the right tool message, stay inside
+// Usage refresh icon buttons left of the "+" add toggle: present with a title and aria-label, send the right tool message, stay inside
 // the heading (wrapping below the title at narrow widths) without overlapping the title, each other or the Add toggle,
 // and disappear when no account can be queried
 async function refreshButtons(locale, width) {
@@ -840,7 +839,7 @@ async function resetDateStates() {
   results.interactions.push('missing reset date preserves its bar; refreshed host state removes only the expired window');
 }
 
-// The add form starts collapsed behind the "+ Add" toggle; focusAdd expands and focuses it; Escape and a successful add collapse it.
+// The add form starts collapsed behind the "+" add toggle; focusAdd expands and focuses it; Escape and a successful add collapse it.
 // The Tools section is always shown
 // planswap.usageDisplay used: bars, percentages, screen reader values and the bar tooltip show what is used, in every
 // locale and width; the level (color) still follows what is left
@@ -913,7 +912,8 @@ async function addFormAndTools() {
     const fieldFocused = () => field.evaluate((el) => el.getRootNode().activeElement === el);
     assert.equal(await form.isVisible(), false, `${mode} add form must start collapsed`);
     assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
-    assert.equal((await toggle.textContent()).trim(), addLabel.en);
+    assert.equal((await toggle.textContent()).trim(), '', `${mode} toggle shows only its icon`);
+    assert.equal(await toggle.locator('vscode-icon[name="add"]').count(), 1);
     assert.equal(await toggle.getAttribute('aria-label'), 'Add account');
     // The toggle sits at the right end of the list heading
     const placement = await page.evaluate((panel) => {
@@ -928,6 +928,17 @@ async function addFormAndTools() {
     assert.equal(await form.isVisible(), true);
     assert.equal(await toggle.getAttribute('aria-expanded'), 'true');
     assert.equal(await fieldFocused(), true, `${mode} toggle must focus the field`);
+    // While open the toggle is a "×" Cancel and the submit is an icon-only check mark: one plus sign on screen at most
+    assert.equal(await toggle.getAttribute('aria-label'), 'Cancel');
+    assert.equal(await toggle.locator('vscode-icon').getAttribute('name'), 'close');
+    const submit = page.locator(`${panel} .add .input-group vscode-button`);
+    assert.equal((await submit.textContent()).trim(), '', `${mode} submit shows only its icon`);
+    assert.deepEqual([await submit.getAttribute('icon'), await submit.getAttribute('aria-label')], ['check', 'Add']);
+    await toggle.click();
+    assert.equal(await form.isVisible(), false, `${mode} the Cancel toggle must collapse the form`);
+    assert.deepEqual([await toggle.getAttribute('aria-label'), await toggle.locator('vscode-icon').getAttribute('name')], ['Add account', 'add']);
+    await toggle.click();
+    assert.equal(await fieldFocused(), true, `${mode} reopening must focus the field`);
     await page.keyboard.press('Escape');
     assert.equal(await form.isVisible(), false, `${mode} Escape must collapse the form`);
     assert.equal(await toggle.evaluate((el) => el === document.activeElement), true, `${mode} Escape must return the focus to the toggle`);

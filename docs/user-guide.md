@@ -66,13 +66,13 @@ The footer at the bottom of the panel stays visible on both tabs. Its buttons sh
 
 For Codex, [enable switching](#enable-and-switch-codex-accounts) first.
 
-1. In the relevant tab, click **+ Add** next to **All accounts**.
+1. In the relevant tab, click **+** (**Add account**) next to **All accounts**.
 2. Enter a name such as `work`. Rules for names:
    - Use letters, digits, underscores or hyphens.
    - `default` is reserved.
    - A name cannot match another account's name or display name in the same tab, ignoring case.
 3. Keep **Linked to the default account (recommended)** selected to continue the same work with another account: settings, history and sessions are shared, only the sign-in is separate. Choose **Independent** to keep work and personal apart, starting from a copy of the current settings. See [account modes](#choose-linked-or-independent-accounts) before choosing.
-4. Click **Add** or press Enter. PlanSwap creates the account directory, or reuses an existing directory with that name. If it reports files it could not link or copy, read the list: those files stay as they are.
+4. Click the check mark (**Add**) or press Enter. To cancel, click **×** (**Cancel**) where the **+** was, or press Esc. PlanSwap creates the account directory, or reuses an existing directory with that name. If it reports files it could not link or copy, read the list: those files stay as they are.
 5. Click **Log in** on the new row. A terminal opens; complete the official client's first-run setup and sign-in there. For Claude, you can instead switch to the account and sign in from the Claude Code panel.
 6. If the row still shows **Not logged in**, click the refresh button in the panel title bar. Closing the PlanSwap terminal also refreshes the list.
 
@@ -151,7 +151,7 @@ Changed your mind before restarting? Click the arrow icon on the highlighted (ef
 
 ## Use a DeepSeek API card
 
-In the Codex add form, choose **DeepSeek API**, enter a new account name and choose linked or independent. Click **Add**, choose the model, then enter your DeepSeek API key in the hidden input. This requires a new directory; an existing subscription account is not converted. No Claude or ChatGPT subscription credentials are needed.
+In the Codex add form, choose **DeepSeek API**, enter a new account name and choose linked or independent. Click the check mark (**Add**), choose the model, then enter your DeepSeek API key in the hidden input. This requires a new directory; an existing subscription account is not converted. No Claude or ChatGPT subscription credentials are needed.
 
 The card shows the configured model and whether a key is configured. This is a local configuration check, not a successful connection test. Use **Edit DeepSeek configuration** to change the model or key; leave the replacement key empty to keep it. Settings Codex adds to the file itself are kept when editing; unsupported changes to the provider, authentication or the model and key lines are preserved and reported instead of overwritten. A missing/invalid configuration prevents switching or opening the account terminal.
 

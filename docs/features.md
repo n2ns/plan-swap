@@ -53,7 +53,7 @@ Claude and Codex are recommended separately; a percentage of one subscription is
 
 ### 2.3 Add-account section
 
-The "+ Add" toggle or an add command opens the form; the name is checked as typed. Two options under the name choose the mode, each described by purpose: linked to the default account (selected by default; continue the same work, only the sign-in is separate) or independent (keep work and personal apart, starting from a copy of the current settings). Success collapses and clears the form; failure keeps it open with the reason. Refreshes keep the typed input and checkbox. A help line names the directory to be created; each page keeps its own form.
+The "+" add toggle (labeled "Add account") or an add command opens the form; while it is open the toggle shows "×" (Cancel) and closes it, as Esc does, and the form submits with an icon-only check mark (labeled "Add"); the name is checked as typed. Two options under the name choose the mode, each described by purpose: linked to the default account (selected by default; continue the same work, only the sign-in is separate) or independent (keep work and personal apart, starting from a copy of the current settings). Success collapses and clears the form; failure keeps it open with the reason. Refreshes keep the typed input and checkbox. A help line names the directory to be created; each page keeps its own form.
 
 ### 2.4 Inline rename
 

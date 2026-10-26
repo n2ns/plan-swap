@@ -240,34 +240,29 @@ html:lang(ko) { word-break: keep-all; }
   background: var(--surface-2);
   border: 1px solid var(--line);
 }
-/* Usage refresh icon buttons and "+ Add" at the right of the list heading; right-aligned also when wrapped below the title */
+/* Usage refresh icon buttons and the "+" add toggle at the right of the list heading; right-aligned also when wrapped below the title */
 .title-actions { display: flex; align-items: center; gap: 2px; margin-left: auto; min-width: 0; }
 .title-actions .icon-btn { width: 22px; height: 22px; }
 .title-actions .icon-btn[hidden] { display: none; }
-.title-actions .add-toggle { margin-left: 2px; }
-/* "+ Add" at the right of the list heading; the form opens below it */
+/* "+" icon toggle at the right of the list heading, sized like the icon buttons beside it; the form opens below it */
 .add-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
   margin: 0;
-  padding: 1px 8px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-pill);
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
   background: transparent;
   color: var(--ink);
-  font: inherit;
-  font-size: max(11px, 0.72em);
-  font-weight: 600;
-  letter-spacing: 0;
-  text-transform: none;
-  line-height: 18px;
   cursor: pointer;
   transition: background var(--ease);
 }
 .add-toggle vscode-icon { color: inherit; }
-.add-toggle:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
-.add-toggle.is-open { background: color-mix(in srgb, var(--ink) 12%, transparent); }
+.add-toggle:hover { background: color-mix(in srgb, var(--ink) 12%, transparent); }
+.add-toggle.is-open { background: color-mix(in srgb, var(--ink) 18%, transparent); }
 .add-toggle:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
 
 /* ---------- Account list ---------- */
@@ -591,6 +586,8 @@ html:lang(ko) { word-break: keep-all; }
 .add { display: flex; flex-direction: column; gap: var(--gap); padding: var(--gap); border-radius: var(--radius-row); border: 1px solid var(--line); background: var(--surface-1); }
 .add[hidden] { display: none; }
 .input-group {
+  /* Field and submit button use the card buttons' 11px text */
+  --vscode-font-size: 11px;
   display: flex;
   align-items: stretch;
   border-radius: var(--radius-row);
@@ -624,9 +621,9 @@ html:lang(ko) { word-break: keep-all; }
   --vsc-border-left-radius: 6px;
   --vsc-border-right-radius: 6px;
 }
-/* Button internals: 26px like the field, flex-centered vertically, line-height 1 so the text box hugs the glyphs and icon and text share a center line */
-.input-group vscode-button::part(base) { height: 26px; display: flex; align-items: center; line-height: 1; padding: 0 12px; }
-/* Disabled state must still read as a button: 40% accent mixed into the input background + accent border, text and plus stay legible (overrides the component's default 0.4 opacity) */
+/* Button internals: 26px like the field, the check mark flex-centered */
+.input-group vscode-button::part(base) { height: 26px; display: flex; align-items: center; justify-content: center; line-height: 1; padding: 0 8px; }
+/* Disabled state must still read as a button: 40% accent mixed into the input background + accent border, the check mark stays legible (overrides the component's default 0.4 opacity) */
 .input-group vscode-button[disabled] { opacity: 1; }
 .input-group vscode-button[disabled]::part(base) {
   background: color-mix(in srgb, var(--vscode-button-background) 40%, var(--vscode-input-background));
