@@ -231,6 +231,8 @@ Cuando el porcentaje restante más bajo de los límites generales de la cuenta a
 
 Para dejar una cuenta fuera de las recomendaciones, por ejemplo una cuenta de trabajo, pulsa el icono de bombilla en su tarjeta; púlsalo de nuevo para incluirla. Desactiva `planswap.sidebar.showRecommendation` en los [ajustes](#cambiar-el-idioma-y-los-ajustes-de-visualización) para ocultar la tarjeta y los iconos de bombilla.
 
+Para ocultar solo la tarjeta por ahora, pulsa **×** en ella (**Ocultar hasta que cambie la recomendación**). Vuelve a aparecer cuando se recomienda otra cuenta o la cuenta actual es otra, y cuando la cuenta actual se recupera por encima del umbral y vuelve a quedarse baja.
+
 Si el acceso por suscripción de una cuenta de Claude no está disponible, el icono de bombilla se oculta sin cambiar tu preferencia de incluir o excluir la cuenta. Cuando se restaura el acceso, vuelve a aparecer si se cumplen las condiciones habituales de visualización.
 
 ### Barra de estado

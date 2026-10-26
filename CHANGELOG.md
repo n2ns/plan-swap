@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- A close button (**×**) on the recommended-account card hides it until the recommendation changes: another account is recommended, another account is current, or the current account recovers and runs low again.
+
 ### Changed
 
 - The add button next to **All accounts** shows only **+**. While the add form is open it turns into **×** to cancel, the form's submit button is a check mark, and the name field and submit button use smaller text.

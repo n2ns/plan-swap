@@ -1,5 +1,5 @@
-// Account recommendation: which registered account of a page to suggest when the current one runs low, and the
-// per-account "excluded from recommendations" marks. Pure ranking over the rows the panel already shows (no new data,
+// Account recommendation: which registered account of a page to suggest when the current one runs low, the
+// per-account "excluded from recommendations" marks and the closed recommendation card. Pure ranking over the rows the panel already shows (no new data,
 // no vscode import); the Webview only renders the result.
 import type { StateMemento } from './fileState';
 import type { AccountView } from './protocol';
@@ -81,5 +81,45 @@ export class RecommendExclusions {
   private read(): string[] {
     const value = this.state.get<unknown>(this.key);
     return Array.isArray(value) ? value.filter((n): n is string => typeof n === 'string') : [];
+  }
+}
+
+interface Dismissal { current: string; recommended: string }
+
+// Stored under state[key]: the recommendation card the user closed, as the current and the recommended account's
+// directories. The card stays hidden while that same pair comes up again (in any window), and the entry is dropped once
+// that current account is observed above the threshold, so a later drop shows the card again. A different current or
+// recommended account is a new situation and shows the card; only the last closed card is remembered.
+export class RecommendDismissals {
+  constructor(
+    private readonly state: StateMemento,
+    private readonly key: 'claude.recommendDismissed' | 'codex.recommendDismissed',
+  ) {}
+
+  hides(current: string, recommended: string): boolean {
+    const d = this.read();
+    return d !== undefined && d.current === current && d.recommended === recommended;
+  }
+
+  async dismiss(current: string, recommended: string): Promise<void> {
+    if (this.hides(current, recommended)) return;
+    await this.state.update(this.key, { current, recommended } satisfies Dismissal);
+  }
+
+  /** Drops the entry once its current account's lowest general window is observed above recommendationThreshold;
+   *  nothing is written otherwise */
+  async releaseRecovered(rows: readonly AccountView[], recommendationThreshold: number): Promise<void> {
+    const d = this.read();
+    if (!d) return;
+    const lowest = lowestRemaining(rows.find((r) => r.dir === d.current)?.usage);
+    if (lowest === undefined || lowest <= recommendationThreshold) return;
+    await this.state.updateWith<unknown>(this.key, (value) => (JSON.stringify(value) === JSON.stringify(d) ? undefined : value));
+  }
+
+  private read(): Dismissal | undefined {
+    const value = this.state.get<unknown>(this.key);
+    if (typeof value !== 'object' || value === null) return undefined;
+    const { current, recommended } = value as Record<string, unknown>;
+    return typeof current === 'string' && typeof recommended === 'string' ? { current, recommended } : undefined;
   }
 }

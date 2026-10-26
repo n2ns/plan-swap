@@ -10,7 +10,7 @@ import type { AccountView, FromWebview, PanelMode, PanelState, RestartInfo, TabS
 import { isSharedClaudeAccount } from './claudeShare';
 import { readClaudeUsage } from './claudeUsage';
 import { threshold, usageDisplay, usageThresholds } from './usageSettings';
-import { recommend, type RecommendExclusions } from './recommend';
+import { recommend, type RecommendDismissals, type RecommendExclusions } from './recommend';
 import { getLocale, intlLocale, t } from './i18n';
 import { comparablePath, isWindows, tildify } from './platform';
 
@@ -168,6 +168,8 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
     private readonly extensionUri: vscode.Uri,
     private readonly sources: { claude: PanelSource; codex: PanelSource },
     private readonly memento: vscode.Memento,
+    // Closed recommendation cards per page (claude.recommendDismissed / codex.recommendDismissed); tests may leave it out
+    private readonly dismissals?: { claude: RecommendDismissals; codex: RecommendDismissals },
   ) {
     this.syncWatchers();
   }
@@ -273,7 +275,8 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
   async dispatch(msg: FromWebview): Promise<void> {
     if (!('mode' in msg)) return;
     try {
-      await this.handlers[msg.mode]?.(msg);
+      if (msg.type === 'recommendDismiss') await this.dismissRecommendation(msg.mode, msg.dir);
+      else await this.handlers[msg.mode]?.(msg);
     } catch (err) {
       console.error(`[planswap] panel action ${msg.type} failed:`, err);
       void vscode.window.showErrorMessage(t('panel.actionFailed', { error: err instanceof Error ? err.message : String(err) }));
@@ -286,8 +289,28 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
     this.changed.dispose();
   }
 
+  // Closes the card only for the recommendation it shows now (a stale click after a change is ignored), then re-renders
+  private async dismissRecommendation(mode: PanelMode, dir: string): Promise<void> {
+    const shown = this.recommendation(mode);
+    if (!shown || shown.recommended !== dir) return;
+    await this.dismissals?.[mode].dismiss(shown.current, shown.recommended);
+    this.refresh();
+  }
+
+  // The recommendation the card would show, before a closed card hides it; undefined while none is made
+  private recommendation(mode: PanelMode, rows = this.sources[mode].accounts()): { current: string; recommended: string } | undefined {
+    const source = this.sources[mode];
+    const showRecommendation = vscode.workspace.getConfiguration('planswap').get<boolean>(SHOW_RECOMMENDATION_SETTING, true);
+    const switchedTo = mode === 'claude' ? this.switchedTo : undefined;
+    const current = rows.find((r) => r.isCurrent);
+    if (!showRecommendation || source.pendingDir() || switchedTo || !current) return undefined;
+    const recommended = recommend(rows, recommendationThreshold(), source.identityOf);
+    return recommended === undefined ? undefined : { current: current.dir, recommended };
+  }
+
   // The recommendation is computed on the full rows, before the display settings drop any window;
-  // switch/restart banners take precedence, since the user already chose the next account.
+  // switch/restart banners take precedence, since the user already chose the next account. A closed card stays hidden
+  // until the recommendation changes, and is released once its current account is above the threshold again.
   private tabState(mode: PanelMode): TabState {
     const source = this.sources[mode];
     const display = sidebarDisplay();
@@ -295,11 +318,14 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
     const showRecommendation = vscode.workspace.getConfiguration('planswap').get<boolean>(SHOW_RECOMMENDATION_SETTING, true);
     const pendingDir = source.pendingDir();
     const switchedTo = mode === 'claude' ? this.switchedTo : undefined;
+    const dismissals = this.dismissals?.[mode];
+    void dismissals?.releaseRecovered(rows, recommendationThreshold()).catch((err: unknown) => console.error('[planswap] releasing a closed recommendation failed:', err));
+    const shown = this.recommendation(mode, rows);
     return {
       enabled: source.enabled(),
       accounts: applySidebarDisplay(rows, display),
       hideEmail: display.email ? undefined : true,
-      recommended: showRecommendation && !pendingDir && !switchedTo ? recommend(rows, recommendationThreshold(), source.identityOf) : undefined,
+      recommended: shown && !dismissals?.hides(shown.current, shown.recommended) ? shown.recommended : undefined,
       hideRecommendation: showRecommendation ? undefined : true,
       switchedTo,
       pendingDir,
@@ -392,6 +418,7 @@ const MESSAGE_FIELDS: Record<FromWebview['type'], readonly string[]> = {
   unshare: ['dir'],
   rename: ['dir', 'label'],
   recommendExclude: ['dir'],
+  recommendDismiss: ['dir'],
   reorder: [],
   reload: [],
   dismissBanner: [],

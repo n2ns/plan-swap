@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type * as vscode from 'vscode';
+import { RecommendDismissals } from '../src/recommend';
 import { AccountsPanel, applySidebarDisplay, claudePanelSource, recommendationThreshold, sidebarDisplay, type PanelSource } from '../src/accountsPanel';
 import { usageThresholds } from '../src/usageSettings';
 import { AccountStore } from '../src/accounts';
@@ -13,7 +14,7 @@ import { makeTempHome, MemoryMemento } from './helpers';
 import { intlLocale, setLocale, t } from '../src/i18n';
 import { resetConfig, setConfig, setConfigDefault, updates } from './stubs/vscode';
 
-function harness(claude?: PanelSource) {
+function harness(claude?: PanelSource, memento = new MemoryMemento()) {
   const messages: ToWebview[] = [];
   let receive!: (msg: FromWebview) => void;
   let visibility!: () => void;
@@ -30,7 +31,8 @@ function harness(claude?: PanelSource) {
     onDidDispose: (listener: typeof dispose) => { dispose = listener; },
   };
   const source: PanelSource = claude ?? { accounts: () => [], enabled: () => true, pendingDir: () => undefined, watchTargets: () => [] };
-  const panel = new AccountsPanel({ path: '/extension' } as vscode.Uri, { claude: source, codex: source }, new MemoryMemento());
+  const panel = new AccountsPanel({ path: '/extension' } as vscode.Uri, { claude: source, codex: source }, new MemoryMemento(),
+    { claude: new RecommendDismissals(memento, 'claude.recommendDismissed'), codex: new RecommendDismissals(memento, 'codex.recommendDismissed') });
   panel.resolveWebviewView(view as unknown as vscode.WebviewView);
   return { panel, view, messages, receive: (msg: FromWebview) => receive(msg), visible(value: boolean) { view.visible = value; visibility(); }, dispose: () => dispose() };
 }
@@ -344,4 +346,46 @@ test('the sidebar display settings hide the email and the general 5-hour / 7-day
   const generalOnly = [{ ...rows[0], usage: { checkedAt: now, windows: rows[0].usage!.windows.slice(0, 2) } }];
   assert.deepEqual(applySidebarDisplay(generalOnly, { email: true, fiveHour: false, weekly: false })[0].usage, { checkedAt: now, windows: [] }, 'no window left: the observation time stays');
   assert.equal(rows[0].email, 'a@example.com', 'the input rows are not changed');
+});
+
+test('closing the recommendation card hides it until the recommendation changes, per page', async () => {
+  resetConfig();
+  let currentUsed = 95;
+  const workUsed = 10;
+  let extra: AccountView[] = [];
+  const usage = (used: number) => ({ windows: [{ usedPercent: used, windowMinutes: 300 }], checkedAt: 1 });
+  const rows = (): AccountView[] => [
+    { kind: 'default', name: 'default', label: 'default', dir: '/h/.claude', dirLabel: '~/.claude', loggedIn: true, isCurrent: true, usage: usage(currentUsed) },
+    { kind: 'named', name: 'work', label: 'work', dir: '/h/.claude-work', dirLabel: '~/.claude-work', loggedIn: true, isCurrent: false, usage: usage(workUsed) },
+    ...extra,
+  ];
+  const memento = new MemoryMemento();
+  const h = harness({ accounts: rows, enabled: () => true, pendingDir: () => undefined, watchTargets: () => [] }, memento);
+  const recommended = () => {
+    h.messages.length = 0;
+    h.receive({ type: 'ready' });
+    const msg = h.messages[0];
+    assert.ok(msg.type === 'state');
+    return [msg.state.claude.recommended, msg.state.codex.recommended];
+  };
+  const dismiss = async (mode: 'claude' | 'codex', dir: string) => { await h.panel.dispatch({ type: 'recommendDismiss', mode, dir }); };
+  try {
+    assert.deepEqual(recommended(), ['/h/.claude-work', '/h/.claude-work']);
+    await dismiss('claude', '/h/.claude-other');
+    assert.equal(memento.data.has('claude.recommendDismissed'), false, 'a card not shown now is not closed');
+    await dismiss('claude', '/h/.claude-work');
+    assert.deepEqual(recommended(), [undefined, '/h/.claude-work'], 'only the closed page hides its card');
+    // A better account becomes the recommendation: a new situation shows the card
+    extra = [{ kind: 'named', name: 'other', label: 'other', dir: '/h/.claude-other', dirLabel: '~/.claude-other', loggedIn: true, isCurrent: false, usage: usage(0) }];
+    assert.deepEqual(recommended(), ['/h/.claude-other', '/h/.claude-other']);
+    extra = [];
+    assert.deepEqual(recommended(), [undefined, '/h/.claude-work'], 'the closed pair stays hidden while it comes up again');
+    // The current account recovers: the closed card is released, so the next drop shows it again
+    currentUsed = 50;
+    assert.deepEqual(recommended(), [undefined, undefined]);
+    await new Promise((r) => setImmediate(r));
+    assert.equal(memento.data.has('claude.recommendDismissed'), false);
+    currentUsed = 95;
+    assert.deepEqual(recommended(), ['/h/.claude-work', '/h/.claude-work']);
+  } finally { h.panel.dispose(); resetConfig(); }
 });

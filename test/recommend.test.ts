@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { RecommendExclusions, lowestRemaining, recommend } from '../src/recommend';
+import { RecommendDismissals, RecommendExclusions, lowestRemaining, recommend } from '../src/recommend';
 import type { AccountView } from '../src/protocol';
 import { MemoryMemento } from './helpers';
 
@@ -150,5 +150,44 @@ describe('RecommendExclusions', () => {
     assert.equal(new RecommendExclusions(memento, 'claude.recommendExcluded').has('work'), false);
     memento.data.set('claude.recommendExcluded', ['work', 3]);
     assert.equal(new RecommendExclusions(memento, 'claude.recommendExcluded').has('work'), true);
+  });
+});
+
+describe('RecommendDismissals', () => {
+  const current = (used: number) => row('default', [fiveHour(used)], { isCurrent: true });
+  test('hides only the closed pair of current and recommended account', async () => {
+    const memento = new MemoryMemento();
+    const d = new RecommendDismissals(memento, 'claude.recommendDismissed');
+    assert.equal(d.hides('/a', '/b'), false);
+    await d.dismiss('/a', '/b');
+    assert.deepEqual(memento.data.get('claude.recommendDismissed'), { current: '/a', recommended: '/b' });
+    assert.equal(d.hides('/a', '/b'), true);
+    assert.equal(d.hides('/a', '/c'), false, 'another recommended account');
+    assert.equal(d.hides('/x', '/b'), false, 'another current account');
+    const writes = memento.updates;
+    await d.dismiss('/a', '/b');
+    assert.equal(memento.updates, writes, 'closing the same card again writes nothing');
+    await d.dismiss('/a', '/c');
+    assert.equal(d.hides('/a', '/b'), false, 'only the last closed card is remembered');
+  });
+  test('is released once its current account is observed above the threshold, and only then', async () => {
+    const memento = new MemoryMemento();
+    const d = new RecommendDismissals(memento, 'codex.recommendDismissed');
+    const cur = current(95);
+    await d.dismiss(cur.dir, '/b');
+    const writes = memento.updates;
+    await d.releaseRecovered([cur], 10);
+    await d.releaseRecovered([row('default', undefined, { isCurrent: true })], 10);
+    await d.releaseRecovered([], 10);
+    assert.equal(memento.updates, writes, 'still low, unobserved or absent: nothing is written');
+    assert.equal(d.hides(cur.dir, '/b'), true);
+    await d.releaseRecovered([current(80)], 10);
+    assert.equal(d.hides(cur.dir, '/b'), false);
+    assert.equal(memento.data.has('codex.recommendDismissed'), false);
+  });
+  test('an unreadable stored value hides nothing', () => {
+    const memento = new MemoryMemento();
+    memento.data.set('claude.recommendDismissed', { current: 1, recommended: '/b' });
+    assert.equal(new RecommendDismissals(memento, 'claude.recommendDismissed').hides('1', '/b'), false);
   });
 });

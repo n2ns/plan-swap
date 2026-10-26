@@ -548,6 +548,7 @@ const recommendTitle = { en: 'Recommended: Work', 'zh-cn': '推荐：Work', 'zh-
 const recommendSwitch = { en: 'Switch', 'zh-cn': '切换', 'zh-tw': '切換', es: 'Cambiar', ja: '切り替え', ko: '전환' };
 const recommendTerminal = { en: 'Terminal', 'zh-cn': '终端', 'zh-tw': '終端機', es: 'Terminal', ja: 'ターミナル', ko: '터미널' };
 const excludeTitle = { en: 'Exclude from recommendations', 'zh-cn': '不参与推荐', 'zh-tw': '不參與推薦', es: 'Excluir de las recomendaciones', ja: 'おすすめから除外', ko: '추천에서 제외' };
+const dismissTitle = { en: 'Hide until the recommendation changes', 'zh-cn': '隐藏，推荐变化时再显示', 'zh-tw': '隱藏，推薦變更時再顯示', es: 'Ocultar hasta que cambie la recomendación', ja: 'おすすめが変わるまで非表示', ko: '추천이 바뀔 때까지 숨기기' };
 const includeTitle = { en: 'Include in recommendations', 'zh-cn': '恢复参与推荐', 'zh-tw': '恢復參與推薦', es: 'Incluir en las recomendaciones', ja: 'おすすめに含める', ko: '추천에 포함' };
 const updatedNow = { en: 'Updated just now', 'zh-cn': '刚刚更新', 'zh-tw': '剛剛更新', es: 'Actualizado ahora mismo', ja: 'たった今更新', ko: '방금 업데이트됨' };
 async function recommendation(locale, width) {
@@ -581,6 +582,13 @@ async function recommendation(locale, width) {
         order: [...panel.querySelectorAll('.row')].map((r) => r.dataset.dir),
         title: card.querySelector('.banner-title').textContent, text: card.querySelector('.recommend-text').textContent,
         icon: card.querySelector('.banner-icon').getAttribute('name'),
+        close: (() => {
+          const c = card.querySelector(':scope > [data-action="recommendDismiss"]');
+          const title = card.querySelector('.banner-title');
+          return c && { icon: c.getAttribute('icon'), label: c.getAttribute('label'), title: c.title,
+            inside: rect(c).right <= rect(card).right + 1 && rect(c).top >= rect(card).top - 1,
+            clearOfTitle: rect(c).left >= rect(title).right - parseFloat(getComputedStyle(title).paddingRight) - 1 || rect(c).bottom <= rect(title).top + 1 };
+        })(),
         buttons: buttons.map((b) => ({ action: b.dataset.action, icon: b.getAttribute('icon'), label: b.textContent.trim(), secondary: b.hasAttribute('secondary'),
           inside: rect(b).left >= sidebar.left - 1 && rect(b).right <= sidebar.right + 1 && rect(b).bottom <= rect(card).bottom + 1,
           cut: (() => { const base = b.shadowRoot?.querySelector('[part~="base"]'); return !!base && base.scrollWidth > base.clientWidth + 1; })() })),
@@ -603,6 +611,7 @@ async function recommendation(locale, width) {
     assert.notEqual(data.textColor, data.bannerTextColor, `card text uses the more readable color at ${where}`);
     assert.deepEqual(data.order, [`/fixture/.${mode}`, `/fixture/.${mode}-work`, `/fixture/.${mode}-empty`], `list order unchanged at ${where}`);
     assert.equal(data.icon, 'lightbulb');
+    assert.deepEqual(data.close, { icon: 'close', label: dismissTitle[locale], title: dismissTitle[locale], inside: true, clearOfTitle: true }, `close button at ${where}`);
     assert.equal(data.title, recommendTitle[locale], `card title at ${where}`);
     const parts = data.text.split(' · ');
     assert.equal(parts.length, 3, `two general windows and the observation time at ${where}: ${data.text}`);
@@ -626,6 +635,10 @@ async function recommendation(locale, width) {
     // Card actions send the recommended account's directory
     for (const action of expected.map((b) => b.action)) await page.locator(`#panel-${mode} .banner.recommend [data-action="${action}"]`).click();
     assert.deepEqual(await page.evaluate(() => window.preview.messages), expected.map((b) => ({ type: b.action, mode, dir: `/fixture/.${mode}-work` })), `card messages at ${where}`);
+    await page.evaluate(() => window.preview.clearMessages());
+    // The close button asks the host to hide the card for this recommendation
+    await page.locator(`#panel-${mode} .banner.recommend [data-action="recommendDismiss"]`).click();
+    assert.deepEqual(await page.evaluate(() => window.preview.messages), [{ type: 'recommendDismiss', mode, dir: `/fixture/.${mode}-work` }], `close message at ${where}`);
     await page.evaluate(() => window.preview.clearMessages());
     // planswap.usageDisplay used: the card's figures show what is used
     await page.evaluate(() => window.preview.post({ type: 'state', state: { ...structuredClone(window.preview.state()), usageDisplay: 'used' } }));

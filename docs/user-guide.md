@@ -231,6 +231,8 @@ When the current account’s lowest general remaining percentage is at or below 
 
 To keep an account out of the recommendations, for example a work account, click the lightbulb icon on its card; click it again to include it. Turn off `planswap.sidebar.showRecommendation` in [settings](#change-language-and-display-settings) to hide the card and the lightbulb icons.
 
+To hide just the card for now, click **×** on it (**Hide until the recommendation changes**). It comes back when another account is recommended or another account is current, and after the current account recovers above the threshold and runs low again.
+
 For a Claude account with unavailable subscription access, the lightbulb icon is hidden without changing your inclusion or exclusion preference. After access is restored, it reappears when the usual display conditions are met.
 
 ### Status bar

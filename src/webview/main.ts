@@ -792,8 +792,9 @@ class Page {
 
   // Recommendation card (the host decides, recommend in src/recommend.ts): the account's general windows as the row
   // shows them (the display settings may hide some), when it was observed, and the actions Switch (the same message
-  // as the row's button, so Codex gets its usual selection and restart flow) and Terminal. The card carries no
-  // data-dir: focus restore must not take it for the recommended account's row
+  // as the row's button, so Codex gets its usual selection and restart flow) and Terminal, plus a close button that
+  // hides it until the recommendation changes (the host decides that too). The card carries no data-dir: focus restore
+  // must not take it for the recommended account's row
   private renderRecommendation(): HTMLElement | null {
     if (this.mode === 'claude' ? this.tab.switchedTo : this.tab.pendingDir) return null;
     const a = this.tab.recommended !== undefined && !this.tab.hideRecommendation ? this.tab.accounts.find((x) => x.dir === this.tab.recommended && !x.provider) : undefined;
@@ -822,6 +823,7 @@ class Page {
         h('div', { class: 'banner-text recommend-text' }, ...windows.flatMap((w) => [w, ' · ']), a.usage && updatedAgoText(a.usage.checkedAt)),
         actions,
       ),
+      withAction(toolbarButton('close', t('recommend.dismiss'), () => this.send({ type: 'recommendDismiss', dir: a.dir })), 'recommendDismiss'),
     );
   }
 

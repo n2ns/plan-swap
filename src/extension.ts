@@ -6,7 +6,7 @@ import { claudeCredentialOverrides, oneDriveHome, pathVarsWithSpaces } from './e
 import { AccountsPanel, VIEW_ID, claudePanelSource, type PanelSource } from './accountsPanel';
 import { EXTERNAL_NAME, LabelStore, labelFor } from './labels';
 import { FileMemento, STATE_JSON, type StateMemento } from './fileState';
-import { RecommendExclusions } from './recommend';
+import { RecommendDismissals, RecommendExclusions } from './recommend';
 import { usageColorsChanged } from './usageSettings';
 import { findSameDir, readAccountInfo, samePath, setClaudeSettingEnv } from './paths';
 import { ensureCodexLinks, isSharedCodexAccount } from './codex/codexShare';
@@ -597,7 +597,8 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   };
   checkLinks();
 
-  const panel = new AccountsPanel(ctx.extensionUri, { claude: claudePanelSource(store, claudeLabels, claudeExclusions, subscriptionState), codex: codexSource }, ctx.globalState);
+  const panel = new AccountsPanel(ctx.extensionUri, { claude: claudePanelSource(store, claudeLabels, claudeExclusions, subscriptionState), codex: codexSource }, ctx.globalState,
+    { claude: new RecommendDismissals(state, 'claude.recommendDismissed'), codex: new RecommendDismissals(state, 'codex.recommendDismissed') });
   // A stored observation of the effective Codex account (another window, an earlier session) is shown from the start
   usage?.adoptCached();
   // Re-render expiry even when no query is due, including accounts other than the effective one.
