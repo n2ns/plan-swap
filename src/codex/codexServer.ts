@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { t } from '../i18n';
+import { isMac } from '../platform';
 // Detection and restart of the editor's WSL-side server, so a new CODEX_HOME selection takes effect. No vscode import.
 // Design and editor facts: codex-design.md section 5. Everything except executeRestart only reads /proc and files;
 // executeRestart is the one function that signals processes (rules: AGENTS.md "WSL restart").
@@ -63,8 +64,9 @@ export function classifyDataDir(dataDir: string, home: string): ServerKind {
 
 /** Classifies the server that hosts this process: readArgv(process.ppid) → server root → data dir (the root's parent
  *  must be named `bin`; the data dir is its parent) → classifyDataDir(dataDir, home). Read-only. Never throws; any
- *  failure → 'unknown'. */
+ *  failure → 'unknown'. macOS has no WSL server: always 'unknown' without probing. */
 export function detectServerKind(): ServerKind {
+  if (isMac()) return 'unknown';
   try {
     const root = parseServerRoot(readArgv(process.ppid));
     const dataDir = root && dataDirOf(root);

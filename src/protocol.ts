@@ -35,6 +35,10 @@ export interface AccountView {
   providerHasKey?: boolean;
   providerConfigured?: boolean;
   providerError?: string;
+  // Codex on macOS only: the account keeps its sign-in outside auth.json (cli_auth_credentials_store other than file),
+  // so email, plan and sign-in state are unknown; this localized note replaces them (loggedIn is then true, so the row
+  // offers its terminal, not a sign-in)
+  signInNote?: string;
   // Claude only: confirmed subscription rejection and an in-flight availability probe.
   subscriptionUnavailable?: boolean;
   subscriptionChecking?: boolean;

@@ -149,15 +149,32 @@ function isExpiredAuth(e: Record<string, unknown>): boolean {
 /**
  * The codex binary shipped inside the Codex extension (<extension>/bin/<os>-<arch>/codex[.exe]), for users without the
  * CLI on PATH. The package also carries other platforms' binaries (a Windows install ships linux-x86_64 for WSL), so
- * only the folder of this OS and architecture is used.
+ * only the folder of this OS and architecture is used. macOS: bin/macos-<arch> (macos-x86_64 verified on an Intel Mac,
+ * macos-aarch64 assumed); when that folder has no binary, a bin/macos-* folder named by another alias of this
+ * architecture (x86_64 / x64 / amd64, aarch64 / arm64) is used instead.
  */
 export function findBundledCodex(extensionPath: string, platform: NodeJS.Platform = process.platform, arch: string = process.arch): string | undefined {
-  const os = platform === 'win32' ? 'windows' : platform === 'linux' ? 'linux' : undefined;
+  const os = platform === 'win32' ? 'windows' : platform === 'linux' ? 'linux' : platform === 'darwin' ? 'macos' : undefined;
   if (!os) return undefined;
   const archName = arch === 'x64' ? 'x86_64' : arch === 'arm64' ? 'aarch64' : arch;
-  const file = path.join(extensionPath, 'bin', `${os}-${archName}`, platform === 'win32' ? 'codex.exe' : 'codex');
-  return fs.existsSync(file) ? file : undefined;
+  const exe = platform === 'win32' ? 'codex.exe' : 'codex';
+  const file = path.join(extensionPath, 'bin', `${os}-${archName}`, exe);
+  if (fs.existsSync(file)) return file;
+  if (platform !== 'darwin') return undefined;
+  const aliases = MAC_ARCH_ALIASES.find((names) => names.includes(archName)) ?? [archName];
+  let folders: string[];
+  try {
+    folders = fs.readdirSync(path.join(extensionPath, 'bin'));
+  } catch {
+    return undefined;
+  }
+  const folder = folders.sort().find((name) => name.startsWith('macos-') && aliases.includes(name.slice('macos-'.length))
+    && fs.existsSync(path.join(extensionPath, 'bin', name, exe)));
+  return folder && path.join(extensionPath, 'bin', folder, exe);
 }
+
+// Names one architecture may carry in a bundled folder name (the first is the expected one)
+const MAC_ARCH_ALIASES = [['x86_64', 'x64', 'amd64'], ['aarch64', 'arm64']];
 
 function errorMessage(message: string, code: unknown): string {
   return truncateDetail(typeof code === 'number' ? `${message} (${code})` : message);

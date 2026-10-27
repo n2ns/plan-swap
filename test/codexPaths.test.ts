@@ -276,8 +276,8 @@ describe('scanCodexDirs / checkCodexSafeToDelete / codexDaemonAlive / deleteCode
     // Make ~/.codex a symlink to ~/.codex-real to verify the realpath exclusion
     fs.mkdirSync(path.join(home, '.codex-real'), { mode: 0o700 });
     fs.symlinkSync(path.join(home, '.codex-real'), def, 'junction');
-    // Start ticks come from /proc; on Windows the daemon check only asks whether the pid is alive
-    if (!onWindows) {
+    // Start ticks come from /proc; on Windows and macOS the daemon check only asks whether the pid is alive
+    if (process.platform === 'linux') {
       const stat = fs.readFileSync('/proc/self/stat', 'utf8');
       myTicks = Number(stat.slice(stat.lastIndexOf(')') + 1).trim().split(/\s+/)[19]);
     }

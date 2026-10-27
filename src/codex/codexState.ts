@@ -5,13 +5,15 @@ import { spawnSync } from 'node:child_process';
 import { CODEX_DIR_BASENAME_RE, codexDefaultDir } from './codexPaths';
 import { samePath } from '../paths';
 import { t } from '../i18n';
-import { fsyncDir, isWindows, renameReplacing } from '../platform';
+import { fsyncDir, isMac, isWindows, renameReplacing } from '../platform';
 import { SELF_CHECK_NAME, type Runner, getUserCodexHome, getUserEnv, setUserCodexHome, setUserEnv } from './codexWindows';
 import { type ServerKind, detectServerKind } from './codexServer';
+import { currentMacRcFile, macBlockFiles, macLoginShell, macShellKind, macStartupFiles } from './codexMac';
 // Codex selection state: the shared state file ~/.config/planswap/codex-home and the per-editor files
 // codex-home.<kind> (the selected dir), the rc marker blocks in ~/.profile and ~/.bashrc that export the shared
 // selection, the hook block in an editor's server-env-setup that exports its own selection before its WSL server
-// starts, the native Windows user variable branch, enable pre-/self-checks and the ai-switcher migration. Design:
+// starts, the native Windows user variable branch, enable pre-/self-checks and the ai-switcher migration. macOS uses
+// the same rc block in the login shell's own startup file (codexMac) and only the shared state file. Design:
 // codex-design.md sections 4, 4a and 9a. No vscode import.
 
 /** The shared state file: the selection of terminals outside an editor and of editors without a server-env-setup
@@ -41,9 +43,10 @@ export function hookFileFor(kind: HookKind): string {
 
 let cachedKind: ServerKind | undefined;
 /** The kind of the WSL server hosting this extension host, detected once (detectServerKind; a process cannot change
- *  its parent): 'unknown' on Windows, outside a WSL server and in tests. */
+ *  its parent): 'unknown' on Windows and macOS (no WSL server, so only the shared state file), outside a WSL server
+ *  and in tests. */
 export function currentServerKind(): ServerKind {
-  cachedKind ??= isWindows() ? 'unknown' : detectServerKind();
+  cachedKind ??= isWindows() || isMac() ? 'unknown' : detectServerKind();
   return cachedKind;
 }
 
@@ -120,11 +123,13 @@ export function writeSelection(dir: string | undefined, run?: Runner, kind: Serv
   }
 }
 
-/** Whether PlanSwap manages CODEX_HOME. Windows: the state file exists; elsewhere: both rc files carry a complete
- *  block (a start marker without its end marker counts as not enabled). An unreadable rc file throws. */
+/** Whether PlanSwap manages CODEX_HOME. Windows: the state file exists; elsewhere: every rc file of rcStatus() carries
+ *  a complete block (a start marker without its end marker counts as not enabled; macOS with a login shell other than
+ *  zsh or bash has none, so it is not enabled). An unreadable rc file throws. */
 export function isEnabled(): boolean {
   if (isWindows()) return fs.existsSync(STATE_FILE());
-  return rcStatus().every((s) => s.hasBlock && !s.broken);
+  const files = rcStatus();
+  return files.length > 0 && files.every((s) => s.hasBlock && !s.broken);
 }
 
 // A user-level CODEX_HOME that points at a PlanSwap-style account directory (~/.codex-<name>) is adopted, e.g. after the
@@ -265,9 +270,19 @@ function statusOf(file: string, block: string = rcBlock()): RcFileStatus {
   return { file, hasBlock, broken, hasUserExport };
 }
 
-/** Status of ~/.profile and ~/.bashrc, in that order. Read errors other than ENOENT are thrown. */
+/** Status of ~/.profile and ~/.bashrc, in that order; macOS: of the login shell's block file (codexMac.macRcFile),
+ *  none for a shell other than zsh or bash. Read errors other than ENOENT are thrown. */
 export function rcStatus(): RcFileStatus[] {
+  if (isMac()) {
+    const file = currentMacRcFile();
+    return file ? [statusOf(file)] : [];
+  }
   return [statusOf(profilePath()), statusOf(bashrcPath())];
+}
+
+// Every file a block may sit in on this platform, for removal and upgrade (Linux: ~/.bashrc and ~/.profile)
+function blockFiles(): string[] {
+  return isMac() ? macBlockFiles() : [bashrcPath(), profilePath()];
 }
 
 export interface PreCheck { ok: boolean; reasons: string[] }
@@ -279,9 +294,24 @@ export interface PreCheck { ok: boolean; reasons: string[] }
  * CODEX_HOME.
  * Windows: unless the state file exists, a user-level CODEX_HOME that is not an adoptable ~/.codex-<name> is refused;
  * the read is strict, so a failed read throws instead of passing.
+ * macOS: the login shell (codexMac.macLoginShell) is zsh or bash; none of the files that shell reads
+ * (codexMac.macStartupFiles) has a broken block or a user export of CODEX_HOME.
  */
 export function preCheck(run?: Runner, kind: ServerKind = currentServerKind()): PreCheck {
   const reasons: string[] = [];
+  if (isMac()) {
+    const shell = macLoginShell();
+    const shellKind = macShellKind(shell);
+    if (!shellKind) {
+      reasons.push(t('codex.pre.notBash', { shell: shell || t('codex.pre.shellUnset') }));
+      return { ok: false, reasons };
+    }
+    for (const st of macStartupFiles(shellKind).map((file) => statusOf(file))) {
+      if (st.broken) reasons.push(t('codex.pre.broken', { file: st.file }));
+      if (st.hasUserExport) reasons.push(t('codex.pre.userExport', { file: st.file }));
+    }
+    return { ok: reasons.length === 0, reasons };
+  }
   if (isWindows()) {
     // An existing state file means PlanSwap already owns the variable. Strict read: a failure throws (the caller refuses
     // to enable) instead of passing as "unset" over a value the user set
@@ -390,8 +420,16 @@ function installInto(file: string, beforeGuard: boolean, block: string = rcBlock
  * created with 0644, an existing one keeps its mode. Written by writeRc (atomic, through a symlink to its target);
  * a dangling symlink throws t('codex.rc.danglingLink') before that file is written. Install then removeRcBlocks
  * restores the original bytes of a file that existed before.
+ * macOS: only the login shell's block file (codexMac.macRcFile), appended like ~/.profile; a shell other than zsh or
+ * bash throws t('codex.pre.notBash') without writing.
  */
 export function installRcBlocks(): void {
+  if (isMac()) {
+    const file = currentMacRcFile();
+    if (!file) throw new Error(t('codex.pre.notBash', { shell: macLoginShell() || t('codex.pre.shellUnset') }));
+    installInto(file, false);
+    return;
+  }
   installInto(bashrcPath(), true);
   installInto(profilePath(), false);
 }
@@ -442,12 +480,13 @@ export function removeRcBlockFrom(file: string): void {
 
 /** Removes every block from both rc files and from the server-env-setup of every hook kind, including the blank line
  *  or missing newline added on installation (a file created by the installation is left empty); no block → no write.
+ *  macOS: from every file codexMac.macBlockFiles lists instead (either shell's, so a block survives no shell change).
  *  Checks all files first; if any BEGIN lacks an END, throws (all localized reasons combined) without changing any
  *  file. Written like removeRcBlockFrom. */
 export function removeRcBlocks(): void {
   const errors: Error[] = [];
   const writes: Array<{ file: string; content: string }> = [];
-  for (const file of [bashrcPath(), profilePath(), ...HOOK_KINDS.map(hookFileFor)]) {
+  for (const file of isMac() ? macBlockFiles() : [bashrcPath(), profilePath(), ...HOOK_KINDS.map(hookFileFor)]) {
     try {
       const content = withoutBlocks(file);
       if (content !== undefined) writes.push({ file, content });
@@ -475,13 +514,14 @@ export function removeLinuxState(): void {
  * Brings the marker blocks of both rc files to the current rcBlock() content: a block whose lines differ (written
  * by an earlier version, e.g. the one that unset an inherited CODEX_HOME) is replaced in place; lines outside the
  * blocks are kept byte for byte. Both files are checked first; a BEGIN without its END throws and nothing is written.
- * Returns true when a file was rewritten. Runs on every activation after migrateLegacyCodex.
+ * Returns true when a file was rewritten. Runs on every activation after migrateLegacyCodex. macOS: the files of
+ * codexMac.macBlockFiles instead of ~/.bashrc and ~/.profile.
  */
 export function upgradeRcBlocks(): boolean {
   const current = rcBlock().split('\n').slice(0, -1);
   const errors: Error[] = [];
   const writes: Array<{ file: string; content: string }> = [];
-  for (const file of [bashrcPath(), profilePath()]) {
+  for (const file of blockFiles()) {
     const text = readText(file);
     if (text === undefined) continue;
     const lines = text.split('\n');
@@ -611,16 +651,33 @@ export function selfCheckWindows(run?: Runner): { ok: boolean; detail: string } 
   return result;
 }
 
+/** What the self-check needs from a finished shell run (spawnSync's result fits). */
+export interface ShellResult { error?: Error; stdout?: string | null; stderr?: string | null }
+/** Runs shell with args and env, synchronously (self-check seam; tests pass a fake, never a real login shell of theirs). */
+export type ShellRunner = (shell: string, args: string[], env: NodeJS.ProcessEnv) => ShellResult;
+
+const runShell: ShellRunner = (shell, args, env) =>
+  spawnSync(shell, args, { env, timeout: 10000, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+
 /**
  * Enable self-check. Linux: creates a scratch dir (SELF_CHECK_DIR_PREFIX) beside STATE_FILE, temporarily selects it
  * in the shared state file (the one the rc blocks read), runs `bash -i -l -c` without this host's own CODEX_HOME
  * (the block only fills in an unset one) printing SELF_CHECK_MARK + $CODEX_HOME and compares only that marked line.
+ * macOS: the same with the login shell itself (codexMac.macLoginShell, zsh or bash; another shell fails with
+ * t('codex.pre.notBash')), which is how the editor resolves its environment.
  * Cleanup restores the previous state (or deletes a newly created state file) only while the state file still selects
  * the scratch dir, so a concurrent switch by another window is kept, and removes the scratch with non-recursive rmdir
  * so unexpected contents stay. Never throws; failures are returned as a localized detail. Windows: selfCheckWindows().
+ * run: the shell runner (default spawnSync with a 10 s timeout).
  */
-export function selfCheck(): { ok: boolean; detail: string } {
+export function selfCheck(run: ShellRunner = runShell): { ok: boolean; detail: string } {
   if (isWindows()) return selfCheckWindows();
+  let shell = 'bash';
+  if (isMac()) {
+    const login = macLoginShell();
+    if (!login || !macShellKind(login)) return { ok: false, detail: t('codex.pre.notBash', { shell: login || t('codex.pre.shellUnset') }) };
+    shell = login;
+  }
   const file = STATE_FILE();
   let backup: string | undefined;
   let tmpDir: string | undefined;
@@ -632,12 +689,7 @@ export function selfCheck(): { ok: boolean; detail: string } {
     writeSelectedDir(tmpDir, 'unknown');
     const env = { ...process.env };
     delete env.CODEX_HOME;
-    const r = spawnSync('bash', ['-i', '-l', '-c', `printf '\\n${SELF_CHECK_MARK}%s\\n' "$CODEX_HOME"`], {
-      env,
-      timeout: 10000,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    const r = run(shell, ['-i', '-l', '-c', `printf '\\n${SELF_CHECK_MARK}%s\\n' "$CODEX_HOME"`], env);
     if (r.error) return { ok: false, detail: t('codex.self.bashFailed', { error: r.error.message }) };
     // A login shell may print a motd or hints (Ubuntu's "sudo_root" note) to stdout; only the marked line is the value
     const marked = (r.stdout ?? '').split('\n').filter((l) => l.startsWith(SELF_CHECK_MARK)).pop();

@@ -39,7 +39,8 @@ import {
   watchedStateFiles,
   writeSelection,
 } from './codexState';
-import { isWindows, lacksProcfs, tildify, errText } from '../platform';
+import { isMac, isWindows, lacksProcfs, tildify, errText } from '../platform';
+import { currentMacRcFile, usesKeychainStore } from './codexMac';
 import { askCopyFallback } from '../linkPolicy';
 import { type ServerKind, canAutoRestart, detectServerKind, executeRestart, planRestart } from './codexServer';
 import type { CodexAccountStore } from './codexStore';
@@ -96,11 +97,22 @@ const EDITOR_NAMES: Record<ServerKind, string> = {
 const editorName = (kind: ServerKind): string => EDITOR_NAMES[kind];
 
 /** Pure localized guidance selector (hint, the "restart required" warning and the switch confirmation): native Windows
- *  local window → quit and relaunch the editor; other local → restart the editor; non-WSL remote → remote guidance;
- *  WSL → per editor kind. Callers pass vscode.env.remoteName; uses the editor connection context, not the kernel, so
- *  WSLg desktop windows get local guidance. windows is a test seam. */
-export function manualRestartMessages(kind: ServerKind, remoteName: string | undefined, windows: boolean = isWindows()): { hint: string; required: string; switchConfirm: string } {
-  if (remoteName === undefined && windows) {
+ *  local window → quit and relaunch the editor; macOS local window → quit (⌘Q) and reopen it from the Dock, with the
+ *  Windows switch confirmation (its text names no platform); other local → restart the editor; non-WSL remote → remote
+ *  guidance; WSL → per editor kind. Callers pass vscode.env.remoteName; uses the editor connection context, not the
+ *  kernel, so WSLg desktop windows get local guidance. platform is a test seam: a platform name, or the older boolean
+ *  (true = win32, false = linux). */
+export function manualRestartMessages(kind: ServerKind, remoteName: string | undefined, platform: NodeJS.Platform | boolean = process.platform): { hint: string; required: string; switchConfirm: string } {
+  const os = platform === true ? 'win32' : platform === false ? 'linux' : platform;
+  if (remoteName === undefined && os === 'darwin') {
+    const hint = t('codex.manualRestartHintMac');
+    return {
+      hint,
+      required: t('codex.manualRestartRequiredMac', { hint }),
+      switchConfirm: t('codex.switchConfirmManualWin', { hint }),
+    };
+  }
+  if (remoteName === undefined && os === 'win32') {
     const hint = t('codex.manualRestartHintWin');
     return {
       hint,
@@ -186,9 +198,11 @@ function providerErrorText(code: ProviderErrorCode): string {
   return t(`codex.provider.error.${code}`);
 }
 
-// Only safe provider status enters the view. Provider homes never need a subscription credential read.
-function codexRowInfo(dir: string): Pick<AccountView, 'email' | 'plan' | 'loggedIn' | 'provider' | 'providerService' | 'providerModel' | 'providerBaseUrl' | 'providerHost' | 'providerHasKey' | 'providerConfigured' | 'providerError'> {
+// Only safe provider status enters the view. Provider homes never need a subscription credential read. macOS: an
+// account whose sign-in may sit in the Keychain (usesKeychainStore) gets only the note; the Keychain is never read
+function codexRowInfo(dir: string): Pick<AccountView, 'email' | 'plan' | 'loggedIn' | 'signInNote' | 'provider' | 'providerService' | 'providerModel' | 'providerBaseUrl' | 'providerHost' | 'providerHasKey' | 'providerConfigured' | 'providerError'> {
   const provider = readProviderInfo(dir);
+  if (!provider && usesKeychainStore(dir)) return { loggedIn: true, signInNote: t('codex.mac.keychainStore') };
   if (!provider) return viewInfo(readCodexAccountInfo(dir));
   return {
     loggedIn: provider.configured,
@@ -208,7 +222,8 @@ function codexRowInfo(dir: string): Pick<AccountView, 'email' | 'plan' | 'logged
  * Data source of the Codex panel tab.
  * - accounts(): store.all() rows with subscription info or secret-free provider status; current and selected rows by findSameDir (alternate
  *   spellings match), isSelected independent of isCurrent; shared only for named rows; when effectiveDir() matches no
- *   row, an extra current 'external' row. Usage history only for signed-in non-API-key rows, and none while
+ *   row, an extra current 'external' row. Usage history only for signed-in non-API-key rows without a macOS Keychain
+ *   note (signInNote), and none while
  *   codexRunsInWsl().
  * - enabled(): isEnabled(); errors count as not enabled.
  * - pendingDir(): when the selected dir (default when unset) differs from effectiveDir(), the account's display name,
@@ -248,7 +263,8 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, h
     }
     if (!codexRunsInWsl()) {
       for (const row of rows) {
-        if (!row.provider && row.loggedIn && row.plan !== 'API key') {
+        // A Keychain sign-in (signInNote) is unknown, and querying it would make the CLI read the Keychain
+        if (!row.provider && !row.signInNote && row.loggedIn && row.plan !== 'API key') {
           row.usage = history?.get(row.dir);
           row.usageEligible = true;
         }
@@ -401,7 +417,10 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       panel.refresh();
       return;
     }
-    const ok = await vscode.window.showWarningMessage(t('codex.enableConfirm'), { modal: true, detail: rcBlock() }, writeLabel);
+    // macOS: the block goes into the login shell's own startup file (preCheck already refused other shells)
+    const macFile = isMac() ? currentMacRcFile() : undefined;
+    const confirmText = macFile ? t('codex.mac.enableConfirm', { file: tildify(macFile) }) : t('codex.enableConfirm');
+    const ok = await vscode.window.showWarningMessage(confirmText, { modal: true, detail: rcBlock() }, writeLabel);
     if (ok !== writeLabel) return;
     // Snapshot before writing: rollback only removes blocks from files newly written this time, never the user's existing blocks
     let newlyWritten: string[];
