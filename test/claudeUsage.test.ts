@@ -130,6 +130,20 @@ test('usageEnv points the CLI at the file PlanSwap reads and applies the Claude 
   } finally { tmp.restore(); }
 });
 
+test('usageEnv keeps an inherited CLAUDE_CONFIG_DIR spelling that names the same folder (macOS Keychain item names)', () => {
+  const tmp = makeTempHome('claude-usage-env-raw');
+  try {
+    const dir = path.join(tmp.home, 'cfg');
+    fs.mkdirSync(dir);
+    const raw = dir + path.sep;
+    // The host's own spelling (the default account when the editor runs with it) and a hand-written setting value
+    assert.equal(usageEnv(dir, true, { CLAUDE_CONFIG_DIR: raw }).CLAUDE_CONFIG_DIR, raw);
+    assert.equal(usageEnv(dir, true, {}, { CLAUDE_CONFIG_DIR: raw }).CLAUDE_CONFIG_DIR, raw);
+    // Another folder's value is replaced by the resolved path
+    assert.equal(usageEnv(dir, true, { CLAUDE_CONFIG_DIR: path.join(tmp.home, 'other') }).CLAUDE_CONFIG_DIR, dir);
+  } finally { tmp.restore(); }
+});
+
 interface FakeRun { command: string; args: string[]; options: SpawnOptions; child: FakeChild }
 class FakeChild extends EventEmitter implements ClaudeUsageChild {
   stdout = new PassThrough();

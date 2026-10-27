@@ -35,7 +35,8 @@ export function macShellKind(shell: string | undefined): MacShell | undefined {
   return name === 'zsh' || name === 'bash' ? name : undefined;
 }
 
-// zsh reads its startup files from $ZDOTDIR when the environment it starts with sets it, else from the home directory
+// zsh reads its startup files other than ~/.zshenv from $ZDOTDIR once it is set (commonly by ~/.zshenv itself, which
+// is how the host inherits it), else from the home directory
 function zshDir(env: NodeJS.ProcessEnv): string {
   return env.ZDOTDIR ? path.resolve(env.ZDOTDIR) : os.homedir();
 }
@@ -48,13 +49,15 @@ function entryExists(file: string): boolean {
 }
 
 /**
- * The startup file that gets the marker block. zsh: .zshenv, which every zsh reads first. bash: the first of
+ * The startup file that gets the marker block. zsh: ~/.zshenv, which every zsh reads first: the editor's login shell
+ * starts without ZDOTDIR (launchd sets none), so a ZDOTDIR the host shows was set during startup and its .zshenv is
+ * never read by that shell. bash: the first of
  * ~/.bash_profile, ~/.bash_login and ~/.profile that exists (a login bash reads only that one, so creating
  * ~/.bash_profile next to an existing ~/.profile would stop bash reading the user's file), else ~/.bash_profile.
  */
 export function macRcFile(kind: MacShell, env: NodeJS.ProcessEnv = process.env): string {
-  if (kind === 'zsh') return path.join(zshDir(env), '.zshenv');
   const home = os.homedir();
+  if (kind === 'zsh') return path.join(home, '.zshenv');
   const existing = BASH_LOGIN_FILES.map((name) => path.join(home, name)).find(entryExists);
   return existing ?? path.join(home, '.bash_profile');
 }
@@ -67,11 +70,12 @@ export function currentMacRcFile(env: NodeJS.ProcessEnv = process.env): string |
 
 /**
  * The files the editor's `-i -l -c` login shell reads, in which a user's own `export CODEX_HOME=` or an incomplete
- * marker block conflicts with the block (pre-check). zsh: .zshenv, .zprofile, .zshrc and .zlogin; bash: its login file
+ * marker block conflicts with the block (pre-check). zsh: ~/.zshenv, then .zprofile, .zshrc and .zlogin from $ZDOTDIR or
+ * the home directory; bash: its login file
  * (macRcFile) and ~/.bashrc, which login files commonly source.
  */
 export function macStartupFiles(kind: MacShell, env: NodeJS.ProcessEnv = process.env): string[] {
-  if (kind === 'zsh') return ['.zshenv', '.zprofile', '.zshrc', '.zlogin'].map((name) => path.join(zshDir(env), name));
+  if (kind === 'zsh') return [path.join(os.homedir(), '.zshenv'), ...['.zprofile', '.zshrc', '.zlogin'].map((name) => path.join(zshDir(env), name))];
   return [macRcFile(kind, env), path.join(os.homedir(), '.bashrc')];
 }
 

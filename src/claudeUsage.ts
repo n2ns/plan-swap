@@ -187,13 +187,15 @@ export function findBundledClaude(extensionPath: string, platform: NodeJS.Platfo
  * The environment of the CLI run: a copy of base with the setting variables applied (each value, '' included,
  * overrides the inherited one), then CLAUDE_CONFIG_DIR=dir (resolved) when Claude Code reads <dir>/.claude.json for it,
  * and no CLAUDE_CONFIG_DIR for the home-level ~/.claude.json of the default ~/.claude, so the CLI updates the file we read.
+ * An inherited or configured value that already names dir keeps its spelling: on macOS the sign-in's Keychain item is
+ * named after the exact string, so another spelling of the same folder would read as signed out.
  */
 export function usageEnv(
   dir: string, explicit: boolean, base: NodeJS.ProcessEnv = process.env, setting: Record<string, string> = {},
 ): NodeJS.ProcessEnv {
   const env = { ...base, ...setting };
-  if (path.resolve(path.dirname(claudeJsonPath(dir, explicit))) === path.resolve(dir)) env.CLAUDE_CONFIG_DIR = path.resolve(dir);
-  else delete env.CLAUDE_CONFIG_DIR;
+  if (path.resolve(path.dirname(claudeJsonPath(dir, explicit))) !== path.resolve(dir)) delete env.CLAUDE_CONFIG_DIR;
+  else if (!env.CLAUDE_CONFIG_DIR || path.resolve(env.CLAUDE_CONFIG_DIR) !== path.resolve(dir)) env.CLAUDE_CONFIG_DIR = path.resolve(dir);
   return env;
 }
 

@@ -689,6 +689,8 @@ export function selfCheck(run: ShellRunner = runShell): { ok: boolean; detail: s
     writeSelectedDir(tmpDir, 'unknown');
     const env = { ...process.env };
     delete env.CODEX_HOME;
+    // macOS: the editor's own login shell starts from launchd without ZDOTDIR and so reads ~/.zshenv first
+    if (isMac()) delete env.ZDOTDIR;
     const r = run(shell, ['-i', '-l', '-c', `printf '\\n${SELF_CHECK_MARK}%s\\n' "$CODEX_HOME"`], env);
     if (r.error) {
       const detail = isMac() ? t('codex.mac.shellFailed', { shell, error: r.error.message }) : t('codex.self.bashFailed', { error: r.error.message });

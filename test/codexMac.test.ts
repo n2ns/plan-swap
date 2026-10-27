@@ -17,7 +17,7 @@ import {
 } from '../src/codex/codexState';
 import { codexDaemonAlive, topLevelConfigString, type CodexAccount } from '../src/codex/codexPaths';
 import { codexAccountBusy } from '../src/codex/codexShare';
-import { findBundledCodex } from '../src/codex/codexUsage';
+import { findBundledCodex, readCodexUsage } from '../src/codex/codexUsage';
 import { codexPanelSource, manualRestartMessages, registerCodexCommands, restartInfo } from '../src/codex/codexCommands';
 import { detectServerKind } from '../src/codex/codexServer';
 import { CodexAccountStore } from '../src/codex/codexStore';
@@ -79,11 +79,16 @@ describe('login shell and block file', () => {
     for (const shell of ['/opt/homebrew/bin/fish', '/bin/sh', '/bin/tcsh', '', undefined]) assert.equal(macShellKind(shell), undefined);
   });
 
-  test('zsh: ~/.zshenv, or $ZDOTDIR/.zshenv when the environment sets ZDOTDIR', () => {
+  test('zsh: always ~/.zshenv, which the editor\'s login shell reads before any ZDOTDIR is set', () => {
     assertTempHome(home);
     assert.equal(macRcFile('zsh', {}), at('.zshenv'));
-    assert.equal(macRcFile('zsh', { ZDOTDIR: at('dots') }), path.join(home, 'dots', '.zshenv'));
+    // ~/.zshenv itself commonly sets ZDOTDIR; the host inherits it, but a Dock-started editor's shell never reads
+    // $ZDOTDIR/.zshenv
+    assert.equal(macRcFile('zsh', { ZDOTDIR: at('dots') }), at('.zshenv'));
     assert.deepEqual(macStartupFiles('zsh', {}), ['.zshenv', '.zprofile', '.zshrc', '.zlogin'].map(at));
+    // The pre-check also covers the files zsh reads from ZDOTDIR after ~/.zshenv set it
+    assert.deepEqual(macStartupFiles('zsh', { ZDOTDIR: at('dots') }),
+      [at('.zshenv'), ...['.zprofile', '.zshrc', '.zlogin'].map((name) => path.join(home, 'dots', name))]);
   });
 
   test('bash: the first existing login file, ~/.bash_profile when there is none', () => {
@@ -239,6 +244,9 @@ describe('selection and self-check on macOS', () => {
     assert.deepEqual(calls[0].args.slice(0, 3), ['-i', '-l', '-c']);
     assert.equal(calls[0].env.CODEX_HOME, undefined);
     assert.equal(read(STATE_FILE()), at('.codex-a'));
+    // Like a Dock-started editor, the shell starts without the host's ZDOTDIR, so it reads ~/.zshenv first
+    withEnv({ ZDOTDIR: at('dots') }, () => selfCheck(blockShell(calls)));
+    assert.equal(calls[1].env.ZDOTDIR, undefined);
     assert.deepEqual(fs.readdirSync(path.dirname(STATE_FILE())), ['codex-home'], 'scratch folder removed');
   });
 
@@ -381,6 +389,15 @@ describe('credential store note', () => {
     assert.equal(usesKeychainStore(account('k6')), false);
     assert.equal(usesKeychainStore(at('.codex-k1'), 'linux'), false);
     assert.equal(usesKeychainStore(at('.codex-k1'), 'win32'), false);
+  });
+
+  test('usage of a Keychain-store account never starts the CLI on macOS, even with a leftover auth.json', async () => {
+    const dir = account('kcu', 'cli_auth_credentials_store = "keyring"\n');
+    fs.writeFileSync(path.join(dir, 'auth.json'), '{}');
+    let spawned = 0;
+    const spawn = (() => { spawned++; throw new Error('not expected'); }) as never;
+    assert.deepEqual(await readCodexUsage(dir, { platform: 'darwin', spawn }), { ok: false, reason: 'noRateLimits' });
+    assert.equal(spawned, 0);
   });
 
   test('the panel row shows the note instead of sign-in, email and plan, and no usage', async () => {
