@@ -187,7 +187,8 @@ function planClass(plan: string | undefined, mode: PanelMode): string {
 }
 
 // API cards show configuration status independently of email visibility. Subscription rows without an email show
-// "Logged in" based on loggedIn; their identity line is hidden when email display is turned off.
+// "Logged in" based on loggedIn; their identity line is hidden when email display is turned off. A Codex row whose
+// sign-in is in the macOS Keychain shows the host's note instead (it names no identity, so it stays when emails hide).
 function loginStatus(a: AccountView, hideEmail?: boolean): HTMLElement | null {
   if (a.provider) {
     return h('div', { class: 'row-sub provider-details' },
@@ -197,6 +198,7 @@ function loginStatus(a: AccountView, hideEmail?: boolean): HTMLElement | null {
       h('div', { title: a.providerConfigured ? t('provider.configuredHint') : undefined }, t(a.providerConfigured ? 'provider.configured' : 'provider.incomplete')),
     );
   }
+  if (a.signInNote) return h('div', { class: 'row-sub sign-in-note' }, a.signInNote);
   if (hideEmail) return null;
   if (a.email) return h('div', { class: 'row-sub row-identity' }, h('span', { class: 'row-email' }, a.email));
   if (a.loggedIn) return h('div', { class: 'row-sub ok' }, t('account.loggedIn'));

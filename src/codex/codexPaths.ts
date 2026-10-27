@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { realPathInside, samePath, sameRealPath } from '../paths';
-import { isWindows, pidAlive, stripBom, unlinkLinks, isPlainObject } from '../platform';
+import { isMac, isWindows, lacksProcfs, pidAlive, stripBom, unlinkLinks, isPlainObject } from '../platform';
 import { t } from '../i18n';
 import { assertProviderFilesLocal, preserveProviderConfig } from './codexProvider';
 // Codex account directories, read-only account info from auth.json, the config.toml seed copy and deletion safety.
@@ -281,6 +281,43 @@ export function blockedConfigReason(text: string, roots: readonly string[] = COD
 }
 
 /**
+ * The value of a top-level single-line string key (`name = "value"` or `name = 'value'`, a trailing # comment allowed)
+ * in a config.toml text, scanned like blockedConfigReason (keys after a table header or inside a multi-line value are
+ * not top-level). undefined when the key is missing or holds anything else; the last assignment wins.
+ */
+export function topLevelConfigString(text: string, name: string): string | undefined {
+  let value: string | undefined;
+  const st: ValueState = { depth: 0 };
+  for (const raw of stripBom(text).split(/\r?\n/)) {
+    if (st.depth > 0 || st.ml) {
+      scanValue(raw, st);
+      continue;
+    }
+    const line = raw.trimStart();
+    if (line === '' || line.startsWith('#')) continue;
+    if (line.startsWith('[')) {
+      const header = parseTomlKey(line.slice(line.startsWith('[[') ? 2 : 1));
+      // Keys after any table header are not top-level
+      if (header && header.rest.startsWith(']')) break;
+      continue;
+    }
+    const key = parseTomlKey(line);
+    if (!key || !key.rest.startsWith('=')) continue;
+    if (key.segments.length === 1 && key.segments[0] === name) {
+      const match = /^("(?:[^"\\]|\\.)*"|'[^']*')[ \t]*(?:#.*)?$/.exec(key.rest.slice(1).trim());
+      value = undefined;
+      if (match) {
+        try {
+          value = match[1].startsWith('"') ? JSON.parse(match[1]) as string : match[1].slice(1, -1);
+        } catch { /* a TOML-only escape: not a value recognized here */ }
+      }
+    }
+    scanValue(key.rest.slice(1), st);
+  }
+  return value;
+}
+
+/**
  * Seed copy for a new independent account: only config.toml (the rest is copied by codexShare.copyCodexIndependent;
  * auth.json is never copied). Skipped, with a localized reason, when the source is missing or unreadable, the target
  * already exists, or blockedConfigReason finds a blocked key or table. Written with mode 0600 and flag 'wx'.
@@ -349,7 +386,27 @@ function toTicks(v: unknown): number | undefined {
   return undefined;
 }
 
+// macOS: the daemon's pid file format there is unverified, so an existing file counts as alive unless it names a pid
+// (a JSON object's pid, or a bare number) that is not alive: an unrecognized or unreadable file errs towards "busy"
+function macPidFileAlive(file: string): boolean {
+  let text: string;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code !== 'ENOENT';
+  }
+  let pid: unknown;
+  try {
+    const data: unknown = JSON.parse(text);
+    pid = isPlainObject(data) ? data.pid : data;
+  } catch {
+    pid = undefined;
+  }
+  return typeof pid === 'number' && Number.isInteger(pid) && pid > 0 ? pidAlive(pid) : true;
+}
+
 function pidFileAlive(file: string, procRoot: string): boolean {
+  if (isMac() && procRoot === '/proc') return macPidFileAlive(file);
   let data: unknown;
   try {
     data = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -360,7 +417,7 @@ function pidFileAlive(file: string, procRoot: string): boolean {
   const pid = data.pid;
   if (typeof pid !== 'number' || !Number.isInteger(pid) || pid <= 0) return false;
   // Windows: no start ticks to compare, so a live pid counts, with or without them
-  if (isWindows() && procRoot === '/proc') return pidAlive(pid);
+  if (lacksProcfs() && procRoot === '/proc') return pidAlive(pid);
   const identity = data.processIdentity;
   const ticks = toTicks(isPlainObject(identity) ? identity.startTicks : undefined) ?? toTicks(data.processStartTime);
   if (ticks === undefined) return false;
@@ -373,7 +430,9 @@ function pidFileAlive(file: string, procRoot: string): boolean {
  * Whether a Codex daemon owns dir: any of DAEMON_PID_FILES under <dir>/app-server-daemon/ whose JSON pid and start
  * ticks (processIdentity.startTicks, else processStartTime) match the start time in <procRoot>/<pid>/stat.
  * A missing file, unparsable JSON or a missing pid / start ticks → not alive. A valid pid file while procRoot itself
- * is missing → alive (cannot be ruled out). Windows with the default procRoot: a live pid alone counts.
+ * is missing → alive (cannot be ruled out). Windows with the default procRoot: a live pid alone counts. macOS with
+ * the default procRoot (pid file format unverified, so it errs towards alive): an existing file is alive unless the
+ * pid it names (JSON pid or a bare number) is not.
  * Depends on Codex's pid-file format; re-verify after Codex upgrades. procRoot is for tests.
  */
 export function codexDaemonAlive(dir: string, procRoot = '/proc'): boolean {

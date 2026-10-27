@@ -10,7 +10,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { t } from '../i18n';
 import { realPathInside, samePath, sameRealPath } from '../paths';
-import { comparablePath, fileLinksAvailable, isWindows } from '../platform';
+import { comparablePath, fileLinksAvailable, isWindows, lacksProcfs } from '../platform';
 import {
   type MergeCtx, type MigrateReport, type ShareReport, copyTree, defaultFolder, emptyReport, freeName, linkEntry, recordLink, type LinkOptions,
   finalizeMerge, linksTo, lstatOrUndefined, markElsewhere, mergeEntry, mergeLines, missingLinkResult, moveEntry, record, rememberMove, sameContent,
@@ -296,14 +296,14 @@ export function codexBusyText(dir: string, name: string): string {
 /** true when a Codex process uses this dir: codexDaemonAlive(dir), or a <procRoot>/<pid> whose exe basename is
  *  'codex' (a ' (deleted)' suffix ignored) and whose environ CODEX_HOME resolves to dir (for the default dir: unset,
  *  empty or ~/.codex). Environment alone never matches, since shells and MCP servers inherit CODEX_HOME.
- *  Unreadable /proc entries are skipped; an unreadable procRoot counts as busy. Windows with the default procRoot:
- *  codexDaemonAlive only (the host adds its own open-terminal check). procRoot is for tests. */
+ *  Unreadable /proc entries are skipped; an unreadable procRoot counts as busy. Windows and macOS with the default
+ *  procRoot: codexDaemonAlive only (the host adds its own open-terminal check). procRoot is for tests. */
 export function codexAccountBusy(dir: string, procRoot = '/proc'): boolean {
   if (codexDaemonAlive(path.resolve(dir))) return true;
-  // Windows cannot read another process's environment, and a codex.exe is nearly always running (the Codex extension's
-  // app server, which serves the effective account the callers already refuse); they also refuse while the account's
-  // own terminal is open
-  if (isWindows() && procRoot === '/proc') return false;
+  // Windows and macOS cannot read another process's environment, and a codex process is nearly always running (the
+  // Codex extension's app server, which serves the effective account the callers already refuse); they also refuse
+  // while the account's own terminal is open
+  if (lacksProcfs() && procRoot === '/proc') return false;
   let pids: string[];
   try {
     pids = fs.readdirSync(procRoot).filter((p) => /^\d+$/.test(p));
