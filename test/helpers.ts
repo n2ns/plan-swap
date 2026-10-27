@@ -68,6 +68,8 @@ function caseSensitiveTmp(): boolean {
 }
 /** Creates entries whose names differ only in case, which a case-insensitive file system (Windows, macOS default) folds together. */
 export const CASE_SENSITIVE_FS = { skip: !caseSensitiveTmp() && 'the file system is case-insensitive' };
+/** The ~/.profile / ~/.bashrc rc flow, which macOS replaces with the login shell's startup file (codexMac.test.ts). */
+export const RC_FILES = { skip: process.platform === 'darwin' && 'macOS writes the login shell startup file instead' };
 
 /** Asserts POSIX permission bits; Windows has none to check (mode() reads 666 / 444 there). */
 export function assertMode(f: string, expected: string, message?: string): void {

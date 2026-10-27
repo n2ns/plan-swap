@@ -16,7 +16,7 @@ import { readCodexUsage, type UsageChild, type UsageOptions } from '../src/codex
 import { FileMemento } from '../src/fileState';
 import { AccountStore } from '../src/accounts';
 import { CodexAccountStore } from '../src/codex/codexStore';
-import { LINUX_ONLY, MemoryMemento, assertTempHome, makeTempHome, read, type TempHome } from './helpers';
+import { LINUX_ONLY, MemoryMemento, RC_FILES, assertTempHome, makeTempHome, read, type TempHome } from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -148,7 +148,7 @@ describe('Windows enable / disable / switch', () => {
   });
 });
 
-describe('rcStatus with an unterminated block', () => {
+describe('rcStatus with an unterminated block', RC_FILES, () => {
   const bashrc = (): string => path.join(home, '.bashrc');
   const profile = (): string => path.join(home, '.profile');
   after(() => { fs.rmSync(bashrc(), { force: true }); fs.rmSync(profile(), { force: true }); });
@@ -168,7 +168,7 @@ describe('rcStatus with an unterminated block', () => {
   });
 });
 
-describe('atomic writers create their temp files exclusively', () => {
+describe('atomic writers create their temp files exclusively', RC_FILES, () => {
   test("state file, rc files and state.json open the temp file with 'wx'", async () => {
     const flags = new Map<string, unknown>();
     const realOpen = fsModule.openSync;

@@ -86,8 +86,10 @@ describe('local selection with manual restart', () => {
       for (const remoteName of [undefined, 'ssh-remote', 'dev-container']) {
         env.remoteName = remoteName;
         const expected = { context: remoteName === undefined ? 'local' : 'remote', auto: false };
-        // Native Windows also reports that the selection lives in the user environment, not in rc files
-        assert.deepEqual(restartInfo(), process.platform === 'win32' ? { ...expected, userEnv: true } : expected);
+        // Native Windows also reports that the selection lives in the user environment, macOS that it lives in the
+        // login shell's startup file, not in rc files
+        const platformFlag = process.platform === 'win32' ? { userEnv: true } : process.platform === 'darwin' ? { shellFile: true } : {};
+        assert.deepEqual(restartInfo(), { ...expected, ...platformFlag });
       }
     } finally {
       env.remoteName = undefined;

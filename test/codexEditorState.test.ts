@@ -11,7 +11,7 @@ import {
   removeLinuxState, removeRcBlocks, selfCheck, stateFileFor, upgradeRcBlocks, watchedStateFiles, writeSelectedDir,
   writeSelection,
 } from '../src/codex/codexState';
-import { LINUX_ONLY, assertTempHome, makeTempHome, read, type TempHome } from './helpers';
+import { LINUX_ONLY, RC_FILES, assertTempHome, makeTempHome, read, type TempHome } from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -227,7 +227,7 @@ const OLD_BLOCK = [
   '',
 ].join('\n');
 
-describe('upgradeRcBlocks', () => {
+describe('upgradeRcBlocks', RC_FILES, () => {
   afterEach(clean);
 
   test('replaces an older block in place in both files and leaves everything else as it was', () => {
