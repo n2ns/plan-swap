@@ -6,7 +6,8 @@ import { spawnSync } from 'node:child_process';
 import * as path from 'node:path';
 import { setLocale } from '../src/i18n';
 import {
-  comparablePath, createLink, isSupportedPlatform, parseStartTimes, pidAlive, renameReplacing, stripBom, windowsStartTimes,
+  comparablePath, createLink, darwinStartTimes, isSupportedPlatform, lacksProcfs, normalizeStartTime, parseDarwinStartTimes,
+  parseStartTimes, pidAlive, renameReplacing, stripBom, windowsStartTimes,
 } from '../src/platform';
 import { decodeEnvOutput, getUserCodexHome, getUserEnv, setUserCodexHome, setUserEnv } from '../src/codex/codexWindows';
 import { manualRestartMessages } from '../src/codex/codexCommands';
@@ -20,10 +21,11 @@ before(() => {
 after(() => tmp.restore());
 
 describe('platform', () => {
-  test('supported platforms are Linux and Windows only', () => {
+  test('supported platforms are Linux, Windows and macOS', () => {
     assert.equal(isSupportedPlatform('linux'), true);
     assert.equal(isSupportedPlatform('win32'), true);
-    assert.equal(isSupportedPlatform('darwin'), false);
+    assert.equal(isSupportedPlatform('darwin'), true);
+    assert.equal(isSupportedPlatform('freebsd'), false);
   });
 
   test('comparablePath ignores case only on Windows', () => {
@@ -87,6 +89,29 @@ describe('platform', () => {
     assert.match(script, /^Get-Process -Id 12,34 /);
     assert.deepEqual([...(windowsStartTimes([], () => { throw new Error('not called'); }) ?? [])], []);
     assert.equal(windowsStartTimes([5], () => { throw new Error('no powershell'); }), undefined);
+  });
+
+  test('macOS start-time probe: lstart lines, collapsed whitespace, validated pids and failure', () => {
+    assert.deepEqual(
+      [...parseDarwinStartTimes('  401 Mon Oct  5 20:00:10 2026\n\nnoise\n7 Tue Oct 27 03:00:10 2026\n')],
+      [[401, 'Mon Oct 5 20:00:10 2026'], [7, 'Tue Oct 27 03:00:10 2026']],
+    );
+    assert.equal(normalizeStartTime(' Mon  Oct 5 20:00:10 2026 '), 'Mon Oct 5 20:00:10 2026');
+    let args: string[] = [];
+    const times = darwinStartTimes([12, -1, 1.5, 34], (a) => {
+      args = a;
+      return '   12 Mon Oct 26 20:00:10 2026\n';
+    });
+    assert.deepEqual([...(times ?? [])], [[12, 'Mon Oct 26 20:00:10 2026']]);
+    assert.deepEqual(args, ['-o', 'pid=,lstart=', '-p', '12,34']);
+    assert.deepEqual([...(darwinStartTimes([], () => { throw new Error('not called'); }) ?? [])], []);
+    assert.equal(darwinStartTimes([5], () => { throw new Error('no ps'); }), undefined);
+  });
+
+  test('Windows and macOS lack /proc', () => {
+    assert.equal(lacksProcfs('win32'), true);
+    assert.equal(lacksProcfs('darwin'), true);
+    assert.equal(lacksProcfs('linux'), false);
   });
 });
 

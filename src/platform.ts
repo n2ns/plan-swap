@@ -13,10 +13,17 @@ export class LinkPrivilegeError extends Error {}
 export class JunctionError extends Error {}
 
 export const isWindows = (): boolean => process.platform === 'win32';
+export const isMac = (): boolean => process.platform === 'darwin';
 
-/** Whether the host OS is supported: Linux/WSL as before, plus native Windows. */
+/** Whether the host OS is supported: Linux/WSL as before, plus native Windows and macOS. */
 export function isSupportedPlatform(platform: string = process.platform): boolean {
-  return platform === 'linux' || platform === 'win32';
+  return platform === 'linux' || platform === 'win32' || platform === 'darwin';
+}
+
+/** Windows and macOS have no /proc: another process's environment cannot be read, so busy checks rely on session
+ *  records, process start times and the account terminals PlanSwap opened itself. */
+export function lacksProcfs(platform: string = process.platform): boolean {
+  return platform === 'win32' || platform === 'darwin';
 }
 
 /** path.resolve, lower-cased on Windows where paths are case-insensitive (only for comparison, never for display). */
@@ -103,7 +110,8 @@ export function pidAlive(pid: number): boolean {
   }
 }
 
-/** Start times of live processes by pid (Windows FILETIME ticks as decimal strings); undefined when the probe fails. */
+/** Start times of live processes by pid, in the format Claude Code records as `procStart` (Windows: FILETIME ticks as
+ *  decimal strings; macOS: `ps` lstart in the C locale and UTC, whitespace collapsed); undefined when the probe fails. */
 export type StartTimeProbe = (pids: number[]) => Map<number, string> | undefined;
 
 /** Parses `<pid> <filetime>` lines (the output of windowsStartTimes' PowerShell probe). */
@@ -137,6 +145,49 @@ export function windowsStartTimes(pids: number[], run: (script: string) => strin
 function defaultPowerShell(script: string): string {
   return execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', timeout: 8000, windowsHide: true });
 }
+
+/** A start time with its whitespace collapsed: `ps` pads a one-digit day ("Oct  5"), a recorded value may not. */
+export const normalizeStartTime = (s: string): string => s.trim().replace(/\s+/g, ' ');
+
+/** Parses `<pid> <lstart>` lines (the output of darwinStartTimes' `ps` call). */
+export function parseDarwinStartTimes(out: string): Map<number, string> {
+  const times = new Map<number, string>();
+  for (const line of out.split(/\r?\n/)) {
+    const m = /^\s*(\d+)\s+(\S.*)$/.exec(line);
+    if (m) times.set(Number(m[1]), normalizeStartTime(m[2]));
+  }
+  return times;
+}
+
+/**
+ * macOS: the start times of the given processes from one `ps -o pid=,lstart=` call run with `LC_ALL=C TZ=UTC`, which
+ * matches the `procStart` Claude Code records in its session files (e.g. `Mon Oct 26 20:00:10 2026`). Exited pids are
+ * absent (ps then exits non-zero, which is not a failure). Pids that are not positive integers are dropped; with none
+ * left the result is an empty map without running ps. Undefined when the probe fails (`run` throws without output).
+ */
+export function darwinStartTimes(pids: number[], run: (args: string[]) => string = defaultPs): Map<number, string> | undefined {
+  const ids = pids.filter((p) => Number.isInteger(p) && p > 0);
+  if (ids.length === 0) return new Map();
+  try {
+    return parseDarwinStartTimes(run(['-o', 'pid=,lstart=', '-p', ids.join(',')]));
+  } catch {
+    return undefined;
+  }
+}
+
+function defaultPs(args: string[]): string {
+  try {
+    return execFileSync('ps', args, { encoding: 'utf8', timeout: 8000, env: { ...process.env, LC_ALL: 'C', TZ: 'UTC' } });
+  } catch (e) {
+    // ps exits 1 when some pid is gone; the lines of the live ones are still on stdout
+    const { status, stdout } = e as { status?: number; stdout?: string };
+    if (status === 1 && typeof stdout === 'string') return stdout;
+    throw e;
+  }
+}
+
+/** The start-time probe of this platform (Windows or macOS; the Linux checks read /proc instead). */
+export const platformStartTimes: StartTimeProbe = (pids) => (isMac() ? darwinStartTimes(pids) : windowsStartTimes(pids));
 
 /**
  * Windows only: removes the links (symlinks, junctions and opaque reparse folders) anywhere inside `dir`, walking the

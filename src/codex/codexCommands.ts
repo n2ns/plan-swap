@@ -39,7 +39,7 @@ import {
   watchedStateFiles,
   writeSelection,
 } from './codexState';
-import { isWindows, tildify, errText } from '../platform';
+import { isWindows, lacksProcfs, tildify, errText } from '../platform';
 import { askCopyFallback } from '../linkPolicy';
 import { type ServerKind, canAutoRestart, detectServerKind, executeRestart, planRestart } from './codexServer';
 import type { CodexAccountStore } from './codexStore';
@@ -337,9 +337,9 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
   // alias) as in use
   const effectiveAlias = (a: CodexAccount): boolean => isEffective(a) || sameRealPath(a.dir, effectiveDir());
   const selectedAlias = (a: CodexAccount): boolean => isSelected(a) || sameRealPath(a.dir, readSelectedDir() ?? codexDefaultDir());
-  // Windows cannot attribute a running codex.exe to an account (see codexAccountBusy), so an open terminal of the
-  // account also counts; on Linux the /proc check covers terminals
-  const terminalOpen: TerminalCheck = (dir) => isWindows() && [...terminals.values()].some((x) => samePath(x.dir, dir));
+  // Windows and macOS cannot attribute a running codex process to an account (see codexAccountBusy), so an open
+  // terminal of the account also counts; on Linux the /proc check covers terminals
+  const terminalOpen: TerminalCheck = (dir) => lacksProcfs() && [...terminals.values()].some((x) => samePath(x.dir, dir));
   deps.provideTerminalCheck?.(terminalOpen);
   const busy = (a: CodexAccount): boolean => codexAccountBusy(a.dir) || terminalOpen(a.dir);
   // Passed to the linking steps, which OR it with their own process check

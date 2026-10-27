@@ -46,7 +46,7 @@ import type { ApiCardInput, FromWebview } from './protocol';
 import type { CodexAccountStore } from './codex/codexStore';
 import { syncClaudeInto, runTool, type TerminalCheck, type ToolDeps } from './tools';
 import { joinSentences, t } from './i18n';
-import { isWindows, errText } from './platform';
+import { isWindows, lacksProcfs, errText } from './platform';
 import { askCopyFallback } from './linkPolicy';
 import { parseAccountUri } from './accountUri';
 import { accountTerminalShell, bundledPathAssignment, hasControlChars, shQuote, windowsAccountEnv, windowsTerminalEnvSetting } from './terminalShell';
@@ -136,9 +136,9 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
   const inUse = (a: Account): boolean => isCurrent(a) || sameRealPath(a.dir, currentDir());
   // Display name: the alias if set, otherwise the name
   const labelOf = (a: Account): string => labelFor(a.name, labels);
-  // Windows cannot attribute a running Claude process to an account (see windowsSessionsBusy), so an open terminal of
-  // the account also counts; on Linux the /proc check covers terminals
-  const terminalOpen: TerminalCheck = (dir) => isWindows() && [...terminals.values()].some((x) => samePath(x.dir, dir));
+  // Windows and macOS cannot attribute a running Claude process to an account (see windowsSessionsBusy), so an open
+  // terminal of the account also counts; on Linux the /proc check covers terminals
+  const terminalOpen: TerminalCheck = (dir) => lacksProcfs() && [...terminals.values()].some((x) => samePath(x.dir, dir));
   deps.provideTerminalCheck?.(terminalOpen);
   const busy = (a: Account): boolean => claudeAccountBusy(a.dir, procRoot) || terminalOpen(a.dir);
   // Passed to the linking steps, which OR it with their own process check

@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { t } from './i18n';
-import { comparablePath, isWindows, renameReplacing, stripBom, unlinkLinks, isPlainObject, withLockDir } from './platform';
+import { comparablePath, isMac, isWindows, renameReplacing, stripBom, unlinkLinks, isPlainObject, withLockDir } from './platform';
 import { hasClaudeProviderMarker } from './claudeProvider';
 
 export const DEFAULT_NAME = 'default';
@@ -71,10 +71,11 @@ export function samePath(a: string, b: string): boolean {
 /**
  * Real path after resolving links; path.resolve when the path does not exist. On Windows the native call is used: the
  * JS implementation keeps 8.3 short names (C:\Users\JOHNSM~1), a '\\?\' prefix and the case given, so another spelling
- * of the same folder would compare unequal. Linux keeps the JS implementation (same result as realpath(3)).
+ * of the same folder would compare unequal. macOS uses it too: its default volume is case-insensitive and the native call
+ * returns the stored case. Linux keeps the JS implementation (same result as realpath(3)).
  */
 export function realPath(p: string): string {
-  if (isWindows()) {
+  if (isWindows() || isMac()) {
     try {
       return fs.realpathSync.native(p);
     } catch {
