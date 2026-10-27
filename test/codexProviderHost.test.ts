@@ -11,6 +11,7 @@ import { installRcBlocks, readSelectedDir } from '../src/codex/codexState';
 import { LabelStore } from '../src/labels';
 import { ModelCache } from '../src/codex/modelCache';
 import type { FromWebview, ToWebview } from '../src/protocol';
+import { t } from '../src/i18n';
 import { LINUX_ONLY, makeTempHome, MemoryMemento } from './helpers';
 import { env, window } from './stubs/vscode';
 
@@ -197,22 +198,34 @@ test('provider homes with auth files bypass subscription reads, cached quota and
   } finally { tmp.restore(); }
 });
 
-test('a saved key is only sent to its own card endpoint; a new endpoint needs the key typed again', async (ctx) => {
+test('a saved key stays with its card\'s service; a changed endpoint keeps it unless a new key is typed', async (ctx) => {
   const h = harness();
   const calls = mockFetch(ctx, () => new Response(JSON.stringify({ data: [{ id: 'm' }] })));
   try {
     await h.handle({ type: 'add', mode: 'codex', name: 'own', shared: false, provider: { service: 'custom', baseUrl: 'https://own.example.test/v1', key: 'sk-own-saved', model: 'm' } });
     const dir = path.join(h.home, '.codex-own');
-    for (const other of [{ service: 'custom', baseUrl: 'https://elsewhere.example.test/v1' }, { service: 'openrouter' }]) {
-      await h.handle({ type: 'providerModels', mode: 'codex', request: 9, key: '', dir, ...other });
-      assert.ok((h.messages.at(-1) as { error?: string }).error, JSON.stringify(other));
-    }
+    // Another service never gets the saved key
+    await h.handle({ type: 'providerModels', mode: 'codex', request: 9, key: '', dir, service: 'openrouter' });
+    assert.equal((h.messages.at(-1) as { error?: string }).error, t('codex.provider.newServiceNeedsKey'));
     assert.equal(calls.length, 0, 'the saved key went nowhere');
+    // A changed endpoint is the user's choice: the list loads there with the saved key
+    await h.handle({ type: 'providerModels', mode: 'codex', request: 10, key: '', dir, service: 'custom', baseUrl: 'https://elsewhere.example.test/v1' });
+    assert.deepEqual((h.messages.at(-1) as { models?: string[] }).models, ['m']);
+    assert.equal(calls.at(-1)?.url, 'https://elsewhere.example.test/v1/models');
+    assert.equal((calls.at(-1)?.init?.headers as Record<string, string>).Authorization, 'Bearer sk-own-saved');
+    // and saving keeps the saved key at the new endpoint
     await h.handle({ type: 'saveProvider', mode: 'codex', dir, model: 'm', key: '', baseUrl: 'https://elsewhere.example.test/v1' });
-    assert.ok((h.messages.at(-1) as { error?: string }).error);
-    assert.match(fs.readFileSync(path.join(dir, 'config.toml'), 'utf8'), /own\.example\.test/);
-    await h.handle({ type: 'saveProvider', mode: 'codex', dir, model: 'm', key: 'sk-new', baseUrl: 'https://elsewhere.example.test/v1' });
-    assert.equal((h.messages.at(-1) as { error?: string }).error, undefined, 'with the key typed again the endpoint changes');
+    assert.equal((h.messages.at(-1) as { error?: string }).error, undefined);
+    let config = fs.readFileSync(path.join(dir, 'config.toml'), 'utf8');
+    assert.match(config, /elsewhere\.example\.test/);
+    assert.match(config, /sk-own-saved/);
+    // A typed key replaces it
+    await h.handle({ type: 'saveProvider', mode: 'codex', dir, model: 'm', key: 'sk-new', baseUrl: 'https://other.example.test/v1' });
+    assert.equal((h.messages.at(-1) as { error?: string }).error, undefined);
+    config = fs.readFileSync(path.join(dir, 'config.toml'), 'utf8');
+    assert.match(config, /sk-new/);
+    assert.doesNotMatch(config, /sk-own-saved/);
+    assert.doesNotMatch(JSON.stringify(h.messages), /sk-own-saved|sk-new/);
   } finally { h.close(); }
 });
 

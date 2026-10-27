@@ -338,7 +338,7 @@ let lastModelRequest = 0;
 /**
  * The API card fields of the add form (service list) and of a card's edit area (fixed service), for the Codex and the
  * Claude tab: the endpoint (custom service; editable for any card except a Codex DeepSeek one), the key (a password field;
- * when editing, empty keeps the saved key) and the model, chosen from the list the host loads from the endpoint
+ * when editing, empty keeps the saved key, also for a changed endpoint, which keyNotice points out) and the model, chosen from the list the host loads from the endpoint
  * (DeepSeek: its catalog models), or typed only after
  * that load failed (an endpoint without a usable /models). Created once per
  * form so typed values survive re-renders. The key leaves the page only in the messages that need it and is cleared
@@ -352,6 +352,8 @@ class ApiFields {
   private readonly model = h('vscode-single-select', { class: 'api-model' }) as Select;
   private readonly load = h('vscode-button', { secondary: true, icon: 'refresh', class: 'api-load' }) as HTMLElement & { disabled: boolean };
   private readonly status = h('div', { class: 'api-status', role: 'status' });
+  // Editing: a reminder, not a refusal, that an empty key field sends the saved key to a changed endpoint
+  private readonly keyNotice = h('div', { class: 'api-key-notice', role: 'status' });
   private services: ApiServiceView[] = [];
   private request = 0;
   private loading = false;
@@ -409,7 +411,7 @@ class ApiFields {
       this.onChange();
     });
     onClick(this.load, () => this.loadModels());
-    this.root.append(...(editing ? [] : [this.service]), this.url, this.key, h('div', { class: 'api-model-row' }, this.model, this.load), this.status);
+    this.root.append(...(editing ? [] : [this.service]), this.url, this.key, this.keyNotice, h('div', { class: 'api-model-row' }, this.model, this.load), this.status);
     this.applyLocale();
   }
 
@@ -493,6 +495,9 @@ class ApiFields {
     this.key.setAttribute('placeholder', t(this.editing ? (this.editing.hasKey ? 'api.keyKeep' : 'api.keyOptional') : required ? 'api.key' : 'api.keyOptional'));
     this.key.setAttribute('aria-label', t('api.key'));
     this.load.disabled = this.loading || (!this.url.hidden && !this.url.value.trim());
+    const url = this.url.value.trim();
+    const keyMoves = !!this.editing?.hasKey && !this.url.hidden && !!url && url !== this.editing.baseUrl && !this.key.value.trim();
+    this.keyNotice.textContent = keyMoves ? t('api.keyNewEndpoint') : '';
   }
 
   // Whether a load can be asked for now: DeepSeek on its fixed endpoint always (its catalog), else a complete endpoint

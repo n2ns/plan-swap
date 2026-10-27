@@ -178,8 +178,8 @@ export function readClaudeProviderInfo(dir: string): ClaudeProviderInfo | undefi
   }
 }
 
-/** The saved key of a valid card ('' without one or with the placeholder), for the host's model-list request to that
- *  card's own endpoint only. */
+/** The saved key of a valid card ('' without one or with the placeholder), for the host's model-list request of that
+ *  card's own service, at the endpoint its edit form names. */
 export function readClaudeProviderKey(dir: string): string {
   return snapshot(dir, false).config.key;
 }

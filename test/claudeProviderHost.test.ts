@@ -233,9 +233,11 @@ test('editing keeps the saved key; an ordinary account cannot be edited as a car
     assert.equal(settingsOf(dir).env.ANTHROPIC_AUTH_TOKEN, 'saved-key');
     assert.equal(settingsOf(dir).env.ANTHROPIC_MODEL, 'm2');
     assert.equal(h.row('gw')?.providerModel, 'm2');
-    // Another endpoint with the saved key is refused
+    // Another endpoint keeps the saved key: the user decides, the form only reminds
     await h.handle({ type: 'saveProvider', mode: 'claude', dir, model: 'm2', baseUrl: 'https://other.example.test', key: '' });
-    assert.equal(h.last().error, t('codex.provider.newEndpointNeedsKey'));
+    assert.equal(h.last().error, undefined);
+    assert.equal(settingsOf(dir).env.ANTHROPIC_BASE_URL, 'https://other.example.test');
+    assert.equal(settingsOf(dir).env.ANTHROPIC_AUTH_TOKEN, 'saved-key');
     // An unmarked account
     fs.mkdirSync(h.dir('plain'));
     await h.store.add({ name: 'plain', dir: h.dir('plain') });
@@ -274,12 +276,14 @@ test('model lists: DeepSeek fixed; others through claudeModelsUrl with the typed
     const dir = h.dir('gw');
     await h.handle({ type: 'providerModels', mode: 'claude', request: 4, service: 'custom', baseUrl: 'https://gw.example.test/anthropic', key: '', dir });
     assert.equal((calls.at(-1)?.init?.headers as Record<string, string>).Authorization, 'Bearer saved-key');
+    // A changed endpoint gets the saved key (the edit form reminds the user); another service never does
+    await h.handle({ type: 'providerModels', mode: 'claude', request: 5, service: 'custom', baseUrl: 'https://other.example.test/anthropic', key: '', dir });
+    assert.equal(calls.at(-1)?.url, 'https://other.example.test/anthropic/v1/models');
+    assert.equal((calls.at(-1)?.init?.headers as Record<string, string>).Authorization, 'Bearer saved-key');
     const before = calls.length;
-    await h.handle({ type: 'providerModels', mode: 'claude', request: 5, service: 'custom', baseUrl: 'https://evil.example.test', key: '', dir });
-    assert.equal(h.last().error, t('codex.provider.newEndpointNeedsKey'));
     await h.handle({ type: 'providerModels', mode: 'claude', request: 6, service: 'kimi', key: '', dir });
-    assert.equal(h.last().error, t('codex.provider.newEndpointNeedsKey'));
-    assert.equal(calls.length, before, 'the saved key never goes to another endpoint or service');
+    assert.equal(h.last().error, t('codex.provider.newServiceNeedsKey'));
+    assert.equal(calls.length, before, 'the saved key never goes to another service');
     answer.current = () => new Response('secret body', { status: 401 });
     await h.handle({ type: 'providerModels', mode: 'claude', request: 7, service: 'custom', baseUrl: 'https://gw.example.test/anthropic', key: 'k' });
     assert.match(h.last().error ?? '', /HTTP 401/);

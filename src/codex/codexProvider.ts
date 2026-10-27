@@ -455,7 +455,8 @@ export function readProviderInfo(dir: string): ProviderInfo | undefined {
   }
 }
 
-/** The saved key of a valid card, for the host's model-list request to that card's endpoint only ('' without one). */
+/** The saved key of a valid card ('' without one), for the host's model-list request of that card's own service, at the
+ *  endpoint its edit form names. */
 export function readProviderKey(dir: string): string {
   return snapshot(dir, false).config.key;
 }

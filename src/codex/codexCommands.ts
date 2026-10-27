@@ -575,13 +575,13 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     try {
       baseUrl = checkBaseUrl(msg.baseUrl?.trim() || SERVICE_INFO[msg.service].baseUrl);
       if (!key && msg.dir) {
-        // A saved key goes only to its own card's service and endpoint; another one needs the key typed again.
-        // A card without a saved key has nothing to protect: the new endpoint is asked without a key
+        // A saved key goes only to its own card's service. A changed endpoint is the user's choice: it gets the saved
+        // key, and the edit form says so. A card without a saved key asks the endpoint without one
         const card = panel.resolve(MODE, msg.dir);
         if (card?.kind === 'named' && preserveProviderConfig(card.dir)) {
           const saved = readProviderEditState(card.dir);
           if (saved.hasKey) {
-            if (saved.service !== msg.service || saved.baseUrl !== baseUrl) return { error: t('codex.provider.newEndpointNeedsKey') };
+            if (saved.service !== msg.service) return { error: t('codex.provider.newServiceNeedsKey') };
             key = readProviderKey(card.dir);
           }
         }
@@ -609,10 +609,6 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       const before = readProviderEditState(account.dir);
       const registered = store.find(account.name);
       if (!registered || !samePath(registered.dir, account.dir)) return providerErrorText('changed');
-      // Moving the saved key to another endpoint needs it typed again, as for the model list
-      if (before.service !== 'deepseek' && !msg.key.trim() && before.hasKey && msg.baseUrl !== undefined && msg.baseUrl.trim() !== before.baseUrl) {
-        return t('codex.provider.newEndpointNeedsKey');
-      }
       editProviderConfig(account.dir, { model: msg.model.trim(), key: msg.key.trim(), baseUrl: before.service === 'deepseek' ? undefined : msg.baseUrl?.trim() }, before.revision);
       return undefined;
     } catch (err) {
