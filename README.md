@@ -39,6 +39,7 @@ See how much is left on each Claude Code and Codex subscription account you own 
 - **Your own order**: drag the cards into the order you want (the current account stays first); it is kept for every editor on the same machine or WSL distribution.
 - **Stay signed in everywhere**: sign in once per account, then switch with one click.
 - **Linked or independent accounts**: share the default account's setup and history, or keep them separate.
+- **API cards**: run Claude Code or Codex against another AI service, such as DeepSeek, Kimi, OpenRouter or Ollama, set up entirely in the sidebar and switched like any account ([Claude](docs/user-guide.md#use-a-claude-api-card), [Codex](docs/user-guide.md#use-an-api-card)).
 - **Tools**: open your rules file and the official extension's settings, update the CLI, check linked accounts and repair their links.
 - **Six languages**: English, Simplified Chinese, Traditional Chinese, Spanish, Japanese and Korean.
 
