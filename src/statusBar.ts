@@ -9,6 +9,7 @@ import { getLocale, LOCALE_INFO, t, type MessageKey } from './i18n';
 import type { CodexAccountStore } from './codex/codexStore';
 import { codexDefaultDir, readCodexAccountInfo } from './codex/codexPaths';
 import { providerLabel, readProviderInfo } from './codex/codexProvider';
+import { claudeProviderLabel, readClaudeProviderInfo } from './claudeProvider';
 import { effectiveDir, isEnabled, readSelectedDir } from './codex/codexState';
 import { codexRunsInWsl } from './codex/codexSettings';
 import type { CodexUsageState } from './codex/codexUsageMonitor';
@@ -375,7 +376,7 @@ function candidatesOf(windows: ReadonlyArray<UsageWindow | ClaudeUsageWindow>): 
  * general windows of both products (never model-specific ones).
  *
  * Tooltip: one usageTable with one block per vendor, each headed by its product name between rules. Identity is the email
- * unless planswap.sidebar.showEmail is off;
+ * unless planswap.sidebar.showEmail is off; a current Claude API card shows "<label> (<service label>)", no plan and no usage;
  * with email hidden or absent, a Codex API key account shows
  * "API key" (and no plan), another signed-in account its label, a signed-out one "Not logged in". Codex notes in order:
  * the pending selection (only while switching is enabled and the selected and effective directories differ; an
@@ -441,7 +442,9 @@ export class StatusBar implements vscode.Disposable {
     if (hasClaude) {
       const account = sameDirAccount(this.store.all(), dir);
       const label = labelFor(account ? account.name : EXTERNAL_NAME, this.labels);
-      const info = readAccountInfo(dir, explicit);
+      // An API card shows its label and service instead of a sign-in, and no usage (its info file is not read)
+      const card = readClaudeProviderInfo(dir);
+      const info = card ? { loggedIn: false } as ReturnType<typeof readAccountInfo> : readAccountInfo(dir, explicit);
       // Usage limits exist only for a subscription sign-in (oauthAccount); signed-out accounts show none
       const showUsage = info.identity !== undefined;
       const usage = showUsage && !this.claudeSubscriptionUnavailable(dir) ? readClaudeUsage(dir, explicit) : undefined;
@@ -449,7 +452,8 @@ export class StatusBar implements vscode.Disposable {
       if (usage) candidates.push(...candidatesOf(usage.windows));
       blocks.push({
         product: 'Claude',
-        identity: (showEmail ? info.email : undefined) ?? (info.loggedIn ? label : t('common.notLoggedIn')),
+        identity: card ? `${label} (${claudeProviderLabel(card.provider, t('claude.provider.customLabel'))})`
+          : (showEmail ? info.email : undefined) ?? (info.loggedIn ? label : t('common.notLoggedIn')),
         plan: info.plan,
         refresh: showUsage && this.claudeUsage !== undefined ? CLAUDE_REFRESH_USAGE_COMMAND : undefined,
         usage: showUsage ? claudeUsageParts(usage, this.claudeUsage, dir, now, display) : { rows: [], notes: [] },

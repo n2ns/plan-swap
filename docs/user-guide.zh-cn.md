@@ -14,6 +14,7 @@ PlanSwap 让你同时保持多个 Claude Code 和 Codex 账号的登录状态，
 - [切换 Claude 账号](#切换-claude-账号)
 - [启用并切换 Codex 账号](#启用并切换-codex-账号)
 - [使用 API 卡片](#使用-api-卡片)
+- [使用 Claude API 卡片](#使用-claude-api-卡片)
 - [选择链接账号或独立账号](#选择链接账号或独立账号)
 - [查看和刷新用量额度](#查看和刷新用量额度)
 - [重命名或删除账号](#重命名或删除账号)
@@ -169,6 +170,25 @@ API 卡片让官方 Codex 扩展和 CLI 改用其他 AI 服务，而不是 ChatG
 Key 明文保存在该卡片自己的 `config.toml` 中，不进入侧边栏或 PlanSwap 状态文件，只发送给该卡片的地址。即使采用链接模式，provider 配置、Key 和模型目录也保持独立。只会从默认配置复制一次支持的标量审批和沙箱设置；不导入 MCP 定义和项目信任设置，之后默认配置的修改也不会同步。其他允许的指令、技能和历史记录按所选共享模式处理。共享历史记录不一定能跨服务商继续；用 API 服务继续会话可能将相关上下文发送给该服务。参见[隐私](privacy.md)。
 
 同一 WSL 发行版中同一编辑器的窗口共享 Codex 选择；这些卡片不会为每个项目窗口隔离后端。VS Code 和 VSCodium 仍各自保留选择。原生 Windows 仍需完全重启编辑器。仍待完成的真实客户端验收列在 [TODO](../TODO.md) 中。
+
+## 使用 Claude API 卡片
+
+Claude API 卡片让官方 Claude Code 扩展和 CLI 改用其他 AI 服务，而不是 Claude 登录：DeepSeek、Kimi、OpenRouter、Z.ai、本机上的 Ollama，或者任何提供 Anthropic Messages API 的自定义地址，例如 LiteLLM 网关。该服务必须提供兼容 Anthropic 的接口；只提供 OpenAI API 的服务不能直接使用。
+
+在 Claude 添加表单中选择 **API 服务**，输入新账号名称并选择链接或独立模式。所有操作都在侧边栏完成：
+
+1. 在列表中选择服务。选择 **自定义地址** 时，输入 Claude Code 用来替代 Anthropic 地址的地址，例如 `https://gateway.example.com`（Claude Code 会自行加上 `/v1/messages`）。地址必须以 `https://` 开头；`http://` 只允许本机（`localhost`）。
+2. 在 Key 输入框中输入 API Key（显示为圆点）。DeepSeek、Kimi、OpenRouter 和 Z.ai 必须填写；Ollama 和自定义地址在不需要 Key 时可以留空。
+3. 选择模型。DeepSeek 会立即列出它的两个模型，OpenRouter 和 Ollama（正在运行时）也会立即列出，编辑器启动后 PlanSwap 会在后台更新它们的列表。Kimi 和 Z.ai 的列表在你停止输入 Key 后加载，并保存供下次使用；自定义地址在你停止输入地址或 Key 后加载。获取失败时，下方会显示原因；修正后列表会重新加载，也可以点 **获取模型** 重试。如果接口不提供模型列表，这时也可以在列表里直接输入模型 ID，再选择 `Add "…"` 那一项。
+4. 点击对号（**添加**）。要取消，点 **×** 关闭表单。
+
+此操作需要新目录；已有的 Claude 账号不会被转换。不需要 Claude 订阅。
+
+卡片显示服务、模型、地址主机以及配置是否完整。这只是本地配置检查，不是连接测试。点击 **编辑 API 配置**（齿轮）可以更改地址、输入新的 Key（留空则保留已保存的 Key）或选择其他模型，然后点击 **保存**。更换地址时需要重新输入 Key：已保存的 Key 只会发送给原来的地址。编辑时会保留 Claude Code 自己写入卡片 `settings.json` 的设置。
+
+像切换任何 Claude 账号一样切换到该卡片，然后重新加载窗口：之后新的 Claude 会话会使用该服务和模型，不会出现登录界面，卡片的终端也是如此。Claude Code 的所有模型选择都使用这个模型，包括后台任务和子代理。创建或编辑卡片不会切换账号。要重新使用 Claude，请切换回订阅账号。Claude API 卡片没有用量条、用量刷新或推荐；该卡片为当前账号时，需要 claude.ai 账号的功能（例如语音听写）不可用。
+
+Key 明文保存在该卡片自己的 `settings.json` 中（作为 `ANTHROPIC_AUTH_TOKEN`），不进入编辑器设置或 PlanSwap 状态文件，只发送给该卡片的地址。即使采用链接模式，卡片的 `settings.json` 也是它自己的，之后对默认 Claude Code 设置的修改不会同步到卡片；其他链接的内容（历史记录、指令、技能）按所选模式处理。在卡片上继续一个链接的对话，会把该对话发送给卡片的服务。Anthropic 不支持 Claude Code 搭配非 Claude 模型使用，因此部分功能可能无法在所有服务上正常工作。参见[隐私](privacy.md)。
 
 ## 选择链接账号或独立账号
 

@@ -14,6 +14,7 @@ PlanSwap 讓你同時保持多個 Claude Code 和 Codex 帳號的登入狀態，
 - [切換 Claude 帳號](#切換-claude-帳號)
 - [啟用並切換 Codex 帳號](#啟用並切換-codex-帳號)
 - [使用 API 卡片](#使用-api-卡片)
+- [使用 Claude API 卡片](#使用-claude-api-卡片)
 - [選擇已連結帳號或獨立帳號](#選擇已連結帳號或獨立帳號)
 - [查看和重新整理用量額度](#查看和重新整理用量額度)
 - [重新命名或移除帳號](#重新命名或移除帳號)
@@ -169,6 +170,25 @@ API 卡片讓官方 Codex 擴充功能和 CLI 改用其他 AI 服務，而不是
 Key 以明文儲存在該卡片自己的 `config.toml`，不會傳至側邊欄或 PlanSwap 狀態檔，只會傳送給該卡片的位址。即使採用連結模式，provider 設定、Key 和模型目錄也保持獨立。只會從預設設定複製一次支援的純量核准與沙箱設定；不匯入 MCP 定義和專案信任設定，之後預設設定的變更也不會同步。其他允許的指令、技能和歷史記錄依所選共用模式處理。共用歷史記錄不一定能跨服務繼續；以 API 服務繼續工作階段可能將相關上下文傳送給該服務。請參閱[隱私](privacy.md)。
 
 同一 WSL 發行版本中同一編輯器的視窗共用 Codex 選擇；這些卡片不會為每個專案視窗隔離後端。VS Code 和 VSCodium 仍各自保留選擇。原生 Windows 仍需完全重新啟動編輯器。仍待完成的真實用戶端驗收列在 [TODO](../TODO.md) 中。
+
+## 使用 Claude API 卡片
+
+Claude API 卡片讓官方 Claude Code 擴充功能和 CLI 改用其他 AI 服務，而不是 Claude 登入：DeepSeek、Kimi、OpenRouter、Z.ai、本機上的 Ollama，或任何提供 Anthropic Messages API 的自訂位址，例如 LiteLLM 閘道。該服務必須提供相容 Anthropic 的端點；只提供 OpenAI API 的服務無法直接使用。
+
+在 Claude 新增表單中選擇 **API 服務**，輸入新帳號名稱並選擇連結或獨立模式。所有操作都在側邊欄完成：
+
+1. 在清單中選擇服務。選擇 **自訂位址** 時，輸入 Claude Code 用來取代 Anthropic 位址的位址，例如 `https://gateway.example.com`（Claude Code 會自行加上 `/v1/messages`）。位址必須以 `https://` 開頭；`http://` 只允許本機（`localhost`）。
+2. 在 Key 輸入框中輸入 API Key（顯示為圓點）。DeepSeek、Kimi、OpenRouter 和 Z.ai 必須填寫；Ollama 和自訂位址在不需要 Key 時可留空。
+3. 選擇模型。DeepSeek 會立即列出它的兩個模型，OpenRouter 和 Ollama（正在執行時）也會立即列出，編輯器啟動後 PlanSwap 會在背景更新它們的清單。Kimi 和 Z.ai 的清單在你停止輸入 Key 後載入，並保存供下次使用；自訂位址在你停止輸入位址或 Key 後載入。取得失敗時，下方會顯示原因；修正後清單會重新載入，也可以按 **取得模型** 重試。如果端點不提供模型清單，這時也可以在清單中直接輸入模型 ID，再選擇 `Add "…"` 項目。
+4. 按一下勾號（**新增**）。若要取消，按 **×** 關閉表單。
+
+此操作需要新目錄；既有的 Claude 帳號不會被轉換。不需要 Claude 訂閱。
+
+卡片顯示服務、模型、位址主機以及設定是否完整。這只是本機設定檢查，不是連線測試。按一下 **編輯 API 設定**（齒輪）可以變更位址、輸入新的 Key（留空則保留已儲存的 Key）或選擇其他模型，然後按一下 **儲存**。變更位址時需要重新輸入 Key：已儲存的 Key 只會傳送給原本的位址。編輯時會保留 Claude Code 自行寫入卡片 `settings.json` 的設定。
+
+像切換任何 Claude 帳號一樣切換至該卡片，然後重新載入視窗：之後新的 Claude 工作階段會使用該服務和模型，不會出現登入畫面，卡片的終端機也是如此。Claude Code 的所有模型選擇都使用這個模型，包括背景工作和子代理程式。建立或編輯卡片不會切換帳號。若要重新使用 Claude，請切換回訂閱帳號。Claude API 卡片沒有用量條、用量重新整理或推薦；該卡片為目前帳號時，需要 claude.ai 帳號的功能（例如語音聽寫）無法使用。
+
+Key 以明文儲存在該卡片自己的 `settings.json`（作為 `ANTHROPIC_AUTH_TOKEN`），不會存入編輯器設定或 PlanSwap 狀態檔，只會傳送給該卡片的位址。即使採用連結模式，卡片的 `settings.json` 仍是它自己的，之後對預設 Claude Code 設定的變更不會同步到卡片；其他連結的內容（歷史記錄、指令、技能）依所選模式處理。在卡片上繼續一個連結的對話，會把該對話傳送給卡片的服務。Anthropic 不支援 Claude Code 搭配非 Claude 模型使用，因此部分功能可能無法在所有服務上正常運作。請參閱[隱私](privacy.md)。
 
 ## 選擇已連結帳號或獨立帳號
 

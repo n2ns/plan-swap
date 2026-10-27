@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Claude API cards: a Claude account can now use another AI service instead of a Claude sign-in. Choose **API service** in the Claude add form, then the service (DeepSeek, Kimi, OpenRouter, Z.ai, Ollama on this machine, or any custom Anthropic-compatible endpoint such as a LiteLLM gateway), enter the key and pick the model, all in the sidebar. After switching to the card and reloading, Claude Code and the card's terminal use the service without a sign-in screen. Cards can be linked or independent, can be edited from the card, and have no usage bars or recommendations. The key is stored only in the card's own `settings.json`.
+
 ## [0.5.1] - 2026-10-27
 
 ### Added

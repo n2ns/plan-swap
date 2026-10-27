@@ -69,3 +69,58 @@ Inspected the embedded JavaScript in the installed Linux Claude Code 2.1.296 nat
 - An isolated Node experiment ran the extracted pruning function against temporary synthetic history paths: the named-account symlink never reached its downstream scanner, while the default account's regular file reached it once. The scanner was stubbed, so this proves the guard and reachability, not complete retention processing or real-client acceptance. It corrects the earlier claim that shared history can never be pruned: the default account's real file remains eligible when the HIPAA condition applies.
 
 The temporary fixture was removed. The resulting PlanSwap decision is in [Claude design, limitation 16](../design.md#11-known-limitations-and-risks). The directory guide also records that `claude project purge` was renamed to `claude purge` in 2.1.288; earlier numbered facts retain the command name of the version they describe.
+
+## Other model services (2026-10-27)
+
+Documentation review, GitHub issues and community tools on 2026-10-27, for running the official Claude Code extension with services other than Anthropic, as Codex API cards do ([Codex research](codex.md#api-services-for-codex-cards-2026-10-26)). Nothing here was run: no endpoint was called and no extension setting was tried.
+
+### Official connection method
+
+- **Two required variables.** `ANTHROPIC_BASE_URL` is the address; the credential goes in `ANTHROPIC_AUTH_TOKEN` (sent as `Authorization: Bearer`) or `ANTHROPIC_API_KEY` (sent as `x-api-key`), or comes from `apiKeyHelper` (sent in both headers). A credential variable outranks the claude.ai login, and the subscription's usage limits no longer apply ([LLM gateway connect](https://code.claude.com/docs/en/llm-gateway-connect.md), [LLM gateway](https://code.claude.com/docs/en/llm-gateway)).
+- **Endpoint requirements.** `/v1/messages` with streaming is required; `/v1/messages/count_tokens` is optional ([Gateway compatibility guide](https://code.claude.com/docs/en/llm-gateway-protocol.md)).
+- **Model mapping.** `ANTHROPIC_MODEL` sets the main model; `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL`, `ANTHROPIC_DEFAULT_HAIKU_MODEL` (and `ANTHROPIC_DEFAULT_FABLE_MODEL`) decide which model the opus / sonnet / haiku aliases use; `CLAUDE_CODE_SUBAGENT_MODEL` sets the subagent model. An unrecognized model ID is assumed to have a 200K context window, which `CLAUDE_CODE_AUTO_COMPACT_WINDOW` can correct ([Model config](https://code.claude.com/docs/en/model-config)).
+- **Model picker.** `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1` makes Claude Code request `GET /v1/models`, but it keeps only IDs containing `claude` or `anthropic`, so models such as deepseek or glm **do not appear automatically** in the list; only the mapping variables above select them.
+- **Compatibility.** An upstream that does not recognize the beta fields Claude Code sends returns 400, which `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` resolves. `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` turns off background traffic to Anthropic.
+- **Official position.** Anthropic "doesn't support routing Claude Code to non-Claude models": it works, but problems are not supported.
+
+### VS Code extension (the key constraint)
+
+- The official documentation says the extension reads credentials **before launch** only from `claudeCode.environmentVariables` for its login check. Values in the `env` block of `settings.json` reach the Claude process, but "not the extension's own login check" ([LLM gateway connect](https://code.claude.com/docs/en/llm-gateway-connect.md)).
+- The workaround is `claudeCode.disableLoginPrompt`, a setting meant for third-party providers. With it on, the extension features that depend on a claude.ai account (usage bars, voice dictation, the Web tab) are unavailable ([VS Code docs](https://code.claude.com/docs/en/vs-code)).
+- Several GitHub issues report that the extension ignores `ANTHROPIC_BASE_URL` and keeps showing the login screen ([#8522](https://github.com/anthropics/claude-code/issues/8522), [#20271](https://github.com/anthropics/claude-code/issues/20271), [#38430](https://github.com/anthropics/claude-code/issues/38430), [#9136](https://github.com/anthropics/claude-code/issues/9136)), all closed as not planned. The community workaround is `disableLoginPrompt: true` plus the environment variables.
+
+### Anthropic-compatible endpoints of other services
+
+| Service | Address | Source |
+|---|---|---|
+| DeepSeek | `https://api.deepseek.com/anthropic` | Official. The [Claude Code guide](https://api-docs.deepseek.com/quick_start/agent_integrations/claude_code) recommends: every model set to `deepseek-flash[1m]` (haiku and subagents `deepseek-flash`), `CLAUDE_CODE_EFFORT_LEVEL=max`, `CLAUDE_CODE_AUTO_COMPACT_WINDOW=786432`. The service maps `claude-opus*` to v4-pro and everything else to flash ([Anthropic API](https://api-docs.deepseek.com/guides/anthropic_api)). |
+| Z.ai (GLM) | `https://api.z.ai/api/anthropic` | Official [docs.z.ai](https://docs.z.ai/scenario-example), which documents the model mapping; a third party advises raising `API_TIMEOUT_MS` ([AI EngineerGuide](https://aiengineerguide.com/til/claude-code-z-ai-glm-4-7/)). |
+| OpenRouter | `https://openrouter.ai/api` | Official. Needs `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_API_KEY` set to an empty string ([OpenRouter docs](https://openrouter.ai/docs/cookbook/coding-agents/claude-code-integration.md)). |
+| Ollama | `http://localhost:11434` | Official, from v0.14; any token value (for example `ollama`) ([Ollama docs](https://docs.ollama.com/api/anthropic-compatibility)). |
+| Kimi | `https://api.moonshot.ai/anthropic` (`.cn` in mainland China) | Third-party guides only, no official documentation found ([PromptLayer](https://www.promptlayer.com/blog/how-to-use-kimi-k3-moonshot-ai-with-claude-code/)). |
+| Qwen | `https://dashscope-intl.aliyuncs.com/apps/anthropic` | From what appears to be a mirror site; needs confirmation ([source](https://docs.platform.qianwenai.com/developer-guides/clients-and-developer-tools/claude-code)). |
+| MiniMax, xAI, LM Studio | No official Anthropic endpoint found | — |
+
+### Community tools
+
+- **[claude-code-router](https://github.com/musistudio/claude-code-router)** (about 38k stars): a local gateway, by default on `127.0.0.1:3456`, that converts OpenAI, Gemini and other formats to the Anthropic format, with routing and fallback. Suited to services that offer only the OpenAI format.
+- **[CC Switch](https://github.com/farion1231/cc-switch)**: a desktop app that switches providers by rewriting `~/.claude/settings.json`, and also supports Codex. Closest to PlanSwap's approach, but it changes the global file ([guide](https://www.developersdigest.tech/blog/cc-switch-claude-code-codex-guide)).
+- **LiteLLM**: the general gateway the official documentation mentions.
+
+### Extension sign-in check (source inspection, 2026-10-27)
+
+Read from `extension.js` of the official extension `anthropic.claude-code-2.1.310-win32-x64` (installed in VSCodium) and its bundled `claude.exe`; not a runtime test:
+
+- The panel's auth manager is built with the environment the extension passes to Claude Code (`i$()`: the extension host's `process.env` with the `claudeCode.environmentVariables` entries layered on top and `CLAUDE_CONFIG_DIR` resolved as in fact 2), with `claudeCode.disableLoginPrompt`, when a panel is created.
+- `readAuthStatus` reports a sign-in only from that environment (`ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_API_KEY`), the stored OAuth credentials of the configuration directory, or `primaryApiKey` in `<config dir>/config.json`; otherwise it logs "No authentication found" and the panel offers its sign-in screen. The `env` block of the account's `settings.json` is not read by this check.
+- `isAuthLoginDisabled()` is `disableLoginPrompt || CLAUDE_CODE_SKIP_AUTH_LOGIN` (truthy value in that environment); with either, the status sent to the Webview has `skipLogin` / `loginPromptDisabled` instead of a sign-in request. `CLAUDE_CODE_SKIP_AUTH_LOGIN` is not in the public environment variable reference, and the bundled `claude.exe` does not contain the name, so it affects only the extension.
+- `claudeCode.disableLoginPrompt` has no `scope` in the manifest (window scope, so a WSL window writes it to the local user settings shared by every window), while `claudeCode.environmentVariables` is `machine` scoped (fact 2, fact 9).
+- The third-party provider check (`uJ`) covers the cloud provider switches plus `CLAUDE_CODE_USE_GATEWAY` (the Claude apps gateway sign-in); a plain `ANTHROPIC_BASE_URL` is not a third-party provider for the extension.
+
+Runtime observation on 2026-10-27 (VSCodium on native Windows, extension 2.1.310, isolated user profile and home, a local mock of the Anthropic Messages API on `127.0.0.1`):
+
+- With `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_MODEL` only in the `env` block of `<CLAUDE_CONFIG_DIR>/settings.json` and nothing but `CLAUDE_CONFIG_DIR` in `claudeCode.environmentVariables`, the panel opened straight to the chat input without a sign-in screen, with or without `claudeCode.disableLoginPrompt`, and the first message reached the mock as `POST /v1/messages?beta=true` with `Authorization: Bearer <token>`, the configured model and streaming, after two `HEAD /api/hello` probes. So the documentation's statement that settings-file values do not reach the extension's login check does not stop the panel in this version; the source-inspection reading above is incomplete.
+- The same variables in `claudeCode.environmentVariables` with `disableLoginPrompt` behaved the same.
+- A configuration directory without any credential showed the sign-in screen ("How do you want to log in?"); with `disableLoginPrompt` it showed the chat, and sending answered "Not logged in · Please run /login" without any request.
+
+The resulting PlanSwap decision is in [Claude design 6.10](../design.md#610-claude-api-cards): the card keeps the endpoint, key and model in its own `settings.json`, and switching writes only `CLAUDE_CONFIG_DIR`, since the runtime observation above shows that neither `claudeCode.disableLoginPrompt` nor a credential in `claudeCode.environmentVariables` is needed.

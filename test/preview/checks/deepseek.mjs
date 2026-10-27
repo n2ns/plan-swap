@@ -162,7 +162,8 @@ export async function run(ctx) {
   await toggle.click();
   await toggle.click();
   await step('Closing the form clears the key and shows no message', (await form.locator('.api-key input').inputValue()) === '' && !(await help.getAttribute('class')).includes('error'));
-  await step('Claude add flow has no provider choice', await page.locator('#panel-claude vscode-radio[name="add-provider-codex"]').count() === 0);
+  await step('The Claude add flow has its own provider choice', await page.locator('#panel-claude vscode-radio[name="add-provider-codex"]').count() === 0
+    && await page.locator('#panel-claude vscode-radio[name="add-provider-claude"]').count() === 2);
 }
 
 // Cached lists belong to a preset's own endpoint and never replace a model the user typed or a card's current one

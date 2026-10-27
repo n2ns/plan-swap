@@ -9,6 +9,9 @@ type PreviewApi = {
   post(message: ToWebview): void;
   messages: FromWebview[];
   clearMessages(): void;
+  // Synthetic Claude API cards (configured preset, configuration error, linked custom endpoint, keyless local server)
+  // a check adds to the Claude accounts; never part of the default state, so the fixed layout checks keep their rows
+  claudeApiCards(): AccountView[];
 };
 
 declare global {
@@ -65,12 +68,37 @@ function account(mode: PanelMode, name: 'default' | 'work' | 'empty'): AccountVi
   return base;
 }
 
+function claudeApiCards(): AccountView[] {
+  const card = (name: string, label: string, view: Partial<AccountView>): AccountView => ({
+    kind: 'named', name, label, dir: `/fixture/.claude-${name}`, dirLabel: `/fixture/.claude-${name}`,
+    loggedIn: true, isCurrent: false, shared: false, ...view,
+  });
+  return [
+    card('deepseek', 'DeepSeek', { provider: 'DeepSeek API', plan: 'DeepSeek API', providerService: 'deepseek', providerModel: 'deepseek-v4-pro',
+      providerBaseUrl: 'https://api.deepseek.com/anthropic', providerHasKey: true, providerConfigured: true }),
+    card('broken', 'Broken', { provider: 'Kimi API', plan: 'Kimi API', providerService: 'kimi', providerConfigured: false,
+      providerError: 'Synthetic provider configuration error', loggedIn: false }),
+    card('gateway', 'Gateway', { provider: 'Custom API', plan: 'Custom API', providerService: 'custom', providerModel: 'gateway-model',
+      providerBaseUrl: 'https://gateway.example.test/anthropic', providerHost: 'gateway.example.test', providerHasKey: true, providerConfigured: true, shared: true }),
+    card('local', 'Local', { provider: 'Ollama API', plan: 'Ollama API', providerService: 'ollama', providerModel: 'qwen3-coder',
+      providerBaseUrl: 'http://localhost:11434', providerHost: 'localhost:11434', providerHasKey: false, providerConfigured: true }),
+  ];
+}
+
 function makeState(nextLocale: Locale, nextActive: PanelMode): PanelState {
   return {
     active: nextActive, locale: nextLocale,
     claude: {
       enabled: true, accounts: ['default', 'work', 'empty'].map((name) => account('claude', name as 'default' | 'work' | 'empty')),
       dirPrefix: '/fixture/.claude-',
+      apiServices: [
+        { id: 'deepseek', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/anthropic', keyRequired: true, models: ['deepseek-flash', 'deepseek-v4-pro'] },
+        { id: 'kimi', name: 'Kimi', baseUrl: 'https://api.moonshot.ai/anthropic', keyRequired: true },
+        { id: 'ollama', name: 'Ollama', baseUrl: 'http://localhost:11434', keyRequired: false },
+        { id: 'openrouter', name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api', keyRequired: true, models: ['anthropic/model-a', 'z-ai/model-c'] },
+        { id: 'zai', name: 'Z.ai', baseUrl: 'https://api.z.ai/api/anthropic', keyRequired: true },
+        { id: 'custom', name: '', keyRequired: false },
+      ],
     },
     codex: {
       enabled: true, accounts: ['default', 'work', 'empty'].map((name) => account('codex', name as 'default' | 'work' | 'empty')),
@@ -123,4 +151,5 @@ window.preview = {
   post,
   messages,
   clearMessages() { messages.length = 0; },
+  claudeApiCards,
 };

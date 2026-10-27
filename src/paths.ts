@@ -6,6 +6,7 @@ import * as path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { t } from './i18n';
 import { comparablePath, isWindows, renameReplacing, stripBom, unlinkLinks, isPlainObject, withLockDir } from './platform';
+import { hasClaudeProviderMarker } from './claudeProvider';
 
 export const DEFAULT_NAME = 'default';
 export const NAME_RE = /^[A-Za-z0-9_-]+$/;
@@ -235,11 +236,12 @@ export function scanAccountDirs(): Account[] {
 
 /** Copies <fromDir>/settings.json to <toDir> (mode 0600, never overwriting) without the identity keys
  *  (CLAUDE_IDENTITY_SETTING_KEYS; the federation pair only when both are set) and the plugin keys. false, writing
- *  nothing, when the source is missing, unparsable or not an object, or the target already exists. Used by
+ *  nothing, when the source is missing, unparsable or not an object, the target already exists, or either folder is
+ *  a Claude API card (its settings.json is its own and never copied to or from). Used by
  *  claudeShare.copyClaudeIndependent and for a linked account whose default settings.json cannot be linked. */
 export function copySettingsStripped(fromDir: string, toDir: string): boolean {
   const dst = path.join(toDir, 'settings.json');
-  if (fs.existsSync(dst)) return false;
+  if (hasClaudeProviderMarker(toDir) || hasClaudeProviderMarker(fromDir) || fs.existsSync(dst)) return false;
   const data = strippedSettings(fromDir);
   if (!data) return false;
   // wx: fail if the target exists; never overwrite

@@ -14,6 +14,7 @@ Button names below use the English UI. Hover an icon to see its name in your lan
 - [Switch Claude accounts](#switch-claude-accounts)
 - [Enable and switch Codex accounts](#enable-and-switch-codex-accounts)
 - [Use an API card](#use-an-api-card)
+- [Use a Claude API card](#use-a-claude-api-card)
 - [Choose linked or independent accounts](#choose-linked-or-independent-accounts)
 - [Read and refresh usage limits](#read-and-refresh-usage-limits)
 - [Rename or remove accounts](#rename-or-remove-accounts)
@@ -169,6 +170,25 @@ The terminal action starts Codex with this card's home without a ChatGPT login f
 The key is saved in plaintext in this card's own `config.toml`, never in the sidebar or PlanSwap state, and is sent only to the card's endpoint. Even when linked, the provider config, key and model catalog stay independent. Only supported scalar approval/sandbox settings are copied once from the default config; MCP definitions and project trust are not imported, and later default-config changes do not synchronize. Other permitted instructions, skills and history follow the selected sharing mode. Shared history may not resume across providers; resuming it with an API service may send that context to that service. See [Privacy](privacy.md).
 
 Same-editor windows in one WSL distribution share the Codex selection; these cards do not isolate the backend per project window. VS Code and VSCodium keep their existing separate selections. Native Windows still requires a full editor restart. Real-client acceptance that is still pending is listed in [TODO](../TODO.md).
+
+## Use a Claude API card
+
+A Claude API card lets the official Claude Code extension and CLI use another AI service instead of a Claude sign-in: DeepSeek, Kimi, OpenRouter, Z.ai, Ollama on this machine, or any custom endpoint that serves the Anthropic Messages API, such as a LiteLLM gateway. The service must offer an Anthropic-compatible endpoint; one that offers only the OpenAI API cannot be used directly.
+
+In the Claude add form, choose **API service**, enter a new account name and choose linked or independent. Everything happens in the sidebar:
+
+1. Choose the service in the list. For **Custom endpoint**, enter the address that Claude Code should use in place of Anthropic's, such as `https://gateway.example.com` (Claude Code adds `/v1/messages` itself). Addresses must start with `https://`; `http://` is accepted only for this machine (`localhost`).
+2. Enter the API key in the key field (it shows dots). It is required for DeepSeek, Kimi, OpenRouter and Z.ai; for Ollama and custom endpoints you can leave it empty when the endpoint needs none.
+3. Choose the model. DeepSeek lists its two models at once, and so do OpenRouter and Ollama (when it is running), whose lists PlanSwap keeps up to date in the background after the editor starts. For Kimi and Z.ai the list loads once you stop typing the key and is kept for next time; a custom endpoint's list loads once you stop typing its address or key. If loading fails, the reason appears below; fix it and the list loads again, or click **Load models** to retry. If the endpoint offers no model list, you can then type the model ID in the list and choose the `Add "…"` entry.
+4. Click the check mark (**Add**). To cancel, close the form with **×**.
+
+This requires a new directory; an existing Claude account is not converted. No Claude subscription is needed.
+
+The card shows the service, the model, the endpoint host and whether the configuration is complete. This is a local configuration check, not a connection test. Click **Edit API configuration** (the gear) to change the endpoint, enter a new key (leave it empty to keep the saved one) or choose another model, then click **Save**. Changing the endpoint needs the key entered again: a saved key is only sent to its own endpoint. Settings Claude Code adds to the card's `settings.json` itself are kept when editing.
+
+Switch to the card like any Claude account and reload the window: new Claude sessions then use the service and model without a sign-in screen, and so does the card's terminal. The model is used for every Claude Code model choice, including background tasks and subagents. Creating or editing a card does not switch accounts. Switch back to a subscription account to use Claude again. Claude API cards have no usage bars, usage refresh or recommendation, and features that need a claude.ai account, such as voice dictation, are not available while a card is current.
+
+The key is saved in plaintext in the card's own `settings.json` (as `ANTHROPIC_AUTH_TOKEN`), never in the editor settings or PlanSwap state, and is sent only to the card's endpoint. Even when linked, the card's `settings.json` stays its own, so later changes to your default Claude Code settings do not reach it; other linked content (history, instructions, skills) follows the selected mode. Resuming a linked conversation on a card sends that conversation to the card's service. Anthropic does not support Claude Code with non-Claude models, so some features may not work with every service. See [Privacy](privacy.md).
 
 ## Choose linked or independent accounts
 

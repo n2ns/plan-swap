@@ -44,21 +44,22 @@ function mockFetch(ctx: { mock: { method: typeof import('node:test').mock.method
   return calls;
 }
 
-test('provider actions are Codex-only and carry well-formed API card fields', () => {
+test('provider actions carry well-formed API card fields, for either page', () => {
   const add = { type: 'add', mode: 'codex', name: 'deepseek', shared: false, provider: deepseekCard };
   assert.deepEqual(checkMessage(add), add);
-  assert.equal(checkMessage({ ...add, mode: 'claude' }), undefined);
+  assert.deepEqual(checkMessage({ ...add, mode: 'claude' }), { ...add, mode: 'claude' });
   assert.equal(checkMessage({ ...add, provider: 'api' }), undefined);
   assert.equal(checkMessage({ ...add, provider: { ...deepseekCard, model: 1 } }), undefined);
   assert.equal(checkMessage({ ...add, provider: { ...deepseekCard, baseUrl: 2 } }), undefined);
   const models = { type: 'providerModels', mode: 'codex', request: 1, service: 'custom', key: '' };
   assert.deepEqual(checkMessage(models), models);
-  assert.equal(checkMessage({ ...models, mode: 'claude' }), undefined);
+  assert.deepEqual(checkMessage({ ...models, mode: 'claude' }), { ...models, mode: 'claude' });
   assert.equal(checkMessage({ ...models, request: '1' }), undefined);
   assert.equal(checkMessage({ ...models, dir: 3 }), undefined);
   const save = { type: 'saveProvider', mode: 'codex', dir: '/d', model: 'm', key: '' };
   assert.deepEqual(checkMessage(save), save);
-  assert.equal(checkMessage({ ...save, mode: 'claude' }), undefined);
+  assert.deepEqual(checkMessage({ ...save, mode: 'claude' }), { ...save, mode: 'claude' });
+  assert.equal(checkMessage({ ...save, mode: 'other' }), undefined);
   assert.equal(checkMessage({ type: 'saveProvider', mode: 'codex', dir: '/d', key: '' }), undefined);
 });
 

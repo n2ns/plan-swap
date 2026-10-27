@@ -112,12 +112,13 @@ You can change an account's mode later, and **Re-link** in Tools checks linked a
 - **On Windows**, linking single files needs Developer Mode, and Codex thread databases stay per account ([details](docs/user-guide.md#linking-on-windows)). While the Codex extension runs Codex inside WSL (`chatgpt.runCodexInWindowsSubsystemForLinux`), manage Codex accounts from a WSL window ([details](docs/user-guide.md#enable-once)).
 - **Not yet verified everywhere**: switching and usage limits have been tested end to end with real accounts in Antigravity IDE, VS Code and VSCodium in WSL, on native Windows and on a local Linux desktop. Other remote windows have not been tested with real accounts.
 - **API cards** (DeepSeek, OpenRouter, Z.ai, Kimi, xAI, Ollama, LM Studio or a custom Responses endpoint such as a LiteLLM gateway) use independent Codex configuration and do not provide per-window backend isolation. Real-client acceptance is partly pending; see the [guide](docs/user-guide.md#use-an-api-card) and [TODO](TODO.md).
+- **Claude API cards** (DeepSeek, Kimi, OpenRouter, Z.ai, Ollama or a custom Anthropic-compatible endpoint) run Claude Code against another service; Anthropic does not support Claude Code with non-Claude models, and acceptance with real services is pending ([guide](docs/user-guide.md#use-a-claude-api-card), [TODO](TODO.md)).
 
 ## Privacy
 
 PlanSwap has no telemetry. Its only network requests of its own are model lists for API cards (`GET <endpoint>/models`): after the editor starts, without any key, for OpenRouter and for Ollama and LM Studio on this machine; and from an API card form, to the endpoint you chose with the key you entered, when no saved list covers it. Usage limits are read through the official `claude` and `codex` CLIs, which contact their own services as usual. When Claude usage is unavailable, a minimal official CLI model request can check subscription access; it may consume a small amount of quota. PlanSwap never copies, moves or sends your Claude or Codex sign-in; between linked Claude accounts it syncs only the sign-ins to MCP servers, and it changes your shell or environment configuration only after you confirm (afterwards it keeps the blocks it added up to date). Details: [privacy](docs/privacy.md).
 
-API keys entered for API cards are saved in plaintext in each card's own Codex configuration. Codex sends those cards' model requests directly to the card's service; PlanSwap does not proxy requests or check subscription quotas for them.
+API keys entered for API cards are saved in plaintext in each card's own Codex configuration or Claude `settings.json`. Codex or Claude Code sends those cards' model requests directly to the card's service; PlanSwap does not proxy requests or check subscription quotas for them.
 
 ## Uninstall
 

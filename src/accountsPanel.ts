@@ -8,6 +8,8 @@ import type { AccountStore } from './accounts';
 import { EXTERNAL_NAME, labelFor, type LabelStore } from './labels';
 import type { AccountView, FromWebview, PanelMode, PanelState, RestartInfo, TabState, ToWebview, ApiServiceView } from './protocol';
 import { isSharedClaudeAccount } from './claudeShare';
+import { CLAUDE_API_SERVICES, CLAUDE_PROVIDER_FILES, CLAUDE_SERVICE_INFO, claudeProviderLabel, hasClaudeProviderMarker, readClaudeProviderInfo, type ProviderErrorCode } from './claudeProvider';
+import type { ClaudeModelCache } from './claudeModelCache';
 import { readClaudeUsage } from './claudeUsage';
 import { threshold, usageDisplay, usageThresholds } from './usageSettings';
 import { recommend, type RecommendDismissals, type RecommendExclusions } from './recommend';
@@ -83,7 +85,7 @@ export interface PanelSource {
   // In-memory identity comparison key of a dir (never sent to the Webview): rows signed in to the current row's identity
   // are not recommended
   identityOf?(dir: string): string | undefined;
-  // codex only; copied into TabState.apiServices
+  // Copied into TabState.apiServices: the services an API card of the tab can use
   apiServices?(): ApiServiceView[];
 }
 
@@ -91,9 +93,12 @@ export interface PanelSource {
  * Claude data source: one row per store.all() account (label via labelFor; email, plan, usageEligible and usage via
  * claudeRowInfo; shared via isSharedClaudeAccount for named rows; recommendExcluded from exclusions), plus an
  * "external directory" row (EXTERNAL_NAME, kind 'external') when the current dir matches no registered account
- * (findSameDir). enabled is always true and pendingDir always undefined.
+ * (findSameDir). enabled is always true and pendingDir always undefined. A Claude API card (hasClaudeProviderMarker)
+ * shows only its secret-free provider status (claudeProviderRowInfo): no account info is read, no usage, no
+ * subscription state and no identity (so it is never recommended nor compared). apiServices: CLAUDE_API_SERVICES with
+ * the lists of modelCache (DeepSeek's fixed list). watchTargets adds each dir's provider files.
  */
-export function claudePanelSource(store: AccountStore, labels: LabelStore, exclusions?: RecommendExclusions, subscription?: (dir: string) => { unavailable: boolean; checking: boolean }): PanelSource {
+export function claudePanelSource(store: AccountStore, labels: LabelStore, exclusions?: RecommendExclusions, subscription?: (dir: string) => { unavailable: boolean; checking: boolean }, modelCache?: ClaudeModelCache): PanelSource {
   const accounts = (): AccountView[] => {
     const cur = currentDir();
     const all = store.all();
@@ -121,22 +126,26 @@ export function claudePanelSource(store: AccountStore, labels: LabelStore, exclu
       });
     }
     return rows.map((row) => {
-      const state = subscription?.(row.dir);
+      const state = row.provider ? undefined : subscription?.(row.dir);
       return state ? { ...row, subscriptionUnavailable: state.unavailable || undefined, subscriptionChecking: state.checking || undefined,
         usage: state.unavailable ? undefined : row.usage } : row;
     });
   };
   return {
     accounts,
+    apiServices: (): ApiServiceView[] => CLAUDE_API_SERVICES.map((id) => ({
+      id, name: id === 'custom' ? '' : CLAUDE_SERVICE_INFO[id].name, baseUrl: CLAUDE_SERVICE_INFO[id].baseUrl, keyRequired: CLAUDE_SERVICE_INFO[id].keyRequired,
+      models: modelCache?.get(id) ?? (CLAUDE_SERVICE_INFO[id].models ? [...CLAUDE_SERVICE_INFO[id].models!] : undefined),
+    })),
     enabled: () => true,
     pendingDir: () => undefined,
-    identityOf: (dir) => readAccountInfo(dir, isExplicitConfigDir(dir)).identity,
+    identityOf: (dir) => hasClaudeProviderMarker(dir) ? undefined : readAccountInfo(dir, isExplicitConfigDir(dir)).identity,
     // Same directories as accounts() (registered ones plus the external current dir) without reading any .claude.json
     watchTargets: () => {
       const cur = currentDir();
       const dirs = store.all().map((a) => a.dir);
       if (!dirs.some((d) => samePath(d, cur))) dirs.push(cur);
-      return dirs.map((d) => claudeJsonPath(d, isExplicitConfigDir(d)));
+      return dirs.flatMap((d) => [claudeJsonPath(d, isExplicitConfigDir(d)), ...CLAUDE_PROVIDER_FILES.map((file) => path.join(d, file))]);
     },
   };
 }
@@ -447,20 +456,58 @@ export function checkMessage(raw: unknown): FromWebview | undefined {
   const isStringList = (v: unknown): boolean => Array.isArray(v) && v.every((s) => typeof s === 'string');
   if (!(LIST_FIELDS[type] ?? []).every((f) => isStringList(msg[f]))) return undefined;
   const optionalString = (v: unknown): boolean => v === undefined || typeof v === 'string';
-  if ((type === 'providerModels' || type === 'saveProvider') && msg.mode !== 'codex') return undefined;
   if (type === 'providerModels' && (typeof msg.request !== 'number' || !optionalString(msg.baseUrl) || !optionalString(msg.dir))) return undefined;
   if (type === 'saveProvider' && !optionalString(msg.baseUrl)) return undefined;
   if (type === 'add' && msg.provider !== undefined) {
     const p = msg.provider as Record<string, unknown> | null;
-    if (msg.mode !== 'codex' || typeof p !== 'object' || p === null || typeof p.service !== 'string' || typeof p.key !== 'string'
+    if (typeof p !== 'object' || p === null || typeof p.service !== 'string' || typeof p.key !== 'string'
       || typeof p.model !== 'string' || !optionalString(p.baseUrl)) return undefined;
   }
   return raw as FromWebview;
 }
 
+type ClaudeRowInfo = Pick<AccountView, 'email' | 'plan' | 'loggedIn' | 'usage' | 'usageEligible' | 'provider' | 'providerService' | 'providerModel'
+  | 'providerBaseUrl' | 'providerHost' | 'providerHasKey' | 'providerConfigured' | 'providerError'>;
+
+/** The localized text of a Claude API card error code: the Claude wording where it differs (any model ID, a Claude
+ *  account rather than a Codex DeepSeek configuration), otherwise the generic API card text. */
+export function claudeProviderErrorText(code: ProviderErrorCode): string {
+  if (code === 'model') return t('claude.provider.error.model');
+  if (code === 'unmanaged') return t('claude.provider.error.unmanaged');
+  return t(`codex.provider.error.${code}`);
+}
+
+/** The service label of a Claude API card ("DeepSeek API", or the localized custom label). */
+export function claudeCardLabel(service: Parameters<typeof claudeProviderLabel>[0]): string {
+  return claudeProviderLabel(service, t('claude.provider.customLabel'));
+}
+
+// A Claude API card's row: only safe provider status, never its key and no account info (.credentials.json /
+// .claude.json); not signed in, no usage
+function claudeProviderRowInfo(dir: string): ClaudeRowInfo | undefined {
+  const provider = readClaudeProviderInfo(dir);
+  if (!provider) return undefined;
+  const label = claudeCardLabel(provider.provider);
+  return {
+    loggedIn: false,
+    usageEligible: false,
+    plan: label,
+    provider: label,
+    providerService: provider.provider,
+    providerModel: provider.model,
+    providerBaseUrl: provider.baseUrl,
+    providerHost: provider.host,
+    providerHasKey: provider.hasKey,
+    providerConfigured: provider.configured,
+    providerError: provider.error ? claudeProviderErrorText(provider.error) : undefined,
+  };
+}
+
 // Account info plus the usage Claude Code cached in the same file; only subscription sign-ins (oauthAccount) have usage
-// (and usageEligible). Scoped windows are dropped unless SHOW_MODEL_LIMITS_SETTING is on
-function claudeRowInfo(dir: string): Pick<AccountView, 'email' | 'plan' | 'loggedIn' | 'usage' | 'usageEligible'> {
+// (and usageEligible). Scoped windows are dropped unless SHOW_MODEL_LIMITS_SETTING is on. API cards: claudeProviderRowInfo
+function claudeRowInfo(dir: string): ClaudeRowInfo {
+  const card = claudeProviderRowInfo(dir);
+  if (card) return card;
   const explicit = isExplicitConfigDir(dir);
   const info = readAccountInfo(dir, explicit);
   const usage = info.identity !== undefined ? readClaudeUsage(dir, explicit) : undefined;

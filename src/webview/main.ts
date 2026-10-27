@@ -336,9 +336,10 @@ const modelRequests = new Map<number, (models?: string[], error?: string) => voi
 let lastModelRequest = 0;
 
 /**
- * The API card fields of the add form (service list) and of a card's edit area (fixed service): the endpoint (custom
- * service; editable for any non-DeepSeek card), the key (a password field; when editing, empty keeps the saved key) and
- * the model, chosen from the list the host loads from the endpoint (DeepSeek: its two catalog models), or typed only after
+ * The API card fields of the add form (service list) and of a card's edit area (fixed service), for the Codex and the
+ * Claude tab: the endpoint (custom service; editable for any card except a Codex DeepSeek one), the key (a password field;
+ * when editing, empty keeps the saved key) and the model, chosen from the list the host loads from the endpoint
+ * (DeepSeek: its catalog models), or typed only after
  * that load failed (an endpoint without a usable /models). Created once per
  * form so typed values survive re-renders. The key leaves the page only in the messages that need it and is cleared
  * with clear().
@@ -359,7 +360,7 @@ class ApiFields {
   private autoTimer?: ReturnType<typeof setTimeout>;
   private loadedFor?: string;
 
-  constructor(private readonly onChange: () => void, private readonly editing?: { dir: string; service: string; baseUrl?: string; model?: string; hasKey?: boolean }) {
+  constructor(private readonly mode: PanelMode, private readonly onChange: () => void, private readonly editing?: { dir: string; service: string; baseUrl?: string; model?: string; hasKey?: boolean }) {
     this.model.combobox = true;
     this.model.filter = 'contains';
     this.model.disabled = true;
@@ -470,7 +471,8 @@ class ApiFields {
   }
 
   applyLocale(): void {
-    this.url.setAttribute('placeholder', t('api.urlPlaceholder'));
+    // Claude Code appends /v1/messages to an Anthropic-format endpoint; Codex takes an OpenAI-format /v1 base
+    this.url.setAttribute('placeholder', t(this.mode === 'claude' ? 'api.urlPlaceholderClaude' : 'api.urlPlaceholder'));
     this.url.setAttribute('aria-label', t('api.url'));
     this.service.setAttribute('aria-label', t('api.service'));
     this.model.setAttribute('aria-label', t('api.model'));
@@ -485,18 +487,18 @@ class ApiFields {
 
   private updateVisibility(): void {
     const id = this.serviceId();
-    // The endpoint: typed for a custom service, editable on a non-DeepSeek card, fixed otherwise
-    this.url.hidden = this.editing ? id === 'deepseek' : id !== 'custom';
+    // The endpoint: typed for a custom service, editable on any card except a Codex DeepSeek one, fixed otherwise
+    this.url.hidden = this.editing ? this.mode === 'codex' && id === 'deepseek' : id !== 'custom';
     const required = this.editing ? false : this.serviceInfo()?.keyRequired ?? true;
     this.key.setAttribute('placeholder', t(this.editing ? (this.editing.hasKey ? 'api.keyKeep' : 'api.keyOptional') : required ? 'api.key' : 'api.keyOptional'));
     this.key.setAttribute('aria-label', t('api.key'));
     this.load.disabled = this.loading || (!this.url.hidden && !this.url.value.trim());
   }
 
-  // Whether a load can be asked for now: DeepSeek always (its catalog), else a complete endpoint and, when adding to a
-  // service that requires one, a key (an edit falls back to the saved key)
+  // Whether a load can be asked for now: DeepSeek on its fixed endpoint always (its catalog), else a complete endpoint
+  // and, when adding to a service that requires one, a key (an edit falls back to the saved key)
   private loadReady(): boolean {
-    if (this.serviceId() === 'deepseek') return true;
+    if (this.serviceId() === 'deepseek' && this.url.hidden) return true;
     if (!this.url.hidden && !/^https?:\/\/\S+/i.test(this.url.value.trim())) return false;
     return !!this.editing || !(this.serviceInfo()?.keyRequired ?? true) || !!this.key.value.trim();
   }
@@ -552,7 +554,7 @@ class ApiFields {
       this.updateVisibility();
       this.onChange();
     });
-    send({ type: 'providerModels', mode: 'codex', request, service: this.serviceId(), key: this.key.value.trim(),
+    send({ type: 'providerModels', mode: this.mode, request, service: this.serviceId(), key: this.key.value.trim(),
       ...(this.url.hidden ? {} : { baseUrl: this.url.value.trim() }), ...(this.editing ? { dir: this.editing.dir } : {}) });
   }
 
@@ -598,12 +600,13 @@ class Page {
   private readonly addMode: HTMLElement;
   private readonly addLinked: HTMLElement & { checked: boolean };
   private readonly addIndependent: HTMLElement & { checked: boolean };
-  private readonly addProvider?: HTMLElement;
-  private readonly addCodex?: HTMLElement & { checked: boolean };
-  private readonly addApi?: HTMLElement & { checked: boolean };
-  // Codex: the API card fields of the add form, shown while "API service" is chosen
-  private readonly apiFields?: ApiFields;
-  // Codex: the API card being edited in place (one at a time); its fields and buttons are created once per edit
+  // The account type: a sign-in account of the tab's tool (selected by default) or an API card
+  private readonly addProvider: HTMLElement;
+  private readonly addSignIn: HTMLElement & { checked: boolean };
+  private readonly addApi: HTMLElement & { checked: boolean };
+  // The API card fields of the add form, shown while "API service" is chosen
+  private readonly apiFields: ApiFields;
+  // The API card being edited in place (one at a time); its fields and buttons are created once per edit
   private editingDir?: string;
   private editFields?: ApiFields;
   private editSave?: HTMLElement & { disabled: boolean };
@@ -649,30 +652,28 @@ class Page {
     this.addLinked.checked = true;
     this.addIndependent = radio('independent');
     this.addMode = h('vscode-radio-group', { class: 'add-mode', variant: 'vertical' }, this.addLinked, this.addIndependent);
-    if (mode === 'codex') {
-      const providerRadio = (value: string): HTMLElement & { checked: boolean } =>
-        h('vscode-radio', { class: 'add-mode-option', name: 'add-provider-codex', value }) as HTMLElement & { checked: boolean };
-      this.addCodex = providerRadio('codex');
-      this.addCodex.checked = true;
-      this.addApi = providerRadio('api');
-      this.addProvider = h('vscode-radio-group', { class: 'add-mode', variant: 'vertical' }, this.addCodex, this.addApi);
-      this.addProvider.addEventListener('change', () => {
-        this.addError = undefined;
-        this.updateAddHelp();
-        if (this.addApi?.checked) this.apiFields?.scheduleLoad(0);
-      });
-      // A host error about these fields clears once one of them changes, like the name's
-      this.apiFields = new ApiFields(() => {
-        this.addError = undefined;
-        this.updateAddHelp();
-      });
-    }
+    const providerRadio = (value: string): HTMLElement & { checked: boolean } =>
+      h('vscode-radio', { class: 'add-mode-option', name: `add-provider-${mode}`, value }) as HTMLElement & { checked: boolean };
+    this.addSignIn = providerRadio(mode);
+    this.addSignIn.checked = true;
+    this.addApi = providerRadio('api');
+    this.addProvider = h('vscode-radio-group', { class: 'add-mode', variant: 'vertical' }, this.addSignIn, this.addApi);
+    this.addProvider.addEventListener('change', () => {
+      this.addError = undefined;
+      this.updateAddHelp();
+      if (this.addApi.checked) this.apiFields.scheduleLoad(0);
+    });
+    // A host error about these fields clears once one of them changes, like the name's
+    this.apiFields = new ApiFields(mode, () => {
+      this.addError = undefined;
+      this.updateAddHelp();
+    });
     this.addSection = h(
       'div',
       { class: 'add', id: `add-${mode}`, hidden: true },
       this.addProvider,
       h('div', { class: 'input-group' }, this.addField, this.addButton),
-      this.apiFields?.root,
+      this.apiFields.root,
       this.addMode,
       this.addHelp,
     );
@@ -742,10 +743,10 @@ class Page {
       button.setAttribute('title', t(key));
     }
     this.addMode.setAttribute('aria-label', t('add.mode.ariaLabel'));
-    this.addProvider?.setAttribute('aria-label', t('provider.type'));
-    if (this.addCodex) this.addCodex.textContent = t('provider.codex');
-    if (this.addApi) this.addApi.textContent = t('provider.api');
-    this.apiFields?.applyLocale();
+    this.addProvider.setAttribute('aria-label', t(this.mode === 'claude' ? 'provider.typeClaude' : 'provider.type'));
+    this.addSignIn.textContent = t(this.mode === 'claude' ? 'provider.claude' : 'provider.codex');
+    this.addApi.textContent = t('provider.api');
+    this.apiFields.applyLocale();
     this.editFields?.applyLocale();
     // A host add error is in the old locale; drop it so the help line shows the local validation in the new one
     if (this.addError) {
@@ -774,10 +775,6 @@ class Page {
   }
 
   private send(msg: PageMessage): void {
-    if (msg.type === 'providerModels' || msg.type === 'saveProvider') {
-      if (this.mode === 'codex') send({ ...msg, mode: 'codex' });
-      return;
-    }
     send({ ...msg, mode: this.mode });
   }
 
@@ -786,8 +783,11 @@ class Page {
     this.stopEdit();
     this.editingDir = a.dir;
     this.editError = undefined;
-    this.editFields = new ApiFields(() => this.updateEditButtons(),
-      { dir: a.dir, service: a.providerService ?? 'custom', baseUrl: a.providerBaseUrl, model: a.providerModel, hasKey: a.providerHasKey });
+    const service = a.providerService ?? 'custom';
+    // Claude cards edit the endpoint of every service: one the host does not report is the preset's
+    const baseUrl = a.providerBaseUrl ?? (this.mode === 'claude' ? this.tab.apiServices?.find((s) => s.id === service)?.baseUrl : undefined);
+    this.editFields = new ApiFields(this.mode, () => this.updateEditButtons(),
+      { dir: a.dir, service, baseUrl, model: a.providerModel, hasKey: a.providerHasKey });
     this.editSave = h('vscode-button', { icon: 'check', 'data-action': 'saveProvider' }, t('api.save')) as HTMLElement & { disabled: boolean };
     onClick(this.editSave, () => this.submitEdit());
     this.updateEditButtons();
@@ -842,8 +842,8 @@ class Page {
     this.addToggle.classList.toggle('is-open', open);
     this.updateAddToggle();
     // A closed form keeps no typed key; an opened one with API service chosen loads the models of its service
-    if (!open) this.apiFields?.clear();
-    else if (this.addApi?.checked) this.apiFields?.scheduleLoad(0);
+    if (!open) this.apiFields.clear();
+    else if (this.addApi.checked) this.apiFields.scheduleLoad(0);
   }
 
   private updateAddToggle(): void {
@@ -862,7 +862,7 @@ class Page {
   }
 
   onState(): void {
-    this.apiFields?.setServices(this.tab.apiServices);
+    this.apiFields.setServices(this.tab.apiServices);
     this.editFields?.setServices(this.tab.apiServices);
     if (this.editingDir && !this.tab.accounts.some((a) => a.dir === this.editingDir && a.provider)) this.stopEdit();
     if (this.confirmingDir && !this.tab.accounts.some((a) => a.dir === this.confirmingDir)) this.confirmingDir = undefined;
@@ -1017,15 +1017,15 @@ class Page {
   }
 
   private updateAddHelp(): void {
-    const api = this.mode === 'codex' && this.addApi?.checked === true;
+    const api = this.addApi.checked;
     this.addLinked.textContent = t(api ? 'provider.addLinked' : 'add.mode.linked');
     this.addIndependent.textContent = t(api ? 'provider.addIndependent' : 'add.mode.independent');
     const name = this.addField.value.trim();
     const error = this.addError ?? this.validateName(name);
     this.addField.invalid = !!error;
-    if (this.apiFields) this.apiFields.root.hidden = !api;
+    this.apiFields.root.hidden = !api;
     // An API card also needs its service fields complete, with a model chosen from the loaded list
-    this.addButton.disabled = this.adding || !name || !!error || (api && !this.apiFields?.values());
+    this.addButton.disabled = this.adding || !name || !!error || (api && !this.apiFields.values());
     this.addHelp.className = error ? 'help error' : 'help';
     const createKey = api ? 'provider.addHelp'
       : !this.addLinked.checked ? 'add.help.independent'
@@ -1033,14 +1033,14 @@ class Page {
         : (`${this.mode}.addHelpShared` as const);
     const help = name ? t(createKey, { dir: this.dirPrefix() + name }) : t('add.helpIdle', { prefix: this.dirPrefix() });
     // The next-steps note follows the creation sentence; the idle hint is not a sentence it can extend
-    this.addHelp.textContent = error ?? (api && name ? joinSentences(help, t('provider.addNext')) : help);
+    this.addHelp.textContent = error ?? (api && name ? joinSentences(help, t(this.mode === 'claude' ? 'provider.addNextClaude' : 'provider.addNext')) : help);
   }
 
   private submitAdd(): void {
     const name = this.addField.value.trim();
     if (this.adding || this.addError || !name || this.validateName(name)) return;
-    const api = this.mode === 'codex' && this.addApi?.checked === true;
-    const provider = api ? this.apiFields?.values() : undefined;
+    const api = this.addApi.checked;
+    const provider = api ? this.apiFields.values() : undefined;
     if (api && !provider) return;
     this.adding = true;
     this.updateAddHelp();
@@ -1193,7 +1193,7 @@ class Page {
 
     const unavailable = this.mode === 'claude' && a.subscriptionUnavailable === true;
     const checking = this.mode === 'claude' && a.subscriptionChecking === true;
-    const provider = this.mode === 'codex' && !!a.provider;
+    const provider = !!a.provider;
     const editing = this.renamingDir === a.dir && !!this.renameField;
     const selected = this.mode === 'codex' && a.isSelected === true;
     // The host refuses a Codex switch to the external directory (it never becomes the selection), so it offers none
@@ -1684,7 +1684,7 @@ window.addEventListener('message', (e: MessageEvent<ToWebview>) => {
     modelRequests.delete(msg.request);
     answer?.(msg.models, msg.error);
   } else if (msg.type === 'saveProviderResult') {
-    pages.codex.onSaveProviderResult(msg.dir, msg.error);
+    pages[msg.mode].onSaveProviderResult(msg.dir, msg.error);
   } else if (msg.type === 'focusAdd') {
     if (activeTab !== msg.mode) {
       setActiveTab(msg.mode);

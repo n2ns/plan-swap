@@ -8,7 +8,7 @@ import { EXTERNAL_NAME, LabelStore, labelFor } from './labels';
 import { FileMemento, STATE_JSON, type StateMemento } from './fileState';
 import { RecommendDismissals, RecommendExclusions } from './recommend';
 import { usageColorsChanged } from './usageSettings';
-import { findSameDir, readAccountInfo, samePath, setClaudeSettingEnv } from './paths';
+import { findSameDir, samePath, setClaudeSettingEnv } from './paths';
 import { ensureCodexLinks, isSharedCodexAccount } from './codex/codexShare';
 import { CLAUDE_REFRESH_ALL_USAGE_COMMAND, CLAUDE_REFRESH_USAGE_COMMAND, CODEX_REFRESH_ALL_USAGE_COMMAND, REFRESH_USAGE_COMMAND, StatusBar, claudeUsageFailureText, codexUsageFailureText, formatDuration, liveCodexUsage, relativeReset } from './statusBar';
 import { registerCommands } from './commands';
@@ -30,6 +30,8 @@ import { effectiveDir, migrateLegacyCodex, upgradeRcBlocks } from './codex/codex
 import { CodexUsageMonitor, queryCodexAccount } from './codex/codexUsageMonitor';
 import { CodexUsageHistory } from './codex/codexUsageHistory';
 import { ModelCache } from './codex/modelCache';
+import { ClaudeModelCache } from './claudeModelCache';
+import { hasClaudeProviderMarker } from './claudeProvider';
 import { findBundledCodex, readCodexUsageWithFallback, type UsageResult } from './codex/codexUsage';
 import { codexDefaultDir, readCodexAccountInfo } from './codex/codexPaths';
 import { preserveProviderConfig } from './codex/codexProvider';
@@ -173,6 +175,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   const codexExclusions = new RecommendExclusions(state, 'codex.recommendExcluded');
   const usageHistory = new CodexUsageHistory(state);
   const modelCache = new ModelCache(state);
+  const claudeModelCache = new ClaudeModelCache(state);
 
   // A Codex init failure is only logged and does not affect Claude: the Codex tab renders as "not enabled, no accounts"
   let codex: { store: CodexAccountStore; labels: LabelStore; exclusions: RecommendExclusions } | undefined;
@@ -248,7 +251,8 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     : undefined;
   if (usage) statusBar.setCodexUsage(usage.current());
   // Usage limits of this window's current Claude account: claude refreshes the cache in the account's info file, which
-  // the status bar and the panel read. Signed-out and non-subscription accounts start nothing
+  // the status bar and the panel read. Signed-out and non-subscription accounts start nothing, and neither do API cards
+  // (claudeIdentity is undefined for them, which every Claude usage and subscription path below checks)
   // Every claude usage process of this window (scheduled, manual, all accounts) runs after the previous one ended
   const claudeCooldown = new UsageCooldown();
   // Claude Code's usage cache tells when any window or terminal last fetched the account's usage
@@ -311,7 +315,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     if (!settings.enabled || !vscode.window.state.focused) return;
     const dir = currentDir();
     const explicit = isExplicitConfigDir(dir);
-    const claudeWindows = readAccountInfo(dir, explicit).identity !== undefined && !subscriptionState(dir).unavailable ? readClaudeUsage(dir, explicit)?.windows : undefined;
+    const claudeWindows = claudeIdentity(dir) !== undefined && !subscriptionState(dir).unavailable ? readClaudeUsage(dir, explicit)?.windows : undefined;
     if (claudeWindows) void announceLowUsage('claude', dir, claudeWindows, false, settings.threshold, store.all(), claudeLabels);
     const result = usage?.current().result;
     const codexUsage = codex && result?.ok && !codexRunsInWsl() && !preserveProviderConfig(effectiveDir()) ? liveCodexUsage(result.usage) : undefined;
@@ -325,9 +329,9 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     }
   }, {
     query: (dir) => claudeQuery(dir),
-    queryIfStale: (dir) => claudeQueries.queryIfStale(dir, () => readAccountInfo(dir, isExplicitConfigDir(dir)).identity !== undefined && !subscriptionState(dir).unavailable),
+    queryIfStale: (dir) => claudeQueries.queryIfStale(dir, () => claudeIdentity(dir) !== undefined && !subscriptionState(dir).unavailable),
     // A confirmed unavailable account stops automatic checks only (claudeAutoRefresh); a manual refresh still queries it
-    eligible: (dir) => readAccountInfo(dir, isExplicitConfigDir(dir)).identity !== undefined,
+    eligible: (dir) => claudeIdentity(dir) !== undefined,
     cachedAt: (dir) => readUsageFetchedAt(dir, isExplicitConfigDir(dir)),
     staleMs: () => usageSchedule('claude').staleMs,
   });
@@ -344,7 +348,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   const refreshAllClaudeUsage = async (): Promise<void> => {
     if (refreshingAll) return;
     const eligible = store.all()
-      .filter((a) => readAccountInfo(a.dir, isExplicitConfigDir(a.dir)).identity !== undefined)
+      .filter((a) => claudeIdentity(a.dir) !== undefined)
       .map((a) => ({ dir: a.dir, label: labelFor(a.name, claudeLabels) }));
     if (!eligible.length) {
       void vscode.window.showInformationMessage(t('claude.usageAllNone'));
@@ -503,7 +507,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     staleMs: () => usageSchedule('claude').staleMs,
     checkedAt: (dir) => latest(readUsageFetchedAt(dir, isExplicitConfigDir(dir)), claudeCooldown.lastQueried(dir)),
     query: async (dir) => {
-      const result = await claudeQueries.queryIfStale(dir, () => claudeOthersAllowed() && readAccountInfo(dir, isExplicitConfigDir(dir)).identity !== undefined && !subscriptionState(dir).unavailable);
+      const result = await claudeQueries.queryIfStale(dir, () => claudeOthersAllowed() && claudeIdentity(dir) !== undefined && !subscriptionState(dir).unavailable);
       if (!result) return claudeOthersAllowed() ? 'skipped' : false;
       // The account may have become the current one meanwhile: the monitor then takes the result as its attempt
       claudeUsage.record(dir, result);
@@ -524,7 +528,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     }),
   });
   const otherClaudeDirs = (): string[] => store.all().map((a) => a.dir)
-    .filter((dir) => !samePath(dir, currentDir()) && readAccountInfo(dir, isExplicitConfigDir(dir)).identity !== undefined && !subscriptionState(dir).unavailable);
+    .filter((dir) => !samePath(dir, currentDir()) && claudeIdentity(dir) !== undefined && !subscriptionState(dir).unavailable);
   const otherCodexDirs = (): string[] => (codex?.store.all() ?? []).map((a) => a.dir).filter((dir) => {
     if (samePath(dir, effectiveDir()) || preserveProviderConfig(dir)) return false;
     const info = readCodexAccountInfo(dir);
@@ -599,10 +603,11 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   };
   checkLinks();
 
-  const panel = new AccountsPanel(ctx.extensionUri, { claude: claudePanelSource(store, claudeLabels, claudeExclusions, subscriptionState), codex: codexSource }, ctx.globalState,
+  const panel = new AccountsPanel(ctx.extensionUri, { claude: claudePanelSource(store, claudeLabels, claudeExclusions, subscriptionState, claudeModelCache), codex: codexSource }, ctx.globalState,
     { claude: new RecommendDismissals(state, 'claude.recommendDismissed'), codex: new RecommendDismissals(state, 'codex.recommendDismissed') });
   // Model lists that need no key load in the background after activation, so the API card forms offer them at once
   void modelCache.refreshPublic().then((changed) => { if (changed) panel.refresh(); }).catch(() => undefined);
+  void claudeModelCache.refreshPublic().then((changed) => { if (changed) panel.refresh(); }).catch(() => undefined);
   // A stored observation of the effective Codex account (another window, an earlier session) is shown from the start
   usage?.adoptCached();
   // Re-render expiry even when no query is due, including accounts other than the effective one.
@@ -621,7 +626,9 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     panel,
     vscode.window.registerWebviewViewProvider(VIEW_ID, panel),
     statusBar,
-    ...registerCommands({ store, panel, statusBar, labels: claudeLabels, exclusions: claudeExclusions, codex, tools, checkSubscription: async (dir) => {
+    ...registerCommands({ store, panel, statusBar, labels: claudeLabels, exclusions: claudeExclusions, codex, tools, modelCache: claudeModelCache, checkSubscription: async (dir) => {
+      // An API card has no subscription
+      if (hasClaudeProviderMarker(dir)) return;
       await manualRefresh('claude', () => claudeProcessQueue(async () => {
         const explicit = isExplicitConfigDir(dir);
         const result = await subscription.check(dir, explicit, true, claudeAbort.signal);

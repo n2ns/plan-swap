@@ -5,6 +5,9 @@
 // throws t('account.containsDefaultDir', { dir, default }) before anything is written; existing content of the default
 // dir is never overwritten or deleted, except that syncClaudeAccount updates the synced items of the default account's
 // info file and the MCP sign-ins of its credentials file; links are absolute; report names use '/' on every platform.
+// A Claude API card's own files (cardFiles) are skipped by every entry point, and ensureClaudeLinks (except in check
+// mode), migrateClaudeToShared, makeClaudeIndependent and copyClaudeIndependent throw t('claude.provider.notLocal')
+// before writing when one of them is a link or not a regular file (assertClaudeProviderFilesLocal).
 import * as fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import * as path from 'node:path';
@@ -15,6 +18,7 @@ import {
   comparablePath, isOpaqueReparseDir, JunctionError, LinkPrivilegeError, createLink, fileLinksAvailable, isWindows, pidAlive, renameReplacing, type StartTimeProbe,
   stripBom, unlinkLinks, windowsStartTimes, isPlainObject, withLockDir,
 } from './platform';
+import { CLAUDE_PROVIDER_FILES, ProviderConfigError, assertClaudeProviderFilesLocal, hasClaudeProviderMarker } from './claudeProvider';
 
 // Whole-entry links (kind: file needs an empty-file default, dir needs an empty dir). 'projects' is the marker entry
 // that isSharedClaudeAccount checks. Not shared: .credentials.json, .claude.json (mirrored instead) and everything else
@@ -104,6 +108,23 @@ function isDefault(dir: string): boolean {
 function assertNotDefaultAncestor(dir: string): void {
   const def = defaultDir();
   if (realPathInside(dir, def)) throw new Error(t('account.containsDefaultDir', { dir: path.resolve(dir), default: def }));
+}
+
+/** The entries a Claude API card owns (claudeProvider CLAUDE_PROVIDER_FILES): sharing never links, copies, strips,
+ *  moves, replaces or deduplicates them, so a card keeps its own settings.json and the default account never gets the
+ *  card's env. Empty for an ordinary account. */
+function cardFiles(dir: string): ReadonlySet<string> {
+  return new Set<string>(hasClaudeProviderMarker(dir) ? CLAUDE_PROVIDER_FILES : []);
+}
+
+// Before a sharing write: a card's own files must still be regular files in its folder, else nothing is written
+function assertCardFilesLocal(dir: string): void {
+  try {
+    assertClaudeProviderFilesLocal(dir);
+  } catch (err) {
+    if (err instanceof ProviderConfigError) throw new Error(t('claude.provider.notLocal', { dir: path.resolve(dir) }));
+    throw err;
+  }
 }
 
 export function emptyReport(): ShareReport {
@@ -318,6 +339,8 @@ export function ensureClaudeLinks(dir: string, procRoot = '/proc', options: Link
   const selected = (name: string): boolean => !entries || entries.has(name) || entries.has(name.split('/')[0]);
   assertNotDefaultAncestor(dir);
   const check = !!options.check;
+  const own = cardFiles(dir);
+  if (!check) assertCardFilesLocal(dir);
   const def = defaultDir();
   const acc = path.resolve(dir);
   if (!check) {
@@ -335,7 +358,7 @@ export function ensureClaudeLinks(dir: string, procRoot = '/proc', options: Link
   // Merging a file's lines back removes it; without file-link privilege it could not be linked again, so it stays
   const fileLinks = check ? options.fileLinks ?? true : fileLinksAvailable(acc);
   for (const { name, kind } of CLAUDE_SHARED_ENTRIES) {
-    if (!selected(name)) continue;
+    if (!selected(name) || own.has(name)) continue;
     const target = path.join(def, name);
     const link = path.join(acc, name);
     const source = sharedSource(target, kind);
@@ -1235,6 +1258,8 @@ export function migrateClaudeToShared(dir: string, accountName: string, procRoot
   if (isDefault(dir)) return report;
   assertNotDefaultAncestor(dir);
   if (claudeAccountBusy(dir, procRoot) || options.busy?.()) throw new Error(t('share.busy', { name: label }));
+  assertCardFilesLocal(dir);
+  const own = cardFiles(dir);
   const def = defaultDir();
   const acc = path.resolve(dir);
   fs.mkdirSync(def, { recursive: true, mode: 0o700 });
@@ -1245,6 +1270,7 @@ export function migrateClaudeToShared(dir: string, accountName: string, procRoot
   const fileLinks = fileLinksAvailable(acc);
 
   for (const { name, kind } of CLAUDE_SHARED_ENTRIES) {
+    if (own.has(name)) continue;
     const src = path.join(acc, name);
     const st = lstatOrUndefined(src);
     if (!st || st.isSymbolicLink()) continue;   // missing or already a link (a link elsewhere stays a conflict)
@@ -1381,6 +1407,7 @@ export function copyClaudeIndependent(fromJson: string, dir: string): { copied: 
   const copied: string[] = [];
   if (isDefault(dir)) return { copied };
   assertNotDefaultAncestor(dir);
+  assertCardFilesLocal(dir);
   const def = defaultDir();
   const acc = path.resolve(dir);
   fs.mkdirSync(acc, { recursive: true, mode: 0o700 });
@@ -1447,12 +1474,14 @@ export function makeClaudeIndependent(fromJson: string, dir: string): { removed:
   if (isDefault(dir)) throw new Error(t('unshare.default', { dir }));
   assertNotDefaultAncestor(dir);
   if (!isSharedClaudeAccount(dir)) throw new Error(t('unshare.notShared', { dir }));
+  assertCardFilesLocal(dir);
+  const own = cardFiles(dir);
   const def = defaultDir();
   const acc = path.resolve(dir);
   const removed: string[] = [];
   const unlinkEntries = (config: boolean): void => {
     for (const { name } of CLAUDE_SHARED_ENTRIES) {
-      if (INDEPENDENT_CONFIG_ENTRIES.has(name) === config) unlinkIfLinksTo(path.join(acc, name), path.join(def, name), name, removed);
+      if (!own.has(name) && INDEPENDENT_CONFIG_ENTRIES.has(name) === config) unlinkIfLinksTo(path.join(acc, name), path.join(def, name), name, removed);
     }
   };
   const unlinkChildren = (name: string): void =>

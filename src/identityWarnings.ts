@@ -3,6 +3,7 @@
 import * as vscode from 'vscode';
 import { readAccountInfo } from './paths';
 import { isExplicitConfigDir } from './claudeSettings';
+import { hasClaudeProviderMarker } from './claudeProvider';
 import { readCodexAccountInfo } from './codex/codexPaths';
 import { identityGroupsKey, sameIdentityGroups } from './identity';
 import { t } from './i18n';
@@ -17,7 +18,9 @@ export interface IdentitySource {
   identityOf(dir: string): string | undefined;
 }
 
-export const claudeIdentity = (dir: string): string | undefined => readAccountInfo(dir, isExplicitConfigDir(dir)).identity;
+/** The Claude sign-in identity of dir; none for an API card, which has no Claude sign-in (its folder is never compared,
+ *  queried for usage or probed for a subscription, whatever its info file says). */
+export const claudeIdentity = (dir: string): string | undefined => hasClaudeProviderMarker(dir) ? undefined : readAccountInfo(dir, isExplicitConfigDir(dir)).identity;
 export const codexIdentity = (dir: string): string | undefined => readCodexAccountInfo(dir).identity;
 
 /** In-memory duplicate sign-in warnings; identity values never leave the process. */

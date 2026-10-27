@@ -14,6 +14,7 @@ Los nombres de botones de esta guía son los de la interfaz en español. Pasa el
 - [Cambiar de cuenta de Claude](#cambiar-de-cuenta-de-claude)
 - [Activar y cambiar cuentas de Codex](#activar-y-cambiar-cuentas-de-codex)
 - [Usar una tarjeta API](#usar-una-tarjeta-api)
+- [Usar una tarjeta API de Claude](#usar-una-tarjeta-api-de-claude)
 - [Elegir cuentas vinculadas o independientes](#elegir-cuentas-vinculadas-o-independientes)
 - [Consultar y actualizar los límites de uso](#consultar-y-actualizar-los-límites-de-uso)
 - [Renombrar o quitar cuentas](#renombrar-o-quitar-cuentas)
@@ -169,6 +170,25 @@ La acción de terminal inicia Codex con el directorio de esta tarjeta sin el flu
 La clave se guarda en texto plano en el `config.toml` propio de esta tarjeta, nunca en la barra lateral ni en el estado de PlanSwap, y solo se envía al endpoint de la tarjeta. Incluso en modo vinculado, la configuración del proveedor, la clave y el catálogo de modelos siguen independientes. Solo se copian una vez los ajustes escalares compatibles de aprobación y sandbox de la configuración predeterminada; no se importan definiciones MCP ni la confianza de proyectos, y los cambios posteriores en la configuración predeterminada no se sincronizan. Las demás instrucciones, habilidades e historial permitidos siguen el modo de uso compartido elegido. Puede que el historial compartido no se pueda reanudar entre proveedores; reanudarlo con un servicio de API puede enviarle ese contexto. Consulta [Privacidad](privacy.md).
 
 Las ventanas del mismo editor en una distribución WSL comparten la selección de Codex; estas tarjetas no aíslan el backend por ventana de proyecto. VS Code y VSCodium mantienen sus selecciones separadas. Windows nativo sigue requiriendo reiniciar el editor por completo. La aceptación pendiente con clientes reales figura en [TODO](../TODO.md).
+
+## Usar una tarjeta API de Claude
+
+Una tarjeta API de Claude permite que la extensión oficial de Claude Code y la CLI usen otro servicio de IA en lugar de un inicio de sesión de Claude: DeepSeek, Kimi, OpenRouter, Z.ai, Ollama en este equipo, o cualquier endpoint personalizado que ofrezca la API Messages de Anthropic, como una pasarela LiteLLM. El servicio debe ofrecer un endpoint compatible con Anthropic; uno que solo ofrece la API de OpenAI no se puede usar directamente.
+
+En el formulario de Claude, elige **Servicio de API**, introduce un nombre nuevo y elige el modo vinculado o independiente. Todo se hace en la barra lateral:
+
+1. Elige el servicio en la lista. Con **Endpoint personalizado**, introduce la dirección que Claude Code debe usar en lugar de la de Anthropic, como `https://gateway.example.com` (Claude Code añade `/v1/messages` por su cuenta). Las direcciones deben empezar por `https://`; `http://` solo se acepta para este equipo (`localhost`).
+2. Introduce la clave API en el campo de clave (muestra puntos). Es obligatoria para DeepSeek, Kimi, OpenRouter y Z.ai; para Ollama y endpoints personalizados puedes dejarla vacía si el endpoint no la necesita.
+3. Elige el modelo. DeepSeek muestra sus dos modelos al momento, y también OpenRouter y Ollama (si está en marcha), cuyas listas PlanSwap mantiene al día en segundo plano tras abrir el editor. Para Kimi y Z.ai la lista se carga en cuanto dejas de escribir la clave y se guarda para la próxima vez; la de un endpoint personalizado se carga en cuanto dejas de escribir su dirección o clave. Si la carga falla, el motivo aparece debajo; corrígelo y la lista se vuelve a cargar, o pulsa **Cargar modelos** para reintentar. Si el endpoint no ofrece lista de modelos, puedes escribir entonces el ID del modelo en la lista y elegir la entrada `Add "…"`.
+4. Pulsa la marca de verificación (**Añadir**). Para cancelar, cierra el formulario con **×**.
+
+Requiere un directorio nuevo; una cuenta de Claude existente no se convierte. No se necesita una suscripción de Claude.
+
+La tarjeta muestra el servicio, el modelo, el host del endpoint y si la configuración está completa. Es una comprobación local, no una prueba de conexión. Pulsa **Editar configuración de API** (el engranaje) para cambiar el endpoint, introducir una clave nueva (déjala vacía para conservar la guardada) o elegir otro modelo, y después pulsa **Guardar**. Cambiar el endpoint requiere volver a introducir la clave: una clave guardada solo se envía a su propio endpoint. Al editar se conservan los ajustes que Claude Code añade por su cuenta al `settings.json` de la tarjeta.
+
+Cambia a la tarjeta como a cualquier cuenta de Claude y recarga la ventana: las nuevas sesiones de Claude usan entonces el servicio y el modelo sin pantalla de inicio de sesión, y lo mismo hace el terminal de la tarjeta. El modelo se usa para todas las elecciones de modelo de Claude Code, incluidas las tareas en segundo plano y los subagentes. Crear o editar una tarjeta no cambia de cuenta. Vuelve a una cuenta de suscripción para usar Claude de nuevo. Las tarjetas API de Claude no tienen barras de uso, actualización de uso ni recomendación, y las funciones que necesitan una cuenta de claude.ai, como el dictado por voz, no están disponibles mientras una tarjeta es la actual.
+
+La clave se guarda en texto plano en el `settings.json` propio de la tarjeta (como `ANTHROPIC_AUTH_TOKEN`), nunca en los ajustes del editor ni en el estado de PlanSwap, y solo se envía al endpoint de la tarjeta. Incluso en modo vinculado, el `settings.json` de la tarjeta sigue siendo propio, así que los cambios posteriores en tus ajustes predeterminados de Claude Code no le llegan; el resto del contenido vinculado (historial, instrucciones, habilidades) sigue el modo elegido. Reanudar una conversación vinculada en una tarjeta envía esa conversación al servicio de la tarjeta. Anthropic no da soporte a Claude Code con modelos que no son de Claude, así que algunas funciones pueden no funcionar con todos los servicios. Consulta [Privacidad](privacy.md).
 
 ## Elegir cuentas vinculadas o independientes
 

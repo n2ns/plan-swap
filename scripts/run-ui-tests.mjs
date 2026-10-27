@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { startPreview } from './preview/server.mjs';
 import { cachedListGuards, run as deepseekCards } from '../test/preview/checks/deepseek.mjs';
+import { run as claudeApiCards } from '../test/preview/checks/claude-api.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const output = path.join(root, '.test-out', 'ui');
@@ -1146,13 +1147,13 @@ try {
   await interactions();
   await updatedAgoTicks();
   for (const locale of locales) for (const width of widths) {
-    const apiCtx = {
+    const apiCtx = (prefix, mode) => ({
       page, locale, width,
       step: async (label, ok, detail) => {
         assert.ok(ok, `${label} at ${locale}-${width}: ${JSON.stringify(detail)}`);
         results.interactions.push(`${locale}-${width}: ${label}`);
       },
-      shot: (file) => shot(`deepseek-${file}`, 'codex'),
+      shot: (file) => shot(`${prefix}-${file}`, mode),
       apply: async (mutate, active) => {
         await page.evaluate(({ locale, width, active, source }) => {
           window.preview.apply({ locale, width, active });
@@ -1161,10 +1162,12 @@ try {
           window.preview.post({ type: 'state', state });
         }, { locale, width, active, source: mutate.toString() });
       },
-    };
-    await deepseekCards(apiCtx);
+    });
+    const codexCtx = apiCtx('deepseek', 'codex');
+    await deepseekCards(codexCtx);
     // Behavior rather than layout: one case is enough
-    if (locale === 'en' && width === 280) await cachedListGuards(apiCtx);
+    if (locale === 'en' && width === 280) await cachedListGuards(codexCtx);
+    await claudeApiCards(apiCtx('claude-api', 'claude'));
   }
   assert.deepEqual(results.consoleErrors, [], 'preview console must have no errors or warnings');
   console.log(`UI preview passed: ${results.cases.length} layout cases, ${codexShots} Codex screenshots, ${results.interactions.length} interactions`);

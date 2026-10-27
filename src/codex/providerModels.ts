@@ -12,12 +12,18 @@ export class ModelListError extends Error {
   }
 }
 
-export async function fetchModels(baseUrl: string, key: string, timeoutMs = 15_000): Promise<string[]> {
+/** options.anthropic: an Anthropic-style service (Claude API cards), which also takes the key as x-api-key and needs
+ *  anthropic-version. */
+export async function fetchModels(baseUrl: string, key: string, timeoutMs = 15_000, options?: { anthropic?: boolean }): Promise<string[]> {
   const url = baseUrl.replace(/\/+$/, '') + '/models';
   let response: Response;
   try {
     response = await fetch(url, {
-      headers: { Accept: 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) },
+      headers: {
+        Accept: 'application/json',
+        ...(key ? { Authorization: `Bearer ${key}` } : {}),
+        ...(options?.anthropic ? { 'anthropic-version': '2023-06-01', ...(key ? { 'x-api-key': key } : {}) } : {}),
+      },
       redirect: 'error',
       signal: AbortSignal.timeout(timeoutMs),
     });

@@ -30,14 +30,22 @@ import {
 import { describeShareReport } from './shareReport';
 import { currentDir, isExplicitConfigDir, setConfigDir } from './claudeSettings';
 import type { AccountStore } from './accounts';
-import type { AccountsPanel } from './accountsPanel';
+import { claudeCardLabel, claudeProviderErrorText, type AccountsPanel } from './accountsPanel';
+import {
+  CLAUDE_API_SERVICES, CLAUDE_SERVICE_INFO, ProviderConfigError, claudeModelsUrl, createClaudeProviderConfig, editClaudeProviderConfig,
+  hasClaudeProviderMarker, readClaudeProviderEditState, readClaudeProviderInfo, readClaudeProviderKey, validateClaudeProviderConfig,
+  type ClaudeApiService,
+} from './claudeProvider';
+import type { ClaudeModelCache } from './claudeModelCache';
+import { checkBaseUrl } from './codex/codexProvider';
+import { fetchModels, ModelListError } from './codex/providerModels';
 import type { StatusBar } from './statusBar';
 import { labelFor, sameName, type LabelStore, EXTERNAL_NAME } from './labels';
 import type { RecommendExclusions } from './recommend';
-import type { FromWebview } from './protocol';
+import type { ApiCardInput, FromWebview } from './protocol';
 import type { CodexAccountStore } from './codex/codexStore';
 import { syncClaudeInto, runTool, type TerminalCheck, type ToolDeps } from './tools';
-import { t } from './i18n';
+import { joinSentences, t } from './i18n';
 import { isWindows, errText } from './platform';
 import { askCopyFallback } from './linkPolicy';
 import { parseAccountUri } from './accountUri';
@@ -65,6 +73,8 @@ export interface Deps {
   bundledClaude?: () => string | undefined;
   // Receives this module's "account terminal open" check, so the toolbar's Re-link can treat such an account as busy
   provideTerminalCheck?: (check: TerminalCheck) => void;
+  // Model lists of the Claude API card services (claude.modelCache); a list a form loads for a preset is stored there
+  modelCache?: ClaudeModelCache;
 }
 
 /**
@@ -97,6 +107,17 @@ export interface Deps {
  *   to the terminal's PATH (windowsAccountEnv / linuxClaudeCommand), so `claude` still starts without an installed CLI; closing a PlanSwap terminal refreshes
  *   the UI and warns when a still-registered named account is still signed out.
  * - planswap.refresh re-syncs both stores with the disk and refreshes the panel and status bar.
+ * - API cards (hasClaudeProviderMarker): the add form sends the service, endpoint, key and model; the host checks them
+ *   (a missing required key or an unusable endpoint is refused before any directory exists), creates a NEW folder,
+ *   createClaudeProviderConfig, then links (keeping the two provider files) or copies like any account and registers
+ *   it without switching; a failure after the folder was made deletes it through deleteAccountDir. providerModels
+ *   answers DeepSeek's fixed list or fetchModels of claudeModelsUrl (the typed key, else the saved key of the card
+ *   being edited, only for its own service and endpoint; a preset's list at its preset endpoint is cached).
+ *   saveProvider edits a marked named row with a fresh revision. Switching (panel, Command Palette, URI) and
+ *   share/unshare refuse a card failing validateClaudeProviderConfig; switching to a card is the ordinary
+ *   CLAUDE_CONFIG_DIR write (Claude Code applies the card's settings.json env). Cards get no subscription check,
+ *   sign-in tip, "still signed out" warning or recommendation mark; their terminal starts claude with
+ *   CLAUDE_CONFIG_DIR as usual.
  */
 export function registerCommands(deps: Deps): vscode.Disposable[] {
   const { store, panel, statusBar, labels, exclusions, codex, tools } = deps;
@@ -130,10 +151,11 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
     }
     const picked = await vscode.window.showQuickPick(
       accounts.map((account) => {
-        const info = readAccountInfo(account.dir, isExplicitConfigDir(account.dir));
+        const card = account.name === DEFAULT_NAME ? undefined : readClaudeProviderInfo(account.dir);
+        const info = card ? undefined : readAccountInfo(account.dir, isExplicitConfigDir(account.dir));
         return {
           label: labelOf(account),
-          description: info.email ?? t(info.loggedIn ? 'common.loggedIn' : 'common.notLoggedIn'),
+          description: card ? claudeCardLabel(card.provider) : info!.email ?? t(info!.loggedIn ? 'common.loggedIn' : 'common.notLoggedIn'),
           detail: account.dir,
           account,
         };
@@ -162,6 +184,7 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
       void vscode.window.showErrorMessage(t('account.dirMissing', { dir: account.dir }));
       return false;
     }
+    if (!providerReady(account)) return false;
     // A shared current account syncs with the default account first (as the account in use), so the incoming account
     // gets what it changed. A failure cancels the switch, so nothing is left half synced behind the user's back
     const outgoing = currentDir();
@@ -186,6 +209,8 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
         return false;
       }
     }
+    // The re-link above may have run into the card's files: checked again right before the switch
+    if (!providerReady(account)) return false;
     try {
       await setConfigDir(account.name === DEFAULT_NAME ? undefined : account.dir);
     } catch (err) {
@@ -213,10 +238,132 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
   // Info file of the default account: the source of mirrored MCP servers and project settings
   const defaultJson = (): string => claudeJsonPath(defaultDir(), isExplicitConfigDir(defaultDir()));
 
-  // shared: link everything but the login to the default account; otherwise copy its configuration once
-  async function addAccount(name: string, shared: boolean): Promise<string | undefined> {
+  // A named account that is a Claude API card (the default account never is one)
+  const isCard = (account: Account): boolean => account.name !== DEFAULT_NAME && hasClaudeProviderMarker(account.dir);
+
+  // A card must pass local validation before it is switched to or converted; shows why not
+  function providerReady(account: Account): boolean {
+    if (!isCard(account)) return true;
+    try {
+      validateClaudeProviderConfig(account.dir);
+      return true;
+    } catch (err) {
+      const reason = claudeProviderErrorText(err instanceof ProviderConfigError ? err.code : 'file');
+      void vscode.window.showErrorMessage(t('codex.provider.unavailable', { reason }));
+      return false;
+    }
+  }
+
+  const isService = (value: string): value is ClaudeApiService => (CLAUDE_API_SERVICES as readonly string[]).includes(value);
+  const badText = (value: string): boolean => /\s|[\x00-\x1f\x7f]/u.test(value);
+
+  // The model list for a form: DeepSeek's fixed list, otherwise GET <claudeModelsUrl>/models with the key typed in the
+  // form, or the saved key of the card being edited (dir) when none was typed. Errors name only the status or the cause
+  async function listProviderModels(msg: { service: string; baseUrl?: string; key: string; dir?: string }): Promise<{ models?: string[]; error?: string }> {
+    if (!isService(msg.service)) return { error: claudeProviderErrorText('format') };
+    const info = CLAUDE_SERVICE_INFO[msg.service];
+    if (info.models) return { models: [...info.models] };
+    let baseUrl: string;
+    let key = msg.key.trim();
+    try {
+      baseUrl = checkBaseUrl(msg.baseUrl?.trim() || info.baseUrl);
+      if (!key && msg.dir) {
+        // A saved key goes only to its own card's service and endpoint; another one needs the key typed again
+        const card = panel.resolve(MODE, msg.dir);
+        if (card?.kind === 'named' && hasClaudeProviderMarker(card.dir)) {
+          const saved = readClaudeProviderEditState(card.dir);
+          if (saved.service !== msg.service || saved.baseUrl !== baseUrl) return { error: t('codex.provider.newEndpointNeedsKey') };
+          key = readClaudeProviderKey(card.dir);
+        }
+      }
+    } catch (err) {
+      return { error: claudeProviderErrorText(err instanceof ProviderConfigError ? err.code : 'file') };
+    }
+    if (badText(key)) return { error: claudeProviderErrorText('key') };
+    try {
+      const models = await fetchModels(claudeModelsUrl(msg.service, baseUrl), key, undefined, { anthropic: true });
+      // A preset's list at its own endpoint is the service's list: keep it for the next form
+      if (msg.service !== 'custom' && baseUrl === info.baseUrl) {
+        void deps.modelCache?.set(msg.service, models).then(() => panel.refresh()).catch(() => undefined);
+      }
+      return { models };
+    } catch (err) {
+      const e = err instanceof ModelListError ? err : new ModelListError('network');
+      return { error: e.code === 'http' ? t('codex.provider.modelsHttp', { status: e.status ?? 0 }) : t(e.code === 'format' ? 'codex.provider.modelsFormat' : 'codex.provider.modelsNetwork') };
+    }
+  }
+
+  // The edit form's values; key '' keeps the saved key, an empty endpoint keeps the saved one. Errors carry no config text
+  async function saveProvider(account: Account, msg: { model: string; baseUrl?: string; key: string }): Promise<string | undefined> {
+    try {
+      const before = readClaudeProviderEditState(account.dir);
+      const registered = store.find(account.name);
+      if (!registered || !samePath(registered.dir, account.dir)) return claudeProviderErrorText('changed');
+      const baseUrl = msg.baseUrl?.trim() || undefined;
+      // Moving the saved key to another endpoint needs it typed again, as for the model list
+      if (!msg.key.trim() && before.hasKey && baseUrl !== undefined && baseUrl !== before.baseUrl) return t('codex.provider.newEndpointNeedsKey');
+      editClaudeProviderConfig(account.dir, { model: msg.model.trim(), key: msg.key.trim(), baseUrl }, before.revision);
+      return undefined;
+    } catch (err) {
+      return joinSentences(t('codex.provider.editFailed'), claudeProviderErrorText(err instanceof ProviderConfigError ? err.code : 'write'));
+    } finally {
+      refreshUi();
+    }
+  }
+
+  // An API card: the form's fields are checked before anything is created, and the card always gets a NEW folder (an
+  // existing one is never adopted). A failure after the folder was made deletes it again (deleteAccountDir only)
+  async function addProviderAccount(name: string, shared: boolean, input: ApiCardInput): Promise<string | undefined> {
+    const account: Account = { name, dir: accountDir(name) };
+    if (!isService(input.service)) return claudeProviderErrorText('format');
+    const service = input.service;
+    const model = input.model.trim();
+    const key = input.key.trim();
+    const baseUrl = input.baseUrl?.trim() || undefined;
+    if (!model || badText(model)) return claudeProviderErrorText('model');
+    if (CLAUDE_SERVICE_INFO[service].keyRequired && !key) return t('codex.provider.keyRequired');
+    if (badText(key)) return claudeProviderErrorText('key');
+    if (service === 'custom' || baseUrl !== undefined) {
+      try { checkBaseUrl(baseUrl ?? CLAUDE_SERVICE_INFO[service].baseUrl); } catch { return claudeProviderErrorText('url'); }
+    }
     const error = validateName(name, store, labels);
     if (error) return error;
+    if (lstatOrUndefined(account.dir)) return t('codex.provider.dirExists', { dir: account.dir });
+    let created = false;
+    try {
+      fs.mkdirSync(account.dir, { mode: 0o700 });
+      created = true;
+      createClaudeProviderConfig(account.dir, service, { model, key, baseUrl });
+      if (shared) {
+        const options = await askCopyFallback(account.dir, 'Claude');
+        validateClaudeProviderConfig(account.dir);
+        const report = ensureClaudeLinks(account.dir, procRoot, { ...options, busy: linkBusy(account) });
+        if (!isSharedClaudeAccount(account.dir)) throw new Error('not linked');
+        syncClaudeInto(defaultJson(), account.dir);
+        const notes = describeShareReport(report);
+        if (notes) void vscode.window.showWarningMessage(t('share.addNotes', { name, notes }));
+      } else {
+        copyClaudeIndependent(defaultJson(), account.dir);
+      }
+      validateClaudeProviderConfig(account.dir);
+      await store.add(account);
+    } catch (err) {
+      if (created) {
+        try { await deleteAccountDir(account.dir); } catch { /* left for the user; the message names the folder */ }
+      }
+      // Never an arbitrary exception text: the form's fields must not come back to the Webview
+      const reason = err instanceof ProviderConfigError ? claudeProviderErrorText(err.code) : t('codex.provider.error.write');
+      return joinSentences(t('codex.provider.createFailed', { dir: account.dir }), reason);
+    }
+    refreshUi();
+    return undefined;
+  }
+
+  // shared: link everything but the login to the default account; otherwise copy its configuration once
+  async function addAccount(name: string, shared: boolean, provider?: ApiCardInput): Promise<string | undefined> {
+    const error = validateName(name, store, labels);
+    if (error) return error;
+    if (provider) return addProviderAccount(name, shared, provider);
     const account: Account = { name, dir: accountDir(name) };
     try {
       ensureAccountDir(account.dir);
@@ -260,12 +407,13 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
   // Converts an independent account to a shared one after a modal confirmation
   async function shareAccount(account: Account): Promise<void> {
     if (account.name === DEFAULT_NAME || isSharedClaudeAccount(account.dir)) return;
+    if (!providerReady(account)) return;
     if (inUse(account)) {
       void vscode.window.showWarningMessage(t('share.current', { label: labelOf(account) }));
       return;
     }
     const ok = t('share.confirmButton');
-    const picked = await vscode.window.showWarningMessage(t('share.confirm', { label: labelOf(account), dir: account.dir }), { modal: true }, ok);
+    const picked = await vscode.window.showWarningMessage(t(isCard(account) ? 'claude.provider.shareConfirm' : 'share.confirm', { label: labelOf(account), dir: account.dir }), { modal: true }, ok);
     if (picked !== ok) return;
     // Re-checked after the modal: another window may have switched to the account meanwhile
     if (inUse(account)) {
@@ -292,6 +440,7 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
       return;
     }
     try {
+      if (!providerReady(account)) return;
       const report = migrateClaudeToShared(account.dir, account.name, procRoot, labelOf(account), { ...linkOptions, busy: linkBusy(account) });
       syncClaudeInto(defaultJson(), account.dir);
       void vscode.window.showInformationMessage(t(isSharedClaudeAccount(account.dir) ? 'share.done' : 'share.incomplete', { label: labelOf(account), summary: describeShareReport(report) || t('share.nothingElse') }));
@@ -304,12 +453,13 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
   // Converts a shared account back to an independent one after a modal confirmation; history stays in the default dir
   async function unshareAccount(account: Account): Promise<void> {
     if (account.name === DEFAULT_NAME || !isSharedClaudeAccount(account.dir)) return;
+    if (!providerReady(account)) return;
     if (inUse(account)) {
       void vscode.window.showWarningMessage(t('unshare.current', { label: labelOf(account) }));
       return;
     }
     const ok = t('unshare.confirmButton');
-    const picked = await vscode.window.showWarningMessage(t('unshare.confirm', { label: labelOf(account), dir: account.dir }), { modal: true }, ok);
+    const picked = await vscode.window.showWarningMessage(t(isCard(account) ? 'claude.provider.unshareConfirm' : 'unshare.confirm', { label: labelOf(account), dir: account.dir }), { modal: true }, ok);
     if (picked !== ok) return;
     if (inUse(account)) {
       void vscode.window.showWarningMessage(t('unshare.current', { label: labelOf(account) }));
@@ -320,6 +470,7 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
       return;
     }
     try {
+      if (!providerReady(account)) return;
       const r = makeClaudeIndependent(defaultJson(), account.dir);
       void vscode.window.showInformationMessage(
         t('unshare.done', { label: labelOf(account), removed: r.removed.length, copied: r.copied.join(', ') || t('unshare.nothingCopied') }),
@@ -401,7 +552,8 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
     // Windows shells have no `env` command: the terminal environment carries CLAUDE_CONFIG_DIR and PATH there
     terminal.sendText(isWindows() ? 'claude' : linuxClaudeCommand(linuxDir, bundled));
     terminal.show();
-    if (!readAccountInfo(account.dir, isExplicitConfigDir(account.dir)).loggedIn) {
+    // An API card has no sign-in: its Claude Code uses the card's settings.json
+    if (!isCard(account) && !readAccountInfo(account.dir, isExplicitConfigDir(account.dir)).loggedIn) {
       void vscode.window.showInformationMessage(t('account.loginTip', { vendor: 'Claude' }));
     }
   }
@@ -411,7 +563,7 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
     switch (msg.type) {
       case 'switch': {
         const a = panel.resolve(MODE, msg.dir);
-        if (!a || isCurrent(a)) return;
+        if (!a || isCurrent(a) || !providerReady(a)) return;
         // Panel entries (switch button, double-click, Enter) confirm first unless planswap.claude.confirmSwitch is off;
         // the Command Palette pick is already explicit
         if (vscode.workspace.getConfiguration('planswap').get<boolean>(CONFIRM_SWITCH_SETTING, true) !== false) {
@@ -429,7 +581,8 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
       }
       case 'subscriptionCheck': {
         const a = panel.resolve(MODE, msg.dir);
-        if (a) await deps.checkSubscription?.(a.dir);
+        // An API card has no subscription to check
+        if (a && !hasClaudeProviderMarker(a.dir)) await deps.checkSubscription?.(a.dir);
         return;
       }
       case 'remove': {
@@ -441,11 +594,22 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
         // Any failure still answers, so the panel never keeps waiting for the result
         let error: string | undefined;
         try {
-          error = await addAccount(msg.name.trim(), msg.shared !== false);
+          error = await addAccount(msg.name.trim(), msg.shared !== false, msg.provider);
         } catch (err) {
-          error = errText(err);
+          error = msg.provider ? t('codex.provider.createFailed', { dir: accountDir(msg.name.trim()) }) : errText(err);
         }
         panel.post({ type: 'addResult', mode: MODE, error });
+        return;
+      }
+      case 'providerModels': {
+        const result = await listProviderModels(msg);
+        panel.post({ type: 'providerModelsResult', mode: MODE, request: msg.request, ...result });
+        return;
+      }
+      case 'saveProvider': {
+        const a = panel.resolve(MODE, msg.dir);
+        const error = a?.kind === 'named' && hasClaudeProviderMarker(a.dir) ? await saveProvider(a, msg) : claudeProviderErrorText('unmanaged');
+        panel.post({ type: 'saveProviderResult', mode: MODE, dir: msg.dir, error });
         return;
       }
       case 'share': {
@@ -470,7 +634,7 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
       }
       case 'recommendExclude': {
         const a = panel.resolve(MODE, msg.dir);
-        if (!a || a.kind === 'external') return;
+        if (!a || a.kind === 'external' || hasClaudeProviderMarker(a.dir)) return;
         await exclusions?.set(a.name, msg.excluded !== false);
         panel.refresh();
         return;
@@ -562,6 +726,7 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
         account.name !== EXTERNAL_NAME &&
         store.find(account.name) &&
         fs.existsSync(account.dir) &&
+        !hasClaudeProviderMarker(account.dir) &&
         !readAccountInfo(account.dir, isExplicitConfigDir(account.dir)).loggedIn
       ) {
         void vscode.window.showWarningMessage(
