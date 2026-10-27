@@ -13,6 +13,9 @@ import { shQuote } from '../src/terminalShell';
 import { t } from '../src/i18n';
 import { LabelStore } from '../src/labels';
 import { accountDir, defaultDir } from '../src/paths';
+import type { ClaudeLogoutResult } from '../src/claudeLogout';
+import { isExplicitConfigDir } from '../src/claudeSettings';
+import { usageEnv } from '../src/claudeUsage';
 import type { FromWebview, ToWebview } from '../src/protocol';
 import type { StatusBar } from '../src/statusBar';
 import { commands, resetConfig, setConfig, updates, window, type StubTerminal } from './stubs/vscode';
@@ -142,7 +145,9 @@ describe('panel message handlers (Claude)', () => {
     switchedTo: string | undefined;
     dispose(): void;
   }
-  function harness(checkSubscription?: (dir: string) => Promise<void>, bundledClaude?: () => string | undefined): Harness {
+  function harness(
+    checkSubscription?: (dir: string) => Promise<void>, bundledClaude?: () => string | undefined, logoutClaude?: (dir: string) => Promise<ClaudeLogoutResult>,
+  ): Harness {
     const memento = new MemoryMemento();
     const store = new AccountStore(memento);
     const labels = new LabelStore(memento, 'claude.labels');
@@ -162,7 +167,7 @@ describe('panel message handlers (Claude)', () => {
     const statusBar = { update() {} } as unknown as StatusBar;
     const exclusions = new RecommendExclusions(memento, 'claude.recommendExcluded');
     h.exclusions = exclusions;
-    const disposables = registerCommands({ store, panel, statusBar, labels, exclusions, tools: {}, procRoot: procRoot(), checkSubscription, bundledClaude });
+    const disposables = registerCommands({ store, panel, statusBar, labels, exclusions, tools: {}, procRoot: procRoot(), checkSubscription, bundledClaude, logoutClaude });
     h.dispose = () => disposables.forEach((d) => d.dispose());
     return h;
   }
@@ -384,6 +389,153 @@ describe('panel message handlers (Claude)', () => {
     } finally {
       h.dispose();
     }
+  });
+
+  test('remove never runs the sign-out off macOS', { skip: process.platform === 'darwin' }, async (ctx) => {
+    const h = harness(undefined, undefined, async () => assert.fail('no sign-out expected'));
+    const dir = await add(h, 'plain', false);
+    ctx.mock.method(window, 'showWarningMessage', async () => t('common.deleteDir'));
+    try {
+      await h.handle({ type: 'remove', mode: 'claude', dir });
+      assert.ok(!fs.existsSync(dir));
+    } finally {
+      h.dispose();
+    }
+  });
+
+  describe('macOS (Keychain sign-ins)', () => {
+    const realPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+    before(() => Object.defineProperty(process, 'platform', { value: 'darwin' }));
+    after(() => Object.defineProperty(process, 'platform', realPlatform));
+    const anyway = t('claude.mac.deleteAnyway');
+
+    test('switching, the login terminal and the usage query use the identical resolved folder; the default account sets none', async (ctx) => {
+      const h = harness();
+      const dir = accountDir('kc');
+      fs.mkdirSync(dir);
+      // A stored spelling with a trailing separator would name another Keychain item
+      const spelled = dir + path.sep;
+      await h.store.add({ name: 'kc', dir: spelled });
+      ctx.mock.method(window, 'showInformationMessage', async () => undefined);
+      const created = ctx.mock.method(window, 'createTerminal');
+      try {
+        setConfig('planswap', CONFIRM_SWITCH_SETTING, false);
+        await h.handle({ type: 'switch', mode: 'claude', dir: spelled });
+        assert.equal(configured(), dir);
+        assert.equal(usageEnv(spelled, isExplicitConfigDir(spelled), {}).CLAUDE_CONFIG_DIR, dir);
+        await h.handle({ type: 'terminal', mode: 'claude', dir: spelled });
+        await h.handle({ type: 'switch', mode: 'claude', dir: defaultDir() + path.sep });
+        assert.deepEqual(updates.at(-1)?.value, [], 'the default account removes the variable instead of writing its path');
+        assert.equal(usageEnv(defaultDir(), isExplicitConfigDir(defaultDir()), { CLAUDE_CONFIG_DIR: dir }).CLAUDE_CONFIG_DIR, undefined);
+        await h.handle({ type: 'terminal', mode: 'claude', dir: defaultDir() });
+        const opened = created.mock.calls.map((c) => ({
+          env: (c.arguments[0] as { env?: Record<string, string> }).env,
+          sent: (c.result as StubTerminal).sent,
+        }));
+        assert.deepEqual(opened, [
+          { env: { CLAUDE_CONFIG_DIR: dir }, sent: [`env CLAUDE_CONFIG_DIR=${shQuote(dir)} claude`] },
+          { env: undefined, sent: ['env -u CLAUDE_CONFIG_DIR claude'] },
+        ]);
+      } finally {
+        h.dispose();
+      }
+    });
+
+    test('remove signs a subscription account out through the CLI, then deletes it', async (ctx) => {
+      const calls: string[] = [];
+      const h = harness(undefined, undefined, async (d) => {
+        calls.push(d);
+        assert.ok(fs.existsSync(d), 'signed out while the folder still exists');
+        return { ok: true };
+      });
+      const dir = await add(h, 'out', false);
+      const warning = ctx.mock.method(window, 'showWarningMessage', async () => t('common.deleteDir'));
+      try {
+        await h.handle({ type: 'remove', mode: 'claude', dir });
+        assert.deepEqual(calls, [dir]);
+        assert.ok(!fs.existsSync(dir));
+        assert.equal(warning.mock.callCount(), 1, 'only the delete-directory prompt');
+      } finally {
+        h.dispose();
+      }
+    });
+
+    test('remove does not sign out an account whose deletion is declined, refused or blocked, nor an API card', async (ctx) => {
+      const calls: string[] = [];
+      const h = harness(undefined, undefined, async (d) => { calls.push(d); return { ok: true }; });
+      let answer: string | undefined;
+      ctx.mock.method(window, 'showWarningMessage', async () => answer);
+      ctx.mock.method(window, 'showErrorMessage', async () => undefined);
+      try {
+        // Declined
+        const kept = await add(h, 'kept', false);
+        await h.handle({ type: 'remove', mode: 'claude', dir: kept });
+        assert.ok(fs.existsSync(kept));
+        answer = t('common.deleteDir');
+        // Refused by checkSafeToDelete: a symlinked folder
+        const real = path.join(home, 'real-l');
+        fs.mkdirSync(real);
+        const link = accountDir('l');
+        fs.symlinkSync(real, link, 'junction');
+        await h.store.add({ name: 'l', dir: link });
+        await h.handle({ type: 'remove', mode: 'claude', dir: link });
+        assert.ok(fs.existsSync(real));
+        // Busy: a running Claude process of the account
+        const busy = await add(h, 'busy', false);
+        runningIn(busy, 43);
+        await h.handle({ type: 'remove', mode: 'claude', dir: busy });
+        assert.ok(fs.existsSync(busy));
+        // An API card has no Keychain sign-in
+        const card = await add(h, 'card', false);
+        fs.writeFileSync(path.join(card, '.planswap-provider.json'), '{}');
+        await h.handle({ type: 'remove', mode: 'claude', dir: card });
+        assert.ok(!fs.existsSync(card));
+        assert.deepEqual(calls, []);
+      } finally {
+        h.dispose();
+      }
+    });
+
+    test('a failed sign-out asks before deleting; the detail is a code or error, never output', async (ctx) => {
+      let result: ClaudeLogoutResult = { ok: false, reason: 'failed', detail: 'exit code 1' };
+      const h = harness(undefined, undefined, async () => result);
+      await h.labels.set('x', 'Work');
+      let answers: Array<string | undefined> = [];
+      const warning = ctx.mock.method(window, 'showWarningMessage', async () => answers.shift());
+      const failedPrompt = (detail: string): unknown[] => [t('claude.mac.logoutFailed', { name: 'Work', detail }), { modal: true }, anyway];
+      try {
+        // Cancel keeps the folder
+        let dir = await add(h, 'x', false);
+        answers = [t('common.deleteDir'), undefined];
+        await h.handle({ type: 'remove', mode: 'claude', dir });
+        assert.deepEqual(warning.mock.calls[1].arguments, failedPrompt('exit code 1'));
+        assert.ok(fs.existsSync(dir));
+        fs.rmSync(dir, { recursive: true });
+        // Delete anyway deletes it
+        dir = await add(h, 'x', false);
+        await h.labels.set('x', 'Work');
+        result = { ok: false, reason: 'timeout' };
+        answers = [t('common.deleteDir'), anyway];
+        await h.handle({ type: 'remove', mode: 'claude', dir });
+        assert.deepEqual(warning.mock.calls[3].arguments, failedPrompt(t('tools.ver.timeout')));
+        assert.ok(!fs.existsSync(dir));
+        // A missing CLI; the account became busy while the prompt was open
+        dir = await add(h, 'x', false);
+        await h.labels.set('x', 'Work');
+        result = { ok: false, reason: 'cliMissing' };
+        answers = [t('common.deleteDir'), anyway];
+        warning.mock.mockImplementation(async (...args: unknown[]) => {
+          if (args[0] === failedPrompt('spawn claude ENOENT')[0]) runningIn(dir, 44);
+          return answers.shift();
+        });
+        await h.handle({ type: 'remove', mode: 'claude', dir });
+        assert.deepEqual(warning.mock.calls[5].arguments, failedPrompt('spawn claude ENOENT'));
+        assert.deepEqual(warning.mock.calls[6].arguments, [t('share.busy', { name: 'Work' })]);
+        assert.ok(fs.existsSync(dir));
+      } finally {
+        h.dispose();
+      }
+    });
   });
 
   test('switch to a shared account re-links and mirrors first; link problems only warn, a failed mirror cancels', LINUX_ONLY, async (ctx) => {

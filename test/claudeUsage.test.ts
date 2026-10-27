@@ -624,7 +624,7 @@ test('queryClaudeUsage cancels the running bundled child without starting anothe
 test('findBundledClaude finds only files in supported layouts, preferring the current architecture', () => {
   const tmp = makeTempHome('claude-bundled-layouts');
   try {
-    for (const platform of ['linux', 'win32'] as const) {
+    for (const platform of ['linux', 'win32', 'darwin'] as const) {
       const extension = path.join(tmp.home, platform);
       const name = platform === 'win32' ? 'claude.exe' : 'claude';
       const legacy = path.join(extension, 'resources', 'native-binary', name);
@@ -643,7 +643,7 @@ test('findBundledClaude finds only files in supported layouts, preferring the cu
       fs.rmdirSync(arm64);
       fs.writeFileSync(arm64, '');
       assert.equal(findBundledClaude(extension, platform, 'arm64'), arm64);
-      assert.equal(findBundledClaude(extension, 'darwin', 'arm64'), undefined);
+      assert.equal(findBundledClaude(extension, 'freebsd', 'arm64'), undefined);
     }
   } finally { tmp.restore(); }
 });

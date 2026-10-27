@@ -1,4 +1,5 @@
 import * as fs from 'node:fs';
+import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
   DEFAULT_NAME,
@@ -15,6 +16,7 @@ import {
   samePath,
   sameRealPath,
   caseVariantOf,
+  checkSafeToDelete,
   configDirFromEnv,
 } from './paths';
 import {
@@ -28,7 +30,7 @@ import {
   syncClaudeAccount,
 } from './claudeShare';
 import { describeShareReport } from './shareReport';
-import { currentDir, isExplicitConfigDir, setConfigDir } from './claudeSettings';
+import { currentDir, isExplicitConfigDir, setConfigDir, settingEnv } from './claudeSettings';
 import type { AccountStore } from './accounts';
 import { claudeCardLabel, claudeProviderErrorText, type AccountsPanel } from './accountsPanel';
 import {
@@ -46,7 +48,8 @@ import type { ApiCardInput, FromWebview } from './protocol';
 import type { CodexAccountStore } from './codex/codexStore';
 import { syncClaudeInto, runTool, type TerminalCheck, type ToolDeps } from './tools';
 import { joinSentences, t } from './i18n';
-import { isWindows, lacksProcfs, errText } from './platform';
+import { isMac, isWindows, lacksProcfs, errText } from './platform';
+import { logoutClaude, type ClaudeLogoutResult } from './claudeLogout';
 import { askCopyFallback } from './linkPolicy';
 import { parseAccountUri } from './accountUri';
 import { accountTerminalShell, bundledPathAssignment, hasControlChars, shQuote, windowsAccountEnv, windowsTerminalEnvSetting } from './terminalShell';
@@ -75,6 +78,8 @@ export interface Deps {
   provideTerminalCheck?: (check: TerminalCheck) => void;
   // Model lists of the Claude API card services (claude.modelCache); a list a form loads for a preset is stored there
   modelCache?: ClaudeModelCache;
+  // macOS sign-out before a delete; default logoutClaude with the setting variables and bundledClaude. Tests pass a fake
+  logoutClaude?: (dir: string) => Promise<ClaudeLogoutResult>;
 }
 
 /**
@@ -97,7 +102,10 @@ export interface Deps {
  *   terminal-busy callback (linkBusy) to ensureClaudeLinks / migrateClaudeToShared; switching re-links with linkBusy only.
  * - Remove: the current account (any spelling, sameRealPath) and a busy one are refused before the first confirmation,
  *   after the Command Palette confirmation and again after the delete-directory confirmation. The alias is cleared with
- *   the account; the directory is deleted only through deleteAccountDir, after which it is no longer ignored.
+ *   the account; the directory is deleted only through deleteAccountDir, after which it is no longer ignored. macOS:
+ *   when the deletion would go ahead (checkSafeToDelete passes), a subscription account (not an API card) is first
+ *   signed out with logoutClaude, which removes its Keychain sign-in; when that fails a modal names the account and a
+ *   short detail (never CLI output) and only "Delete anyway" goes on (busy and current state re-checked after it).
  * - Rename: named rows only; always answers renameResult.
  * - recommendExclude: registered rows only (the external row is ignored); sets or clears the recommendation mark and
  *   refreshes the panel. The mark is cleared with the account (remove, or a pruned directory on sync).
@@ -136,7 +144,7 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
   const inUse = (a: Account): boolean => isCurrent(a) || sameRealPath(a.dir, currentDir());
   // Display name: the alias if set, otherwise the name
   const labelOf = (a: Account): string => labelFor(a.name, labels);
-  // Windows and macOS cannot attribute a running Claude process to an account (see windowsSessionsBusy), so an open
+  // Windows and macOS cannot attribute a running Claude process to an account (see sessionRecordsBusy), so an open
   // terminal of the account also counts; on Linux the /proc check covers terminals
   const terminalOpen: TerminalCheck = (dir) => lacksProcfs() && [...terminals.values()].some((x) => samePath(x.dir, dir));
   deps.provideTerminalCheck?.(terminalOpen);
@@ -481,6 +489,23 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
     refreshUi();
   }
 
+  const logout = deps.logoutClaude ?? ((dir: string) => logoutClaude(dir, { env: settingEnv(), fallback: deps.bundledClaude }));
+  // macOS: `claude auth logout` for the account; true when it succeeded or the user chose to delete anyway. The detail
+  // is an error message, exit code or timeout, never CLI output
+  async function signOutBeforeDelete(account: Account, label: string): Promise<boolean> {
+    let detail: string;
+    try {
+      const r = await logout(account.dir);
+      if (r.ok) return true;
+      detail = r.reason === 'timeout' ? t('tools.ver.timeout') : r.reason === 'cliMissing' ? 'spawn claude ENOENT' : r.detail ?? r.reason;
+    } catch (err) {
+      detail = errText(err);
+    }
+    const anyway = t('claude.mac.deleteAnyway');
+    const answer = await vscode.window.showWarningMessage(t('claude.mac.logoutFailed', { name: label, detail }), { modal: true }, anyway);
+    return answer === anyway;
+  }
+
   // confirmed: the panel already did an inline confirmation; Command Palette entries need a modal confirmation
   async function removeAccount(account: Account, confirmed: boolean): Promise<void> {
     if (account.name === DEFAULT_NAME || !store.find(account.name)) return;
@@ -521,6 +546,11 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
       deleteDirLabel,
     );
     if (delDir !== deleteDirLabel || blocked()) return;
+    // macOS: the sign-in lives in the Keychain under a name derived from the folder and would outlive it, so a later
+    // account in the same folder would start signed in. Only for a deletion that goes ahead (a refused one keeps it)
+    if (isMac() && !isCard(account) && checkSafeToDelete(account.dir) === undefined) {
+      if (!(await signOutBeforeDelete(account, label)) || blocked()) return;
+    }
     try {
       await deleteAccountDir(account.dir);
       // The directory is gone; stop ignoring it so a recreated directory is auto-discovered again
@@ -532,9 +562,10 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
 
   function openTerminal(account: Account): void {
     const isDefault = account.name === DEFAULT_NAME;
-    const dir = isDefault ? undefined : account.dir;
+    // The string setConfigDir writes: on macOS Claude Code names the Keychain sign-in after the exact value
+    const dir = isDefault ? undefined : path.resolve(account.dir);
     // Linux: the default account gets the host's CLAUDE_CONFIG_DIR (or none), so an rc export cannot redirect its sign-in
-    const linuxDir = isDefault ? configDirFromEnv() : account.dir;
+    const linuxDir = isDefault ? configDirFromEnv() : dir;
     // Linux types the folder into the shell; a control character (a newline) would end the command line early
     if (!isWindows() && linuxDir !== undefined && hasControlChars(linuxDir)) {
       void vscode.window.showErrorMessage(t('terminal.badDir', { dir: JSON.stringify(linuxDir) }));

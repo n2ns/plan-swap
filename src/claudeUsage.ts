@@ -163,10 +163,11 @@ export function readClaudeUsage(dir: string, explicit = false, now: number = Dat
   return parseUsageCache(readInfo(dir, explicit), now);
 }
 
-/** The official extension's native binary, using its platform-specific layout before its single-platform layout.
- * Windows ARM64 also supports the extension's x64 fallback. Only this extension host's installation is searched. */
+/** The official extension's native binary, using its platform-specific layout before its single-platform layout
+ * (the one the macOS extension ships: resources/native-binary/claude). Windows ARM64 also supports the extension's x64
+ * fallback. Only this extension host's installation is searched. */
 export function findBundledClaude(extensionPath: string, platform: NodeJS.Platform = process.platform, arch: string = process.arch): string | undefined {
-  if (platform !== 'win32' && platform !== 'linux') return undefined;
+  if (platform !== 'win32' && platform !== 'linux' && platform !== 'darwin') return undefined;
   const name = platform === 'win32' ? 'claude.exe' : 'claude';
   const candidates = [path.join(extensionPath, 'resources', 'native-binaries', `${platform}-${arch}`, name)];
   if (platform === 'win32' && arch === 'arm64') {
