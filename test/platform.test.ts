@@ -11,7 +11,7 @@ import {
 } from '../src/platform';
 import { decodeEnvOutput, getUserCodexHome, getUserEnv, setUserCodexHome, setUserEnv } from '../src/codex/codexWindows';
 import { manualRestartMessages } from '../src/codex/codexCommands';
-import { LINUX_ONLY, makeTempHome, type TempHome } from './helpers';
+import { makeTempHome, POSIX_ONLY, type TempHome } from './helpers';
 
 let tmp: TempHome;
 before(() => {
@@ -33,7 +33,7 @@ describe('platform', () => {
     assert.equal(comparablePath('/A/b', 'win32'), path.resolve('/A/b').toLowerCase());
   });
 
-  test('createLink creates a symlink on Linux', LINUX_ONLY, () => {
+  test('createLink creates a symlink on Linux', POSIX_ONLY, () => {
     const target = path.join(tmp.home, 'target');
     fs.mkdirSync(target);
     const link = path.join(tmp.home, 'link');

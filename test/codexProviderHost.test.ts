@@ -12,7 +12,7 @@ import { LabelStore } from '../src/labels';
 import { ModelCache } from '../src/codex/modelCache';
 import type { FromWebview, ToWebview } from '../src/protocol';
 import { t } from '../src/i18n';
-import { LINUX_ONLY, makeTempHome, MemoryMemento } from './helpers';
+import { makeTempHome, MemoryMemento, POSIX_ONLY } from './helpers';
 import { env, window } from './stubs/vscode';
 
 function harness() {
@@ -152,7 +152,7 @@ test('model lists: DeepSeek from its catalog, others from GET <endpoint>/models 
   } finally { h.close(); }
 });
 
-test('invalid provider cards cannot switch or open a subscription sign-in terminal', LINUX_ONLY, async (ctx) => {
+test('invalid provider cards cannot switch or open a subscription sign-in terminal', POSIX_ONLY, async (ctx) => {
   const h = harness();
   const previousRemote = env.remoteName;
   env.remoteName = undefined;

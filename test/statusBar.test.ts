@@ -12,7 +12,7 @@ import { AccountStore } from '../src/accounts';
 import { CodexAccountStore } from '../src/codex/codexStore';
 import { LabelStore } from '../src/labels';
 import { setLocale, type Locale } from '../src/i18n';
-import { LINUX_ONLY, makeTempHome, MemoryMemento } from './helpers';
+import { makeTempHome, MemoryMemento, POSIX_ONLY } from './helpers';
 import { fireConfigurationChange, htmlText, MarkdownString, resetConfig, setConfig, statusBarItems, StatusBarAlignment, ThemeColor, tooltipText } from './stubs/vscode';
 import { installRcBlocks, writeSelectedDir } from '../src/codex/codexState';
 import type { CodexUsageState } from '../src/codex/codexUsageMonitor';
@@ -426,7 +426,7 @@ describe('Codex usage limits in the tooltip', () => {
   });
 });
 
-describe('both products in the status bar', LINUX_ONLY, () => {
+describe('both products in the status bar', POSIX_ONLY, () => {
   const NOW_MS = Date.now();
   const iso = (ms: number): string => new Date(ms).toISOString();
   let temp: ReturnType<typeof makeTempHome>;

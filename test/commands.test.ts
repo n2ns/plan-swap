@@ -19,7 +19,7 @@ import { usageEnv } from '../src/claudeUsage';
 import type { FromWebview, ToWebview } from '../src/protocol';
 import type { StatusBar } from '../src/statusBar';
 import { commands, resetConfig, setConfig, updates, window, type StubTerminal } from './stubs/vscode';
-import { LINUX_ONLY, makeTempHome, MemoryMemento, snapshot, type TempHome } from './helpers';
+import { makeTempHome, MemoryMemento, POSIX_ONLY, snapshot, type TempHome } from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -112,7 +112,7 @@ describe('shQuote', () => {
     assert.equal(shQuote(''), `''`);
   });
 
-  test('bash reads the quoted value back byte for byte', LINUX_ONLY, () => {
+  test('bash reads the quoted value back byte for byte', POSIX_ONLY, () => {
     for (const s of [`/tmp/a b`, `it's`, `$HOME`, '`id`', `a"b\\c`, `x;rm -rf y`, `line\nbreak`]) {
       assert.equal(execFileSync('bash', ['-c', `printf %s ${shQuote(s)}`], { encoding: 'utf8' }), s);
     }
@@ -209,7 +209,7 @@ describe('panel message handlers (Claude)', () => {
     }
   });
 
-  test('adding a kept independent directory does not claim that linking succeeded', LINUX_ONLY, async (ctx) => {
+  test('adding a kept independent directory does not claim that linking succeeded', POSIX_ONLY, async (ctx) => {
     const h = harness();
     const dir = accountDir('kept');
     fs.mkdirSync(path.join(dir, 'projects'), { recursive: true });
@@ -225,7 +225,7 @@ describe('panel message handlers (Claude)', () => {
     }
   });
 
-  test('adding a linked account whose settings.json is refused says it was added and explains the copy', LINUX_ONLY, async (ctx) => {
+  test('adding a linked account whose settings.json is refused says it was added and explains the copy', POSIX_ONLY, async (ctx) => {
     const h = harness();
     const def = defaultDir();
     const cfg = path.join(def, 'settings.json');
@@ -251,7 +251,7 @@ describe('panel message handlers (Claude)', () => {
     }
   });
 
-  test('a conversion that leaves the marker unlinked reports an incomplete link', LINUX_ONLY, async (ctx) => {
+  test('a conversion that leaves the marker unlinked reports an incomplete link', POSIX_ONLY, async (ctx) => {
     const h = harness();
     const dir = await add(h, 'conflict', false);
     const elsewhere = path.join(home, 'other-projects');
@@ -538,7 +538,7 @@ describe('panel message handlers (Claude)', () => {
     });
   });
 
-  test('switch to a shared account re-links and mirrors first; link problems only warn, a failed mirror cancels', LINUX_ONLY, async (ctx) => {
+  test('switch to a shared account re-links and mirrors first; link problems only warn, a failed mirror cancels', POSIX_ONLY, async (ctx) => {
     const h = harness();
     const dir = await add(h, 's', true);
     // A link replaced by a real file is a conflict; a running session keeps a purged history from being merged
@@ -583,7 +583,7 @@ describe('panel message handlers (Claude)', () => {
     }
   });
 
-  test('switching away from a shared current account syncs it with the default first; a failure cancels the switch', LINUX_ONLY, async (ctx) => {
+  test('switching away from a shared current account syncs it with the default first; a failure cancels the switch', POSIX_ONLY, async (ctx) => {
     const h = harness();
     const a = await add(h, 'a', true);
     const b = await add(h, 'b', true);
@@ -617,7 +617,7 @@ describe('panel message handlers (Claude)', () => {
     }
   });
 
-  test('adding a directory as a linked account syncs its own settings and the default both ways', LINUX_ONLY, async () => {
+  test('adding a directory as a linked account syncs its own settings and the default both ways', POSIX_ONLY, async () => {
     const h = harness();
     const defJson = path.join(home, '.claude.json');
     fs.writeFileSync(defJson, JSON.stringify({ mcpServers: { def: { command: 'def' } } }));
@@ -735,7 +735,7 @@ describe('panel message handlers (Claude)', () => {
   });
 
   for (const changed of ['current', 'unregistered', 'terminal'] as const) {
-    test(`Windows share rechecks ${changed} after the file-link fallback modal`, LINUX_ONLY, async (ctx) => {
+    test(`Windows share rechecks ${changed} after the file-link fallback modal`, POSIX_ONLY, async (ctx) => {
       const h = harness();
       const solo = await add(h, 'fallback-guard', false);
       fs.mkdirSync(path.join(solo, 'projects'));
@@ -781,7 +781,7 @@ describe('panel message handlers (Claude)', () => {
     });
   }
 
-  test('the share command picks only an independent non-current account and converts it after confirmation', LINUX_ONLY, async (ctx) => {
+  test('the share command picks only an independent non-current account and converts it after confirmation', POSIX_ONLY, async (ctx) => {
     const h = harness();
     const current = await add(h, 'current', false);
     const shared = await add(h, 'shared', true);
@@ -834,7 +834,7 @@ describe('panel message handlers (Claude)', () => {
     }
   });
 
-  test('unshare: confirmed conversion, cancellation, busy account, and ignored rows', LINUX_ONLY, async (ctx) => {
+  test('unshare: confirmed conversion, cancellation, busy account, and ignored rows', POSIX_ONLY, async (ctx) => {
     const h = harness();
     const shared = await add(h, 's', true);
     const solo = await add(h, 'i', false);

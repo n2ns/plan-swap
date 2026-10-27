@@ -11,7 +11,7 @@ import {
   removeLinuxState, removeRcBlocks, selfCheck, stateFileFor, upgradeRcBlocks, watchedStateFiles, writeSelectedDir,
   writeSelection,
 } from '../src/codex/codexState';
-import { LINUX_ONLY, RC_FILES, assertTempHome, makeTempHome, read, type TempHome } from './helpers';
+import { assertTempHome, LINUX_ONLY, makeTempHome, POSIX_ONLY, RC_FILES, read, type TempHome } from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -82,7 +82,7 @@ describe('state files per editor kind', () => {
   });
 });
 
-describe('server-env-setup hook block', LINUX_ONLY, () => {
+describe('server-env-setup hook block', POSIX_ONLY, () => {
   afterEach(clean);
 
   test('writeSelection of a hook kind installs the block once, keeps the user content and writes only its own file', () => {
@@ -260,7 +260,7 @@ describe('upgradeRcBlocks', RC_FILES, () => {
   });
 });
 
-describe('self-check under an inherited CODEX_HOME (real bash -i -l)', LINUX_ONLY, () => {
+describe('self-check under an inherited CODEX_HOME (real bash -i -l)', POSIX_ONLY, () => {
   const configDir = (): string => path.dirname(STATE_FILE());
   before(() => {
     fs.writeFileSync(bashrc(), 'case $- in\n    *i*) ;;\n      *) return;;\nesac\n');

@@ -9,9 +9,9 @@ import { ensureClaudeLinks, syncClaudeAccount } from '../src/claudeShare';
 import { ensureCodexLinks, isSharedCodexAccount } from '../src/codex/codexShare';
 import { joinSentences, setLocale, t } from '../src/i18n';
 import { commands, env, resetConfig, setConfig, window } from './stubs/vscode';
-import { inLocale, LINUX_ONLY, makeTempHome, MemoryMemento } from './helpers';
+import { inLocale, makeTempHome, MemoryMemento, POSIX_ONLY } from './helpers';
 
-describe('Claude repair scope', LINUX_ONLY, () => {
+describe('Claude repair scope', POSIX_ONLY, () => {
   function fixture() {
     const tmp = makeTempHome('claude-repair');
     const def = path.join(tmp.home, '.claude');
@@ -330,7 +330,7 @@ describe('Claude repair scope', LINUX_ONLY, () => {
   });
 });
 
-describe('Codex optional theme checks', LINUX_ONLY, () => {
+describe('Codex optional theme checks', POSIX_ONLY, () => {
   test('unused themes are quiet, but existing themes with a missing account link still prompt', async (ctx) => {
     const tmp = makeTempHome('codex-theme-notice');
     try {

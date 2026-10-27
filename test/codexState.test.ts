@@ -9,7 +9,9 @@ import {
   migrateLegacyCodex, removeRcBlockFrom, removeRcBlocks, selfCheck, writeSelectedDir, disableWindows, selfCheckWindows,
 } from '../src/codex/codexState';
 import type { Runner } from '../src/codex/codexWindows';
-import { assertTempHome, makeTempHome, assertMode, LINUX_ONLY, read, withEnv, type TempHome } from './helpers';
+import {
+  assertMode, assertTempHome, LINUX_ONLY, makeTempHome, POSIX_ONLY, read, type TempHome, withEnv,
+} from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -531,7 +533,7 @@ describe('preCheck', LINUX_ONLY, () => {
   });
 });
 
-describe('selfCheck (real bash -i -l, clean environment)', LINUX_ONLY, () => {
+describe('selfCheck (real bash -i -l, clean environment)', POSIX_ONLY, () => {
   // selfCheck's internal spawnSync takes no env argument and only inherits process.env; during the call, process.env
   // is replaced with a minimal env -i style environment (HOME is the temp dir) so outer variables such as CODEX_HOME do not leak into the login shell
   const inCleanEnv = <T,>(fn: () => T): T => {

@@ -17,7 +17,7 @@ import { AccountStore } from '../src/accounts';
 import { LabelStore } from '../src/labels';
 import { setLocale } from '../src/i18n';
 import { OtherAccountChecks } from '../src/usageOthers';
-import { LINUX_ONLY, makeTempHome, MemoryMemento, withEnv } from './helpers';
+import { makeTempHome, MemoryMemento, POSIX_ONLY, withEnv } from './helpers';
 
 const NOW = Date.parse('2026-10-01T12:00:00Z');
 const iso = (ms: number): string => new Date(ms).toISOString();
@@ -94,7 +94,7 @@ test('parseUsageCache drops windows whose reset time has passed', () => {
   assert.equal(parseUsageCache(cache(), NOW + 50 * HOUR), undefined);
 });
 
-test('readClaudeUsage reads ~/.claude.json for the default account and <dir>/.claude.json otherwise', LINUX_ONLY, () => {
+test('readClaudeUsage reads ~/.claude.json for the default account and <dir>/.claude.json otherwise', POSIX_ONLY, () => {
   const tmp = makeTempHome('claude-usage-read');
   try {
     const def = path.join(tmp.home, '.claude');
@@ -109,7 +109,7 @@ test('readClaudeUsage reads ~/.claude.json for the default account and <dir>/.cl
   } finally { tmp.restore(); }
 });
 
-test('usageEnv points the CLI at the file PlanSwap reads and applies the Claude Code setting variables', LINUX_ONLY, () => {
+test('usageEnv points the CLI at the file PlanSwap reads and applies the Claude Code setting variables', POSIX_ONLY, () => {
   const tmp = makeTempHome('claude-usage-env');
   try {
     const home = path.join(tmp.home, '.claude');
@@ -434,7 +434,7 @@ test('queryClaudeUsage reports stale or missing caches and CLI errors without ex
   } finally { tmp.restore(); }
 });
 
-test('queryClaudeUsage reports a missing CLI and ends a hanging one after the timeout', LINUX_ONLY, async () => {
+test('queryClaudeUsage reports a missing CLI and ends a hanging one after the timeout', POSIX_ONLY, async () => {
   const tmp = makeTempHome('claude-usage-timeout');
   try {
     const dir = path.join(tmp.home, '.claude-work');
@@ -777,7 +777,7 @@ test('a cache refreshed elsewhere after a failed attempt clears that failure wit
   assert.equal(m.current().failure, undefined);
 });
 
-test('readUsageFetchedAt returns the attributable cache time of any age', LINUX_ONLY, () => {
+test('readUsageFetchedAt returns the attributable cache time of any age', POSIX_ONLY, () => {
   const tmp = makeTempHome('claude-usage-fetched');
   try {
     const dir = path.join(tmp.home, '.claude-work');
@@ -867,7 +867,7 @@ test('oneAtATime runs tasks in call order without overlap, also after a failure'
   assert.deepEqual(results.map((r) => r.status), ['fulfilled', 'rejected', 'fulfilled']);
 });
 
-test('queryClaudeUsage ends the running child when the signal aborts', LINUX_ONLY, async () => {
+test('queryClaudeUsage ends the running child when the signal aborts', POSIX_ONLY, async () => {
   const tmp = makeTempHome('claude-usage-abort');
   try {
     const hang = fakeSpawn(() => undefined);
@@ -890,7 +890,7 @@ test('the monitor takes a result recorded for the current directory only', () =>
   assert.equal(m.current().failure, undefined);
 });
 
-test('the status bar text shows Claude with what is left of its short window; the tooltip lists its windows with a refresh link after the plan', LINUX_ONLY, () => {
+test('the status bar text shows Claude with what is left of its short window; the tooltip lists its windows with a refresh link after the plan', POSIX_ONLY, () => {
   setLocale('en');
   const tmp = makeTempHome('status-claude-usage');
   try {
@@ -917,7 +917,7 @@ test('the status bar text shows Claude with what is left of its short window; th
   } finally { tmp.restore(); }
 });
 
-test('Claude panel rows carry the cached usage of a subscription sign-in only', LINUX_ONLY, async () => {
+test('Claude panel rows carry the cached usage of a subscription sign-in only', POSIX_ONLY, async () => {
   const tmp = makeTempHome('panel-claude-usage');
   try {
     const work = path.join(tmp.home, '.claude-work');

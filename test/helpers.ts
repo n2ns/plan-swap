@@ -43,10 +43,13 @@ function fileSymlinksAllowed(): boolean {
  * privilege needed on Windows), so only the categories below are skipped, each where its platform lacks the behavior.
  */
 /**
- * Linux/WSL behavior: rc files and bash, /proc, the WSL server, fifos, chmod-based permissions and the Linux link semantics
- * of sharing. Skipped on Windows and macOS (macOS has no /proc, and its account switching and server handling differ).
+ * Linux/WSL only: /proc, the WSL server and its editor hooks, and the ~/.profile / ~/.bashrc rc flow, none of which
+ * macOS has (its Codex switching uses the login shell's startup file). Skipped on Windows and macOS.
  */
 export const LINUX_ONLY = { skip: process.platform !== 'linux' && 'Linux/WSL behavior' };
+/** POSIX behavior shared by Linux/WSL and macOS: fifos, chmod-based permissions, bash and the symlink semantics of
+ *  sharing. Skipped on Windows. */
+export const POSIX_ONLY = { skip: onWindows && 'Linux/WSL and macOS behavior' };
 /** Creates file symbolic links, which Windows refuses without Developer Mode or elevation (windowsNoDevMode.test.ts covers that case). */
 export const FILE_SYMLINKS = { skip: !fileSymlinksAllowed() && 'file symbolic links need Windows Developer Mode' };
 /**

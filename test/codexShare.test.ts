@@ -10,7 +10,9 @@ import {
 import { codexAccountDir, deleteCodexDir } from '../src/codex/codexPaths';
 import { describeShareReport } from '../src/shareReport';
 import { sameRealPath } from '../src/paths';
-import { assertTempHome, makeTempHome, assertMode, LINUX_ONLY, onWindows, SHARING, read, snapshot, type TempHome } from './helpers';
+import {
+  assertMode, assertTempHome, LINUX_ONLY, makeTempHome, onWindows, POSIX_ONLY, read, SHARING, snapshot, type TempHome,
+} from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -645,7 +647,7 @@ describe('migrateCodexToShared', SHARING, () => {
     assert.equal(isSharedCodexAccount(acc), true);
   });
 
-  test('sqlite dbs are backed up with their -wal / -shm files, then linked', LINUX_ONLY, () => {
+  test('sqlite dbs are backed up with their -wal / -shm files, then linked', POSIX_ONLY, () => {
     write(path.join(def, 'state_5.sqlite'), 'def db');
     const acc = codexAccountDir('a');
     write(path.join(acc, 'state_5.sqlite'), 'acc db');
@@ -907,7 +909,7 @@ describe('makeCodexIndependent', SHARING, () => {
     assert.deepEqual(snapshot(def), before);
   });
 
-  test('a failed copy leaves the account shared: the sessions marker and the database links are still there', LINUX_ONLY, () => {
+  test('a failed copy leaves the account shared: the sessions marker and the database links are still there', POSIX_ONLY, () => {
     if (process.getuid?.() === 0) return;   // root ignores directory permissions
     write(path.join(def, 'config.toml'), 'model = "m"\n');
     write(path.join(def, 'AGENTS.md'), 'rules');

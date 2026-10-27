@@ -12,7 +12,7 @@ import { activate } from '../src/extension';
 import { setLocale, t } from '../src/i18n';
 import { CLAUDE_REFRESH_ALL_USAGE_COMMAND, CLAUDE_REFRESH_USAGE_COMMAND } from '../src/statusBar';
 import { commands, resetConfig, setConfig, window } from './stubs/vscode';
-import { LINUX_ONLY, makeTempHome, MemoryMemento, type TempHome } from './helpers';
+import { makeTempHome, MemoryMemento, POSIX_ONLY, type TempHome } from './helpers';
 
 let tmp: TempHome;
 let subscriptions: Array<{ dispose(): unknown }> = [];
@@ -62,7 +62,7 @@ function fakeClaude(ctx: TestContext): Array<{ dir: string | undefined; probe: b
   return calls;
 }
 
-test('a manual refresh of a current account confirmed unavailable still queries it', LINUX_ONLY, async (ctx) => {
+test('a manual refresh of a current account confirmed unavailable still queries it', POSIX_ONLY, async (ctx) => {
   ctx.mock.timers.enable({ apis: ['Date'], now: 1_700_000_000_000 });
   writeIdentity(path.join(tmp.home, '.claude.json'), 'current');
   const calls = fakeClaude(ctx);
@@ -74,7 +74,7 @@ test('a manual refresh of a current account confirmed unavailable still queries 
   assert.deepEqual(calls.map((c) => c.probe), [false, true, false], 'the manual refresh queries usage; no automatic probe follows the denial');
 });
 
-test('refresh-all joins its skipped-accounts sentence with the locale separator', LINUX_ONLY, async (ctx) => {
+test('refresh-all joins its skipped-accounts sentence with the locale separator', POSIX_ONLY, async (ctx) => {
   setConfig('planswap', 'language', 'zh-cn');
   writeIdentity(path.join(tmp.home, '.claude.json'), 'current');
   writeIdentity(path.join(tmp.home, '.claude-work', '.claude.json'), 'work');
@@ -93,7 +93,7 @@ test('refresh-all joins its skipped-accounts sentence with the locale separator'
   assert.ok(!summary.includes(` ${skipped}`), summary);
 });
 
-test('a state folder that cannot be created only warns: activation still registers the commands', LINUX_ONLY, async (ctx) => {
+test('a state folder that cannot be created only warns: activation still registers the commands', POSIX_ONLY, async (ctx) => {
   const errors: string[] = [];
   ctx.mock.method(window, 'showErrorMessage', async (message: string) => { errors.push(message); return undefined; });
   // A file where ~/.config/planswap should be
@@ -104,7 +104,7 @@ test('a state folder that cannot be created only warns: activation still registe
   assert.ok(errors.length >= 1, 'the state file problem is reported');
 });
 
-test('an unwritable state folder without a state file only warns and names the file', { skip: (LINUX_ONLY.skip || process.getuid?.() === 0) && 'Linux, not root' }, async (ctx) => {
+test('an unwritable state folder without a state file only warns and names the file', { skip: (POSIX_ONLY.skip || process.getuid?.() === 0) && 'Linux, not root' }, async (ctx) => {
   const errors: string[] = [];
   ctx.mock.method(window, 'showErrorMessage', async (message: string) => { errors.push(message); return undefined; });
   const stateDir = path.join(tmp.home, '.config', 'planswap');

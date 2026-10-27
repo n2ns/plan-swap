@@ -11,7 +11,9 @@ import {
   makeClaudeIndependent, mergeEntry, migrateClaudeToShared, moveEntry, syncClaudeAccount, type MigrateReport, sessionRecordsBusy,
 } from '../src/claudeShare';
 import { accountDir, deleteAccountDir, realPath } from '../src/paths';
-import { assertTempHome, makeTempHome, assertMode, FILE_SYMLINKS, LINUX_ONLY, onWindows, SHARING, read, snapshot, withEnv, type TempHome } from './helpers';
+import {
+  assertMode, assertTempHome, FILE_SYMLINKS, makeTempHome, onWindows, POSIX_ONLY, read, SHARING, snapshot, type TempHome, withEnv,
+} from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -408,7 +410,7 @@ describe('ensureClaudeLinks', SHARING, () => {
     assert.equal(exists(path.join(def, 'projects')), false);
   });
 
-  test('incorrect source types and dangling or cyclic sources fail without replacing them', LINUX_ONLY, () => {
+  test('incorrect source types and dangling or cyclic sources fail without replacing them', POSIX_ONLY, () => {
     const acc = accountDir('invalid');
     const procRoot = fakeProc({});
     for (const kind of ['file', 'dangling', 'cycle']) {
@@ -1279,7 +1281,7 @@ describe('isSharedClaudeAccount on Windows', { skip: process.platform !== 'win32
 });
 
 describe('mergeEntry', () => {
-  test('a fifo the default lacks is left in place instead of being moved', LINUX_ONLY, () => {
+  test('a fifo the default lacks is left in place instead of being moved', POSIX_ONLY, () => {
     const src = path.join(home, 'merge-src');
     const dst = path.join(home, 'merge-dst');
     fs.mkdirSync(src);
@@ -1382,7 +1384,7 @@ describe('migrateClaudeToShared', SHARING, () => {
     assert.equal(fs.readlinkSync(path.join(def, 'agents', 'alias.md')), path.join(home, 'outside.md'));
   });
 
-  test('a link to a skipped FIFO still points to the source entry', LINUX_ONLY, () => {
+  test('a link to a skipped FIFO still points to the source entry', POSIX_ONLY, () => {
     const acc = accountDir('pipe');
     fs.mkdirSync(path.join(acc, 'agents'), { recursive: true });
     const pipe = path.join(acc, 'agents', 'pipe');
@@ -1736,7 +1738,7 @@ describe('copyTree', SHARING, () => {
     assert.throws(() => copyTree(src, dst, 'throw'), { code: 'EEXIST' });
   });
 
-  test('an unreadable folder throws an ordinary error instead of ending the process', LINUX_ONLY, () => {
+  test('an unreadable folder throws an ordinary error instead of ending the process', POSIX_ONLY, () => {
     if (process.getuid?.() === 0) return;   // root ignores directory permissions
     const src = path.join(home, 'tree-src');
     write(path.join(src, 'ok.txt'), 'ok');

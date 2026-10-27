@@ -10,7 +10,7 @@ import {
   STATE_FILE, currentServerKind, installRcBlocks, migrateLegacyCodex, readSelectedDir, stateFileFor, writeSelectedDir,
 } from '../src/codex/codexState';
 import { collectDiagnostics } from '../src/diagnosticsCommand';
-import { LINUX_ONLY, makeTempHome, read, type TempHome } from './helpers';
+import { LINUX_ONLY, makeTempHome, POSIX_ONLY, read, type TempHome } from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -39,7 +39,7 @@ test('the fake parent makes this bundle a VS Code window', LINUX_ONLY, () => {
   assert.equal(currentServerKind(), 'vscode');
 });
 
-test('migrateLegacyCodex in a VS Code window copies the legacy selection to the shared state file', LINUX_ONLY, () => {
+test('migrateLegacyCodex in a VS Code window copies the legacy selection to the shared state file', POSIX_ONLY, () => {
   clean();
   const bashrc = path.join(home, '.bashrc');
   const profile = path.join(home, '.profile');

@@ -8,7 +8,7 @@ import { ensureCodexLinks } from '../src/codex/codexShare';
 import { accountDir } from '../src/paths';
 import { codexAccountDir } from '../src/codex/codexPaths';
 import { accountProblems, announcementKeys, isFixable, LinkCheckNotices, REANNOUNCE_MS, type AccountCheck } from '../src/linkCheck';
-import { assertTempHome, LINUX_ONLY, makeTempHome, MemoryMemento, type TempHome } from './helpers';
+import { assertTempHome, makeTempHome, MemoryMemento, POSIX_ONLY, type TempHome } from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -82,7 +82,7 @@ function assertCheckMatchesRepair(scenario: Scenario, run: (check: boolean, proc
   if (!scenario.busy) assert.deepEqual(fixableOf(run(true, proc)), [], `${scenario.name}: still fixable after the repair`);
 }
 
-describe('Claude read-only link check', LINUX_ONLY, () => {
+describe('Claude read-only link check', POSIX_ONLY, () => {
   const setup = (): { acc: string; def: string } => {
     const def = path.join(home, '.claude');
     write(path.join(def, 'settings.json'), '{"model":"x"}\n');
@@ -210,7 +210,7 @@ describe('Claude read-only link check', LINUX_ONLY, () => {
   });
 });
 
-describe('Codex read-only link check', LINUX_ONLY, () => {
+describe('Codex read-only link check', POSIX_ONLY, () => {
   const CODEX_EXE = '/opt/codex/codex';
   const setup = (): { acc: string; def: string } => {
     const def = path.join(home, '.codex');
@@ -292,7 +292,7 @@ describe('link problems', () => {
     assert.deepEqual(accountProblems(check), [{ kind: 'missing', entries: ['plugins/marketplaces'] }]);
   });
 
-  test('retention-cleaned Claude plugin backups are quiet while missing plugin and skill content remains actionable', LINUX_ONLY, () => {
+  test('retention-cleaned Claude plugin backups are quiet while missing plugin and skill content remains actionable', POSIX_ONLY, () => {
     const def = path.join(home, '.claude');
     const acc = accountDir('backups');
     const proc = fakeProc();

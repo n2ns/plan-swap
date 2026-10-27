@@ -14,7 +14,7 @@ import { LabelStore } from '../src/labels';
 import { accountDir, defaultDir } from '../src/paths';
 import type { StatusBar } from '../src/statusBar';
 import { commands, dispatchUri, env, resetConfig, setConfig, updates, uriHandlers, window, workspace } from './stubs/vscode';
-import { LINUX_ONLY, makeTempHome, MemoryMemento, restoreEnv, type TempHome } from './helpers';
+import { makeTempHome, MemoryMemento, POSIX_ONLY, restoreEnv, type TempHome } from './helpers';
 
 type UriParts = Pick<vscode.Uri, 'scheme' | 'authority' | 'path' | 'query' | 'fragment'>;
 const uri = (query = 'account=default', overrides: Partial<UriParts> = {}): UriParts => ({
@@ -211,7 +211,7 @@ describe('registered Claude account URI handler', { skip: process.platform === '
     assert.deepEqual(execute.mock.calls.map((call) => call.arguments), [['workbench.action.reloadWindow'], ['workbench.action.reloadWindow']]);
   });
 
-  test('invalid parameters and misdelivered WSL requests do not reach the switch', LINUX_ONLY, async (ctx) => {
+  test('invalid parameters and misdelivered WSL requests do not reach the switch', POSIX_ONLY, async (ctx) => {
     await add();
     const error = ctx.mock.method(window, 'showErrorMessage', async () => undefined);
     const execute = ctx.mock.method(commands, 'executeCommand', async () => undefined);
@@ -238,7 +238,7 @@ describe('registered Claude account URI handler', { skip: process.platform === '
     assert.equal(execute.mock.callCount(), 0);
   });
 
-  test('URI switching retains shared-account synchronization and cancels on its failure', LINUX_ONLY, async (ctx) => {
+  test('URI switching retains shared-account synchronization and cancels on its failure', POSIX_ONLY, async (ctx) => {
     const dir = await add();
     ensureClaudeLinks(dir, path.join(tmp.home, 'fake-proc'));
     const source = path.join(tmp.home, '.claude.json');

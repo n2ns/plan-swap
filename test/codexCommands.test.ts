@@ -17,7 +17,9 @@ import { RC_BEGIN, STATE_FILE, installRcBlocks, rcBlock, rcStatus, readSelectedD
 import { CODEX_DEFAULT_NAME, codexAccountDir, deleteCodexDir, readCodexAccountInfo, type CodexAccount } from '../src/codex/codexPaths';
 import { isSharedCodexAccount } from '../src/codex/codexShare';
 import { labelFor } from '../src/labels';
-import { assertTempHome, inLocale, LINUX_ONLY, makeTempHome, MemoryMemento, read, restoreEnv, snapshot, type TempHome } from './helpers';
+import {
+  assertTempHome, inLocale, LINUX_ONLY, makeTempHome, MemoryMemento, POSIX_ONLY, read, restoreEnv, snapshot, type TempHome,
+} from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -105,7 +107,7 @@ describe('local selection with manual restart', () => {
     assert.equal(execute.mock.callCount(), 0);
   });
 
-  test('confirmed named/default selections stay pending without changing the running host or quitting', LINUX_ONLY, async (ctx) => {
+  test('confirmed named/default selections stay pending without changing the running host or quitting', POSIX_ONLY, async (ctx) => {
     const fixture = makeTempHome('manual-selection');
     const home = fixture.home;
     env.remoteName = undefined;
@@ -352,7 +354,7 @@ describe('panel message handlers', () => {
     }
   });
 
-  test('enable: pre-check failures are reported without a confirmation', LINUX_ONLY, async (ctx) => {
+  test('enable: pre-check failures are reported without a confirmation', POSIX_ONLY, async (ctx) => {
     fs.rmSync(path.join(fxHome, '.bash_profile'), { force: true });
     fs.writeFileSync(bashrc(), 'export CODEX_HOME=/mine\n');
     fs.writeFileSync(profile(), 'p=1\n');
@@ -442,7 +444,7 @@ describe('panel message handlers', () => {
     }
   }
 
-  test('switch: an account already effective in this window only realigns the state file; no confirmation, no restart', LINUX_ONLY, async (ctx) => {
+  test('switch: an account already effective in this window only realigns the state file; no confirmation, no restart', POSIX_ONLY, async (ctx) => {
     // Enabled: rc blocks in place (the confirmed switch back to the default needs them)
     fs.writeFileSync(bashrc(), 'x=1\n');
     fs.writeFileSync(profile(), 'p=1\n');
@@ -471,7 +473,7 @@ describe('panel message handlers', () => {
   });
 
   for (const deleteDirectory of [true, false]) {
-    test(`switch: an account removed during confirmation is not selected (delete directory: ${deleteDirectory})`, LINUX_ONLY, async (ctx) => {
+    test(`switch: an account removed during confirmation is not selected (delete directory: ${deleteDirectory})`, POSIX_ONLY, async (ctx) => {
       fs.writeFileSync(bashrc(), 'x=1\n');
       fs.writeFileSync(profile(), 'p=1\n');
       installRcBlocks();
@@ -497,7 +499,7 @@ describe('panel message handlers', () => {
     });
   }
 
-  test('add: a linked account is created and linked; an independent one gets a copy; invalid names are reported', LINUX_ONLY, async () => {
+  test('add: a linked account is created and linked; an independent one gets a copy; invalid names are reported', POSIX_ONLY, async () => {
     fs.mkdirSync(def, { recursive: true });
     fs.writeFileSync(path.join(def, 'config.toml'), 'model = "m"\n');
     fs.mkdirSync(path.join(def, 'sessions'), { recursive: true });
@@ -616,7 +618,7 @@ describe('panel message handlers', () => {
     }
   });
 
-  test('share then unshare: conversion after confirmation; the selected account is refused', LINUX_ONLY, async (ctx) => {
+  test('share then unshare: conversion after confirmation; the selected account is refused', POSIX_ONLY, async (ctx) => {
     fs.mkdirSync(def, { recursive: true, mode: 0o700 });
     fs.writeFileSync(path.join(def, 'config.toml'), 'model = "m"\n');
     const a = named('conv');
@@ -656,7 +658,7 @@ describe('panel message handlers', () => {
   });
 
   for (const changed of ['selected', 'effective', 'unregistered', 'terminal'] as const) {
-    test(`Windows share rechecks ${changed} after the file-link fallback modal`, LINUX_ONLY, async (ctx) => {
+    test(`Windows share rechecks ${changed} after the file-link fallback modal`, POSIX_ONLY, async (ctx) => {
       fs.mkdirSync(def, { recursive: true, mode: 0o700 });
       const a = named(`fallback-${changed}`);
       const h = await harness([a]);
@@ -703,7 +705,7 @@ describe('panel message handlers', () => {
     });
   }
 
-  test('adding a kept independent directory does not claim that linking succeeded', LINUX_ONLY, async (ctx) => {
+  test('adding a kept independent directory does not claim that linking succeeded', POSIX_ONLY, async (ctx) => {
     const a = named('kept-unlinked');
     fs.mkdirSync(path.join(a.dir, 'sessions'), { recursive: true });
     const h = await harness();
@@ -719,7 +721,7 @@ describe('panel message handlers', () => {
     }
   });
 
-  test('adding a linked account whose config.toml is refused says it was added and explains the refusal', LINUX_ONLY, async (ctx) => {
+  test('adding a linked account whose config.toml is refused says it was added and explains the refusal', POSIX_ONLY, async (ctx) => {
     const a = named('refused-config');
     const cfg = path.join(fxHome, '.codex', 'config.toml');
     const before = fs.existsSync(cfg) ? read(cfg) : undefined;
@@ -741,7 +743,7 @@ describe('panel message handlers', () => {
     }
   });
 
-  test('a conversion that leaves the marker unlinked reports an incomplete link', LINUX_ONLY, async (ctx) => {
+  test('a conversion that leaves the marker unlinked reports an incomplete link', POSIX_ONLY, async (ctx) => {
     const a = named('marker-conflict');
     const h = await harness([a]);
     const elsewhere = path.join(fxHome, 'other-sessions');
@@ -784,7 +786,7 @@ describe('panel message handlers', () => {
     }
   });
 
-  test('zh-cn unshare message joins its sentences without a space', LINUX_ONLY, async (ctx) => {
+  test('zh-cn unshare message joins its sentences without a space', POSIX_ONLY, async (ctx) => {
     const shared = named('zh-unshare-joined');
     const h = await harness([shared]);
     fs.rmSync(path.join(def, 'config.toml'), { force: true });
@@ -805,7 +807,7 @@ describe('panel message handlers', () => {
     }
   });
 
-  test('switch on the external row never writes the unregistered directory into the selection', LINUX_ONLY, async (ctx) => {
+  test('switch on the external row never writes the unregistered directory into the selection', POSIX_ONLY, async (ctx) => {
     fs.writeFileSync(bashrc(), 'x=1\n');
     fs.writeFileSync(profile(), 'p=1\n');
     installRcBlocks();
@@ -845,7 +847,7 @@ describe('panel message handlers', () => {
     }
   });
 
-  test('share command picks only independent named accounts outside the effective and selected directories', LINUX_ONLY, async (ctx) => {
+  test('share command picks only independent named accounts outside the effective and selected directories', POSIX_ONLY, async (ctx) => {
     const candidate = named('palette-share-choice');
     const effective = named('palette-share-effective');
     const selected = named('palette-share-selected');
@@ -881,7 +883,7 @@ describe('panel message handlers', () => {
     }
   });
 
-  test('share command cancellation leaves files unchanged and confirmation converts the picked account', LINUX_ONLY, async (ctx) => {
+  test('share command cancellation leaves files unchanged and confirmation converts the picked account', POSIX_ONLY, async (ctx) => {
     const account = named('palette-share-convert');
     const h = await harness([account]);
     const source = path.join(account.dir, 'sessions', 'entry.jsonl');
@@ -932,7 +934,7 @@ describe('panel message handlers', () => {
     }
   });
 
-  test('terminal: runs codex login without auth.json, codex with it, and env -u for the default account', LINUX_ONLY, async (ctx) => {
+  test('terminal: runs codex login without auth.json, codex with it, and env -u for the default account', POSIX_ONLY, async (ctx) => {
     const a = named('term');
     const h = await harness([a]);
     await h.labels.set(a.name, 'Term Label');
@@ -957,7 +959,7 @@ describe('panel message handlers', () => {
     }
   });
 
-  test('terminal: the bundled CLI folder is appended to PATH in the Linux command line', LINUX_ONLY, async (ctx) => {
+  test('terminal: the bundled CLI folder is appended to PATH in the Linux command line', POSIX_ONLY, async (ctx) => {
     const a = named('bundled');
     const bundled = path.join(fxHome, 'ext', 'bin', 'linux-x86_64', 'codex');
     const h = await harness([a], () => bundled);

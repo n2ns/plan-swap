@@ -25,7 +25,7 @@ import type { FromWebview, ToWebview } from '../src/protocol';
 import { StatusBar } from '../src/statusBar';
 import { runTool, type TerminalCheck } from '../src/tools';
 import { commands, resetConfig, setConfig, statusBarItems, tooltipText, window, type StubTerminal } from './stubs/vscode';
-import { LINUX_ONLY, makeTempHome, MemoryMemento, onWindows, read, type TempHome } from './helpers';
+import { makeTempHome, MemoryMemento, onWindows, POSIX_ONLY, read, type TempHome } from './helpers';
 
 let tmp: TempHome;
 let home: string;
@@ -530,7 +530,7 @@ describe('terminal command lines never carry control characters', () => {
     for (const s of ['/home/u/.claude-a', `it's`, '$HOME', 'ä b']) assert.equal(hasControlChars(s), false, s);
   });
 
-  test('both vendors refuse a folder with a control character and create no terminal', LINUX_ONLY, async (ctx) => {
+  test('both vendors refuse a folder with a control character and create no terminal', POSIX_ONLY, async (ctx) => {
     const created = captureTerminals(ctx);
     const errors = ctx.mock.method(window, 'showErrorMessage', async () => undefined);
     ctx.mock.method(window, 'showInformationMessage', async () => undefined);
