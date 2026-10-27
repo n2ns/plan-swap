@@ -179,7 +179,7 @@ export function readClaudeProviderInfo(dir: string): ClaudeProviderInfo | undefi
 }
 
 /** The saved key of a valid card ('' without one or with the placeholder), for the host's model-list request of that
- *  card's own service, at the endpoint its edit form names. */
+ *  card's own service, at the endpoint its edit form names, and for the edit area's eye button (revealProviderKey). */
 export function readClaudeProviderKey(dir: string): string {
   return snapshot(dir, false).config.key;
 }
@@ -237,33 +237,47 @@ export function readClaudeProviderEditState(dir: string): { service: ClaudeApiSe
 }
 
 /** Empty key keeps the saved one. Replaces only the owned env values, keeps every other settings.json key as parsed,
- *  writes a temporary file and renames it over settings.json; refuses a changed revision ('changed'). */
-export function editClaudeProviderConfig(dir: string, next: { model: string; key: string; baseUrl?: string }, revision: string): void {
+ *  writes a temporary file and renames it over settings.json; refuses a changed revision ('changed').
+ *  next.service other than the card's changes its service: the saved key never follows (empty means no key, refused
+ *  with 'key' for a keyRequired service), baseUrl defaults to the new service's preset, and the marker is replaced
+ *  after settings.json (settings.json is valid for every service, so a failure in between leaves a readable card). */
+export function editClaudeProviderConfig(dir: string, next: { service?: ClaudeApiService; model: string; key: string; baseUrl?: string }, revision: string): void {
   // Establish that the root and owned files are local before creating the per-card edit lock
   snapshot(dir, false);
   const lock = path.join(dir, LOCK_FILE);
   let lockFd: number;
   try { lockFd = fs.openSync(lock, 'wx', 0o600); } catch { throw new ProviderConfigError('changed'); }
   let temporary: string | undefined;
+  let markerTemporary: string | undefined;
   try {
     const current = snapshot(dir, false);
     if (current.revision !== revision) throw new ProviderConfigError('changed');
-    const service = current.config.service;
+    const moved = next.service !== undefined && next.service !== current.config.service;
+    const service = moved ? next.service! : current.config.service;
     const source = renderSettings(current.settings, {
-      model: model(next.model), key: serviceKey(service, next.key || current.config.key),
-      baseUrl: checkBaseUrl(next.baseUrl ?? current.config.baseUrl),
+      model: model(next.model), key: serviceKey(service, moved ? next.key : next.key || current.config.key),
+      baseUrl: checkBaseUrl(next.baseUrl ?? (moved ? CLAUDE_SERVICE_INFO[service].baseUrl : current.config.baseUrl)),
     });
     parseSettings(source, service, true);
     temporary = path.join(dir, `.planswap-provider-${randomUUID()}.tmp`);
     fs.writeFileSync(temporary, source, { mode: 0o600, flag: 'wx' });
+    if (moved) {
+      markerTemporary = path.join(dir, `.planswap-provider-${randomUUID()}.tmp`);
+      fs.writeFileSync(markerTemporary, markerFor(service), { mode: 0o600, flag: 'wx' });
+    }
     if (snapshot(dir, false).revision !== revision) throw new ProviderConfigError('changed');
     fs.renameSync(temporary, path.join(dir, 'settings.json'));
     temporary = undefined;
+    if (markerTemporary) {
+      fs.renameSync(markerTemporary, path.join(dir, CLAUDE_PROVIDER_FILES[0]));
+      markerTemporary = undefined;
+    }
   } catch (error) {
     if (error instanceof ProviderConfigError) throw error;
     throw new ProviderConfigError('write');
   } finally {
     if (temporary) try { fs.unlinkSync(temporary); } catch { /* a failed write may not have created it */ }
+    if (markerTemporary) try { fs.unlinkSync(markerTemporary); } catch { /* a failed write may not have created it */ }
     fs.closeSync(lockFd);
     fs.unlinkSync(lock);
   }

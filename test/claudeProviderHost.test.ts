@@ -280,10 +280,10 @@ test('model lists: DeepSeek fixed; others through claudeModelsUrl with the typed
     await h.handle({ type: 'providerModels', mode: 'claude', request: 5, service: 'custom', baseUrl: 'https://other.example.test/anthropic', key: '', dir });
     assert.equal(calls.at(-1)?.url, 'https://other.example.test/anthropic/v1/models');
     assert.equal((calls.at(-1)?.init?.headers as Record<string, string>).Authorization, 'Bearer saved-key');
-    const before = calls.length;
     await h.handle({ type: 'providerModels', mode: 'claude', request: 6, service: 'kimi', key: '', dir });
-    assert.equal(h.last().error, t('codex.provider.newServiceNeedsKey'));
-    assert.equal(calls.length, before, 'the saved key never goes to another service');
+    const other = calls.at(-1)?.init?.headers as Record<string, string>;
+    assert.equal(calls.at(-1)?.url, 'https://api.moonshot.ai/v1/models');
+    assert.deepEqual([other.Authorization, other['x-api-key']], [undefined, undefined], 'the saved key never goes to another service');
     answer.current = () => new Response('secret body', { status: 401 });
     await h.handle({ type: 'providerModels', mode: 'claude', request: 7, service: 'custom', baseUrl: 'https://gw.example.test/anthropic', key: 'k' });
     assert.match(h.last().error ?? '', /HTTP 401/);
@@ -320,5 +320,22 @@ test('the status bar shows a current card as its label and service, without usag
       assert.match(tip, /ds \(DeepSeek API\)/);
       assert.doesNotMatch(tip, /Not logged in/);
     } finally { bar.dispose(); }
+  } finally { h.close(); }
+});
+
+test('a Claude card can change its service from the edit form, and its key is revealed only on request', async () => {
+  const h = harness();
+  try {
+    await h.handle({ type: 'add', mode: 'claude', name: 'svc', shared: false, provider: { service: 'kimi', key: 'sk-kimi-saved', model: 'kimi-k2' } });
+    const dir = h.dir('svc');
+    await h.handle({ type: 'revealProviderKey', mode: 'claude', dir });
+    assert.deepEqual(h.last(), { type: 'providerKeyResult', mode: 'claude', dir, key: 'sk-kimi-saved', error: undefined });
+    await h.handle({ type: 'saveProvider', mode: 'claude', dir, service: 'openrouter', model: 'vendor/m', key: '' });
+    assert.ok(h.last().error, 'OpenRouter needs a key of its own');
+    await h.handle({ type: 'saveProvider', mode: 'claude', dir, service: 'ollama', model: 'qwen3', key: '' });
+    assert.equal(h.last().error, undefined);
+    assert.deepEqual([h.row('svc')?.providerService, h.row('svc')?.providerHasKey, settingsOf(dir).env.ANTHROPIC_BASE_URL], ['ollama', false, 'http://localhost:11434']);
+    await h.handle({ type: 'revealProviderKey', mode: 'claude', dir });
+    assert.equal((h.last() as { key?: string }).key, undefined, 'the placeholder of a keyless card is not a key');
   } finally { h.close(); }
 });

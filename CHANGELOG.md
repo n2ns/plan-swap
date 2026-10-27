@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- API cards can change their service while editing: choose another service in the card's edit area, such as a local Ollama server instead of a custom endpoint. The saved key does not move to the new service; enter its key, or leave the field empty for a service that needs none. Settings Codex or Claude Code added to the card are kept.
+- An eye button at the end of an API card's key field shows the saved key while editing, so it can be copied before changing the service.
+
 ### Changed
 
 - Changing the endpoint of an API card with a saved key no longer requires entering the key again. With the key field empty, the saved key is kept and sent to the new endpoint, and the edit form says so; enter a new key to replace it.

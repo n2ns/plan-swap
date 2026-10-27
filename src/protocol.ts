@@ -133,7 +133,10 @@ export type ToWebview =
   // Answer to 'providerModels' with the same request number: the model IDs, or a localized error
   | { type: 'providerModelsResult'; mode: PanelMode; request: number; models?: string[]; error?: string }
   // Answer to 'saveProvider' for the card `dir`; error undefined means saved
-  | { type: 'saveProviderResult'; mode: PanelMode; dir: string; error?: string };
+  | { type: 'saveProviderResult'; mode: PanelMode; dir: string; error?: string }
+  // Answer to 'revealProviderKey': the card's saved key, the only message that carries a saved key to the page, posted
+  // only on that explicit request; key undefined when the card has none or cannot be read (error: localized reason)
+  | { type: 'providerKeyResult'; mode: PanelMode; dir: string; key?: string; error?: string };
 
 // Every message except 'ready' carries the page's mode; the host dispatches by it
 export type FromWebview =
@@ -146,13 +149,17 @@ export type FromWebview =
   // Sent after the frontend's inline confirmation; the host only handles named rows
   | { type: 'remove'; mode: PanelMode; dir: string }
   // shared: the add section's checkbox; the host treats a missing value as true. provider: an API card, with the
-  // key typed in the sidebar (sent only in this message, providerModels and saveProvider; never posted back)
+  // key typed in the sidebar (sent only in this message, providerModels and saveProvider; a saved key goes back to the
+  // page only in providerKeyResult, on the user's explicit request)
   | { type: 'add'; mode: PanelMode; name: string; shared: boolean; provider?: ApiCardInput }
   // List the models of a service's endpoint for an API card form. dir: the card being edited, whose saved key is used
-  // when key is ''. request: echoed in the answer so a stale list is ignored
+  // when key is '' and service is the card's own. request: echoed in the answer so a stale list is ignored
   | { type: 'providerModels'; mode: PanelMode; request: number; service: string; baseUrl?: string; key: string; dir?: string }
-  // An API card edit form's values; key '' keeps the saved key, baseUrl applies to every card except Codex DeepSeek ones
-  | { type: 'saveProvider'; mode: PanelMode; dir: string; model: string; baseUrl?: string; key: string }
+  // An API card edit form's values; key '' keeps the saved key, baseUrl applies to every card except Codex DeepSeek ones.
+  // service: another service than the card's changes it; the saved key never follows (key '' then means no key)
+  | { type: 'saveProvider'; mode: PanelMode; dir: string; model: string; baseUrl?: string; key: string; service?: string }
+  // The eye button of an API card's edit area: show that card's saved key (answer: providerKeyResult)
+  | { type: 'revealProviderKey'; mode: PanelMode; dir: string }
   // Convert an independent named account into one shared with the default account (the host confirms with a modal)
   | { type: 'share'; mode: PanelMode; dir: string }
   // Convert a shared named account back into an independent one (links removed, default configuration copied; the host

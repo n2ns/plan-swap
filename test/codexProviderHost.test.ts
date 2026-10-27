@@ -204,10 +204,10 @@ test('a saved key stays with its card\'s service; a changed endpoint keeps it un
   try {
     await h.handle({ type: 'add', mode: 'codex', name: 'own', shared: false, provider: { service: 'custom', baseUrl: 'https://own.example.test/v1', key: 'sk-own-saved', model: 'm' } });
     const dir = path.join(h.home, '.codex-own');
-    // Another service never gets the saved key
+    // Another service never gets the saved key: it is asked with the typed key alone
     await h.handle({ type: 'providerModels', mode: 'codex', request: 9, key: '', dir, service: 'openrouter' });
-    assert.equal((h.messages.at(-1) as { error?: string }).error, t('codex.provider.newServiceNeedsKey'));
-    assert.equal(calls.length, 0, 'the saved key went nowhere');
+    assert.equal(calls.at(-1)?.url, 'https://openrouter.ai/api/v1/models');
+    assert.equal((calls.at(-1)?.init?.headers as Record<string, string>).Authorization, undefined, 'the saved key went nowhere');
     // A changed endpoint is the user's choice: the list loads there with the saved key
     await h.handle({ type: 'providerModels', mode: 'codex', request: 10, key: '', dir, service: 'custom', baseUrl: 'https://elsewhere.example.test/v1' });
     assert.deepEqual((h.messages.at(-1) as { models?: string[] }).models, ['m']);
@@ -281,4 +281,32 @@ test('a preset list loaded with a key is cached for its service; a custom endpoi
     assert.equal(services.find((s) => s.id === 'custom')?.models, undefined);
     assert.deepEqual(services.find((s) => s.id === 'deepseek')?.models, ['deepseek-flash', 'deepseek-v4-pro']);
   } finally { disposables.forEach((d) => d.dispose()); tmp.restore(); }
+});
+
+test('the edit form can change a card\'s service, and the eye button reveals the saved key only on request', async () => {
+  const h = harness();
+  try {
+    await h.handle({ type: 'add', mode: 'codex', name: 'svc', shared: false, provider: { service: 'openrouter', key: 'sk-or-saved', model: 'vendor/m' } });
+    const dir = path.join(h.home, '.codex-svc');
+    assert.doesNotMatch(JSON.stringify(h.messages), /sk-or-saved/);
+    await h.handle({ type: 'revealProviderKey', mode: 'codex', dir });
+    assert.deepEqual(h.messages.at(-1), { type: 'providerKeyResult', mode: 'codex', dir, key: 'sk-or-saved', error: undefined });
+    // DeepSeek needs a key of its own; the saved one does not follow
+    await h.handle({ type: 'saveProvider', mode: 'codex', dir, service: 'deepseek', model: 'deepseek-flash', key: '' });
+    assert.ok((h.messages.at(-1) as { error?: string }).error);
+    await h.handle({ type: 'saveProvider', mode: 'codex', dir, service: 'lmstudio', model: 'local-model', key: '', baseUrl: 'http://localhost:1234/v1' });
+    assert.equal((h.messages.at(-1) as { error?: string }).error, undefined);
+    const row = h.source.accounts().find((r) => r.dir === dir);
+    assert.deepEqual([row?.providerService, row?.providerModel, row?.providerHasKey], ['lmstudio', 'local-model', false]);
+    await h.handle({ type: 'revealProviderKey', mode: 'codex', dir });
+    assert.deepEqual(h.messages.at(-1), { type: 'providerKeyResult', mode: 'codex', dir, key: undefined, error: undefined });
+    await h.handle({ type: 'saveProvider', mode: 'codex', dir, service: 'nonsense', model: 'm', key: '' });
+    assert.ok((h.messages.at(-1) as { error?: string }).error);
+    // An ordinary account has no key to reveal
+    fs.mkdirSync(path.join(h.home, '.codex-plain'));
+    await h.store.add({ name: 'plain', dir: path.join(h.home, '.codex-plain') });
+    await h.handle({ type: 'revealProviderKey', mode: 'codex', dir: path.join(h.home, '.codex-plain') });
+    assert.equal((h.messages.at(-1) as { key?: string }).key, undefined);
+    assert.ok((h.messages.at(-1) as { error?: string }).error);
+  } finally { h.close(); }
 });

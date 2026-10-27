@@ -268,15 +268,13 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
     try {
       baseUrl = checkBaseUrl(msg.baseUrl?.trim() || info.baseUrl);
       if (!key && msg.dir) {
-        // A saved key goes only to its own card's service. A changed endpoint is the user's choice: it gets the saved
-        // key, and the edit form says so. A card without a saved key (the placeholder does not count) asks without one
+        // A saved key goes only to its own card's service; another service is asked with the typed key alone. A
+        // changed endpoint is the user's choice: it gets the saved key, and the edit form says so. The placeholder of
+        // a keyless card does not count as a key
         const card = panel.resolve(MODE, msg.dir);
         if (card?.kind === 'named' && hasClaudeProviderMarker(card.dir)) {
           const saved = readClaudeProviderEditState(card.dir);
-          if (saved.hasKey) {
-            if (saved.service !== msg.service) return { error: t('codex.provider.newServiceNeedsKey') };
-            key = readClaudeProviderKey(card.dir);
-          }
+          if (saved.hasKey && saved.service === msg.service) key = readClaudeProviderKey(card.dir);
         }
       }
     } catch (err) {
@@ -297,13 +295,14 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
   }
 
   // The edit form's values; key '' keeps the saved key, an empty endpoint keeps the saved one. Errors carry no config text
-  async function saveProvider(account: Account, msg: { model: string; baseUrl?: string; key: string }): Promise<string | undefined> {
+  async function saveProvider(account: Account, msg: { model: string; baseUrl?: string; key: string; service?: string }): Promise<string | undefined> {
     try {
+      if (msg.service !== undefined && !isService(msg.service)) return claudeProviderErrorText('format');
       const before = readClaudeProviderEditState(account.dir);
       const registered = store.find(account.name);
       if (!registered || !samePath(registered.dir, account.dir)) return claudeProviderErrorText('changed');
       const baseUrl = msg.baseUrl?.trim() || undefined;
-      editClaudeProviderConfig(account.dir, { model: msg.model.trim(), key: msg.key.trim(), baseUrl }, before.revision);
+      editClaudeProviderConfig(account.dir, { service: msg.service as ClaudeApiService | undefined, model: msg.model.trim(), key: msg.key.trim(), baseUrl }, before.revision);
       return undefined;
     } catch (err) {
       return joinSentences(t('codex.provider.editFailed'), claudeProviderErrorText(err instanceof ProviderConfigError ? err.code : 'write'));
@@ -611,6 +610,17 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
         const a = panel.resolve(MODE, msg.dir);
         const error = a?.kind === 'named' && hasClaudeProviderMarker(a.dir) ? await saveProvider(a, msg) : claudeProviderErrorText('unmanaged');
         panel.post({ type: 'saveProviderResult', mode: MODE, dir: msg.dir, error });
+        return;
+      }
+      case 'revealProviderKey': {
+        // The eye button: the only path of a saved key to the page, on this explicit request only
+        const a = panel.resolve(MODE, msg.dir);
+        let key: string | undefined;
+        let error: string | undefined;
+        if (a?.kind === 'named' && hasClaudeProviderMarker(a.dir)) {
+          try { key = readClaudeProviderKey(a.dir) || undefined; } catch (err) { error = claudeProviderErrorText(err instanceof ProviderConfigError ? err.code : 'file'); }
+        } else error = claudeProviderErrorText('unmanaged');
+        panel.post({ type: 'providerKeyResult', mode: MODE, dir: msg.dir, key, error });
         return;
       }
       case 'share': {

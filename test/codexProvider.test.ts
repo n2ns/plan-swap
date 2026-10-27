@@ -445,3 +445,99 @@ describe('model cache', () => {
     assert.equal(JSON.stringify(memento.data.get('codex.modelCache')).includes('never'), false);
   });
 });
+
+describe('changing a card\'s service', () => {
+  const state = () => readProviderEditState(dir);
+  const marker = (): string => read(path.join(dir, PROVIDER_FILES[0]));
+
+  test('DeepSeek to a local server: template settings, no saved key, other settings and tables kept', () => {
+    create();
+    // Settings Codex or the user added to the card's file: a top-level one, approval, and a project trust table
+    const withExtra = config().replace('\n[model_providers.deepseek]', 'approval_policy = "on-request"\nnotify = ["say", "done"]\n\n[projects."/work/app"]\ntrust_level = "trusted"\n\n[model_providers.deepseek]');
+    fs.writeFileSync(path.join(dir, 'config.toml'), withExtra);
+    editProviderConfig(dir, { service: 'ollama', model: 'qwen3', key: '' }, state().revision);
+    assert.equal(marker(), '{"version":1,"provider":"ollama"}\n');
+    const text = config();
+    assert.doesNotMatch(text, /sk-test-key|deepseek|model_catalog_json|model_reasoning_effort/);
+    assert.match(text, /model_provider = "planswap"/);
+    assert.match(text, /base_url = "http:\/\/localhost:11434\/v1"/);
+    assert.match(text, /approval_policy = "on-request"/);
+    assert.match(text, /notify = \["say", "done"\]/);
+    assert.match(text, /\[projects\."\/work\/app"\]\ntrust_level = "trusted"/);
+    assert.ok(text.indexOf('notify') < text.indexOf('[projects.'), 'top-level settings stay before the first table');
+    assert.deepEqual([readProviderInfo(dir)?.provider, readProviderInfo(dir)?.model, readProviderInfo(dir)?.hasKey, readProviderInfo(dir)?.configured], ['ollama', 'qwen3', false, true]);
+    assert.equal(fs.existsSync(path.join(dir, 'models.json')), false, 'the former DeepSeek catalog is removed');
+    validateProviderConfig(dir);
+  });
+
+  test('a local server to DeepSeek needs a key and writes the catalog; a custom endpoint needs its address', () => {
+    createProviderConfig(dir, 'custom', { model: 'm', key: '', baseUrl: 'http://127.0.0.1:18080/v1' }, def);
+    assert.throws(() => editProviderConfig(dir, { service: 'deepseek', model: 'deepseek-flash', key: '' }, state().revision), fails('key'));
+    assert.throws(() => editProviderConfig(dir, { service: 'deepseek', model: 'not-a-deepseek-model', key: 'sk-new' }, state().revision), fails('model'));
+    assert.equal(marker(), '{"version":1,"provider":"custom"}\n', 'a refusal leaves the card as it was');
+    assert.equal(fs.existsSync(path.join(dir, 'models.json')), false);
+    editProviderConfig(dir, { service: 'deepseek', model: 'deepseek-v4-pro', key: 'sk-new' }, state().revision);
+    assert.equal(readProviderKey(dir), 'sk-new');
+    assert.equal(state().service, 'deepseek');
+    validateProviderConfig(dir);
+    // And on to a custom endpoint, which needs an address
+    assert.throws(() => editProviderConfig(dir, { service: 'custom', model: 'm', key: '' }, state().revision), fails('url'));
+    editProviderConfig(dir, { service: 'custom', model: 'm', key: '', baseUrl: 'https://gw.example.test/v1' }, state().revision);
+    assert.deepEqual([state().service, state().baseUrl, state().hasKey], ['custom', 'https://gw.example.test/v1', false]);
+    assert.equal(fs.readdirSync(dir).filter((name) => name.endsWith('.tmp')).length, 0, 'no temporary file is left');
+  });
+
+  test('between two other services the reasoning effort and sign-in preference stay; a preset fills its endpoint', () => {
+    createProviderConfig(dir, 'openrouter', { model: 'vendor/m', key: 'sk-or' }, def);
+    const text = config().replace('model_provider = "planswap"', 'model_provider = "planswap"\nmodel_reasoning_effort = "low"\npreferred_auth_method = "apikey"');
+    fs.writeFileSync(path.join(dir, 'config.toml'), text);
+    editProviderConfig(dir, { service: 'kimi', model: 'kimi-k2', key: 'sk-kimi' }, state().revision);
+    const after = config();
+    assert.match(after, /model_reasoning_effort = "low"/);
+    assert.match(after, /preferred_auth_method = "apikey"/);
+    assert.match(after, /name = "Kimi"/);
+    assert.equal(state().baseUrl, SERVICE_INFO.kimi.baseUrl, 'no endpoint given: the preset one');
+    assert.equal(readProviderKey(dir), 'sk-kimi');
+    assert.equal(fs.existsSync(path.join(dir, '.planswap-provider.lock')), false, 'the edit lock is released');
+    // To DeepSeek its template decides the effort; the sign-in preference still stays
+    editProviderConfig(dir, { service: 'deepseek', model: 'deepseek-flash', key: 'sk-ds' }, state().revision);
+    assert.match(config(), /model_reasoning_effort = "high"/);
+    assert.doesNotMatch(config(), /"low"/);
+    assert.match(config(), /preferred_auth_method = "apikey"/);
+    validateProviderConfig(dir);
+  });
+
+  test('CRLF, a BOM, array tables, multiline values and a table before the provider table survive a service change', () => {
+    createProviderConfig(dir, 'custom', { model: 'm', key: '', baseUrl: 'http://127.0.0.1:18080/v1' }, def);
+    const lines = config().replace(/\n$/, '').split('\n');
+    const at = lines.findIndex((line) => line.startsWith('[model_providers.'));
+    const root = [
+      'notify = [', '  "say",', '  "done",', ']',
+      'instructions = """', '[not a table]', 'model = "not a setting"', '"""',
+    ];
+    const tables = ['[[hooks]]', 'command = "a"', '', '[[hooks]]', 'command = "b"', '', '[projects."/w.x"]', 'trust_level = "trusted"', ''];
+    const withUser = [...lines.slice(0, at - 1), ...root, '', ...tables, ...lines.slice(at)].join('\r\n') + '\r\n';
+    fs.writeFileSync(path.join(dir, 'config.toml'), '﻿' + withUser);
+    validateProviderConfig(dir);
+    editProviderConfig(dir, { service: 'lmstudio', model: 'local', key: '' }, state().revision);
+    const after = config();
+    assert.doesNotMatch(after, /\r|﻿/);
+    assert.match(after, /notify = \[\n  "say",\n  "done",\n\]/);
+    assert.match(after, /instructions = """\n\[not a table\]\nmodel = "not a setting"\n"""/);
+    assert.equal(after.match(/\[\[hooks\]\]/g)?.length, 2);
+    assert.match(after, /\[projects\."\/w\.x"\]\ntrust_level = "trusted"/);
+    assert.ok(after.indexOf('instructions') < after.indexOf('[[hooks]]'), 'top-level settings stay before the first table');
+    assert.ok(after.lastIndexOf('[model_providers.planswap]') > after.indexOf('[projects.'), 'the provider table comes last');
+    assert.deepEqual([state().service, state().model, state().baseUrl], ['lmstudio', 'local', SERVICE_INFO.lmstudio.baseUrl]);
+    validateProviderConfig(dir);
+  });
+
+  test('a stale revision changes nothing', () => {
+    create();
+    const revision = state().revision;
+    editProviderConfig(dir, { model: 'deepseek-v4-pro', key: '' }, revision);
+    const files = owned();
+    assert.throws(() => editProviderConfig(dir, { service: 'ollama', model: 'qwen3', key: '' }, revision), fails('changed'));
+    assert.deepEqual(owned(), files);
+  });
+});

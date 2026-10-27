@@ -91,6 +91,53 @@ export async function run(ctx) {
   await page.evaluate(() => window.preview.post({ type: 'saveProviderResult', mode: 'claude', dir: '/fixture/.claude-gateway' }));
   await step('A saved edit closes the edit area', await gateway.locator('.provider-edit').count() === 0);
 
+  // The edit area changes the service and shows the saved key on request
+  await page.evaluate(() => window.preview.clearMessages());
+  await gateway.locator('[data-action="editProvider"]').click();
+  const svcEdit = gateway.locator('.provider-edit');
+  const fitsCard = () => gateway.evaluate((el) => [...el.querySelectorAll('.provider-edit, .api-fields, .api-key-notice, .api-service')].every((n) => n.scrollWidth <= n.clientWidth + 1));
+  await step('The edit area lists the services, starting at the card\'s', await svcEdit.locator('.api-service').isVisible()
+    && await svcEdit.locator('.api-service').evaluate((el) => el.value) === 'custom');
+  const eye = svcEdit.locator('.api-key-eye');
+  await step('A card with a saved key has the eye button in its key field', await eye.count() === 1 && await eye.isVisible());
+  // A typed key: the eye shows that text and asks the host for nothing
+  await svcEdit.locator('.api-key input').fill('typed-new-key');
+  await eye.click();
+  await step('With a typed key the eye shows it and keeps it', await svcEdit.locator('.api-key').getAttribute('type') === 'text'
+    && await svcEdit.locator('.api-key').evaluate((el) => el.value) === 'typed-new-key'
+    && !(await page.evaluate(() => window.preview.messages.some((m) => m.type === 'revealProviderKey'))));
+  await eye.click();
+  await svcEdit.locator('.api-key input').fill('');
+  await eye.click();
+  const reveal = await page.evaluate(() => window.preview.messages.filter((m) => m.type === 'revealProviderKey').at(-1));
+  await step('The eye button asks the host for the saved key', reveal?.mode === 'claude' && reveal.dir === '/fixture/.claude-gateway', reveal);
+  await page.evaluate(() => window.preview.post({ type: 'providerKeyResult', mode: 'claude', dir: '/fixture/.claude-gateway', key: 'synthetic-saved-key' }));
+  await step('The saved key shows as text', await svcEdit.locator('.api-key').getAttribute('type') === 'text'
+    && await svcEdit.locator('.api-key').evaluate((el) => el.value) === 'synthetic-saved-key');
+  await shot(`${locale}-${width}-edit-key-shown.png`);
+  await eye.click();
+  await step('A second click hides it again', await svcEdit.locator('.api-key').getAttribute('type') === 'password');
+  // The shown saved key is still in the (hidden) field: another service must not take it
+  await svcEdit.locator('.api-service').evaluate((el) => { el.value = 'kimi'; el.dispatchEvent(new Event('change')); });
+  await page.waitForTimeout(100);
+  await step('Another service empties the key field and hides the eye', await svcEdit.locator('.api-key').evaluate((el) => el.value) === '' && await eye.isHidden());
+  await step('Another service says that the saved key is not kept, inside the card', !!(await notice(svcEdit).textContent())
+    && await notice(svcEdit).isVisible() && await fitsCard());
+  await step('A service that needs a key cannot be saved without one', await svcEdit.locator('[data-action="saveProvider"]').evaluate((el) => el.disabled) === true);
+  await shot(`${locale}-${width}-edit-new-service.png`);
+  await svcEdit.locator('.api-service').evaluate((el) => { el.value = 'ollama'; el.dispatchEvent(new Event('change')); });
+  await page.waitForTimeout(100);
+  const ollamaLoad = await page.evaluate(() => window.preview.messages.filter((m) => m.type === 'providerModels').at(-1));
+  if (ollamaLoad?.service === 'ollama') await page.evaluate((request) => window.preview.post({ type: 'providerModelsResult', mode: 'claude', request, models: ['qwen3'] }), ollamaLoad.request);
+  await step('A keyless service starts at its preset endpoint', await svcEdit.locator('.api-url').evaluate((el) => el.value) === 'http://localhost:11434');
+  await step('A keyless service loads its models without the saved key', !ollamaLoad || ollamaLoad.service !== 'ollama' || ollamaLoad.key === '', ollamaLoad);
+  await page.evaluate(() => window.preview.clearMessages());
+  await svcEdit.locator('[data-action="saveProvider"]').click();
+  const moved = await page.evaluate(() => window.preview.messages.at(-1));
+  await step('A keyless service saves without a key and names the new service', moved?.type === 'saveProvider' && moved.service === 'ollama' && moved.key === ''
+    && moved.baseUrl === 'http://localhost:11434' && !!moved.model, moved);
+  await page.evaluate(() => window.preview.post({ type: 'saveProviderResult', mode: 'claude', dir: '/fixture/.claude-gateway' }));
+
   // The add form: Claude sign-in or API card
   const toggle = panel.locator('.add-toggle');
   if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();

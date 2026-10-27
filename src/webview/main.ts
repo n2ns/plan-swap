@@ -336,13 +336,14 @@ const modelRequests = new Map<number, (models?: string[], error?: string) => voi
 let lastModelRequest = 0;
 
 /**
- * The API card fields of the add form (service list) and of a card's edit area (fixed service), for the Codex and the
+ * The API card fields of the add form and of a card's edit area (both with the service list; editing starts at the
+ * card's service, and another one never takes its saved key), for the Codex and the
  * Claude tab: the endpoint (custom service; editable for any card except a Codex DeepSeek one), the key (a password field;
  * when editing, empty keeps the saved key, also for a changed endpoint, which keyNotice points out) and the model, chosen from the list the host loads from the endpoint
  * (DeepSeek: its catalog models), or typed only after
  * that load failed (an endpoint without a usable /models). Created once per
- * form so typed values survive re-renders. The key leaves the page only in the messages that need it and is cleared
- * with clear().
+ * form so typed values survive re-renders. The key leaves the page only in the messages that need it, a saved key
+ * arrives only in providerKeyResult after a click on the eye, and both are cleared with clear().
  */
 class ApiFields {
   readonly root = h('div', { class: 'api-fields' });
@@ -352,8 +353,15 @@ class ApiFields {
   private readonly model = h('vscode-single-select', { class: 'api-model' }) as Select;
   private readonly load = h('vscode-button', { secondary: true, icon: 'refresh', class: 'api-load' }) as HTMLElement & { disabled: boolean };
   private readonly status = h('div', { class: 'api-status', role: 'status' });
-  // Editing: a reminder, not a refusal, that an empty key field sends the saved key to a changed endpoint
+  // Editing: a reminder, not a refusal, that an empty key field sends the saved key to a changed endpoint, or that a
+  // changed service does not keep the saved key
   private readonly keyNotice = h('div', { class: 'api-key-notice', role: 'status' });
+  // Editing a card with a saved key: shows the key field's text, or with an empty field the saved key on request
+  // (providerKeyResult), and hides it again. Hidden once another service is chosen: the saved key stays with the card's
+  private readonly eye = h('vscode-icon', { name: 'eye', 'action-icon': true, slot: 'content-after', class: 'api-key-eye' }) as HTMLElement & { name: string; label: string };
+  private revealed = false;
+  // The saved key this form received, so a service change can take it out of the key field
+  private fetchedKey?: string;
   private services: ApiServiceView[] = [];
   private request = 0;
   private loading = false;
@@ -382,10 +390,25 @@ class ApiFields {
     };
     this.service.addEventListener('change', () => {
       this.resetModels();
+      // Editing: another service starts from its preset endpoint (custom: empty); back to the card's own, its endpoint.
+      // A saved key shown in the field never goes to another service
+      if (editing) {
+        this.url.value = (this.moved() ? this.serviceInfo()?.baseUrl : editing.baseUrl) ?? '';
+        if (this.fetchedKey !== undefined && this.key.value.trim() === this.fetchedKey) this.key.value = '';
+        this.hideKey();
+      }
       this.updateVisibility();
       this.applyCached();
       this.scheduleLoad(0);
     });
+    if (editing?.hasKey) {
+      this.key.append(this.eye);
+      onClick(this.eye, () => {
+        if (this.revealed) this.hideKey();
+        else if (this.key.value) this.revealField();
+        else send({ type: 'revealProviderKey', mode: this.mode, dir: editing.dir });
+      });
+    }
     this.url.addEventListener('input', changed(true, AUTO_LOAD_DELAY));
     // A typed key keeps a cached list; without one it loads the list once typing pauses
     this.key.addEventListener('input', () => {
@@ -411,18 +434,14 @@ class ApiFields {
       this.onChange();
     });
     onClick(this.load, () => this.loadModels());
-    this.root.append(...(editing ? [] : [this.service]), this.url, this.key, this.keyNotice, h('div', { class: 'api-model-row' }, this.model, this.load), this.status);
+    this.root.append(this.service, this.url, this.key, this.keyNotice, h('div', { class: 'api-model-row' }, this.model, this.load), this.status);
     this.applyLocale();
   }
 
   setServices(services: ApiServiceView[] | undefined): void {
     if (!services || JSON.stringify(services) === JSON.stringify(this.services)) return;
-    if (this.editing) {
-      this.services = services;
-      this.applyCached();
-      return;
-    }
-    const chosen = services.some((s) => s.id === this.service.value) ? this.service.value : services[0]?.id ?? '';
+    const fallback = this.editing?.service ?? services[0]?.id ?? '';
+    const chosen = services.some((s) => s.id === this.service.value) ? this.service.value : fallback;
     this.services = services;
     this.service.options = services.map((s) => ({
       label: s.id === 'custom' ? t('api.custom') : s.keyRequired ? s.name : `${s.name} (${t('api.local')})`,
@@ -432,7 +451,7 @@ class ApiFields {
     this.service.value = chosen;
     this.updateVisibility();
     this.applyCached();
-    if (!this.root.hidden) this.scheduleLoad(0);
+    if (!this.root.hidden && !this.editing) this.scheduleLoad(0);
   }
 
   // The service's cached list (TabState.apiServices models), offered at once without a request while the model list is
@@ -445,7 +464,7 @@ class ApiFields {
       this.showModels(cached);
       this.status.className = 'api-status';
       this.status.textContent = t('api.modelsLoaded', { count: cached.length });
-    } else if (!this.editing && this.serviceInfo()?.keyRequired && !this.key.value.trim() && !this.loading) {
+    } else if ((!this.editing || this.moved()) && this.serviceInfo()?.keyRequired && !this.key.value.trim() && !this.loading) {
       this.status.className = 'api-status';
       this.status.textContent = t('api.keyFirst');
     }
@@ -462,8 +481,10 @@ class ApiFields {
   private showModels(models: string[]): void {
     // Keep the choice made so far, else the card's current model when editing, else the first model of the list. A card's
     // current model the list lacks (typed earlier, or since withdrawn) stays offered, so saving only a new key keeps it
-    const keep = this.model.value || this.editing?.model;
-    if (this.editing?.model && keep === this.editing.model && !models.includes(keep)) models = [keep, ...models];
+    // Another service than the card's starts from its own list: the card's model is not kept there
+    const own = this.editing && !this.moved() ? this.editing.model : undefined;
+    const keep = this.model.value || own;
+    if (own && keep === own && !models.includes(keep)) models = [keep, ...models];
     const chosen = keep && models.includes(keep) ? keep : models[0];
     this.model.options = models.map((m) => ({ label: m, value: m, selected: m === chosen }));
     // The component does not take the selection from options in combobox mode; set it explicitly
@@ -484,20 +505,26 @@ class ApiFields {
     this.updateVisibility();
   }
 
-  private serviceId(): string { return this.editing?.service ?? this.service.value; }
+  private serviceId(): string { return this.service.value || this.editing?.service || ''; }
+  // Editing: another service than the card's is chosen (its saved key does not follow)
+  moved(): boolean { return !!this.editing && this.serviceId() !== this.editing.service; }
   private serviceInfo(): ApiServiceView | undefined { return this.services.find((s) => s.id === this.serviceId()); }
 
   private updateVisibility(): void {
     const id = this.serviceId();
     // The endpoint: typed for a custom service, editable on any card except a Codex DeepSeek one, fixed otherwise
     this.url.hidden = this.editing ? this.mode === 'codex' && id === 'deepseek' : id !== 'custom';
-    const required = this.editing ? false : this.serviceInfo()?.keyRequired ?? true;
-    this.key.setAttribute('placeholder', t(this.editing ? (this.editing.hasKey ? 'api.keyKeep' : 'api.keyOptional') : required ? 'api.key' : 'api.keyOptional'));
+    const keeps = !!this.editing && !this.moved();
+    const required = keeps ? false : this.serviceInfo()?.keyRequired ?? true;
+    this.key.setAttribute('placeholder', t(keeps ? (this.editing!.hasKey ? 'api.keyKeep' : 'api.keyOptional') : required ? 'api.key' : 'api.keyOptional'));
+    this.eye.label = t(this.revealed ? 'api.hideKey' : 'api.showKey');
+    this.eye.title = this.eye.label;
+    this.eye.hidden = this.moved();
     this.key.setAttribute('aria-label', t('api.key'));
     this.load.disabled = this.loading || (!this.url.hidden && !this.url.value.trim());
     const url = this.url.value.trim();
-    const keyMoves = !!this.editing?.hasKey && !this.url.hidden && !!url && url !== this.editing.baseUrl && !this.key.value.trim();
-    this.keyNotice.textContent = keyMoves ? t('api.keyNewEndpoint') : '';
+    const keyMoves = keeps && !!this.editing!.hasKey && !this.url.hidden && !!url && url !== this.editing!.baseUrl && !this.key.value.trim();
+    this.keyNotice.textContent = this.moved() ? t('api.keyNewService') : keyMoves ? t('api.keyNewEndpoint') : '';
   }
 
   // Whether a load can be asked for now: DeepSeek on its fixed endpoint always (its catalog), else a complete endpoint
@@ -505,7 +532,7 @@ class ApiFields {
   private loadReady(): boolean {
     if (this.serviceId() === 'deepseek' && this.url.hidden) return true;
     if (!this.url.hidden && !/^https?:\/\/\S+/i.test(this.url.value.trim())) return false;
-    return !!this.editing || !(this.serviceInfo()?.keyRequired ?? true) || !!this.key.value.trim();
+    return (!!this.editing && !this.moved()) || !(this.serviceInfo()?.keyRequired ?? true) || !!this.key.value.trim();
   }
 
   private loadSignature(): string {
@@ -567,13 +594,46 @@ class ApiFields {
   values(): { service: string; baseUrl?: string; key: string; model: string } | undefined {
     const model = this.model.disabled ? '' : this.model.value;
     if (!model || (!this.url.hidden && !this.url.value.trim())) return undefined;
-    if (!this.editing && (this.serviceInfo()?.keyRequired ?? true) && !this.key.value.trim()) return undefined;
+    if ((!this.editing || this.moved()) && (this.serviceInfo()?.keyRequired ?? true) && !this.key.value.trim()) return undefined;
     return { service: this.serviceId(), key: this.key.value.trim(), model, ...(this.url.hidden ? {} : { baseUrl: this.url.value.trim() }) };
+  }
+
+  /** providerKeyResult for this form's card: the saved key into the still empty key field of the card's own service,
+   *  shown as text; a key typed meanwhile or another service chosen meanwhile is left alone */
+  showKey(key: string | undefined, error: string | undefined): void {
+    if (key) {
+      if (this.key.value || this.moved()) return;
+      this.fetchedKey = key;
+      this.key.value = key;
+      this.revealField();
+      return;
+    } else if (error) {
+      this.status.className = 'api-status error';
+      this.status.textContent = error;
+    }
+    this.updateVisibility();
+    this.onChange();
+  }
+
+  private revealField(): void {
+    this.key.setAttribute('type', 'text');
+    this.revealed = true;
+    this.eye.name = 'eye-closed';
+    this.updateVisibility();
+  }
+
+  private hideKey(): void {
+    this.key.setAttribute('type', 'password');
+    this.revealed = false;
+    this.eye.name = 'eye';
+    this.updateVisibility();
   }
 
   clear(): void {
     clearTimeout(this.autoTimer);
     this.autoTimer = undefined;
+    this.hideKey();
+    this.fetchedKey = undefined;
     this.key.value = '';
     this.url.value = this.editing?.baseUrl ?? '';
     this.resetModels();
@@ -820,7 +880,12 @@ class Page {
     if (!values || this.saving || !this.editingDir) return;
     this.saving = true;
     this.updateEditButtons();
-    this.send({ type: 'saveProvider', dir: this.editingDir, model: values.model, key: values.key, ...(values.baseUrl !== undefined ? { baseUrl: values.baseUrl } : {}) });
+    this.send({ type: 'saveProvider', dir: this.editingDir, model: values.model, key: values.key, ...(values.baseUrl !== undefined ? { baseUrl: values.baseUrl } : {}),
+      ...(this.editFields?.moved() ? { service: values.service } : {}) });
+  }
+
+  onProviderKey(dir: string, key?: string, error?: string): void {
+    if (dir === this.editingDir) this.editFields?.showKey(key, error);
   }
 
   onSaveProviderResult(dir: string, error?: string): void {
@@ -1690,6 +1755,8 @@ window.addEventListener('message', (e: MessageEvent<ToWebview>) => {
     answer?.(msg.models, msg.error);
   } else if (msg.type === 'saveProviderResult') {
     pages[msg.mode].onSaveProviderResult(msg.dir, msg.error);
+  } else if (msg.type === 'providerKeyResult') {
+    pages[msg.mode].onProviderKey(msg.dir, msg.key, msg.error);
   } else if (msg.type === 'focusAdd') {
     if (activeTab !== msg.mode) {
       setActiveTab(msg.mode);
