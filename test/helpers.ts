@@ -13,6 +13,10 @@ const REAL_HOME = os.homedir();
 
 export const onWindows = process.platform === 'win32';
 
+// Parent of the temporary HOMEs. Off Windows its real path, as a real HOME has no linked ancestor: the macOS temporary
+// directory /var/folders/... is reached through the /var -> /private/var link, which realpath-based code reports back.
+const TMP_ROOT = onWindows ? os.tmpdir() : fs.realpathSync(os.tmpdir());
+
 // scripts/test-guard.cjs (loaded first in every test bundle by scripts/run-tests.mjs) refuses reg / powershell / pwsh /
 // setx on every platform, so the Windows code paths cannot touch the real user-level CODEX_HOME. Fail loudly when a
 // bundle was built without it.
@@ -36,10 +40,13 @@ function fileSymlinksAllowed(): boolean {
 
 /**
  * Test/describe options. Directory link fixtures pass the 'junction' type to fs.symlinkSync (ignored off Windows, no
- * privilege needed on Windows), so only the categories below are skipped, and only on Windows.
+ * privilege needed on Windows), so only the categories below are skipped, each where its platform lacks the behavior.
  */
-/** Linux/WSL behavior: rc files and bash, /proc, the WSL server, fifos, chmod-based permissions and the Linux link semantics of sharing. */
-export const LINUX_ONLY = { skip: onWindows && 'Linux/WSL behavior' };
+/**
+ * Linux/WSL behavior: rc files and bash, /proc, the WSL server, fifos, chmod-based permissions and the Linux link semantics
+ * of sharing. Skipped on Windows and macOS (macOS has no /proc, and its account switching and server handling differ).
+ */
+export const LINUX_ONLY = { skip: process.platform !== 'linux' && 'Linux/WSL behavior' };
 /** Creates file symbolic links, which Windows refuses without Developer Mode or elevation (windowsNoDevMode.test.ts covers that case). */
 export const FILE_SYMLINKS = { skip: !fileSymlinksAllowed() && 'file symbolic links need Windows Developer Mode' };
 /**
@@ -48,8 +55,19 @@ export const FILE_SYMLINKS = { skip: !fileSymlinksAllowed() && 'file symbolic li
  * junctions or directory symlinks there. Linux-only details inside use LINUX_ONLY per test.
  */
 export const SHARING = { skip: onWindows && !fileSymlinksAllowed() && 'sharing tests need file symbolic links (Windows Developer Mode)' };
-/** Creates entries whose names differ only in case, which a Windows file system folds together. */
-export const CASE_SENSITIVE_FS = { skip: onWindows && 'the Windows file system is case-insensitive' };
+// Whether the temporary directory's file system tells apart names that differ only in case: NTFS and the default macOS
+// APFS volume do not
+function caseSensitiveTmp(): boolean {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'planswap-probe-'));
+  try {
+    fs.writeFileSync(path.join(dir, 'case'), '');
+    return !fs.existsSync(path.join(dir, 'CASE'));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+/** Creates entries whose names differ only in case, which a case-insensitive file system (Windows, macOS default) folds together. */
+export const CASE_SENSITIVE_FS = { skip: !caseSensitiveTmp() && 'the file system is case-insensitive' };
 
 /** Asserts POSIX permission bits; Windows has none to check (mode() reads 666 / 444 there). */
 export function assertMode(f: string, expected: string, message?: string): void {
@@ -80,7 +98,7 @@ export function makeTempHome(prefix: string): TempHome {
   const saved = new Map<string, string | undefined>();
   for (const k of ENV_KEYS) saved.set(k, process.env[k]);
   // The prefix avoids selfCheck's own planswap-codex-*, otherwise parallel tests would disturb its leftover check
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), `planswap-test-${prefix}-`));
+  const home = fs.mkdtempSync(path.join(TMP_ROOT, `planswap-test-${prefix}-`));
   process.env.HOME = home;
   process.env.USERPROFILE = home;
   for (const k of CLEARED_ENV_KEYS) delete process.env[k];
@@ -135,7 +153,7 @@ function settle<T>(fn: () => T, cleanup: () => void): T {
 export function assertTempHome(expected?: string): void {
   const home = os.homedir();
   assert.notEqual(path.resolve(home), path.resolve(REAL_HOME), `HOME is still the real home directory: ${home}`);
-  assert.ok(path.resolve(home).startsWith(path.resolve(os.tmpdir())), `HOME is not under the temporary directory: ${home}`);
+  assert.ok(path.resolve(home).startsWith(path.resolve(TMP_ROOT)), `HOME is not under the temporary directory: ${home}`);
   if (expected !== undefined) assert.equal(home, expected);
 }
 
