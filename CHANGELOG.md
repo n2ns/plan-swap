@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- Editing the endpoint of a Codex or Claude API card that has no saved key, such as a local server, no longer asks for the key again: the model list now loads from the new endpoint without a key, so the card can be saved.
+
 ## [0.5.2] - 2026-10-27
 
 ### Added

@@ -268,12 +268,15 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
     try {
       baseUrl = checkBaseUrl(msg.baseUrl?.trim() || info.baseUrl);
       if (!key && msg.dir) {
-        // A saved key goes only to its own card's service and endpoint; another one needs the key typed again
+        // A saved key goes only to its own card's service and endpoint; another one needs the key typed again.
+        // A card without a saved key (the placeholder does not count) is asked at the new endpoint without a key
         const card = panel.resolve(MODE, msg.dir);
         if (card?.kind === 'named' && hasClaudeProviderMarker(card.dir)) {
           const saved = readClaudeProviderEditState(card.dir);
-          if (saved.service !== msg.service || saved.baseUrl !== baseUrl) return { error: t('codex.provider.newEndpointNeedsKey') };
-          key = readClaudeProviderKey(card.dir);
+          if (saved.hasKey) {
+            if (saved.service !== msg.service || saved.baseUrl !== baseUrl) return { error: t('codex.provider.newEndpointNeedsKey') };
+            key = readClaudeProviderKey(card.dir);
+          }
         }
       }
     } catch (err) {

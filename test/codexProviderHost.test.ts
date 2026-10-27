@@ -216,6 +216,24 @@ test('a saved key is only sent to its own card endpoint; a new endpoint needs th
   } finally { h.close(); }
 });
 
+test('a card without a saved key loads models from, and saves, a new endpoint without a key typed', async (ctx) => {
+  const h = harness();
+  const calls = mockFetch(ctx, () => new Response(JSON.stringify({ data: [{ id: 'local-model' }] })));
+  try {
+    await h.handle({ type: 'add', mode: 'codex', name: 'local', shared: false, provider: { service: 'custom', baseUrl: 'http://127.0.0.1:8080/v1', key: '', model: 'local-model' } });
+    const dir = path.join(h.home, '.codex-local');
+    await h.handle({ type: 'providerModels', mode: 'codex', request: 9, service: 'custom', baseUrl: 'http://127.0.0.1:18080/v1', key: '', dir });
+    assert.deepEqual((h.messages.at(-1) as { models?: string[] }).models, ['local-model']);
+    assert.equal(calls.at(-1)?.url, 'http://127.0.0.1:18080/v1/models');
+    assert.equal((calls.at(-1)?.init?.headers as Record<string, string>).Authorization, undefined);
+    await h.handle({ type: 'saveProvider', mode: 'codex', dir, model: 'local-model', key: '', baseUrl: 'http://127.0.0.1:18080/v1' });
+    assert.equal((h.messages.at(-1) as { error?: string }).error, undefined);
+    const config = fs.readFileSync(path.join(dir, 'config.toml'), 'utf8');
+    assert.match(config, /127\.0\.0\.1:18080/);
+    assert.doesNotMatch(config, /experimental_bearer_token/);
+  } finally { h.close(); }
+});
+
 test('a key with inner whitespace is refused before any directory exists', async () => {
   const h = harness();
   try {

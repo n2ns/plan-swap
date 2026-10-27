@@ -575,12 +575,15 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     try {
       baseUrl = checkBaseUrl(msg.baseUrl?.trim() || SERVICE_INFO[msg.service].baseUrl);
       if (!key && msg.dir) {
-        // A saved key goes only to its own card's service and endpoint; another one needs the key typed again
+        // A saved key goes only to its own card's service and endpoint; another one needs the key typed again.
+        // A card without a saved key has nothing to protect: the new endpoint is asked without a key
         const card = panel.resolve(MODE, msg.dir);
         if (card?.kind === 'named' && preserveProviderConfig(card.dir)) {
           const saved = readProviderEditState(card.dir);
-          if (saved.service !== msg.service || saved.baseUrl !== baseUrl) return { error: t('codex.provider.newEndpointNeedsKey') };
-          key = readProviderKey(card.dir);
+          if (saved.hasKey) {
+            if (saved.service !== msg.service || saved.baseUrl !== baseUrl) return { error: t('codex.provider.newEndpointNeedsKey') };
+            key = readProviderKey(card.dir);
+          }
         }
       }
     } catch (err) {

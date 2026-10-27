@@ -287,6 +287,24 @@ test('model lists: DeepSeek fixed; others through claudeModelsUrl with the typed
   } finally { h.close(); }
 });
 
+test('a card without a saved key loads models from, and saves, a new endpoint without a key typed', async (ctx) => {
+  const h = harness();
+  const calls = mockFetch(ctx, () => new Response(JSON.stringify({ data: [{ id: 'local-model' }] })));
+  try {
+    await h.handle({ type: 'add', mode: 'claude', name: 'local', shared: false, provider: { service: 'custom', baseUrl: 'http://127.0.0.1:8080', key: '', model: 'local-model' } });
+    const dir = h.dir('local');
+    await h.handle({ type: 'providerModels', mode: 'claude', request: 1, service: 'custom', baseUrl: 'http://127.0.0.1:18080', key: '', dir });
+    assert.deepEqual(h.last().models, ['local-model']);
+    assert.equal(calls.at(-1)?.url, 'http://127.0.0.1:18080/v1/models');
+    const headers = calls.at(-1)?.init?.headers as Record<string, string>;
+    assert.equal(headers.Authorization, undefined);
+    assert.equal(headers['x-api-key'], undefined);
+    await h.handle({ type: 'saveProvider', mode: 'claude', dir, model: 'local-model', baseUrl: 'http://127.0.0.1:18080', key: '' });
+    assert.equal(h.last().error, undefined);
+    assert.equal(settingsOf(dir).env.ANTHROPIC_BASE_URL, 'http://127.0.0.1:18080');
+  } finally { h.close(); }
+});
+
 test('the status bar shows a current card as its label and service, without usage', async () => {
   const h = harness();
   try {
