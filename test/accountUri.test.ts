@@ -74,9 +74,16 @@ describe('account URI parsing', () => {
     assert.throws(() => parseAccountUri(uri('account=default&target=windows'), { ...windows, remoteName: 'ssh-remote' }));
     assert.throws(() => parseAccountUri(uri('account=default&target=windows&distro=Ubuntu_26'), windows));
   });
+
+  test('a local macOS window accepts neither target', () => {
+    const mac = { ...wsl, platform: 'darwin' as const, remoteName: undefined, distro: undefined };
+    assert.throws(() => parseAccountUri(uri(), mac), { message: t('uri.wslRequired') });
+    assert.throws(() => parseAccountUri(uri('account=default&target=windows'), mac), { message: t('uri.windowsRequired') });
+  });
 });
 
-describe('registered Claude account URI handler', () => {
+// Account URIs target WSL or native Windows; a local macOS window refuses them (see the parsing tests)
+describe('registered Claude account URI handler', { skip: process.platform === 'darwin' && 'account URIs target WSL or Windows' }, () => {
   let tmp: TempHome;
   let savedDistro: string | undefined;
   let savedRemote: string | undefined;

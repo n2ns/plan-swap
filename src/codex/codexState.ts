@@ -303,7 +303,7 @@ export function preCheck(run?: Runner, kind: ServerKind = currentServerKind()): 
     const shell = macLoginShell();
     const shellKind = macShellKind(shell);
     if (!shellKind) {
-      reasons.push(t('codex.pre.notBash', { shell: shell || t('codex.pre.shellUnset') }));
+      reasons.push(t('codex.mac.notShell', { shell: shell || t('codex.pre.shellUnset') }));
       return { ok: false, reasons };
     }
     for (const st of macStartupFiles(shellKind).map((file) => statusOf(file))) {
@@ -426,7 +426,7 @@ function installInto(file: string, beforeGuard: boolean, block: string = rcBlock
 export function installRcBlocks(): void {
   if (isMac()) {
     const file = currentMacRcFile();
-    if (!file) throw new Error(t('codex.pre.notBash', { shell: macLoginShell() || t('codex.pre.shellUnset') }));
+    if (!file) throw new Error(t('codex.mac.notShell', { shell: macLoginShell() || t('codex.pre.shellUnset') }));
     installInto(file, false);
     return;
   }
@@ -675,7 +675,7 @@ export function selfCheck(run: ShellRunner = runShell): { ok: boolean; detail: s
   let shell = 'bash';
   if (isMac()) {
     const login = macLoginShell();
-    if (!login || !macShellKind(login)) return { ok: false, detail: t('codex.pre.notBash', { shell: login || t('codex.pre.shellUnset') }) };
+    if (!login || !macShellKind(login)) return { ok: false, detail: t('codex.mac.notShell', { shell: login || t('codex.pre.shellUnset') }) };
     shell = login;
   }
   const file = STATE_FILE();
@@ -690,7 +690,10 @@ export function selfCheck(run: ShellRunner = runShell): { ok: boolean; detail: s
     const env = { ...process.env };
     delete env.CODEX_HOME;
     const r = run(shell, ['-i', '-l', '-c', `printf '\\n${SELF_CHECK_MARK}%s\\n' "$CODEX_HOME"`], env);
-    if (r.error) return { ok: false, detail: t('codex.self.bashFailed', { error: r.error.message }) };
+    if (r.error) {
+      const detail = isMac() ? t('codex.mac.shellFailed', { shell, error: r.error.message }) : t('codex.self.bashFailed', { error: r.error.message });
+      return { ok: false, detail };
+    }
     // A login shell may print a motd or hints (Ubuntu's "sudo_root" note) to stdout; only the marked line is the value
     const marked = (r.stdout ?? '').split('\n').filter((l) => l.startsWith(SELF_CHECK_MARK)).pop();
     const out = marked === undefined ? '' : marked.slice(SELF_CHECK_MARK.length).trim();

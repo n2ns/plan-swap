@@ -145,6 +145,7 @@ export const en = {
   'disabled.text':
     'When enabled, each account uses its own CODEX_HOME directory (default ~/.codex, others ~/.codex-<name>). The extension writes a marker block into ~/.profile and ~/.bashrc that reads the selected directory from a state file.',
   'disabled.textWin': 'When enabled, each account uses its own CODEX_HOME directory (default ~/.codex, others ~/.codex-<name>). The extension sets the per-user environment variable CODEX_HOME to the selected directory (removed for the default account).',
+  'disabled.textMac': 'When enabled, each account uses its own CODEX_HOME directory (default ~/.codex, others ~/.codex-<name>). The extension writes a marker block into your login shell\'s startup file (such as ~/.zshenv) that reads the selected directory from a state file.',
   'disabled.restartWsl': "Switching accounts requires restarting the editor's WSL server; all WSL windows disconnect.",
   'disabled.restartLocal': 'Switching accounts requires restarting this editor; all of its windows close and integrated terminals end.',
   'disabled.restartRemote': 'Switching accounts requires restarting the editor server in the remote environment.',
@@ -313,6 +314,7 @@ export const zhCn: Record<MessageKey, string> = {
   'disabled.text':
     '启用后，每个账号使用独立的 CODEX_HOME 目录（默认 ~/.codex，其他为 ~/.codex-<名字>）。插件会在 ~/.profile 与 ~/.bashrc 写入一段标记块，从状态文件读取所选目录。',
   'disabled.textWin': '启用后，每个账号使用独立的 CODEX_HOME 目录（默认 ~/.codex，其他为 ~/.codex-<名字>）。插件会把用户环境变量 CODEX_HOME 设为所选目录（默认账号时删除该变量）。',
+  'disabled.textMac': '启用后，每个账号使用独立的 CODEX_HOME 目录（默认 ~/.codex，其他为 ~/.codex-<名字>）。插件会在登录 shell 的启动文件（如 ~/.zshenv）中写入标记块，从状态文件读取所选目录。',
   'disabled.restartWsl': '切换账号需要重启编辑器的 WSL 服务端，所有 WSL 窗口会断开。',
   'disabled.restartLocal': '切换账号需要重启当前编辑器，它的所有窗口会关闭，集成终端会结束。',
   'disabled.restartRemote': '切换账号需要在远程环境中重启编辑器服务端。',
@@ -479,6 +481,7 @@ export const zhTw: Record<MessageKey, string> = {
   'disabled.text':
     '啟用後，每個帳號使用獨立的 CODEX_HOME 目錄（預設 ~/.codex，其他為 ~/.codex-<名稱>）。擴充功能會在 ~/.profile 與 ~/.bashrc 寫入一段標記區塊，從狀態檔案讀取所選目錄。',
   'disabled.textWin': '啟用後，每個帳號使用獨立的 CODEX_HOME 目錄（預設 ~/.codex，其他為 ~/.codex-<名稱>）。擴充功能會把使用者環境變數 CODEX_HOME 設為所選目錄（預設帳號時移除該變數）。',
+  'disabled.textMac': '啟用後，每個帳號使用獨立的 CODEX_HOME 目錄（預設 ~/.codex，其他為 ~/.codex-<名稱>）。擴充功能會在登入 shell 的啟動檔案（例如 ~/.zshenv）中寫入標記區塊，從狀態檔讀取所選目錄。',
   'disabled.restartWsl': '切換帳號需要重新啟動編輯器的 WSL 伺服器，所有 WSL 視窗都會中斷連線。',
   'disabled.restartLocal': '切換帳號需要重新啟動目前的編輯器，它的所有視窗都會關閉，整合式終端機也會結束。',
   'disabled.restartRemote': '切換帳號需要在遠端環境中重新啟動編輯器伺服器。',
@@ -644,6 +647,7 @@ export const es: Record<MessageKey, string> = {
   'disabled.title': 'Cambio de cuenta de Codex desactivado',
   'disabled.text': 'Al activarlo, cada cuenta usa su propio directorio CODEX_HOME (por defecto ~/.codex; las demás, ~/.codex-<name>). La extensión escribe un bloque delimitado en ~/.profile y ~/.bashrc que lee el directorio seleccionado de un archivo de estado.',
   'disabled.textWin': 'Al activarlo, cada cuenta usa su propio directorio CODEX_HOME (por defecto ~/.codex; las demás, ~/.codex-<name>). La extensión define la variable de entorno de usuario CODEX_HOME con el directorio seleccionado (se elimina para la cuenta predeterminada).',
+  'disabled.textMac': 'Al activarlo, cada cuenta usa su propio directorio CODEX_HOME (por defecto ~/.codex; las demás, ~/.codex-<name>). La extensión escribe un bloque delimitado en el archivo de inicio de tu shell de inicio de sesión (como ~/.zshenv) que lee el directorio seleccionado de un archivo de estado.',
   'disabled.restartWsl': 'Cambiar de cuenta requiere reiniciar el servidor WSL del editor; se desconectarán todas las ventanas WSL.',
   'disabled.restartLocal': 'Cambiar de cuenta requiere reiniciar este editor; se cerrarán todas sus ventanas y terminales integrados.',
   'disabled.restartRemote': 'Cambiar de cuenta requiere reiniciar el servidor del editor en el entorno remoto.',
@@ -809,6 +813,7 @@ export const ja: Record<MessageKey, string> = {
   'disabled.title': 'Codex のアカウント切り替えは無効です',
   'disabled.text': '有効にすると、アカウントごとに専用の CODEX_HOME ディレクトリを使います（既定は ~/.codex、その他は ~/.codex-<name>）。拡張機能は ~/.profile と ~/.bashrc にマーカーブロックを書き込み、状態ファイルから選択中のディレクトリを読み取ります。',
   'disabled.textWin': '有効にすると、アカウントごとに専用の CODEX_HOME ディレクトリを使います（既定は ~/.codex、その他は ~/.codex-<name>）。拡張機能はユーザー環境変数 CODEX_HOME を選択中のディレクトリに設定します（既定のアカウントでは削除します）。',
+  'disabled.textMac': '有効にすると、アカウントごとに専用の CODEX_HOME ディレクトリを使います（既定は ~/.codex、その他は ~/.codex-<name>）。拡張機能はログイン shell の起動ファイル（~/.zshenv など）にマーカーブロックを書き込み、状態ファイルから選択中のディレクトリを読み取ります。',
   'disabled.restartWsl': '切り替えにはエディターの WSL サーバーの再起動が必要です。すべての WSL ウィンドウが切断されます。',
   'disabled.restartLocal': '切り替えにはエディターの再起動が必要です。すべてのウィンドウと統合ターミナルが閉じます。',
   'disabled.restartRemote': '切り替えにはリモート環境でエディターのサーバーを再起動する必要があります。',
@@ -975,6 +980,7 @@ export const ko: Record<MessageKey, string> = {
   'disabled.text':
     '활성화하면 각 계정이 자체 CODEX_HOME 디렉터리를 사용합니다(기본값 ~/.codex, 그 외 ~/.codex-<name>). 확장이 ~/.profile과 ~/.bashrc에 상태 파일에서 선택된 디렉터리를 읽는 마커 블록을 기록합니다.',
   'disabled.textWin': '활성화하면 각 계정이 자체 CODEX_HOME 디렉터리를 사용합니다(기본값 ~/.codex, 그 외 ~/.codex-<name>). 확장이 사용자 환경 변수 CODEX_HOME을 선택된 디렉터리로 설정합니다(기본 계정에서는 제거).',
+  'disabled.textMac': '활성화하면 각 계정이 자체 CODEX_HOME 디렉터리를 사용합니다(기본값 ~/.codex, 그 외 ~/.codex-<name>). 확장이 로그인 셸의 시작 파일(예: ~/.zshenv)에 마커 블록을 쓰고, 상태 파일에서 선택된 디렉터리를 읽습니다.',
   'disabled.restartWsl': '계정을 전환하려면 편집기의 WSL 서버를 다시 시작해야 하며, 모든 WSL 창의 연결이 끊어집니다.',
   'disabled.restartLocal': '계정을 전환하려면 이 편집기를 다시 시작해야 하며, 모든 창이 닫히고 통합 터미널이 종료됩니다.',
   'disabled.restartRemote': '계정을 전환하려면 원격 환경에서 편집기 서버를 다시 시작해야 합니다.',

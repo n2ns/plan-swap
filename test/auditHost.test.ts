@@ -161,10 +161,10 @@ async function codexHarness(accounts: CodexAccount[] = []): Promise<CodexHarness
   return h;
 }
 const codexNamed = (name: string): CodexAccount => ({ name, dir: codexAccountDir(name) });
-// A live app-server daemon pid file of this process (Linux: with its start ticks), as codexDaemonAlive reads it
+// A live app-server daemon pid file of this process (Linux: with its start ticks, from /proc), as codexDaemonAlive reads it
 function codexDaemonRunning(dir: string): void {
   const data: Record<string, unknown> = { pid: process.pid };
-  if (!onWindows) {
+  if (process.platform === 'linux') {
     const stat = fs.readFileSync(`/proc/${process.pid}/stat`, 'utf8');
     data.processIdentity = { startTicks: Number(stat.slice(stat.lastIndexOf(')') + 1).trim().split(/\s+/)[19]) };
   }
@@ -202,7 +202,7 @@ describe('adding a shared Claude account never replaces an existing account\'s o
 });
 
 describe('account terminals count as busy for the linking steps', () => {
-  test('both command modules provide a check that is true only for a folder with an open account terminal on Windows', async (ctx) => {
+  test('both command modules provide a check that is true only for a folder with an open account terminal on Windows and macOS', async (ctx) => {
     captureTerminals(ctx);
     ctx.mock.method(window, 'showInformationMessage', async () => undefined);
     const claude = claudeHarness();
@@ -222,7 +222,7 @@ describe('account terminals count as busy for the linking steps', () => {
         assert.equal(codex.terminalOpen(codexAccountDir('d')), false);
       });
       // Linux: /proc already sees terminal processes, so the terminal itself is no extra signal
-      if (!onWindows) assert.equal(claude.terminalOpen(a), false);
+      if (process.platform === 'linux') assert.equal(claude.terminalOpen(a), false);
     } finally {
       claude.dispose();
       codex.dispose();

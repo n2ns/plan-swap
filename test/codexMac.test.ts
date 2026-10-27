@@ -157,7 +157,7 @@ describe('rc block on macOS', () => {
     withEnv({ SHELL: '/opt/homebrew/bin/fish' }, () => {
       assert.deepEqual(rcStatus(), []);
       assert.equal(isEnabled(), false);
-      assert.throws(() => installRcBlocks(), { message: t('codex.pre.notBash', { shell: '/opt/homebrew/bin/fish' }) });
+      assert.throws(() => installRcBlocks(), { message: t('codex.mac.notShell', { shell: '/opt/homebrew/bin/fish' }) });
     });
     assert.deepEqual(fs.readdirSync(home).filter((n) => n.startsWith('.z') || n.startsWith('.bash') || n === '.profile'), []);
   });
@@ -182,7 +182,7 @@ describe('preCheck on macOS', () => {
 
   test('another shell or none is refused', () => {
     withEnv({ SHELL: '/opt/homebrew/bin/fish' }, () => {
-      assert.deepEqual(preCheck(), { ok: false, reasons: [t('codex.pre.notBash', { shell: '/opt/homebrew/bin/fish' })] });
+      assert.deepEqual(preCheck(), { ok: false, reasons: [t('codex.mac.notShell', { shell: '/opt/homebrew/bin/fish' })] });
     });
   });
 
@@ -256,13 +256,13 @@ describe('selection and self-check on macOS', () => {
     assert.equal(wrong.ok, false);
     assert.match(wrong.detail, /^CODEX_HOME in the login shell is ""/);
     const missing = selfCheck(() => ({ error: new Error('spawn /bin/zsh ENOENT') }));
-    assert.deepEqual(missing, { ok: false, detail: t('codex.self.bashFailed', { error: 'spawn /bin/zsh ENOENT' }) });
+    assert.deepEqual(missing, { ok: false, detail: t('codex.mac.shellFailed', { shell: '/bin/zsh', error: 'spawn /bin/zsh ENOENT' }) });
   });
 
   test('another login shell fails without running anything', () => {
     let ran = false;
     const r = withEnv({ SHELL: '/bin/tcsh' }, () => selfCheck(() => { ran = true; return {}; }));
-    assert.deepEqual(r, { ok: false, detail: t('codex.pre.notBash', { shell: '/bin/tcsh' }) });
+    assert.deepEqual(r, { ok: false, detail: t('codex.mac.notShell', { shell: '/bin/tcsh' }) });
     assert.equal(ran, false);
   });
 });
@@ -417,7 +417,7 @@ describe('restart guidance and commands on macOS', () => {
     assert.equal(manualRestartMessages('unknown', undefined, false).hint, t('codex.manualRestartHintLocal'));
     assert.equal(manualRestartMessages('vscode', 'ssh-remote', 'darwin').hint, t('codex.manualRestartHintRemote'));
     env.remoteName = undefined;
-    assert.deepEqual(restartInfo(), { context: 'local', auto: false });
+    assert.deepEqual(restartInfo(), { context: 'local', auto: false, shellFile: true });
   });
 
   const harness = async (accounts: CodexAccount[]) => {
@@ -456,7 +456,7 @@ describe('restart guidance and commands on macOS', () => {
       await withEnv({ SHELL: path.join(home, 'no-such-bin', 'zsh') }, () => h.handle({ type: 'enable', mode: 'codex' }));
       assert.deepEqual(prompts[0], [t('codex.mac.enableConfirm', { file: tildify(at('.zshenv')) }), { modal: true, detail: rcBlock() }, t('codex.enableButton')]);
       assert.equal(errors.mock.callCount(), 1);
-      assert.match(String(errors.mock.calls[0].arguments[0]), /^Self-check failed; rc files were rolled back: Cannot run bash: /);
+      assert.match(String(errors.mock.calls[0].arguments[0]), /^Self-check failed; rc files were rolled back: Cannot run the login shell /);
       assert.equal(read(at('.zshenv')), 'z=1\n');
       assert.equal(fs.existsSync(at('.profile')), false);
     } finally {

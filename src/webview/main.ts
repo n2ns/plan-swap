@@ -1062,7 +1062,7 @@ class Page {
       { class: 'disabled-card' },
       h('div', { class: 'disabled-icon' }, h('vscode-icon', { name: 'plug', size: '26' })),
       h('div', { class: 'disabled-title' }, t('disabled.title')),
-      h('div', { class: 'disabled-text' }, joinSentences(t(codexRestart().userEnv ? 'disabled.textWin' : 'disabled.text'), t(DISABLED_RESTART[codexRestart().context]))),
+      h('div', { class: 'disabled-text' }, joinSentences(t(codexRestart().userEnv ? 'disabled.textWin' : codexRestart().shellFile ? 'disabled.textMac' : 'disabled.text'), t(DISABLED_RESTART[codexRestart().context]))),
       h('div', { class: 'disabled-actions' }, onClick(h('vscode-button', { icon: 'check', 'data-action': 'enable' }, t('disabled.enable')), () => this.send({ type: 'enable' }))),
     );
   }

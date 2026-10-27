@@ -147,13 +147,13 @@ export function manualRestartMessages(kind: ServerKind, remoteName: string | und
 }
 
 /** Automatic restart is restricted to the existing supported WSL servers: auto only for a WSL remote with
- *  canAutoRestart(kind); local and other remotes never. userEnv: true on native Windows. kind: the caller's
- *  detectServerKind() result, so one flow detects the kind once. */
+ *  canAutoRestart(kind); local and other remotes never. userEnv: true on native Windows, shellFile: true on macOS.
+ *  kind: the caller's detectServerKind() result, so one flow detects the kind once. */
 export function restartInfo(kind: ServerKind = detectServerKind()): RestartInfo {
   const remoteName = vscode.env.remoteName;
   const context = remoteName === undefined ? 'local' : remoteName === 'wsl' ? 'wsl' : 'remote';
   const info: RestartInfo = { context, auto: context === 'wsl' && canAutoRestart(kind) };
-  return isWindows() ? { ...info, userEnv: true } : info;
+  return isWindows() ? { ...info, userEnv: true } : isMac() ? { ...info, shellFile: true } : info;
 }
 
 // Returns false when automatic restart is unsupported or validation failed and the manual alternative was shown
@@ -466,7 +466,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
 
   async function disable(): Promise<void> {
     const disableLabel = t('codex.disableButton');
-    const ok = await vscode.window.showWarningMessage(t(isWindows() ? 'codex.win.disableConfirm' : 'codex.disableConfirm'), { modal: true }, disableLabel);
+    const ok = await vscode.window.showWarningMessage(t(isWindows() ? 'codex.win.disableConfirm' : isMac() ? 'codex.mac.disableConfirm' : 'codex.disableConfirm'), { modal: true }, disableLabel);
     if (ok !== disableLabel) return;
     try {
       if (isWindows()) {
