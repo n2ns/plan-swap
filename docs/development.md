@@ -54,7 +54,7 @@ F5 in a WSL window uses the "Run Extension" launch configuration; `.vscode/tasks
 
 - `npm test` runs `scripts/run-tests.mjs`: it bundles `test/*.test.ts` into `.test-out/` with `vscode` aliased to `test/stubs/vscode.ts` and loads `scripts/test-guard.cjs` first, which refuses `reg` / `powershell` / `pwsh` / `setx` so no test can touch the real user-level `CODEX_HOME`. The runner needs Node 21 or later because the Webview i18n module reads the global `navigator` at load time.
 - `makeTempHome` (`test/helpers.ts`) points both `HOME` and `USERPROFILE` (read by `os.homedir()` on Windows) at a temporary directory, clears inherited account variables and asserts the real home is not used. The account stores are tested with `MemoryMemento`.
-- On native Windows, `test/helpers.ts` skips the categories it defines (`LINUX_ONLY`, `FILE_SYMLINKS`, `SHARING`, `CASE_SENSITIVE_FS`) with the reasons given there; Linux/WSL remains the full run.
+- On native Windows and macOS, `test/helpers.ts` skips the categories it defines (`LINUX_ONLY`, `POSIX_ONLY` on Windows only, `RC_FILES` on macOS only, `FILE_SYMLINKS`, `SHARING`, `CASE_SENSITIVE_FS`) with the reasons given there; Linux/WSL remains the full run.
 - Unit tests use disposable fixtures. UI integration and real-account acceptance are separate and follow [Manual Verification](manual-verification.md). Record what ran and what remains unverified.
 
 ### CI
