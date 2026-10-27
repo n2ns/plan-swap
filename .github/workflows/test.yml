@@ -34,7 +34,7 @@ jobs:
       fail-fast: false
       matrix:
         # The Windows runner is elevated, so file symbolic links work there and the sharing tests run on real links
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
         # esbuild targets node22 and the editors ship Node 22; 24 is the current LTS
         node: ['22', '24']
     runs-on: ${{ matrix.os }}
