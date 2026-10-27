@@ -167,7 +167,9 @@ describe('panel message handlers (Claude)', () => {
     const statusBar = { update() {} } as unknown as StatusBar;
     const exclusions = new RecommendExclusions(memento, 'claude.recommendExcluded');
     h.exclusions = exclusions;
-    const disposables = registerCommands({ store, panel, statusBar, labels, exclusions, tools: {}, procRoot: procRoot(), checkSubscription, bundledClaude, logoutClaude });
+    const disposables = registerCommands({ store, panel, statusBar, labels, exclusions, tools: {}, procRoot: procRoot(), checkSubscription, bundledClaude,
+      // The macOS sign-out before a delete never runs the real CLI
+      logoutClaude: logoutClaude ?? (async () => ({ ok: true })) });
     h.dispose = () => disposables.forEach((d) => d.dispose());
     return h;
   }

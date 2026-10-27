@@ -1,15 +1,17 @@
 // Loaded first in every test bundle (esbuild banner in run-tests.mjs), on every platform.
 // On Windows the product code reads and writes the real user-level CODEX_HOME through reg / powershell.exe / setx
-// (codexWindows' default runner, windowsStartTimes' probe). Tests inject their own runners; this guard makes sure a
-// missed injection fails loudly instead of touching the real user environment. It replaces the child_process functions
-// by direct assignment, so mock.restoreAll() (which only undoes node:test mocks) cannot remove it.
+// (codexWindows' default runner, windowsStartTimes' probe), and on every platform it runs the official claude / codex
+// CLIs (usage queries, the macOS sign-out before a delete), which tests must never start (AGENTS.md). Tests inject their
+// own runners; this guard makes sure a missed injection fails loudly instead of touching the real user environment.
+// It replaces the child_process functions by direct assignment, so mock.restoreAll() (which only undoes node:test
+// mocks) cannot remove it.
 'use strict';
 const childProcess = require('node:child_process');
 const path = require('node:path');
 const util = require('node:util');
 
 if (!childProcess.__planswapTestGuard) {
-  const BLOCKED = /^(reg|powershell|pwsh|setx)(\.exe)?$/i;
+  const BLOCKED = /^(reg|powershell|pwsh|setx|claude|codex)(\.exe|\.cmd)?$/i;
 
   // First token of a shell command line, quotes removed ("C:\Windows\System32\reg.exe" query ... -> reg.exe)
   const firstToken = (command) => {

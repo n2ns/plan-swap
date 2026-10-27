@@ -1,6 +1,6 @@
-// scripts/test-guard.cjs: every test bundle refuses reg / powershell / pwsh / setx, on every platform, whatever the
-// test does with node:test mocks. The probe commands below are read-only or help-only, so even a missing guard could not
-// change the user environment; each call still checks for the guard first.
+// scripts/test-guard.cjs: every test bundle refuses reg / powershell / pwsh / setx and the claude / codex CLIs, on every
+// platform, whatever the test does with node:test mocks. The probe commands below are read-only or help-only, so even a
+// missing guard could not change the user environment; each call still checks for the guard first.
 import { describe, mock, test } from 'node:test';
 import assert from 'node:assert/strict';
 import childProcess, { execFileSync as namedExecFileSync, spawnSync as namedSpawnSync } from 'node:child_process';
@@ -38,6 +38,10 @@ function everyForm(): void {
   refused('exec', () => childProcess.exec('powershell -NoProfile -Command "exit 0"', noop));
   refused('promisified exec', () => util.promisify(childProcess.exec)('powershell -NoProfile -Command "exit 0"'));
   refused('promisified execFile', () => util.promisify(childProcess.execFile)('setx', ['/?']));
+  refused('spawn claude', () => childProcess.spawn('claude', ['--version']));
+  refused('spawn the bundled claude by full path', () => childProcess.spawn('/ext/resources/native-binary/claude', ['--version']));
+  refused('spawn codex.cmd through a shell', () => childProcess.spawn('codex.cmd --version', [], { shell: true }));
+  refused('execFileSync codex.exe', () => childProcess.execFileSync('C:\\ext\\bin\\windows-x86_64\\codex.exe', ['--version']));
 }
 
 describe('process guard', () => {

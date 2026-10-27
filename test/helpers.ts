@@ -18,8 +18,8 @@ export const onWindows = process.platform === 'win32';
 const TMP_ROOT = onWindows ? os.tmpdir() : fs.realpathSync(os.tmpdir());
 
 // scripts/test-guard.cjs (loaded first in every test bundle by scripts/run-tests.mjs) refuses reg / powershell / pwsh /
-// setx on every platform, so the Windows code paths cannot touch the real user-level CODEX_HOME. Fail loudly when a
-// bundle was built without it.
+// setx and the claude / codex CLIs on every platform, so the Windows code paths cannot touch the real user-level
+// CODEX_HOME and no test runs a real CLI. Fail loudly when a bundle was built without it.
 assert.ok((childProcess as unknown as { __planswapTestGuard?: boolean }).__planswapTestGuard,
   'the process guard (scripts/test-guard.cjs) is not loaded; run the tests through npm test');
 

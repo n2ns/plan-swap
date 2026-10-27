@@ -78,7 +78,8 @@ for (const scenario of [
         assert.deepEqual(snapshot.codex.selected, scenario.selection === 'named' ? { kind: 'named', number: 1 } : { kind: 'default' });
         assert.equal(snapshot.codex.pending, scenario.pending);
         const report = buildDiagnosticsReport(snapshot);
-        const restartAdvice = t(process.platform === 'win32' ? 'diagnostics.nextManualWindows' : 'diagnostics.nextManualLocal');
+        const restartAdvice = t(process.platform === 'win32' ? 'diagnostics.nextManualWindows'
+          : process.platform === 'darwin' ? 'diagnostics.nextManualMac' : 'diagnostics.nextManualLocal');
         assert.equal(report.includes(restartAdvice), scenario.pending);
         assert.equal(report.includes(t('diagnostics.nextNone')), !scenario.pending);
       });
