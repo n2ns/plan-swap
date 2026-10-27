@@ -29,10 +29,10 @@ A warning icon beside a Claude account means subscription access was rejected. H
 
 You need:
 
-- A VS Code 1.107+ compatible editor (VS Code, Antigravity IDE or VSCodium). PlanSwap runs in a WSL remote window, on native Windows, on a local Linux desktop or in another remote window. macOS is not supported.
+- A VS Code 1.107+ compatible editor (VS Code, Antigravity IDE or VSCodium). PlanSwap runs in a WSL remote window, on native Windows, on macOS, on a local Linux desktop or in another remote window.
 - PlanSwap and the official Claude Code and/or Codex extension installed where that window runs.
 - Optional: the `claude` and/or `codex` command on the PATH there. When the command is unavailable, signing in from the terminal and usage checks use the CLI bundled with the corresponding official extension.
-- For Codex switching outside native Windows: Bash as your login shell.
+- For Codex switching on WSL and Linux: Bash as your login shell; on macOS: zsh or bash.
 - For Codex switching in a VS Code or VSCodium WSL window: the extension that connects the window reads the PlanSwap block in that editor's `server-env-setup` before its WSL server starts. VS Code uses Microsoft's Remote - WSL; VSCodium needs the [wsl-remote](https://open-vsx.org/extension/n2ns/wsl-remote) extension (`n2ns.wsl-remote`).
 
 See the [installation instructions](../README.md#install) and [supported editors](../README.md#supported-editors) for setup and how well each editor has been tested.
@@ -95,7 +95,7 @@ Switching changes an editor setting shared by other windows on the same machine,
 
 Use `<scheme>://n2ns.planswap/switch?account=<name>`. The scheme follows the editor: `vscode` for VS Code, `vscodium` for VSCodium. Replace `work` below with a registered account name, not its display alias; names are case-insensitive. Use `default` to switch back. The account directory must already exist.
 
-Focus the intended WSL window first. Requests default to `target=wsl`; a local Windows window refuses them. `distro=Ubuntu_26` additionally requires that exact distribution name; it checks the receiving window and does not route to a different one. To intentionally switch native Windows accounts, use `target=windows` and omit `distro`. Other remote environments and local Linux are not supported by this URI entry point.
+Focus the intended WSL window first. Requests default to `target=wsl`; a local Windows window refuses them. `distro=Ubuntu_26` additionally requires that exact distribution name; it checks the receiving window and does not route to a different one. To intentionally switch native Windows accounts, use `target=windows` and omit `distro`. Other remote environments, local Linux and macOS are not supported by this URI entry point.
 
 From Windows Command Prompt (`cmd`):
 
@@ -125,6 +125,7 @@ Open the **Codex** tab and click **Enable Codex switching**. Review and confirm 
 
 - **WSL, local Linux and other remote windows:** PlanSwap adds marked blocks to `~/.profile` and `~/.bashrc`, then checks that a Bash login shell picks up the selected account. If it reports a conflicting `CODEX_HOME` assignment or shell configuration, fix what it names and try again. In a VS Code or VSCodium WSL window, the first switch also adds a marked block to that editor's `~/.vscode-server/server-env-setup` or `~/.vscodium-server/server-env-setup`, which its WSL server reads before it starts.
 - **Native Windows:** PlanSwap manages your user-level `CODEX_HOME` environment variable. If you set `CODEX_HOME` yourself to another value, enabling is refused. If it already points to a PlanSwap account directory (`~/.codex-<name>`), PlanSwap takes it over.
+- **macOS:** PlanSwap adds a marked block to your login shell's startup file (`~/.zshenv` for zsh; for bash, `~/.bash_profile` or the login file you already use), then checks that your login shell picks up the selected account. Other login shells are not supported. If it reports a conflicting `CODEX_HOME` assignment, fix what it names and try again.
 
 If the Windows Codex extension is set to run inside WSL, manage its accounts from a WSL window, or turn off `chatgpt.runCodexInWindowsSubsystemForLinux` before managing Windows accounts. The sidebar banner and the warning offer **Open Setting**, which opens the Settings editor at that setting; PlanSwap does not change it for you.
 
@@ -140,6 +141,7 @@ If the Windows Codex extension is set to run inside WSL, manage its accounts fro
 | VS Code in WSL | Confirm **Save selection**. Close all VS Code windows connected to that distribution, wait a few seconds, then reopen them. |
 | Other editors in WSL | Confirm **Save selection** and follow the manual restart instructions in the dialog. |
 | Native Windows | Confirm **Save selection**, fully quit the editor, then start it again from the Start menu or taskbar. A terminal opened before switching still has the old account. |
+| macOS | Confirm **Save selection**, fully quit the editor (⌘Q), then open it again from the Dock, Launchpad or Finder. A terminal opened before switching still has the old account, and so does an editor started from it. |
 | Local Linux or another remote window | Confirm **Save selection**. Then follow the dialog: restart the editor, or the remote server, so it starts with the selected `CODEX_HOME`. |
 
 In WSL, VS Code and VSCodium each keep their own selection for the same distribution, so switching in one editor does not change the other's account; their integrated terminals follow their editor. Antigravity and terminals opened outside an editor use the shared selection, which only a switch made in Antigravity or in an unrecognized editor changes.
@@ -229,6 +231,11 @@ Then:
 - Codex thread databases (`*.sqlite`) are never linked on Windows, because SQLite there can lose data written through a link. Each account keeps its own, while sessions, history and configuration are still shared.
 - PlanSwap cannot tell on Windows which account a running Claude or Codex process belongs to. Close the account's sessions and PlanSwap terminal tabs before linking, unlinking or removing it, even if the CLI has already exited.
 
+### Linked accounts on macOS
+
+- Claude Code keeps each account's sign-ins, including those to OAuth MCP servers, in the macOS Keychain, so linked Claude accounts do not share MCP server sign-ins: sign in to such a server once in each account.
+- As on Windows, PlanSwap cannot tell which account a running Claude or Codex process belongs to. Close the account's sessions and PlanSwap terminal tabs before linking, unlinking or removing it.
+
 ## Read and refresh usage limits
 
 Usage bars and percentages show what is **left**; set `planswap.usageDisplay` to `used` in [settings](#change-language-and-display-settings) to show what is used instead. The duration next to each limit, such as `2d 5h`, is the time until it resets. Hover a bar to see both, for example `97% left (3% used)`. A bar turns yellow when 30% or less is left and red at 10% or less, also when it shows what is used; change these levels with `planswap.usageWarningThreshold` and `planswap.usageErrorThreshold`. A used-up limit shows its percentage and reset time in red. No usage line means no data yet, not zero usage or unlimited quota.
@@ -290,6 +297,7 @@ If you delete the directory, its sign-in and everything stored in it are permane
 
 - For a linked account, the data in the default account stays; the account's own sign-in, backups and other files that were not linked are deleted. For Codex this includes the account's memories.
 - If PlanSwap refuses because the account is in use, close the sessions or processes it names and try again.
+- On macOS, deleting a Claude account's directory first signs the account out, which removes its sign-in from the macOS Keychain. If signing out fails, PlanSwap asks whether to **Delete Anyway**; the sign-in then stays in the Keychain, and an account you later create with the same name starts signed in to it.
 
 Account directories with valid names that PlanSwap finds in your home directory are added to the list automatically when it starts or refreshes.
 
@@ -358,7 +366,7 @@ With automatic checks off, the refresh icons and commands still work. The email 
 | Claude still uses the previous account | Reload the window to move open Claude panels to the new account. Check for a PlanSwap warning that environment credentials or provider settings override the account's sign-in. |
 | Codex shows a pending selection | Finish the restart for your environment. Reloading the window does not replace restarting the editor or the WSL server. |
 | Codex switching cannot be enabled | Read the listed shell or `CODEX_HOME` conflict. On Windows, check whether Codex is set to run inside WSL. |
-| An account still says **Not logged in** | Sign in with that row's **Log in** button, then refresh. A Codex sign-in kept only in the operating system's keyring cannot be detected, because PlanSwap looks for the account's `auth.json`. |
+| An account still says **Not logged in** | Sign in with that row's **Log in** button, then refresh. A Codex sign-in kept only in the operating system's keyring cannot be detected, because PlanSwap looks for the account's `auth.json`. On macOS, an account whose Codex `config.toml` keeps its sign-in in the Keychain shows a note instead. |
 | Two accounts trigger a duplicate sign-in warning | Both are signed in to the same account and workspace, so switching between them does not give you separate limits. Sign in to the intended identity in one of them. |
 | No usage bars, or a check failed | Check that the account has a subscription (Claude) or ChatGPT (Codex) sign-in and that the `claude` command or the official Claude Code extension is installed (Claude). Refresh by hand and read the failure message; if it reports a cooldown, wait before retrying. If it says the CLI did not answer in time, raise `planswap.claude.usageTimeoutSeconds` or `planswap.codex.usageTimeoutSeconds`. |
 | Settings or history are not shared as expected | Check the link badge and the conversion or Re-link result. Some files stay separate or need merging by hand; on Windows, check whether file links are available. |

@@ -122,7 +122,7 @@ The palette entry only focuses the sidebar's add form, which shows validation er
 
 ### 5.3 Delete account `planswap.removeAccount`
 
-From the row's inline confirmation or the palette (modal; named, non-current accounts). The default account and the external directory cannot be removed; the current or a busy account is refused before and after every confirmation. Removal clears the alias; deleting the directory is always a separate modal, and a kept directory is ignored by auto-discovery until its name is added again. Deletion rules: section 9.
+From the row's inline confirmation or the palette (modal; named, non-current accounts). The default account and the external directory cannot be removed; the current or a busy account is refused before and after every confirmation. Removal clears the alias; deleting the directory is always a separate modal, and a kept directory is ignored by auto-discovery until its name is added again. On macOS, deleting the directory of a subscription account first signs it out with the official CLI, so a folder created later at the same path does not start signed in; if that fails, a modal asks whether to **Delete Anyway** ([Claude design: macOS support](design.md#macos-support)). Deletion rules: section 9.
 
 ### 5.4 Run claude in a terminal as an account `planswap.openTerminal`
 
@@ -180,7 +180,7 @@ Only a real, existing `~/.claude-<name>` directly under home that neither is nor
 
 ## 11. Platform guard
 
-Only Linux (WSL) and native Windows are supported; elsewhere activation warns once and registers nothing ([Claude design 8](design.md#8-platform-guard)).
+Only Linux (WSL), native Windows and macOS are supported; elsewhere activation warns once and registers nothing ([Claude design 8](design.md#8-platform-guard)).
 
 ## 12. Codex account switching
 
@@ -200,8 +200,8 @@ Until switching is enabled (12.9) the page offers only an explanation of the res
 
 Category "Codex Account"; QuickPicks as in section 5, without email.
 
-- `planswap.codex.enable` (disabled-page button, Command Palette): on WSL/Linux runs the [pre-checks](codex-design.md#4-login-shell-configuration), writes the rc marker blocks after a modal confirmation and self-checks them; a failure reports every reason and removes only blocks written by this run. Native Windows manages the per-user `CODEX_HOME` instead and refuses enable, switch and account terminals while Codex runs inside WSL, where the Codex page shows a warning banner instead of the sign-in and terminal buttons; the banner and the refusal warning offer **Open Setting**, which opens the Settings editor at `chatgpt.runCodexInWindowsSubsystemForLinux` without changing it ([Codex design 9a](codex-design.md#9a-native-windows)).
-- `planswap.codex.disable` (Command Palette): after confirmation removes the rc blocks, the `server-env-setup` blocks and every state file, changing nothing when a block is damaged (native Windows: the state file, and the user `CODEX_HOME` while it still points at an account directory); open windows keep `CODEX_HOME` until restarted.
+- `planswap.codex.enable` (disabled-page button, Command Palette): on WSL/Linux runs the [pre-checks](codex-design.md#4-login-shell-configuration), writes the rc marker blocks after a modal confirmation and self-checks them; a failure reports every reason and removes only blocks written by this run. Native Windows manages the per-user `CODEX_HOME` instead and refuses enable, switch and account terminals while Codex runs inside WSL, where the Codex page shows a warning banner instead of the sign-in and terminal buttons; the banner and the refusal warning offer **Open Setting**, which opens the Settings editor at `chatgpt.runCodexInWindowsSubsystemForLinux` without changing it ([Codex design 9a](codex-design.md#9a-native-windows)). macOS writes one block into the login shell's startup file (`~/.zshenv` for zsh) after a modal confirmation that names it, and refuses login shells other than zsh and bash ([Codex design 9b](codex-design.md#9b-macos)).
+- `planswap.codex.disable` (Command Palette): after confirmation removes the rc blocks, the `server-env-setup` blocks and every state file, changing nothing when a block is damaged (native Windows: the state file, and the user `CODEX_HOME` while it still points at an account directory; macOS: the blocks in the shell startup files and the state file); open windows keep `CODEX_HOME` until restarted.
 - `planswap.codex.switchAccount` (switch button, double-click, Enter): 12.5.
 - `planswap.codex.addAccount`: focuses the add form; 12.6.
 - `planswap.codex.shareAccount` (row `link` button): 12.10.
@@ -240,7 +240,7 @@ The Codex page and status bar refresh when an account's `auth.json` or the state
 
 ### 12.9 State file and rc marker block
 
-On WSL/Linux, enabling writes a never-localized [marker block](codex-design.md#4-login-shell-configuration) into `~/.profile` and `~/.bashrc` that sets `CODEX_HOME` from the shared state file when the shell inherited none. Enabled means both files carry an intact block (Linux) or the state file exists (Windows); PlanSwap then owns `CODEX_HOME`. In a VS Code or VSCodium WSL window the first switch adds the same kind of block to `~/.vscode-server/server-env-setup` or `~/.vscodium-server/server-env-setup`, read by that editor's WSL server before it starts ([Codex design 4a](codex-design.md#4a-per-editor-selection-and-the-server-env-setup-hook)). Activation migrates the ai-switcher 0.1.0–0.1.3 setup and updates marker blocks of earlier versions in place.
+On WSL/Linux, enabling writes a never-localized [marker block](codex-design.md#4-login-shell-configuration) into `~/.profile` and `~/.bashrc` that sets `CODEX_HOME` from the shared state file when the shell inherited none. On macOS the same block goes into the login shell's startup file instead. Enabled means both files carry an intact block (Linux), the shell's startup file does (macOS) or the state file exists (Windows); PlanSwap then owns `CODEX_HOME`. On macOS an account whose `config.toml` keeps its sign-in in the Keychain (`cli_auth_credentials_store` other than `file`) shows a note instead of its email, plan and sign-in state, and its usage is not checked. In a VS Code or VSCodium WSL window the first switch adds the same kind of block to `~/.vscode-server/server-env-setup` or `~/.vscodium-server/server-env-setup`, read by that editor's WSL server before it starts ([Codex design 4a](codex-design.md#4a-per-editor-selection-and-the-server-env-setup-hook)). Activation migrates the ai-switcher 0.1.0–0.1.3 setup and updates marker blocks of earlier versions in place.
 
 ### 12.10 Shared and independent Codex accounts
 

@@ -29,10 +29,10 @@ Claude 帳號名稱旁的警告圖示表示訂閱存取遭拒。將游標停留�
 
 你需要：
 
-- 相容 VS Code 1.107 以上版本的編輯器（VS Code、Antigravity IDE 或 VSCodium）。PlanSwap 可在 WSL 遠端視窗、原生 Windows、本機 Linux 桌面或其他遠端視窗中執行。不支援 macOS。
+- 相容 VS Code 1.107 以上版本的編輯器（VS Code、Antigravity IDE 或 VSCodium）。PlanSwap 可在 WSL 遠端視窗、原生 Windows、macOS、本機 Linux 桌面或其他遠端視窗中執行。
 - 在該視窗執行的環境中安裝 PlanSwap，以及官方 Claude Code 和/或 Codex 擴充功能。
 - 選用：該環境的 PATH 中有 `claude` 和／或 `codex` 命令。該命令無法使用時，在終端機登入和查詢用量額度都會使用對應官方擴充功能內建的 CLI。
-- 在原生 Windows 以外的環境中切換 Codex：登入 shell 必須是 Bash。
+- 在 WSL 和 Linux 上切換 Codex：登入 shell 必須是 Bash；在 macOS 上：必須是 zsh 或 bash。
 - 在 VS Code 或 VSCodium 的 WSL 視窗中切換 Codex：連接該視窗的擴充功能會在 WSL 伺服器啟動前讀取該編輯器 `server-env-setup` 中的 PlanSwap 區塊。VS Code 使用 Microsoft 的 Remote - WSL；VSCodium 需要安裝 [wsl-remote](https://open-vsx.org/extension/n2ns/wsl-remote) 擴充功能（`n2ns.wsl-remote`）。
 
 安裝步驟以及各編輯器的測試程度，請參閱[安裝說明](../README.md#install)和[支援的編輯器](../README.md#supported-editors)。
@@ -95,7 +95,7 @@ Claude 帳號名稱旁的警告圖示表示訂閱存取遭拒。將游標停留�
 
 使用 `<scheme>://n2ns.planswap/switch?account=<name>`。通訊協定依編輯器而定：VS Code 為 `vscode`，VSCodium 為 `vscodium`。將下例的 `work` 換成已登記的帳號名稱，而非顯示別名；名稱不區分大小寫。使用 `default` 切回預設帳號。帳號目錄必須已存在。
 
-先將焦點移至目標 WSL 視窗。請求預設為 `target=wsl`，Windows 本機視窗會拒絕。`distro=Ubuntu_26` 還要求發行版名稱完全相符；它只檢查接收視窗，不會選取或開啟另一個視窗。若要切換 Windows 本機帳號，請明確使用 `target=windows`，並省略 `distro`。此 URI 入口不支援其他遠端環境或本機 Linux。
+先將焦點移至目標 WSL 視窗。請求預設為 `target=wsl`，Windows 本機視窗會拒絕。`distro=Ubuntu_26` 還要求發行版名稱完全相符；它只檢查接收視窗，不會選取或開啟另一個視窗。若要切換 Windows 本機帳號，請明確使用 `target=windows`，並省略 `distro`。此 URI 入口不支援其他遠端環境、本機 Linux 或 macOS。
 
 在 Windows 命令提示字元（`cmd`）中：
 
@@ -125,6 +125,7 @@ cmd.exe /c 'start "" "vscode://n2ns.planswap/switch?account=default&distro=Ubunt
 
 - **WSL、本機 Linux 和其他遠端視窗**：PlanSwap 會在 `~/.profile` 和 `~/.bashrc` 中加入帶有標記的區塊，然後檢查 Bash 登入 shell 能否讀到所選帳號。如果它回報有衝突的 `CODEX_HOME` 指派或 shell 設定，請依照提示修正後再試一次。在 VS Code 或 VSCodium 的 WSL 視窗中，第一次切換還會在該編輯器的 `~/.vscode-server/server-env-setup` 或 `~/.vscodium-server/server-env-setup` 中加入帶有標記的區塊，其 WSL 伺服器會在啟動前讀取它。
 - **原生 Windows**：PlanSwap 會管理你的使用者層級 `CODEX_HOME` 環境變數。如果你自己把 `CODEX_HOME` 設成了其他值，啟用會被拒絕。如果它已指向某個 PlanSwap 帳號目錄（`~/.codex-<name>`），PlanSwap 會接管它。
+- **macOS**：PlanSwap 會在登入 shell 的啟動檔案中加入一個標記區塊（zsh 為 `~/.zshenv`；bash 為 `~/.bash_profile` 或你已在使用的登入檔案），然後檢查登入 shell 能否讀到所選帳號。不支援其他登入 shell。如果它回報 `CODEX_HOME` 指派衝突，請依提示修正後再試一次。
 
 如果 Windows 上的 Codex 擴充功能設定為在 WSL 中執行，請在 WSL 視窗中管理其帳號，或先關閉 `chatgpt.runCodexInWindowsSubsystemForLinux`，再管理 Windows 帳號。側邊欄橫幅和警告通知上都有 **開啟設定** 按鈕，會把設定編輯器定位到這一項；PlanSwap 不會替你更改它。
 
@@ -140,6 +141,7 @@ cmd.exe /c 'start "" "vscode://n2ns.planswap/switch?account=default&distro=Ubunt
 | WSL 中的 VS Code | 確認 **儲存選擇**。關閉連線到該發行版本的所有 VS Code 視窗，等待幾秒，然後重新開啟。 |
 | WSL 中的其他編輯器 | 確認 **儲存選擇**，並依照對話方塊中的手動重新啟動說明操作。 |
 | 原生 Windows | 確認 **儲存選擇**，完全結束編輯器，然後從開始功能表或工作列重新啟動。切換之前開啟的終端機仍使用舊帳號。 |
+| macOS | 確認 **儲存選擇**，完全結束編輯器（⌘Q），然後從 Dock、啟動台或 Finder 重新開啟。切換之前開啟的終端機仍使用舊帳號，從這種終端機啟動的編輯器也一樣。 |
 | 本機 Linux 或其他遠端視窗 | 確認 **儲存選擇**。然後依照對話方塊操作：重新啟動編輯器或遠端伺服器，使其以所選的 `CODEX_HOME` 啟動。 |
 
 在 WSL 中，VS Code 與 VSCodium 在同一個發行版裡各自保存自己的選擇：在其中一個編輯器切換不會改變另一個編輯器的帳號，它們的整合式終端機跟隨各自的編輯器。Antigravity 和在編輯器之外開啟的終端機使用共用的選擇，只有在 Antigravity 或無法辨識的編輯器中切換才會改變它。
@@ -229,6 +231,11 @@ Key 以明文儲存在該卡片自己的 `settings.json`（作為 `ANTHROPIC_AUT
 - 在 Windows 上，Codex 的對話串資料庫（`*.sqlite`）一律不連結，因為在 Windows 上透過連結寫入 SQLite 可能遺失資料。每個帳號各自保留一份，工作階段、記錄和設定仍然共用。
 - 在 Windows 上，PlanSwap 無法判斷正在執行的 Claude 或 Codex 處理程序屬於哪個帳號。連結、拆分或移除帳號前，請先關閉該帳號的工作階段和 PlanSwap 終端機索引標籤，即使 CLI 已經結束。
 
+### macOS 上的已連結帳號
+
+- Claude Code 會把每個帳號的登入資訊（包括 OAuth MCP 伺服器的登入）儲存在 macOS 鑰匙圈中，因此已連結的 Claude 帳號不共用 MCP 伺服器的登入：請在每個帳號中各登入一次這類伺服器。
+- 與 Windows 一樣，PlanSwap 無法判斷正在執行的 Claude 或 Codex 處理程序屬於哪個帳號。連結、拆分或移除帳號前，請先關閉該帳號的工作階段和 PlanSwap 終端機索引標籤。
+
 ## 查看和重新整理用量額度
 
 用量條和百分比顯示的是**剩餘**額度；在[設定](#變更語言和顯示設定)中將 `planswap.usageDisplay` 設為 `used` 可改為顯示已用量。每項額度旁的時間長度（例如 `2 天 5 小時`）是距離重設的時間。將游標停留在用量條上可同時看到兩者，例如 `剩餘 97%（已用 3%）`。剩餘 30% 或更少時用量條變黃，剩餘 10% 或更少時變紅，顯示已用量時也是如此；這兩個界線可以用 `planswap.usageWarningThreshold` 和 `planswap.usageErrorThreshold` 調整。已用完的額度會以紅色顯示百分比和重設時間。沒有用量列表示還沒有資料，而不是用量為零或額度無限。
@@ -290,6 +297,7 @@ Claude 帳號的訂閱無法使用時，燈泡圖示會隱藏，但保留你先�
 
 - 對於已連結帳號，預設帳號中的資料會保留；該帳號自己的登入、備份和其他未連結的檔案會被刪除。對於 Codex，這包括該帳號的記憶。
 - 如果 PlanSwap 因帳號正在使用中而拒絕刪除，請關閉它列出的工作階段或處理程序後再試一次。
+- 在 macOS 上，刪除 Claude 帳號的目錄前會先讓該帳號登出，藉此把它的登入資訊從 macOS 鑰匙圈中移除。如果登出失敗，PlanSwap 會詢問是否 **仍要刪除**；這時登入資訊會留在鑰匙圈中，日後以相同名稱建立的帳號會直接處於該登入狀態。
 
 PlanSwap 啟動或重新整理時，會把在你的主目錄中找到、名稱有效的帳號目錄自動加入清單。
 
@@ -358,7 +366,7 @@ PlanSwap 啟動或重新整理時，會把在你的主目錄中找到、名稱�
 | Claude 仍在使用先前的帳號 | 重新載入視窗，讓已開啟的 Claude 面板改用新帳號。檢查是否有 PlanSwap 警告提示環境憑證或提供者設定覆寫了該帳號的登入。 |
 | Codex 顯示有待生效的選擇 | 依照你的環境完成重新啟動。重新載入視窗無法取代重新啟動編輯器或 WSL 伺服器。 |
 | 無法啟用 Codex 切換 | 查看列出的 shell 或 `CODEX_HOME` 衝突。在 Windows 上，檢查 Codex 是否設定為在 WSL 中執行。 |
-| 某個帳號仍顯示 **未登入** | 使用該列的 **登入** 按鈕登入，然後重新整理。僅儲存在作業系統金鑰圈中的 Codex 登入無法偵測到，因為 PlanSwap 尋找的是該帳號的 `auth.json`。 |
+| 某個帳號仍顯示 **未登入** | 使用該列的 **登入** 按鈕登入，然後重新整理。僅儲存在作業系統金鑰圈中的 Codex 登入無法偵測到，因為 PlanSwap 尋找的是該帳號的 `auth.json`。在 macOS 上，Codex `config.toml` 把登入資訊儲存在鑰匙圈中的帳號會改為顯示一則說明。 |
 | 兩個帳號觸發重複登入警告 | 兩者登入的是同一個帳號和工作區，因此在它們之間切換不會得到各自獨立的額度。請在其中一個帳號中登入你想要的身分。 |
 | 沒有用量條，或查詢失敗 | 檢查該帳號是否以訂閱（Claude）或 ChatGPT（Codex）方式登入，以及是否已安裝 `claude` 命令或官方 Claude Code 擴充功能（Claude）。手動重新整理並閱讀失敗訊息；如果提示正在冷卻，請稍候再重試。如果提示 CLI 未及時回應，可調大 `planswap.claude.usageTimeoutSeconds` 或 `planswap.codex.usageTimeoutSeconds`。 |
 | 設定或記錄沒有如預期共用 | 檢查連結標記，以及轉換或重新連結的結果。有些檔案會保持獨立或需要手動合併；在 Windows 上，檢查是否能建立檔案連結。 |

@@ -4,7 +4,7 @@
 
 # PlanSwap: Claude Code & Codex Account Switcher
 
-See how much is left on each Claude Code and Codex subscription account you own (Claude Pro / Max, ChatGPT Plus / Pro…), get told which one to use when the current one runs low, and switch with one click from a VS Code sidebar, without signing out and back in. Built for VS Code WSL remote windows and native Windows; local Linux desktops and other remote windows work too. macOS is not supported.
+See how much is left on each Claude Code and Codex subscription account you own (Claude Pro / Max, ChatGPT Plus / Pro…), get told which one to use when the current one runs low, and switch with one click from a VS Code sidebar, without signing out and back in. Built for VS Code WSL remote windows, native Windows and macOS; local Linux desktops and other remote windows work too.
 
 [![Version](https://img.shields.io/open-vsx/v/n2ns/planswap?style=flat&label=version)](https://marketplace.visualstudio.com/items?itemName=n2ns.planswap)
 [![Install from VS Marketplace](https://img.shields.io/badge/VS_Marketplace-Install-007ACC?style=flat)](https://marketplace.visualstudio.com/items?itemName=n2ns.planswap)
@@ -47,10 +47,10 @@ Every setting is listed in the [user guide](docs/user-guide.md#change-language-a
 
 ## Requirements
 
-- A VS Code 1.107+ compatible editor: VS Code, Antigravity IDE or VSCodium, in a WSL remote window, on native Windows, on a local Linux desktop or in another remote window.
+- A VS Code 1.107+ compatible editor: VS Code, Antigravity IDE or VSCodium, in a WSL remote window, on native Windows, on macOS, on a local Linux desktop or in another remote window.
 - The official Claude Code and/or Codex extension installed where the window runs.
 - Optional: the `claude` and/or `codex` command on the PATH there. Without it, terminal sign-in and usage checks use the CLI bundled with the corresponding official extension.
-- For Codex switching outside native Windows: Bash as the login shell.
+- For Codex switching on WSL and Linux: Bash as the login shell; on macOS: zsh or bash.
 - For Codex switching in a VS Code or VSCodium WSL window: the extension that connects the window reads the PlanSwap block in that editor's `server-env-setup` before its WSL server starts, so each editor keeps its own Codex selection. VS Code uses Microsoft's Remote - WSL; VSCodium needs the [wsl-remote](https://open-vsx.org/extension/n2ns/wsl-remote) extension (`n2ns.wsl-remote`).
 
 ## Supported editors
@@ -62,13 +62,14 @@ A Claude switch applies to new sessions; reload the window to move open panels o
 | Antigravity IDE or VSCodium in WSL | PlanSwap restarts the WSL server after you confirm; reload each disconnected window. VSCodium connects through the [wsl-remote](https://open-vsx.org/extension/n2ns/wsl-remote) extension. |
 | VS Code in WSL | Close all VS Code windows of that distribution, then reopen them. |
 | Native Windows | Fully quit the editor and start it again from the Start menu or taskbar. |
+| macOS | Fully quit the editor (⌘Q) and open it again from the Dock, Launchpad or Finder. |
 | Local Linux or other remote windows | Restart the editor or remote server as PlanSwap's instructions show. |
 
 **Save your work before switching Codex accounts**: the restart closes integrated terminals and running CLI sessions. Step-by-step instructions: [user guide](docs/user-guide.md#select-an-account-and-apply-it).
 
 ## Install
 
-Search for **PlanSwap** in the Extensions view of a **WSL window** (the extension runs on the WSL side) or a local Windows window, and click **Install**.
+Search for **PlanSwap** in the Extensions view of a **WSL window** (the extension runs on the WSL side), a local Windows window or a macOS window, and click **Install**.
 
 - VS Code: [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=n2ns.planswap)
 - Antigravity IDE, VSCodium: [Open VSX](https://open-vsx.org/extension/n2ns/planswap)
@@ -110,8 +111,9 @@ You can change an account's mode later, and **Re-link** in Tools checks linked a
 - **Switching is not per window**: other windows of the same editor switch too.
 - **Continuing another account's session can fail**, especially between Codex accounts in different ChatGPT organizations.
 - **Some sign-ins apply to every account**, such as an `ANTHROPIC_API_KEY` in the environment; PlanSwap warns you ([details](docs/user-guide.md#sign-ins-that-apply-to-every-account)).
+- **On macOS**, linked Claude accounts do not share sign-ins to OAuth MCP servers, which Claude Code keeps in the Keychain; sign in to such servers in each account. Codex switching follows the login shell's startup file, so a slow shell setup can keep the editor from picking it up, and the Codex and Claude desktop apps do not follow it ([details](docs/user-guide.md#linked-accounts-on-macos)).
 - **On Windows**, linking single files needs Developer Mode, and Codex thread databases stay per account ([details](docs/user-guide.md#linking-on-windows)). While the Codex extension runs Codex inside WSL (`chatgpt.runCodexInWindowsSubsystemForLinux`), manage Codex accounts from a WSL window ([details](docs/user-guide.md#enable-once)).
-- **Not yet verified everywhere**: switching and usage limits have been tested end to end with real accounts in Antigravity IDE, VS Code and VSCodium in WSL, on native Windows and on a local Linux desktop. Other remote windows have not been tested with real accounts.
+- **Not yet verified everywhere**: switching and usage limits have been tested end to end with real accounts in Antigravity IDE, VS Code and VSCodium in WSL, on native Windows and on a local Linux desktop. macOS and other remote windows have not been tested end to end with real accounts yet.
 - **API cards** (DeepSeek, OpenRouter, Z.ai, Kimi, xAI, Ollama, LM Studio or a custom Responses endpoint such as a LiteLLM gateway) use independent Codex configuration and do not provide per-window backend isolation. Real-client acceptance is partly pending; see the [guide](docs/user-guide.md#use-an-api-card) and [TODO](TODO.md).
 - **Claude API cards** (DeepSeek, Kimi, OpenRouter, Z.ai, Ollama or a custom Anthropic-compatible endpoint) run Claude Code against another service; Anthropic does not support Claude Code with non-Claude models, and acceptance with real services is pending ([guide](docs/user-guide.md#use-a-claude-api-card), [TODO](TODO.md)).
 
@@ -126,8 +128,8 @@ API keys entered for API cards are saved in plaintext in each card's own Codex c
 Before uninstalling PlanSwap:
 
 1. Switch Claude back to `default` and reload the window.
-2. If you enabled Codex switching, run **Codex Account: Disable Codex Account Switching** from the Command Palette to remove its shell configuration and the blocks in each editor's `server-env-setup` (on Windows, the user environment variable `CODEX_HOME`).
-3. Uninstall PlanSwap from the Extensions view in the window where you installed it (WSL or Windows).
+2. If you enabled Codex switching, run **Codex Account: Disable Codex Account Switching** from the Command Palette to remove its shell configuration and the blocks in each editor's `server-env-setup` (on Windows, the user environment variable `CODEX_HOME`; on macOS, the block in your shell startup file).
+3. Uninstall PlanSwap from the Extensions view in the window where you installed it (WSL, Windows or macOS).
 
 Your account directories (`~/.claude-<name>` and `~/.codex-<name>`) are kept, including the `.planswap-sync.json` file of each linked Claude account. To clear PlanSwap's saved account list, display names and usage records as well, delete `~/.config/planswap/state.json`. This does not delete the accounts' own files.
 

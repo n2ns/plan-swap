@@ -29,10 +29,10 @@ Un icono de advertencia junto a una cuenta de Claude indica que se ha rechazado 
 
 Necesitas:
 
-- Un editor compatible con VS Code 1.107+ (VS Code, Antigravity IDE o VSCodium). PlanSwap funciona en una ventana remota de WSL, en Windows nativo, en un escritorio Linux local o en otra ventana remota. macOS no es compatible.
+- Un editor compatible con VS Code 1.107+ (VS Code, Antigravity IDE o VSCodium). PlanSwap funciona en una ventana remota de WSL, en Windows nativo, en macOS, en un escritorio Linux local o en otra ventana remota.
 - PlanSwap y la extensión oficial de Claude Code o de Codex (o ambas) instaladas donde se ejecuta esa ventana.
 - Opcional: el comando `claude` y/o `codex` en el PATH de ese entorno. Si el comando no está disponible, el inicio de sesión desde el terminal y las consultas de uso utilizan la CLI incluida en la extensión oficial correspondiente.
-- Para cambiar de cuenta de Codex fuera de Windows nativo: Bash como shell de inicio de sesión.
+- Para cambiar de cuenta de Codex en WSL y Linux: Bash como shell de inicio de sesión; en macOS: zsh o bash.
 - Para cambiar de cuenta de Codex en una ventana WSL de VS Code o VSCodium: la extensión que conecta la ventana lee el bloque de PlanSwap en el `server-env-setup` de ese editor antes de iniciar su servidor WSL. VS Code usa Remote - WSL de Microsoft; VSCodium necesita la extensión [wsl-remote](https://open-vsx.org/extension/n2ns/wsl-remote) (`n2ns.wsl-remote`).
 
 Consulta las [instrucciones de instalación](../README.md#install) y los [editores compatibles](../README.md#supported-editors) para la configuración y el grado de prueba de cada editor.
@@ -95,7 +95,7 @@ Cambiar de cuenta modifica un ajuste del editor compartido por las demás ventan
 
 Usa `<scheme>://n2ns.planswap/switch?account=<name>`. El esquema depende del editor: `vscode` para VS Code y `vscodium` para VSCodium. Sustituye `work` por un nombre de cuenta registrado, no su alias visible; no se distinguen mayúsculas y minúsculas. Usa `default` para volver a la cuenta predeterminada. La carpeta debe existir.
 
-Enfoca primero la ventana WSL de destino. Las solicitudes usan `target=wsl` por defecto; una ventana local de Windows las rechaza. `distro=Ubuntu_26` exige además ese nombre exacto de distribución: comprueba la ventana receptora, no elige ni abre otra. Para cambiar cuentas locales de Windows, indica `target=windows` y omite `distro`. Esta entrada URI no admite otros entornos remotos ni Linux local.
+Enfoca primero la ventana WSL de destino. Las solicitudes usan `target=wsl` por defecto; una ventana local de Windows las rechaza. `distro=Ubuntu_26` exige además ese nombre exacto de distribución: comprueba la ventana receptora, no elige ni abre otra. Para cambiar cuentas locales de Windows, indica `target=windows` y omite `distro`. Esta entrada URI no admite otros entornos remotos, Linux local ni macOS.
 
 Desde el símbolo del sistema de Windows (`cmd`):
 
@@ -125,6 +125,7 @@ Abre la pestaña **Codex** y haz clic en **Activar cambio de cuenta de Codex**. 
 
 - **WSL, Linux local y otras ventanas remotas:** PlanSwap añade bloques delimitados a `~/.profile` y `~/.bashrc` y comprueba que un shell de inicio de sesión de Bash recoge la cuenta seleccionada. Si informa de una asignación de `CODEX_HOME` o una configuración de shell en conflicto, corrige lo que indica y vuelve a intentarlo. En una ventana WSL de VS Code o VSCodium, el primer cambio de cuenta añade además un bloque delimitado al `~/.vscode-server/server-env-setup` o `~/.vscodium-server/server-env-setup` de ese editor, que su servidor WSL lee antes de iniciarse.
 - **Windows nativo:** PlanSwap gestiona tu variable de entorno de usuario `CODEX_HOME`. Si tú mismo definiste `CODEX_HOME` con otro valor, se rechaza la activación. Si ya apunta a un directorio de cuenta de PlanSwap (`~/.codex-<name>`), PlanSwap pasa a gestionarla.
+- **macOS:** PlanSwap añade un bloque delimitado al archivo de inicio de tu shell de inicio de sesión (`~/.zshenv` en zsh; en bash, `~/.bash_profile` o el archivo de inicio de sesión que ya uses) y comprueba que el shell de inicio de sesión recoge la cuenta seleccionada. No se admiten otros shells de inicio de sesión. Si indica una asignación de `CODEX_HOME` en conflicto, corrige lo que señala y vuelve a intentarlo.
 
 Si la extensión de Codex de Windows está configurada para ejecutarse dentro de WSL, gestiona sus cuentas desde una ventana de WSL, o desactiva `chatgpt.runCodexInWindowsSubsystemForLinux` antes de gestionar cuentas de Windows. El aviso de la barra lateral y la advertencia ofrecen **Abrir el ajuste**, que abre el editor de ajustes en ese ajuste; PlanSwap no lo cambia por ti.
 
@@ -140,6 +141,7 @@ Si la extensión de Codex de Windows está configurada para ejecutarse dentro de
 | VS Code en WSL | Confirma con **Guardar selección**. Cierra todas las ventanas de VS Code conectadas a esa distribución, espera unos segundos y vuelve a abrirlas. |
 | Otros editores en WSL | Confirma con **Guardar selección** y sigue las instrucciones de reinicio manual del diálogo. |
 | Windows nativo | Confirma con **Guardar selección**, cierra por completo el editor y vuelve a abrirlo desde el menú Inicio o la barra de tareas. Un terminal abierto antes del cambio sigue teniendo la cuenta anterior. |
+| macOS | Confirma con **Guardar selección**, cierra por completo el editor (⌘Q) y vuelve a abrirlo desde el Dock, Launchpad o Finder. Un terminal abierto antes del cambio sigue teniendo la cuenta anterior, igual que un editor iniciado desde él. |
 | Linux local u otra ventana remota | Confirma con **Guardar selección**. Después sigue el diálogo: reinicia el editor, o el servidor remoto, para que arranque con el `CODEX_HOME` seleccionado. |
 
 En WSL, VS Code y VSCodium guardan cada uno su propia selección para la misma distribución: cambiar de cuenta en un editor no cambia la cuenta del otro, y sus terminales integrados siguen a su editor. Antigravity y los terminales abiertos fuera de un editor usan la selección compartida, que solo cambia al cambiar de cuenta en Antigravity o en un editor no reconocido.
@@ -229,6 +231,11 @@ Después:
 - Las bases de datos de conversaciones de Codex (`*.sqlite`) nunca se vinculan en Windows, porque allí SQLite puede perder datos escritos a través de un enlace. Cada cuenta conserva las suyas, mientras que las sesiones, el historial y la configuración se siguen compartiendo.
 - En Windows, PlanSwap no puede saber a qué cuenta pertenece un proceso de Claude o Codex en ejecución. Cierra las sesiones de la cuenta y sus pestañas de terminal de PlanSwap antes de vincularla, desvincularla o quitarla, aunque la CLI ya haya terminado.
 
+### Cuentas vinculadas en macOS
+
+- Claude Code guarda los inicios de sesión de cada cuenta, incluidos los de servidores MCP con OAuth, en el llavero de macOS, así que las cuentas de Claude vinculadas no comparten los inicios de sesión de servidores MCP: inicia sesión en cada uno de esos servidores una vez en cada cuenta.
+- Como en Windows, PlanSwap no puede saber a qué cuenta pertenece un proceso de Claude o Codex en ejecución. Cierra las sesiones de la cuenta y sus pestañas de terminal de PlanSwap antes de vincularla, desvincularla o quitarla.
+
 ## Consultar y actualizar los límites de uso
 
 Las barras de uso y los porcentajes muestran lo que **queda**; pon `planswap.usageDisplay` en `used` en los [ajustes](#cambiar-el-idioma-y-los-ajustes-de-visualización) para que muestren lo que se ha usado. La duración junto a cada límite, como `2d 5h`, es el tiempo hasta que se restablece. Pasa el puntero sobre una barra para ver ambos valores, por ejemplo `97% restante (3% usado)`. Una barra se vuelve amarilla cuando queda un 30 % o menos y roja con un 10 % o menos, también cuando muestra lo usado; puedes cambiar estos niveles con `planswap.usageWarningThreshold` y `planswap.usageErrorThreshold`. Un límite agotado muestra su porcentaje y su hora de restablecimiento en rojo. Si no hay línea de uso, es que aún no hay datos, no que el uso sea cero ni que la cuota sea ilimitada.
@@ -290,6 +297,7 @@ Si eliminas el directorio, su inicio de sesión y todo lo guardado en él se eli
 
 - En una cuenta vinculada, los datos de la cuenta predeterminada se conservan; se eliminan el inicio de sesión propio de la cuenta, sus copias de seguridad y los demás archivos que no estaban vinculados. En Codex esto incluye las Memories de la cuenta.
 - Si PlanSwap se niega porque la cuenta está en uso, cierra las sesiones o procesos que indica y vuelve a intentarlo.
+- En macOS, eliminar el directorio de una cuenta de Claude cierra primero su sesión, lo que quita su inicio de sesión del llavero de macOS. Si no se puede cerrar la sesión, PlanSwap pregunta si quieres **Eliminar de todos modos**; el inicio de sesión queda entonces en el llavero, y una cuenta que crees más adelante con el mismo nombre empezará con esa sesión iniciada.
 
 Los directorios de cuenta con nombres válidos que PlanSwap encuentra en tu directorio personal se añaden automáticamente a la lista al iniciarse o al actualizar.
 
@@ -358,7 +366,7 @@ Con las consultas automáticas desactivadas, los iconos y comandos de actualizar
 | Claude sigue usando la cuenta anterior | Recarga la ventana para pasar los paneles de Claude abiertos a la nueva cuenta. Comprueba si hay un aviso de PlanSwap de que credenciales del entorno o ajustes de proveedor sustituyen el inicio de sesión de la cuenta. |
 | Codex muestra una selección pendiente | Completa el reinicio correspondiente a tu entorno. Recargar la ventana no sustituye reiniciar el editor ni el servidor WSL. |
 | No se puede activar el cambio de cuenta de Codex | Lee el conflicto de shell o de `CODEX_HOME` indicado. En Windows, comprueba si Codex está configurado para ejecutarse dentro de WSL. |
-| Una cuenta sigue mostrando **Sin sesión** | Inicia sesión con el botón **Acceder** de esa fila y actualiza. Un inicio de sesión de Codex guardado solo en el llavero del sistema operativo no se puede detectar, porque PlanSwap busca el `auth.json` de la cuenta. |
+| Una cuenta sigue mostrando **Sin sesión** | Inicia sesión con el botón **Acceder** de esa fila y actualiza. Un inicio de sesión de Codex guardado solo en el llavero del sistema operativo no se puede detectar, porque PlanSwap busca el `auth.json` de la cuenta. En macOS, una cuenta cuyo `config.toml` de Codex guarda el inicio de sesión en el llavero muestra en su lugar una nota. |
 | Dos cuentas generan un aviso de inicio de sesión duplicado | Ambas tienen la sesión iniciada con la misma cuenta y espacio de trabajo, así que cambiar entre ellas no te da límites separados. Inicia sesión con la identidad que corresponda en una de ellas. |
 | No hay barras de uso, o una consulta falló | Comprueba que la cuenta tiene un inicio de sesión con suscripción (Claude) o de ChatGPT (Codex) y que el comando `claude` o la extensión oficial de Claude Code está instalado (Claude). Actualiza a mano y lee el mensaje de error; si indica que los límites de uso se consultaron hace menos de un minuto, espera antes de reintentar. Si dice que la CLI no respondió a tiempo, aumenta `planswap.claude.usageTimeoutSeconds` o `planswap.codex.usageTimeoutSeconds`. |
 | Los ajustes o el historial no se comparten como esperabas | Revisa la insignia de enlace y el resultado de la conversión o de Revincular. Algunos archivos siguen siendo independientes o requieren fusión manual; en Windows, comprueba si los enlaces de archivo están disponibles. |

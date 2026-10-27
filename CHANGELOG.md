@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- macOS support: PlanSwap now runs in VS Code, VSCodium and Antigravity IDE on a Mac. Claude accounts switch as on Linux, each keeping its own sign-in in the macOS Keychain; deleting a Claude account's folder first signs it out, so a folder created later at the same path does not start signed in. Codex switching writes its block into your login shell's startup file (`~/.zshenv` for zsh, the login file for bash) and asks you to fully quit (⌘Q) and reopen the editor after a switch. Linked Claude accounts on a Mac sign in to OAuth MCP servers once each, since those sign-ins are kept in the Keychain.
+
 ### Changed
 
 - Changing the endpoint of an API card with a saved key no longer requires entering the key again. With the key field empty, the saved key is kept and sent to the new endpoint, and the edit form says so; enter a new key to replace it.
