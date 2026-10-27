@@ -427,6 +427,7 @@ const MESSAGE_FIELDS: Record<FromWebview['type'], readonly string[]> = {
   add: ['name'],
   providerModels: ['service', 'key'],
   saveProvider: ['dir', 'model', 'key'],
+  revealProviderKey: ['dir'],
   share: ['dir'],
   unshare: ['dir'],
   rename: ['dir', 'label'],
@@ -457,7 +458,7 @@ export function checkMessage(raw: unknown): FromWebview | undefined {
   if (!(LIST_FIELDS[type] ?? []).every((f) => isStringList(msg[f]))) return undefined;
   const optionalString = (v: unknown): boolean => v === undefined || typeof v === 'string';
   if (type === 'providerModels' && (typeof msg.request !== 'number' || !optionalString(msg.baseUrl) || !optionalString(msg.dir))) return undefined;
-  if (type === 'saveProvider' && !optionalString(msg.baseUrl)) return undefined;
+  if (type === 'saveProvider' && (!optionalString(msg.baseUrl) || !optionalString(msg.service))) return undefined;
   if (type === 'add' && msg.provider !== undefined) {
     const p = msg.provider as Record<string, unknown> | null;
     if (typeof p !== 'object' || p === null || typeof p.service !== 'string' || typeof p.key !== 'string'

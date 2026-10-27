@@ -334,3 +334,28 @@ describe('fetchModels headers', () => {
     assert.deepEqual(seen[0].headers, { Accept: 'application/json', Authorization: 'Bearer sk-k' });
   });
 });
+
+describe('changing a Claude card\'s service', () => {
+  test('a service change never keeps the saved key; a local server may have none, a cloud service needs one', () => {
+    create('kimi');
+    let state = readClaudeProviderEditState(dir);
+    assert.throws(() => editClaudeProviderConfig(dir, { service: 'deepseek', model: 'deepseek-flash', key: '' }, state.revision), fails('key'));
+    assert.equal(JSON.parse(fs.readFileSync(markerFile(), 'utf8')).provider, 'kimi', 'a refusal leaves the card as it was');
+    editClaudeProviderConfig(dir, { service: 'ollama', model: 'qwen3', key: '' }, state.revision);
+    state = readClaudeProviderEditState(dir);
+    assert.deepEqual([state.service, state.baseUrl, state.hasKey, state.model], ['ollama', 'http://localhost:11434', false, 'qwen3']);
+    assert.equal(settings().env.ANTHROPIC_AUTH_TOKEN, NO_KEY_PLACEHOLDER);
+    editClaudeProviderConfig(dir, { service: 'custom', model: 'm', key: 'sk-gw', baseUrl: 'https://gw.example.test' }, state.revision);
+    assert.deepEqual([readClaudeProviderEditState(dir).service, readClaudeProviderKey(dir), settings().env.ANTHROPIC_BASE_URL], ['custom', 'sk-gw', 'https://gw.example.test']);
+    validateClaudeProviderConfig(dir);
+    assert.equal(fs.readdirSync(dir).filter((name) => name.endsWith('.tmp')).length, 0);
+  });
+
+  test('settings the user or Claude Code added are kept across a service change', () => {
+    create('kimi');
+    writeSettings({ ...settings(), permissions: { allow: ['Bash(ls)'] }, env: { ...settings().env, CLAUDE_CODE_ATTRIBUTION_HEADER: '0' } });
+    editClaudeProviderConfig(dir, { service: 'ollama', model: 'qwen3', key: '' }, readClaudeProviderEditState(dir).revision);
+    assert.deepEqual(settings().permissions, { allow: ['Bash(ls)'] });
+    assert.equal(settings().env.CLAUDE_CODE_ATTRIBUTION_HEADER, '0');
+  });
+});

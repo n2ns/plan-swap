@@ -3,7 +3,8 @@
 // runtime vscode import or network calls (the model list is providerModels.ts); a saved key leaves this module only
 // through readProviderKey, for that request. Public status and edit snapshots
 // are secret-free. Editing replaces only the model and key values in place; unrelated native settings are kept as
-// they are, and owned fields in unsupported forms are reported, never overwritten.
+// they are, and owned fields in unsupported forms are reported, never overwritten. A service change writes the owned
+// settings from the new service's built-in template instead, around the card's other settings.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -383,7 +384,9 @@ function editConfigSource(source: string, service: ApiService, next: { model: st
   return result.join('');
 }
 
-function renderConfig(dir: string, config: Config): string {
+// The built-in template of a card's owned settings for its service: the header comment, the top-level fields and the
+// provider table. renderConfig joins them for a new card; a service change puts the card's other settings in between.
+function renderParts(dir: string, config: Config): { header: string; root: string[]; provider: string[] } {
   const deepseek = config.service === 'deepseek';
   const fields: Record<string, string> = deepseek
     ? {
@@ -393,16 +396,67 @@ function renderConfig(dir: string, config: Config): string {
     : { model: config.model, model_provider: GENERIC_PROVIDER, forced_login_method: 'api', web_search: 'disabled' };
   if (config.approval_policy !== undefined) fields.approval_policy = config.approval_policy;
   if (config.sandbox_mode !== undefined) fields.sandbox_mode = config.sandbox_mode;
-  const lines = Object.entries(fields).map(([name, value]) => `${name} = ${JSON.stringify(value)}`);
+  const root = Object.entries(fields).map(([name, value]) => `${name} = ${JSON.stringify(value)}`);
   if (deepseek) {
-    lines.push('', '[model_providers.deepseek]', 'name = "deepseek"', 'base_url = "https://api.deepseek.com/"',
-      'wire_api = "responses"', `experimental_bearer_token = ${JSON.stringify(config.key)}`);
-    return DEEPSEEK_HEADER + lines.join('\n') + '\n';
+    return { header: DEEPSEEK_HEADER, root, provider: ['[model_providers.deepseek]', 'name = "deepseek"', 'base_url = "https://api.deepseek.com/"',
+      'wire_api = "responses"', `experimental_bearer_token = ${JSON.stringify(config.key)}`] };
   }
-  lines.push('', `[model_providers.${GENERIC_PROVIDER}]`, `name = ${JSON.stringify(SERVICE_INFO[config.service].name)}`,
-    `base_url = ${JSON.stringify(config.baseUrl)}`, 'wire_api = "responses"');
-  if (config.key) lines.push(`experimental_bearer_token = ${JSON.stringify(config.key)}`);
-  return CONFIG_HEADER + lines.join('\n') + '\n';
+  const provider = [`[model_providers.${GENERIC_PROVIDER}]`, `name = ${JSON.stringify(SERVICE_INFO[config.service].name)}`,
+    `base_url = ${JSON.stringify(config.baseUrl)}`, 'wire_api = "responses"'];
+  if (config.key) provider.push(`experimental_bearer_token = ${JSON.stringify(config.key)}`);
+  return { header: CONFIG_HEADER, root, provider };
+}
+
+function renderConfig(dir: string, config: Config): string {
+  const parts = renderParts(dir, config);
+  return parts.header + [...parts.root, '', ...parts.provider].join('\n') + '\n';
+}
+
+// Called only after editable-format validation, for a service change: the card's settings that are not owned (other
+// top-level settings, comments and every table Codex or the user wrote) as they are, around a fresh template of the
+// owned ones for the new service. The PlanSwap header comments, owned top-level fields (approval and sandbox are
+// carried in config) and the provider table are left out, except what the template does not decide: the sign-in
+// preference always, and the reasoning effort between two services other than DeepSeek (DeepSeek's template writes
+// its own, which the other services do not take). Line endings become LF.
+function rebuildConfigSource(dir: string, source: string, config: Config, from: ApiService): string {
+  const kept = new Set(['preferred_auth_method']);
+  if (from !== 'deepseek' && config.service !== 'deepseek') kept.add('model_reasoning_effort');
+  const headers = new Set([CONFIG_HEADER.trim(), DEEPSEEK_HEADER.trim()]);
+  const root: string[] = [];
+  const tables: string[] = [];
+  const valueState: ValueState = { depth: 0 };
+  let section: string[] = [];
+  for (const raw of source.replace(/^\uFEFF/, '').split(/\r?\n/)) {
+    const owned = section[0] === 'model_providers';
+    const target = section.length ? tables : root;
+    if (valueState.depth || valueState.multiline) {
+      advanceValue(raw, valueState);
+      if (!owned) target.push(raw);
+      continue;
+    }
+    const line = raw.trim();
+    if (line.startsWith('[')) {
+      section = keyPath(line.slice(line.startsWith('[[') ? 2 : 1))!.segments;
+      if (section[0] !== 'model_providers') tables.push(raw);
+      continue;
+    }
+    if (owned || (!section.length && headers.has(line))) continue;
+    const assignment = keyPath(line);
+    if (assignment?.rest.startsWith('=')) {
+      if (!section.length && ROOT_KEYS.has(assignment.segments[0]) && !kept.has(assignment.segments[0])) continue;
+      advanceValue(assignment.rest.slice(1), valueState);
+    }
+    target.push(raw);
+  }
+  const trim = (lines: string[]): string[] => {
+    let start = 0, end = lines.length;
+    while (start < end && !lines[start].trim()) start++;
+    while (end > start && !lines[end - 1].trim()) end--;
+    return lines.slice(start, end);
+  };
+  const parts = renderParts(dir, config);
+  const own = trim(root), other = trim(tables);
+  return parts.header + [...parts.root, ...own, '', ...(other.length ? [...other, ''] : []), ...parts.provider].join('\n') + '\n';
 }
 
 // DeepSeek cards only; other cards have no catalog (a models.json there is left alone and not read)
@@ -456,7 +510,7 @@ export function readProviderInfo(dir: string): ProviderInfo | undefined {
 }
 
 /** The saved key of a valid card ('' without one), for the host's model-list request of that card's own service, at the
- *  endpoint its edit form names. */
+ *  endpoint its edit form names, and for the edit area's eye button (revealProviderKey). */
 export function readProviderKey(dir: string): string {
   return snapshot(dir, false).config.key;
 }
@@ -526,8 +580,16 @@ export function readProviderEditState(dir: string): { service: ApiService; model
 }
 
 /** Empty replacement preserves the current key; baseUrl applies to non-DeepSeek cards only. Unsupported edits and
- *  competing PlanSwap edits are refused. */
-export function editProviderConfig(dir: string, next: { model: string; key: string; baseUrl?: string }, revision: string): void {
+ *  competing PlanSwap edits are refused.
+ *  next.service other than the card's changes its service: the owned settings are written from the new service's
+ *  template (rebuildConfigSource) and every other setting is kept; the saved key never follows (empty means no key,
+ *  refused with 'key' for a keyRequired service); baseUrl defaults to the new service's preset (DeepSeek: fixed).
+ *  Written in this order: the DeepSeek catalog (unread by other cards), config.toml, then the marker; a former DeepSeek
+ *  card's catalog is removed afterwards. Between DeepSeek and another service the marker and config.toml formats
+ *  differ: a failure after config.toml was replaced and before the marker was (a crash, a permission change) leaves a
+ *  card that reports a format error and cannot be edited; it is repaired by setting the marker's "provider" to the
+ *  service config.toml was written for, or by removing the card and adding it again. */
+export function editProviderConfig(dir: string, next: { service?: ApiService; model: string; key: string; baseUrl?: string }, revision: string): void {
   // Establish that the root and owned files are local before creating the per-card edit lock.
   snapshot(dir, false, true);
   const lock = path.join(dir, '.planswap-provider.lock');
@@ -537,6 +599,10 @@ export function editProviderConfig(dir: string, next: { model: string; key: stri
   try {
     const current = snapshot(dir, false, true);
     if (current.revision !== revision) throw new ProviderConfigError('changed');
+    if (next.service !== undefined && next.service !== current.config.service) {
+      moveService(dir, current, { ...next, service: next.service }, revision);
+      return;
+    }
     const service = current.config.service;
     const nextModel = model(service, next.model);
     const nextKey = serviceKey(service, next.key || current.config.key);
@@ -558,5 +624,44 @@ export function editProviderConfig(dir: string, next: { model: string; key: stri
     if (temporary) try { fs.unlinkSync(temporary); } catch { /* failed write may not have created it */ }
     fs.closeSync(lockFd);
     fs.unlinkSync(lock);
+  }
+}
+
+// A service change under editProviderConfig's lock: every file is written to a temporary first and renamed in place only
+// after the revision check, so a refusal leaves the card as it was.
+function moveService(dir: string, current: Snapshot, next: { service: ApiService; model: string; key: string; baseUrl?: string }, revision: string): void {
+  const service = next.service;
+  const deepseek = service === 'deepseek';
+  const config: Config = {
+    service, model: model(service, next.model), key: serviceKey(service, next.key),
+    baseUrl: deepseek ? SERVICE_INFO.deepseek.baseUrl! : checkBaseUrl(next.baseUrl ?? SERVICE_INFO[service].baseUrl),
+    approval_policy: current.config.approval_policy, sandbox_mode: current.config.sandbox_mode,
+  };
+  const source = rebuildConfigSource(dir, current.source, config, current.config.service);
+  const edited = parseConfig(source, dir, service, true, true);
+  if (edited.model !== config.model || edited.key !== config.key || edited.baseUrl !== config.baseUrl) throw new ProviderConfigError('format');
+  const writes: Array<[string, string]> = [];
+  if (deepseek) writes.push(['models.json', JSON.stringify(DEEPSEEK_CATALOG, null, 2) + '\n']);
+  writes.push(['config.toml', source], [PROVIDER_FILES[0], markerFor(service)]);
+  const temporaries: Array<[string, string]> = [];
+  try {
+    for (const [name, text] of writes) {
+      const temporary = path.join(dir, `.planswap-provider-${randomUUID()}.tmp`);
+      fs.writeFileSync(temporary, text, { mode: 0o600, flag: 'wx' });
+      temporaries.push([temporary, name]);
+    }
+    if (snapshot(dir, false, true).revision !== revision) throw new ProviderConfigError('changed');
+    while (temporaries.length) {
+      const [temporary, name] = temporaries[0];
+      fs.renameSync(temporary, path.join(dir, name));
+      temporaries.shift();
+    }
+    // A former DeepSeek card's catalog is no longer used; a failure to remove it is harmless (other cards never read it)
+    if (current.config.service === 'deepseek' && !deepseek) try { fs.unlinkSync(path.join(dir, 'models.json')); } catch { /* left unread */ }
+  } catch (error) {
+    if (error instanceof ProviderConfigError) throw error;
+    throw new ProviderConfigError('write');
+  } finally {
+    for (const [temporary] of temporaries) try { fs.unlinkSync(temporary); } catch { /* a failed write may not have created it */ }
   }
 }

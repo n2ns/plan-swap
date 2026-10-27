@@ -61,6 +61,38 @@ export async function run(ctx) {
     && save.key === '' && save.baseUrl === 'https://gateway.example.test/v1', save);
   await page.evaluate(() => window.preview.post({ type: 'saveProviderResult', mode: 'codex', dir: '/fixture/.codex-empty' }));
   await step('A saved edit closes the edit area', await gatewayCard.locator('.provider-edit').count() === 0);
+
+  // Changing the service from the edit area: the saved key shown by the eye never goes along
+  await page.evaluate(() => window.preview.clearMessages());
+  await gatewayCard.locator('[data-action="editProvider"]').click();
+  const svcEdit = gatewayCard.locator('.provider-edit');
+  const keyField = svcEdit.locator('.api-key');
+  const eye = svcEdit.locator('.api-key-eye');
+  const lastOf = (type) => page.evaluate((t) => window.preview.messages.filter((m) => m.type === t).at(-1), type);
+  await step('The Codex edit area lists the services, starting at the card\'s, with the eye in the key field', await svcEdit.locator('.api-service').isVisible()
+    && await svcEdit.locator('.api-service').evaluate((el) => el.value) === 'custom' && await eye.isVisible());
+  await eye.click();
+  await page.evaluate(() => window.preview.post({ type: 'providerKeyResult', mode: 'codex', dir: '/fixture/.codex-empty', key: 'synthetic-saved-key' }));
+  await step('The eye shows the saved key', await keyField.getAttribute('type') === 'text' && await keyField.evaluate((el) => el.value) === 'synthetic-saved-key');
+  await svcEdit.locator('.api-service').evaluate((el) => { el.value = 'deepseek'; el.dispatchEvent(new Event('change')); });
+  await page.waitForTimeout(100);
+  await step('Another service empties and hides the key field, hides the eye and says why, inside the card', await keyField.evaluate((el) => el.value) === ''
+    && await keyField.getAttribute('type') === 'password' && await eye.isHidden() && !!(await svcEdit.locator('.api-key-notice').textContent())
+    && await gatewayCard.evaluate((el) => [...el.querySelectorAll('.provider-edit, .api-fields, .api-key-notice, .api-service')].every((n) => n.scrollWidth <= n.clientWidth + 1)));
+  await step('DeepSeek offers its own models, not the card\'s former one', await svcEdit.locator('.api-model').evaluate((el) => el.value !== 'gateway-model'
+    && !el.options.some((o) => o.value === 'gateway-model')));
+  await step('DeepSeek hides the endpoint and cannot be saved without a key', await svcEdit.locator('.api-url').isHidden()
+    && await svcEdit.locator('[data-action="saveProvider"]').evaluate((el) => el.disabled) === true);
+  await shot(`${locale}-${width}-provider-edit-service.png`);
+  await svcEdit.locator('.api-service').evaluate((el) => { el.value = 'ollama'; el.dispatchEvent(new Event('change')); });
+  await page.waitForTimeout(100);
+  const ollamaLoad = await lastOf('providerModels');
+  if (ollamaLoad?.service === 'ollama') await page.evaluate((request) => window.preview.post({ type: 'providerModelsResult', mode: 'codex', request, models: ['qwen3'] }), ollamaLoad.request);
+  await step('A keyless service loads without the saved key', !ollamaLoad || ollamaLoad.service !== 'ollama' || ollamaLoad.key === '', ollamaLoad);
+  await svcEdit.locator('[data-action="saveProvider"]').click();
+  const moved = await lastOf('saveProvider');
+  await step('Saving names the new service with no key and its preset endpoint', moved?.service === 'ollama' && moved.key === '' && moved.baseUrl === 'http://localhost:11434/v1', moved);
+  await page.evaluate(() => window.preview.post({ type: 'saveProviderResult', mode: 'codex', dir: '/fixture/.codex-empty' }));
   await card.locator('[data-action="terminal"]').click();
   const terminal = await page.evaluate(() => window.preview.messages.at(-1));
   await step('Provider terminal uses the existing account action', terminal?.type === 'terminal' && terminal.mode === 'codex' && terminal.dir === '/fixture/.codex-work', terminal);

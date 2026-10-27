@@ -594,15 +594,12 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     try {
       baseUrl = checkBaseUrl(msg.baseUrl?.trim() || SERVICE_INFO[msg.service].baseUrl);
       if (!key && msg.dir) {
-        // A saved key goes only to its own card's service. A changed endpoint is the user's choice: it gets the saved
-        // key, and the edit form says so. A card without a saved key asks the endpoint without one
+        // A saved key goes only to its own card's service; another service is asked with the typed key alone. A
+        // changed endpoint is the user's choice: it gets the saved key, and the edit form says so
         const card = panel.resolve(MODE, msg.dir);
         if (card?.kind === 'named' && preserveProviderConfig(card.dir)) {
           const saved = readProviderEditState(card.dir);
-          if (saved.hasKey) {
-            if (saved.service !== msg.service) return { error: t('codex.provider.newServiceNeedsKey') };
-            key = readProviderKey(card.dir);
-          }
+          if (saved.hasKey && saved.service === msg.service) key = readProviderKey(card.dir);
         }
       }
     } catch (err) {
@@ -623,12 +620,14 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
   }
 
   // The edit form's values; key '' keeps the saved key. Errors carry no config text
-  async function saveProvider(account: CodexAccount, msg: { model: string; baseUrl?: string; key: string }): Promise<string | undefined> {
+  async function saveProvider(account: CodexAccount, msg: { model: string; baseUrl?: string; key: string; service?: string }): Promise<string | undefined> {
     try {
+      if (msg.service !== undefined && !isService(msg.service)) return providerErrorText('format');
       const before = readProviderEditState(account.dir);
       const registered = store.find(account.name);
       if (!registered || !samePath(registered.dir, account.dir)) return providerErrorText('changed');
-      editProviderConfig(account.dir, { model: msg.model.trim(), key: msg.key.trim(), baseUrl: before.service === 'deepseek' ? undefined : msg.baseUrl?.trim() }, before.revision);
+      const service = msg.service ?? before.service;
+      editProviderConfig(account.dir, { service, model: msg.model.trim(), key: msg.key.trim(), baseUrl: service === 'deepseek' ? undefined : msg.baseUrl?.trim() }, before.revision);
       return undefined;
     } catch (err) {
       return joinSentences(t('codex.provider.editFailed'), providerErrorText(err instanceof ProviderConfigError ? err.code : 'write'));
@@ -937,6 +936,17 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
         const a = panel.resolve(MODE, msg.dir);
         const error = a?.kind === 'named' && preserveProviderConfig(a.dir) ? await saveProvider(a, msg) : providerErrorText('unmanaged');
         panel.post({ type: 'saveProviderResult', mode: MODE, dir: msg.dir, error });
+        return;
+      }
+      case 'revealProviderKey': {
+        // The eye button: the only path of a saved key to the page, on this explicit request only
+        const a = panel.resolve(MODE, msg.dir);
+        let key: string | undefined;
+        let error: string | undefined;
+        if (a?.kind === 'named' && preserveProviderConfig(a.dir)) {
+          try { key = readProviderKey(a.dir) || undefined; } catch (err) { error = providerErrorText(err instanceof ProviderConfigError ? err.code : 'file'); }
+        } else error = providerErrorText('unmanaged');
+        panel.post({ type: 'providerKeyResult', mode: MODE, dir: msg.dir, key, error });
         return;
       }
       case 'share': {
