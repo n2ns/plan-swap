@@ -372,7 +372,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       accounts.map((account) => ({
         label: labelOf(account),
         description: preserveProviderConfig(account.dir) ? providerLabel(readProviderInfo(account.dir)?.provider ?? 'custom')
-          : codexLoggedIn(account.dir) ? t('common.loggedIn') : t('common.notLoggedIn'),
+          : codexLoggedIn(account.dir) || usesKeychainStore(account.dir) ? t('common.loggedIn') : t('common.notLoggedIn'),
         detail: account.dir,
         account,
       })),
@@ -909,7 +909,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       }
       case 'terminal': {
         const a = panel.resolve(MODE, msg.dir);
-        if (a) openTerminal(a, !preserveProviderConfig(a.dir) && !codexLoggedIn(a.dir));
+        if (a) openTerminal(a, !preserveProviderConfig(a.dir) && !codexLoggedIn(a.dir) && !usesKeychainStore(a.dir));
         return;
       }
       case 'remove': {
@@ -1014,7 +1014,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
         return;
       }
       const a = await pickAccount(allWithExternal(), t('codex.pick.terminal'));
-      if (a) openTerminal(a, !preserveProviderConfig(a.dir) && !codexLoggedIn(a.dir));
+      if (a) openTerminal(a, !preserveProviderConfig(a.dir) && !codexLoggedIn(a.dir) && !usesKeychainStore(a.dir));
     }),
     vscode.commands.registerCommand('planswap.codex.restartServer', () => restartServerInteractive()),
     vscode.window.onDidCloseTerminal((terminal) => {

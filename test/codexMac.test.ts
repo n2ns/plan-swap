@@ -22,7 +22,9 @@ import { codexPanelSource, manualRestartMessages, registerCodexCommands, restart
 import { detectServerKind } from '../src/codex/codexServer';
 import { CodexAccountStore } from '../src/codex/codexStore';
 import { LabelStore } from '../src/labels';
-import { commands, env, window } from './stubs/vscode';
+import { commands, env, statusBarItems, tooltipText, window, type MarkdownString } from './stubs/vscode';
+import { StatusBar } from '../src/statusBar';
+import { AccountStore } from '../src/accounts';
 import type { AccountsPanel } from '../src/accountsPanel';
 import type { FromWebview } from '../src/protocol';
 import { assertTempHome, makeTempHome, MemoryMemento, onWindows, read, withEnv, type TempHome } from './helpers';
@@ -478,6 +480,46 @@ describe('restart guidance and commands on macOS', () => {
       assert.equal(fs.existsSync(at('.profile')), false);
     } finally {
       h.dispose();
+    }
+  });
+
+  test('a Keychain-store account reads as signed in in the picker and its terminal runs codex, not codex login', async (ctx) => {
+    reset();
+    const a = { name: 'kcq', dir: at('.codex-kcq') };
+    const h = await harness([a]);
+    fs.writeFileSync(path.join(a.dir, 'config.toml'), 'cli_auth_credentials_store = "keyring"\n');
+    const picks: Array<Array<{ description?: string; account?: CodexAccount }>> = [];
+    ctx.mock.method(window, 'showQuickPick', async (items: Array<{ description?: string; account?: CodexAccount }>) => {
+      picks.push(items);
+      return items.find((i) => i.account?.dir === a.dir);
+    });
+    const sent: string[] = [];
+    ctx.mock.method(window, 'createTerminal', () => ({ sendText: (text: string) => sent.push(text), show() {}, dispose() {} }));
+    try {
+      await commands.registered['planswap.codex.openTerminal']();
+      assert.equal(picks[0].find((i) => i.account?.dir === a.dir)?.description, t('common.loggedIn'));
+      assert.equal(sent.length, 1);
+      assert.doesNotMatch(sent[0], /codex login/);
+    } finally {
+      h.dispose();
+    }
+  });
+
+  test('the status bar names a Keychain-store effective account with the note, not as signed out, and shows no usage', () => {
+    reset();
+    const dir = at('.codex');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'config.toml'), 'cli_auth_credentials_store = "keyring"\n');
+    const state = new MemoryMemento();
+    const bar = new StatusBar(new AccountStore(state), new LabelStore(state, 'claude.labels'), { store: new CodexAccountStore(state), labels: new LabelStore(state, 'codex.labels') });
+    try {
+      const text = tooltipText(statusBarItems.at(-1)!.tooltip as MarkdownString);
+      assert.doesNotMatch(text, new RegExp(t('common.notLoggedIn')));
+      assert.match(text, /\*\*Codex\*\*/);
+      assert.ok(text.includes(t('codex.mac.keychainStore')), text);
+    } finally {
+      bar.dispose();
+      fs.rmSync(path.join(dir, 'config.toml'));
     }
   });
 

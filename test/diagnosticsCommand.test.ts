@@ -150,3 +150,22 @@ test('diagnostics matches another spelling of an account directory like the pane
     });
   } finally { resetConfig(); tmp.restore(); }
 });
+
+test('a local macOS window reports the macOS manual restart and its advice', async () => {
+  const tmp = makeTempHome('diagnostics-mac');
+  // Written before faking the platform: off Windows the writer fsyncs the folder, which Windows refuses
+  writeSelectedDir(path.join(tmp.home, '.codex-work'));
+  const realPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+  Object.defineProperty(process, 'platform', { value: 'darwin' });
+  try {
+    const snapshot = await collectDiagnostics({
+      store: { named: () => [] }, codexStore: { named: () => [] }, extensionVersion: '0.5.2', versions,
+      check: () => ({ ok: true }), enabled: () => true, restart: () => ({ context: 'local', auto: false }),
+    });
+    assert.equal(String(snapshot.codex.restart), 'manual-mac');
+    assert.ok(buildDiagnosticsReport(snapshot).includes('⌘Q'));
+  } finally {
+    Object.defineProperty(process, 'platform', realPlatform);
+    tmp.restore();
+  }
+});

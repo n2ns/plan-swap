@@ -21,7 +21,7 @@ export interface DiagnosticSnapshot {
     pending: boolean;
     runsInWsl: boolean;
     precheck: 'passed' | 'blocked' | 'unavailable';
-    restart: 'automatic-wsl' | 'manual-wsl' | 'manual-local' | 'manual-remote' | 'manual-windows';
+    restart: 'automatic-wsl' | 'manual-wsl' | 'manual-local' | 'manual-remote' | 'manual-windows' | 'manual-mac';
   };
 }
 
@@ -87,13 +87,13 @@ export function buildDiagnosticsReport(snapshot: DiagnosticSnapshot): string {
   const restart = enumLabel(snapshot.codex.restart, {
     'automatic-wsl': 'diagnostics.restartAutomaticWsl', 'manual-wsl': 'diagnostics.restartManualWsl',
     'manual-local': 'diagnostics.restartManualLocal', 'manual-remote': 'diagnostics.restartManualRemote',
-    'manual-windows': 'diagnostics.restartManualWindows',
+    'manual-windows': 'diagnostics.restartManualWindows', 'manual-mac': 'diagnostics.restartManualMac',
   });
   const next = snapshot.codex.runsInWsl ? t('diagnostics.nextRunsInWsl')
     : snapshot.codex.pending ? enumLabel(snapshot.codex.restart, {
       'automatic-wsl': 'diagnostics.nextAutomaticWsl', 'manual-wsl': 'diagnostics.nextManualWsl',
       'manual-local': 'diagnostics.nextManualLocal', 'manual-remote': 'diagnostics.nextManualRemote',
-      'manual-windows': 'diagnostics.nextManualWindows',
+      'manual-windows': 'diagnostics.nextManualWindows', 'manual-mac': 'diagnostics.nextManualMac',
     }) : t('diagnostics.nextNone');
   const row = (label: MessageKey, value: string): string => `- **${t(label)}:** ${value}`;
   return [

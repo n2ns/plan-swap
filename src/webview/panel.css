@@ -689,7 +689,7 @@ html:lang(ko) { word-break: keep-all; }
 .disabled-text { color: var(--muted); font-size: max(11px, 0.88em); line-height: 1.55; max-width: 30em; min-width: 0; overflow-wrap: anywhere; }
 .disabled-actions { margin-top: 8px; max-width: 100%; }
 .disabled-actions vscode-button { max-width: 100%; }
-.disabled-actions vscode-button::part(base) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.disabled-actions vscode-button::part(base) { height: auto; min-height: 26px; padding-block: 4px; line-height: 1.3; text-align: center; white-space: normal; overflow-wrap: anywhere; }
 
 /* ---------- Fixed footer toolbar: shared by both pages ---------- */
 .tools {

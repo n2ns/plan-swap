@@ -9,6 +9,7 @@ import { getLocale, LOCALE_INFO, t, type MessageKey } from './i18n';
 import type { CodexAccountStore } from './codex/codexStore';
 import { codexDefaultDir, readCodexAccountInfo } from './codex/codexPaths';
 import { providerLabel, readProviderInfo } from './codex/codexProvider';
+import { usesKeychainStore } from './codex/codexMac';
 import { claudeProviderLabel, readClaudeProviderInfo } from './claudeProvider';
 import { effectiveDir, isEnabled, readSelectedDir } from './codex/codexState';
 import { codexRunsInWsl } from './codex/codexSettings';
@@ -465,7 +466,10 @@ export class StatusBar implements vscode.Disposable {
       const account = sameDirAccount(all, codexDir);
       const label = labelFor(account ? account.name : EXTERNAL_NAME, this.codex.labels);
       const provider = readProviderInfo(codexDir);
-      const info = provider ? { loggedIn: provider.configured, plan: providerLabel(provider.provider), email: undefined } : readCodexAccountInfo(codexDir);
+      // macOS: a sign-in kept in the Keychain is unknown to auth.json; as on the panel, the note stands in for it
+      const keychain = !provider && usesKeychainStore(codexDir);
+      const info = provider ? { loggedIn: provider.configured, plan: providerLabel(provider.provider), email: undefined }
+        : keychain ? { loggedIn: true, plan: undefined, email: undefined } : readCodexAccountInfo(codexDir);
       const apiKey = provider !== undefined || info.plan === 'API key';
       const usage: UsageParts = { rows: [], notes: [] };
       const selected = readSelectedDir() ?? codexDefaultDir();
@@ -478,8 +482,9 @@ export class StatusBar implements vscode.Disposable {
       }
       // Codex run inside WSL by a Windows editor uses another home: its limits are not this account's
       const inWsl = codexRunsInWsl();
-      const showUsage = !inWsl && !apiKey && info.loggedIn;
+      const showUsage = !inWsl && !apiKey && !keychain && info.loggedIn;
       if (inWsl) usage.notes.push(italic(t('status.codexRunsInWsl')));
+      if (keychain) usage.notes.push(italic(t('codex.mac.keychainStore')));
       let part: Product = { product: 'Codex' };
       if (showUsage) {
         const shown = codexUsageParts(this.codexUsage, now, display);

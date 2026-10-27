@@ -61,7 +61,7 @@ export async function collectDiagnostics(deps: DiagnosticsDeps): Promise<Diagnos
   const restartMode: DiagnosticSnapshot['codex']['restart'] = restart.context === 'wsl'
     ? restart.auto ? 'automatic-wsl' : 'manual-wsl'
     : restart.context === 'remote' ? 'manual-remote'
-      : process.platform === 'win32' ? 'manual-windows' : 'manual-local';
+      : process.platform === 'win32' ? 'manual-windows' : process.platform === 'darwin' ? 'manual-mac' : 'manual-local';
   return {
     extensionVersion: deps.extensionVersion,
     editorVersion: vscode.version,

@@ -41,7 +41,8 @@ if (bad.length) {
 }
 
 if (!args.includes('--no-build')) {
-  const build = spawnSync('npm', ['run', 'build', '--silent'], { cwd: root, stdio: 'inherit' });
+  // Windows has npm only as npm.cmd, which spawn starts only through a shell (fixed literals, no user input)
+  const build = spawnSync('npm', ['run', 'build', '--silent'], { cwd: root, stdio: 'inherit', shell: process.platform === 'win32' });
   if (build.status !== 0) process.exit(build.status ?? 1);
 }
 

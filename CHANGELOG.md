@@ -12,6 +12,7 @@
 
 ### Fixed
 
+- The **Enable Codex switching** button on the Codex tab now wraps its label in a narrow sidebar instead of cutting it off.
 - Editing the endpoint of a Codex or Claude API card that has no saved key, such as a local server, no longer asks for the key again: the model list now loads from the new endpoint without a key, so the card can be saved.
 
 ## [0.5.2] - 2026-10-27
