@@ -44,13 +44,26 @@ export async function run(ctx) {
     && await presetEdit.locator('.api-url').evaluate((el) => el.value) === 'https://api.deepseek.com/anthropic');
   await step('A preset card on its preset endpoint offers the cached models without a request', presetLoads.length === 0
     && await presetEdit.locator('.api-model').evaluate((el) => !el.disabled && el.options.length === 2 && el.value === 'deepseek-v4-pro'), presetLoads);
+  const notice = (area) => area.locator('.api-key-notice');
+  await step('A card at its saved endpoint shows no key reminder', await notice(presetEdit).textContent() === '' && await notice(presetEdit).isHidden());
   await presetEdit.locator('.api-url input').fill('https://deepseek-proxy.example.test/anthropic');
   await page.waitForTimeout(1300);
+  await step('Another endpoint with a saved key and an empty key field shows the reminder, inside the card', !!(await notice(presetEdit).textContent())
+    && await notice(presetEdit).isVisible() && await deepseek.evaluate((el) => [...el.querySelectorAll('.provider-edit, .api-fields, .api-key-notice')].every((n) => n.scrollWidth <= n.clientWidth + 1)));
+  await shot(`${locale}-${width}-edit-new-endpoint.png`);
   const movedLoad = await page.evaluate(() => window.preview.messages.filter((m) => m.type === 'providerModels').at(-1));
   await step('A preset card on another endpoint asks the host with an empty key field and the card', movedLoad?.mode === 'claude' && movedLoad.service === 'deepseek'
     && movedLoad.baseUrl === 'https://deepseek-proxy.example.test/anthropic' && movedLoad.key === '' && movedLoad.dir === '/fixture/.claude-deepseek', movedLoad);
+  await presetEdit.locator('.api-key input').fill('typed-key');
+  await step('A typed key removes the reminder', await notice(presetEdit).textContent() === '' && await notice(presetEdit).isHidden());
   await presetEdit.locator('[data-action="cancelEdit"]').click();
   await step('Cancel closes the edit area', await deepseek.locator('.provider-edit').count() === 0);
+  // A card without a saved key has nothing to send: no reminder on another endpoint
+  await local.locator('[data-action="editProvider"]').click();
+  const localEdit = local.locator('.provider-edit');
+  await localEdit.locator('.api-url input').fill('http://localhost:18080');
+  await step('A card without a saved key shows no reminder on another endpoint', await notice(localEdit).textContent() === '' && await notice(localEdit).isHidden());
+  await localEdit.locator('[data-action="cancelEdit"]').click();
 
   // Editing a custom endpoint: loads with the saved key, saves with mode claude
   await page.evaluate(() => window.preview.clearMessages());

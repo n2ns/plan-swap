@@ -276,12 +276,15 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
     try {
       baseUrl = checkBaseUrl(msg.baseUrl?.trim() || info.baseUrl);
       if (!key && msg.dir) {
-        // A saved key goes only to its own card's service and endpoint; another one needs the key typed again
+        // A saved key goes only to its own card's service. A changed endpoint is the user's choice: it gets the saved
+        // key, and the edit form says so. A card without a saved key (the placeholder does not count) asks without one
         const card = panel.resolve(MODE, msg.dir);
         if (card?.kind === 'named' && hasClaudeProviderMarker(card.dir)) {
           const saved = readClaudeProviderEditState(card.dir);
-          if (saved.service !== msg.service || saved.baseUrl !== baseUrl) return { error: t('codex.provider.newEndpointNeedsKey') };
-          key = readClaudeProviderKey(card.dir);
+          if (saved.hasKey) {
+            if (saved.service !== msg.service) return { error: t('codex.provider.newServiceNeedsKey') };
+            key = readClaudeProviderKey(card.dir);
+          }
         }
       }
     } catch (err) {
@@ -308,8 +311,6 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
       const registered = store.find(account.name);
       if (!registered || !samePath(registered.dir, account.dir)) return claudeProviderErrorText('changed');
       const baseUrl = msg.baseUrl?.trim() || undefined;
-      // Moving the saved key to another endpoint needs it typed again, as for the model list
-      if (!msg.key.trim() && before.hasKey && baseUrl !== undefined && baseUrl !== before.baseUrl) return t('codex.provider.newEndpointNeedsKey');
       editClaudeProviderConfig(account.dir, { model: msg.model.trim(), key: msg.key.trim(), baseUrl }, before.revision);
       return undefined;
     } catch (err) {

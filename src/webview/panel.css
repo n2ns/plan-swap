@@ -651,6 +651,8 @@ html:lang(ko) { word-break: keep-all; }
 .api-status { color: var(--muted); font-size: max(11px, 0.8em); padding: 0 2px; min-width: 0; overflow-wrap: anywhere; }
 .api-status.error { color: var(--error); }
 .api-status:empty { display: none; }
+.api-key-notice { color: var(--muted); font-size: max(11px, 0.8em); padding: 0 2px; min-width: 0; overflow-wrap: anywhere; }
+.api-key-notice:empty { display: none; }
 .provider-edit { display: flex; flex-direction: column; gap: var(--gap); margin-top: 6px; min-width: 0; }
 .provider-edit-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .add-mode { display: block; max-width: 100%; min-width: 0; }

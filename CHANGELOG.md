@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Changing the endpoint of an API card with a saved key no longer requires entering the key again. With the key field empty, the saved key is kept and sent to the new endpoint, and the edit form says so; enter a new key to replace it.
+
+### Fixed
+
+- Editing the endpoint of a Codex or Claude API card that has no saved key, such as a local server, no longer asks for the key again: the model list now loads from the new endpoint without a key, so the card can be saved.
+
 ## [0.5.2] - 2026-10-27
 
 ### Added
