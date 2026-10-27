@@ -15,8 +15,8 @@ import { isDeepStrictEqual } from 'node:util';
 import { t } from './i18n';
 import { accountInfoTarget, claudeIdentitySetting, claudeJsonName, copySettingsStripped, defaultDir, realPath, realPathInside, samePath, sameRealPath, strippedSettings, syncMcpServers, unchangedSince, withConfigLock } from './paths';
 import {
-  comparablePath, isOpaqueReparseDir, JunctionError, LinkPrivilegeError, createLink, fileLinksAvailable, isWindows, pidAlive, renameReplacing, type StartTimeProbe,
-  stripBom, unlinkLinks, windowsStartTimes, isPlainObject, withLockDir,
+  comparablePath, isOpaqueReparseDir, JunctionError, LinkPrivilegeError, createLink, fileLinksAvailable, isWindows, lacksProcfs, normalizeStartTime, pidAlive,
+  platformStartTimes, renameReplacing, type StartTimeProbe, stripBom, unlinkLinks, isPlainObject, withLockDir,
 } from './platform';
 import { CLAUDE_PROVIDER_FILES, ProviderConfigError, assertClaudeProviderFilesLocal, hasClaudeProviderMarker } from './claudeProvider';
 
@@ -717,7 +717,8 @@ export interface SyncResult {
  * The base applies only to the same default dir and, for the info file items, to the same info files (BaseOrigin).
  * A sign-in removed on one side is not removed on the other: a new Claude sign-in writes a fresh credentials file
  * without them, which is no removal. Sign-ins are synced only when both credentials files exist; the Claude sign-in and
- * every other key stay.
+ * every other key stay. On macOS Claude Code keeps the MCP sign-ins in the Keychain and writes a credentials file only
+ * when the Keychain write fails, so normally only the info file items sync there.
  * ONBOARDING_KEYS are added to a signed-in account lacking them. Modes:
  * - full (switching to or away from the account, adding or converting it): writes the merge into both accounts and
  *   records the new base;
@@ -865,26 +866,38 @@ export function syncClaudeAccount(fromJson: string, dir: string, mode: SyncMode 
   return result;
 }
 
-// A session file's live process: pid and the recorded start time (procStart); undefined when unreadable, invalid or not running
-function liveSession(file: string): { pid: number; start?: string } | undefined {
+// The procStart format Claude Code records: FILETIME ticks on Windows, `ps` lstart in the C locale and UTC on macOS
+// (e.g. "Mon Oct 26 20:00:10 2026", whitespace collapsed); a value in another format counts as absent
+const PROC_START_FORMAT: Record<string, RegExp> = {
+  win32: /^\d+$/,
+  darwin: /^[A-Z][a-z]{2} [A-Z][a-z]{2} \d{1,2} \d{2}:\d{2}:\d{2} \d{4}$/,
+};
+
+// A session file's live process: pid and the recorded start time (procStart; on macOS with its whitespace collapsed);
+// undefined when unreadable, invalid or not running
+function liveSession(file: string, platform: string): { pid: number; start?: string } | undefined {
   try {
     const data: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
     if (!isPlainObject(data)) return undefined;
     const { pid, procStart } = data;
     if (typeof pid !== 'number' || !Number.isInteger(pid) || pid <= 0 || !pidAlive(pid)) return undefined;
-    return typeof procStart === 'string' && /^\d+$/.test(procStart) ? { pid, start: procStart } : { pid };
+    if (typeof procStart !== 'string') return { pid };
+    const start = platform === 'darwin' ? normalizeStartTime(procStart) : procStart;
+    return PROC_START_FORMAT[platform]?.test(start) ? { pid, start } : { pid };
   } catch {
     return undefined;
   }
 }
 
 /**
- * Windows busy check (no /proc, and another process's environment cannot be read). A shared account's sessions folder
- * is a link to the default one, whose records belong to every account sharing it and cannot be told apart: false (the
- * callers also refuse while the account's own terminal is open). Otherwise a record whose pid is alive and, when it
- * carries procStart, whose process started at that time; a failed start-time probe counts as busy.
+ * Busy check of the platforms without /proc (Windows and macOS, see lacksProcfs), where another process's environment
+ * cannot be read. A shared account's sessions folder is a link to the default one, whose records belong to every
+ * account sharing it and cannot be told apart: false (the callers also refuse while the account's own terminal is
+ * open). Otherwise a record whose pid is alive and, when it carries procStart in the platform's format
+ * (PROC_START_FORMAT), whose process started at that time (both sides compared through normalizeStartTime); a live
+ * record without such a procStart, or a failed start-time probe, counts as busy. startTimes and platform are for tests.
  */
-export function windowsSessionsBusy(sessions: string, startTimes: StartTimeProbe = windowsStartTimes): boolean {
+export function sessionRecordsBusy(sessions: string, startTimes: StartTimeProbe = platformStartTimes, platform: string = process.platform): boolean {
   if (lstatOrUndefined(sessions)?.isSymbolicLink()) return false;
   let files: string[];
   try {
@@ -892,21 +905,24 @@ export function windowsSessionsBusy(sessions: string, startTimes: StartTimeProbe
   } catch {
     return false;
   }
-  const live = files.map((f) => liveSession(path.join(sessions, f))).filter((s) => s !== undefined);
+  const live = files.map((f) => liveSession(path.join(sessions, f), platform)).filter((s) => s !== undefined);
   if (live.some((s) => s.start === undefined)) return true;
   if (live.length === 0) return false;
   const times = startTimes(live.map((s) => s.pid));
-  return !times || live.some((s) => times.get(s.pid) === s.start);
+  return !times || live.some((s) => {
+    const time = times.get(s.pid);
+    return time !== undefined && normalizeStartTime(time) === normalizeStartTime(s.start!);
+  });
 }
 
 /** true when a Claude process is running with this config dir: a <dir>/sessions/*.json whose pid is alive and whose
  *  /proc/<pid>/environ has CLAUDE_CONFIG_DIR=<dir> (samePath or sameRealPath; for the default dir: unset or the
  *  default). Unreadable records, invalid pids and unreadable environ files (not running, another user's process) are
  *  skipped; no sessions folder → false. Without procRoot (e.g. no /proc) any session file counts as busy.
- *  Windows with the default procRoot: windowsSessionsBusy. procRoot is for tests. */
+ *  Windows and macOS with the default procRoot: sessionRecordsBusy. procRoot is for tests. */
 export function claudeAccountBusy(dir: string, procRoot = '/proc'): boolean {
   const sessions = path.join(path.resolve(dir), 'sessions');
-  if (isWindows() && procRoot === '/proc') return windowsSessionsBusy(sessions);
+  if (lacksProcfs() && procRoot === '/proc') return sessionRecordsBusy(sessions);
   let files: string[];
   try {
     files = fs.readdirSync(sessions).filter((f) => f.endsWith('.json'));

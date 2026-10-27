@@ -5,10 +5,10 @@ import fsModule from 'node:fs';
 import * as path from 'node:path';
 import { setLocale, t } from '../src/i18n';
 import { execFileSync, spawn } from 'node:child_process';
-import { pidAlive } from '../src/platform';
+import { pidAlive, type StartTimeProbe } from '../src/platform';
 import {
   CLAUDE_SHARED_ENTRIES, claudeAccountBusy, copyClaudeIndependent, copyTree, ensureClaudeLinks, isSharedClaudeAccount, lstatOrUndefined,
-  makeClaudeIndependent, mergeEntry, migrateClaudeToShared, moveEntry, syncClaudeAccount, type MigrateReport, windowsSessionsBusy,
+  makeClaudeIndependent, mergeEntry, migrateClaudeToShared, moveEntry, syncClaudeAccount, type MigrateReport, sessionRecordsBusy,
 } from '../src/claudeShare';
 import { accountDir, deleteAccountDir, realPath } from '../src/paths';
 import { assertTempHome, makeTempHome, assertMode, FILE_SYMLINKS, LINUX_ONLY, onWindows, SHARING, read, snapshot, withEnv, type TempHome } from './helpers';
@@ -809,6 +809,20 @@ describe('syncClaudeAccount', () => {
     assert.ok(!exists(defCred));
   });
 
+  test('macOS layout (sign-ins in the Keychain, no credentials files): MCP servers and project keys still sync both ways', () => {
+    write(src(), JSON.stringify({ oauthAccount: { emailAddress: 'def@x' }, mcpServers: { a: { command: 'a' } }, projects: { '/p': { allowedTools: ['X'] } } }));
+    const acc = accountDir('keychain');
+    write(path.join(acc, '.claude.json'), JSON.stringify({ oauthAccount: { emailAddress: 'acc@x' }, mcpServers: { b: { command: 'b' } } }));
+    const r = syncClaudeAccount(src(), acc, 'full', { inUse: true });
+    assert.deepEqual(r.changed, ['mcpServers', 'projects:/p']);
+    assert.deepEqual(r.defaultChanged, ['mcpServers']);
+    assert.deepEqual(info(acc).mcpServers, { b: { command: 'b' }, a: { command: 'a' } });
+    assert.deepEqual(info(acc).projects['/p'], { allowedTools: ['X'] });
+    assert.deepEqual(JSON.parse(read(src())).mcpServers, { a: { command: 'a' }, b: { command: 'b' } });
+    assert.ok(!exists(path.join(acc, '.credentials.json')));
+    assert.ok(!exists(path.join(def, '.credentials.json')));
+  });
+
   test('a linked or multiply linked credentials file is refused without writing', FILE_SYMLINKS, () => {
     write(src(), '{}');
     const defCred = path.join(def, '.credentials.json');
@@ -1170,25 +1184,79 @@ describe('claudeAccountBusy', () => {
     const done = 0x7ffffffc;
     assert.equal(pidAlive(done), false);
     const never = (): Map<number, string> => assert.fail('no probe expected');
-    assert.equal(windowsSessionsBusy(sessions, never), false);
+    const busy = (dir: string, probe: StartTimeProbe): boolean => sessionRecordsBusy(dir, probe, 'win32');
+    assert.equal(busy(sessions, never), false);
     write(path.join(sessions, 'dead.json'), JSON.stringify({ pid: done, procStart: '1' }));
     write(path.join(sessions, 'bad.json'), '{ half');
-    assert.equal(windowsSessionsBusy(sessions, never), false);
+    assert.equal(busy(sessions, never), false);
     write(path.join(sessions, 'live.json'), JSON.stringify({ pid: process.pid, procStart: '42' }));
-    assert.equal(windowsSessionsBusy(sessions, () => new Map([[process.pid, '42']])), true);
+    assert.equal(busy(sessions, () => new Map([[process.pid, '42']])), true);
     // The pid now belongs to another process (reused), or it exited between the two checks
-    assert.equal(windowsSessionsBusy(sessions, () => new Map([[process.pid, '43']])), false);
-    assert.equal(windowsSessionsBusy(sessions, () => new Map()), false);
+    assert.equal(busy(sessions, () => new Map([[process.pid, '43']])), false);
+    assert.equal(busy(sessions, () => new Map()), false);
     // A failed probe cannot rule the session out
-    assert.equal(windowsSessionsBusy(sessions, () => undefined), true);
+    assert.equal(busy(sessions, () => undefined), true);
+    // A macOS start time is not a Windows procStart: such a record cannot be told from a reused pid
+    write(path.join(sessions, 'mac.json'), JSON.stringify({ pid: process.pid, procStart: 'Mon Oct 26 20:00:10 2026' }));
+    assert.equal(busy(sessions, () => new Map([[process.pid, 'Mon Oct 26 20:00:10 2026']])), true);
+    assert.equal(busy(sessions, () => new Map()), true);
+    fs.rmSync(path.join(sessions, 'mac.json'));
     // A live record without procStart cannot be told from a reused pid
     write(path.join(sessions, 'old.json'), JSON.stringify({ pid: process.pid }));
-    assert.equal(windowsSessionsBusy(sessions, () => new Map()), true);
+    assert.equal(busy(sessions, () => new Map()), true);
     // Shared account: sessions is a link to the default folder, whose records belong to every sharing account
     const shared = path.join(accountDir('winshared'), 'sessions');
     fs.mkdirSync(path.dirname(shared), { recursive: true });
     fs.symlinkSync(sessions, shared, 'junction');
-    assert.equal(windowsSessionsBusy(shared, never), false);
+    assert.equal(busy(shared, never), false);
+  });
+  test('macOS check: live pid whose ps start time matches the recorded procStart; shared sessions folders are not attributed', () => {
+    const sessions = path.join(accountDir('mac'), 'sessions');
+    const never = (): Map<number, string> => assert.fail('no probe expected');
+    const busy = (dir: string, probe: StartTimeProbe): boolean => sessionRecordsBusy(dir, probe, 'darwin');
+    assert.equal(busy(sessions, never), false);
+    write(path.join(sessions, 'dead.json'), JSON.stringify({ pid: 0x7ffffffc, procStart: 'Mon Oct 26 20:00:10 2026' }));
+    assert.equal(busy(sessions, never), false);
+    // A one-digit day: ps pads it with a second space, the record may not
+    write(path.join(sessions, 'live.json'), JSON.stringify({ pid: process.pid, procStart: 'Mon Oct  5 20:00:10 2026' }));
+    const probed: number[][] = [];
+    assert.equal(busy(sessions, (pids) => { probed.push(pids); return new Map([[process.pid, 'Mon Oct 5 20:00:10 2026']]); }), true);
+    assert.deepEqual(probed, [[process.pid]], 'only the live pid is probed');
+    assert.equal(busy(sessions, () => new Map([[process.pid, 'Mon  Oct 5  20:00:10 2026 ']])), true);
+    // The pid now belongs to another process (reused), or it exited between the two checks
+    assert.equal(busy(sessions, () => new Map([[process.pid, 'Mon Oct 5 20:00:11 2026']])), false);
+    assert.equal(busy(sessions, () => new Map()), false);
+    // A failed probe cannot rule the session out
+    assert.equal(busy(sessions, () => undefined), true);
+    // A Windows procStart, or none, cannot be told from a reused pid
+    write(path.join(sessions, 'win.json'), JSON.stringify({ pid: process.pid, procStart: '42' }));
+    assert.equal(busy(sessions, () => new Map([[process.pid, '42']])), true);
+    assert.equal(busy(sessions, () => new Map()), true);
+    fs.rmSync(path.join(sessions, 'win.json'));
+    assert.equal(busy(sessions, () => new Map()), false);
+    write(path.join(sessions, 'old.json'), JSON.stringify({ pid: process.pid }));
+    assert.equal(busy(sessions, () => new Map()), true);
+    fs.rmSync(path.join(sessions, 'old.json'));
+    // Shared account: sessions is a link to the default folder
+    const shared = path.join(accountDir('macshared'), 'sessions');
+    fs.mkdirSync(path.dirname(shared), { recursive: true });
+    fs.symlinkSync(sessions, shared, 'junction');
+    assert.equal(busy(shared, never), false);
+  });
+  test('claudeAccountBusy uses the session records on macOS with the default procRoot', () => {
+    const real = Object.getOwnPropertyDescriptor(process, 'platform')!;
+    const acc = accountDir('macdefault');
+    // A live record without procStart is busy on the session-record path without any probe; the /proc path (Linux)
+    // would not attribute this test process to the account
+    write(path.join(acc, 'sessions', 'a.json'), JSON.stringify({ pid: process.pid }));
+    Object.defineProperty(process, 'platform', { value: 'darwin' });
+    try {
+      assert.equal(claudeAccountBusy(acc), true, 'a live record without procStart counts as busy');
+      fs.rmSync(path.join(acc, 'sessions', 'a.json'));
+      assert.equal(claudeAccountBusy(acc), false, 'no records');
+    } finally {
+      Object.defineProperty(process, 'platform', real);
+    }
   });
   test('a missing procRoot counts a session file as busy', () => {
     const acc = accountDir('noproc');
