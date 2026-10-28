@@ -1,6 +1,6 @@
 // Validation of a new account name, shared by the Claude and Codex command modules; no vscode import
 import { NAME_RE, caseVariantOf, realPathInside, sameRealPath } from './paths';
-import { lstatOrUndefined } from './claudeShare';
+import { lstatOrUndefined } from './shareLinks';
 import { labelFor, sameName, type LabelStore } from './labels';
 import { t } from './i18n';
 

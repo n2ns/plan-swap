@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { findSameDir, samePath, sameRealPath } from '../paths';
-import { lstatOrUndefined } from '../claudeShare';
+import { lstatOrUndefined } from '../shareLinks';
 import { accountTerminalShell, bundledPathAssignment, hasControlChars, shQuote, windowsAccountEnv, windowsTerminalEnvSetting } from '../terminalShell';
 import { type AccountsPanel, type PanelSource, sharedFlag, viewInfo } from '../accountsPanel';
 import { labelFor, sameName, type LabelStore, EXTERNAL_NAME } from '../labels';

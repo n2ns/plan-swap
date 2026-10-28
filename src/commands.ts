@@ -21,11 +21,11 @@ import {
   copyClaudeIndependent,
   ensureClaudeLinks,
   isSharedClaudeAccount,
-  lstatOrUndefined,
   makeClaudeIndependent,
   migrateClaudeToShared,
   syncClaudeAccount,
 } from './claudeShare';
+import { lstatOrUndefined } from './shareLinks';
 import { describeShareReport } from './shareReport';
 import { validateAccountName } from './accountName';
 import { handleAccountMessage, type AccountMessageOps } from './panelMessages';

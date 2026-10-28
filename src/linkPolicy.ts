@@ -1,7 +1,7 @@
 // Asks once (modal, centered) whether config files may be copied when Windows refuses file links. Imports vscode.
 import * as vscode from 'vscode';
 import { fileLinksAvailable, isWindows } from './platform';
-import type { LinkOptions } from './claudeShare';
+import type { LinkOptions } from './shareLinks';
 import { t } from './i18n';
 
 // Files shown in the dialog (the ones COPYABLE_ON_NO_LINK would copy for each vendor)

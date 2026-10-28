@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { StateMemento } from './fileState';
-import type { ShareReport } from './claudeShare';
+import type { ShareReport } from './shareLinks';
 import { t } from './i18n';
 import { knownFileLinks } from './platform';
 

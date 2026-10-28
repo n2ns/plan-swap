@@ -12,10 +12,10 @@ import { t } from '../i18n';
 import { realPathInside, samePath, sameRealPath } from '../paths';
 import { comparablePath, fileLinksAvailable, isWindows, lacksProcfs, platformProcessNames, type ProcessNameProbe } from '../platform';
 import {
-  type MergeCtx, type MigrateReport, type ShareReport, copyTree, defaultFolder, emptyReport, freeName, linkEntry, recordLink, type LinkOptions,
-  finalizeMerge, linksTo, lstatOrUndefined, markElsewhere, mergeEntry, mergeLines, missingLinkResult, moveEntry, record, rememberMove, sameContent,
-  unlinkChildLinks, unlinkIfLinksTo,
-} from '../claudeShare';
+  type MigrateReport, type ShareReport, type LinkOptions, emptyReport, linkEntry, linksTo, lstatOrUndefined, markElsewhere, mergeLines,
+  missingLinkResult, record, recordLink, sameContent,
+} from '../shareLinks';
+import { type MergeCtx, copyTree, defaultFolder, finalizeMerge, freeName, mergeEntry, moveEntry, rememberMove, unlinkChildLinks, unlinkIfLinksTo } from '../shareMerge';
 import { blockedConfigReason, CODEX_IDENTITY_CONFIG_KEYS, codexDaemonAlive, codexDefaultDir, copyCodexSeed } from './codexPaths';
 import { assertProviderFilesLocal, preserveProviderConfig } from './codexProvider';
 
