@@ -156,7 +156,8 @@ async function codexHarness(accounts: CodexAccount[] = []): Promise<CodexHarness
     refresh() {},
     post(msg: ToWebview) { h.posted.push(msg); },
   } as unknown as AccountsPanel;
-  const disposables = registerCodexCommands({ store, labels, panel, tools: {}, provideTerminalCheck: (check) => { h.terminalOpen = check; } });
+  // The daemon pid files name this process: the fake probe calls it codex (the real Get-Process / ps never runs in tests)
+  const disposables = registerCodexCommands({ store, labels, panel, tools: {}, provideTerminalCheck: (check) => { h.terminalOpen = check; }, processNames: (pids) => new Map(pids.map((pid) => [pid, 'codex'])) });
   h.dispose = () => disposables.forEach((d) => d.dispose());
   return h;
 }

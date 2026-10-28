@@ -308,16 +308,26 @@ export function renameReplacing(
   }
 }
 
+// Windows reports these while a folder another process is deleting still exists (the delete completes shortly after)
+const DELETE_PENDING_CODES = ['EPERM', 'EACCES', 'ENOTEMPTY'];
+
 /** Runs fn while holding the lock folder lock (created with mkdir, the layout of proper-lockfile): a folder whose mtime
  *  is older than staleMs is taken over, a fresh one is waited for up to about a second (10 tries 100 ms apart), then
- *  busy() is thrown. The folder is removed afterwards. */
+ *  busy() is thrown. On Windows a folder whose deletion by another process is still pending (mkdir answers EPERM /
+ *  EACCES / ENOTEMPTY for a moment) counts as a fresh one. The folder is removed afterwards. */
 export function withLockDir<T>(lock: string, staleMs: number, busy: () => Error, fn: () => T): T {
   for (let attempt = 0; ; attempt++) {
     try {
       fs.mkdirSync(lock);
       break;
     } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+      const code = (e as NodeJS.ErrnoException).code ?? '';
+      if (code !== 'EEXIST') {
+        if (!isWindows() || !DELETE_PENDING_CODES.includes(code)) throw e;
+        if (attempt >= 10) throw busy();
+        sleepSync(100);
+        continue;
+      }
       let mtime: number | undefined;
       try { mtime = fs.lstatSync(lock).mtimeMs; } catch { /* released meanwhile: try again */ }
       if (mtime !== undefined && Date.now() - mtime > staleMs) {

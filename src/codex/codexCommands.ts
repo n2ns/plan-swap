@@ -41,7 +41,7 @@ import {
   watchedStateFiles,
   writeSelection,
 } from './codexState';
-import { isMac, isWindows, lacksProcfs, tildify, errText } from '../platform';
+import { isMac, isWindows, lacksProcfs, tildify, errText, platformProcessNames, type ProcessNameProbe } from '../platform';
 import { currentMacRcFile, usesKeychainStore } from './codexMac';
 import { askCopyFallback } from '../linkPolicy';
 import { type ServerKind, canAutoRestart, detectServerKind, executeRestart, planRestart } from './codexServer';
@@ -77,6 +77,9 @@ export interface CodexDeps {
   modelCache?: ModelCache;
   // Receives this module's "account terminal open" check, so the toolbar's Re-link can treat such an account as busy
   provideTerminalCheck?: (check: TerminalCheck) => void;
+  // Windows / macOS: the process names behind the daemon pid files (codexDaemonAlive); tests pass a fake, product code
+  // leaves the default platformProcessNames
+  processNames?: ProcessNameProbe;
 }
 
 /**
@@ -360,7 +363,8 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
   // terminal of the account also counts; on Linux the /proc check covers terminals
   const terminalOpen: TerminalCheck = (dir) => lacksProcfs() && [...terminals.values()].some((x) => samePath(x.dir, dir));
   deps.provideTerminalCheck?.(terminalOpen);
-  const busy = (a: CodexAccount): boolean => codexAccountBusy(a.dir) || terminalOpen(a.dir);
+  const processNames = deps.processNames ?? platformProcessNames;
+  const busy = (a: CodexAccount): boolean => codexAccountBusy(a.dir, '/proc', processNames) || terminalOpen(a.dir);
   // Passed to the linking steps, which OR it with their own process check
   const linkBusy = (a: CodexAccount): (() => boolean) => () => terminalOpen(a.dir);
   // A switch is in progress (e.g. its modal is open); further requests such as a double click are ignored
@@ -757,7 +761,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       return;
     }
     if (busy(account)) {
-      void vscode.window.showWarningMessage(codexBusyText(account.dir, labelOf(account)));
+      void vscode.window.showWarningMessage(codexBusyText(account.dir, labelOf(account), processNames));
       return;
     }
     const linkOptions = await askCopyFallback(account.dir, 'Codex');
@@ -772,7 +776,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       return;
     }
     if (busy(account)) {
-      void vscode.window.showWarningMessage(codexBusyText(account.dir, labelOf(account)));
+      void vscode.window.showWarningMessage(codexBusyText(account.dir, labelOf(account), processNames));
       return;
     }
     try {
@@ -802,7 +806,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
       return;
     }
     if (busy(account)) {
-      void vscode.window.showWarningMessage(codexBusyText(account.dir, labelOf(account)));
+      void vscode.window.showWarningMessage(codexBusyText(account.dir, labelOf(account), processNames));
       return;
     }
     try {
@@ -834,7 +838,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
         return true;
       }
       if (busy(account)) {
-        void vscode.window.showWarningMessage(codexBusyText(account.dir, label));
+        void vscode.window.showWarningMessage(codexBusyText(account.dir, label, processNames));
         return true;
       }
       return false;
@@ -861,7 +865,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     );
     if (delDir !== deleteDirLabel || blocked()) return;
     try {
-      await deleteCodexDir(account.dir);
+      await deleteCodexDir(account.dir, processNames);
       await store.unignore(account.dir);
     } catch (err) {
       void vscode.window.showErrorMessage(t('account.deleteDirFailed', { error: errText(err) }));

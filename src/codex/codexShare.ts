@@ -316,8 +316,8 @@ export function ensureCodexLinks(dir: string, options: LinkOptions = {}, procRoo
 
 /** The refusal for a busy account: how to stop its codex daemon when one is alive (it outlives every editor window
  *  and terminal), else the general text about open Codex sessions and terminals. */
-export function codexBusyText(dir: string, name: string): string {
-  return codexDaemonAlive(path.resolve(dir)) ? t('share.busyCodexDaemon', { name, dir: path.resolve(dir) }) : t('share.busyCodex', { name });
+export function codexBusyText(dir: string, name: string, probe: ProcessNameProbe = platformProcessNames): string {
+  return codexDaemonAlive(path.resolve(dir), '/proc', probe) ? t('share.busyCodexDaemon', { name, dir: path.resolve(dir) }) : t('share.busyCodex', { name });
 }
 
 /** true when a Codex process uses this dir: codexDaemonAlive(dir), or a <procRoot>/<pid> whose exe basename is

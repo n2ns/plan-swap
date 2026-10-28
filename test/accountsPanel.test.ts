@@ -401,7 +401,8 @@ test('a registered account whose directory became a regular file still renders a
     const rows = claudePanelSource(store, new LabelStore(memento, 'claude.labels')).accounts();
     const row = rows.find((r) => r.dir === dir);
     assert.ok(row, 'the row is rendered');
-    assert.equal(row.shared, undefined);
+    // lstat below a regular file: ENOTDIR on POSIX (the check throws, the flag is unknown), ENOENT on Windows (not shared)
+    assert.equal(row.shared, process.platform === 'win32' ? false : undefined);
     assert.equal(sharedFlag(() => { throw new Error('ENOTDIR'); }), undefined);
     assert.equal(sharedFlag(() => true), true);
   } finally { tmp.restore(); }
