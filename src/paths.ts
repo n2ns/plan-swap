@@ -108,6 +108,17 @@ export function sameRealPath(a: string, b: string): boolean {
   return comparablePath(realPath(a)) === comparablePath(realPath(b)) || sameFileId(a, b);
 }
 
+/** Whether dir is the default Claude directory by real path (another spelling of it, or a link to it, counts). */
+export function isDefaultClaudeDir(dir: string): boolean {
+  return sameRealPath(dir, defaultDir());
+}
+
+/** Throws t('account.containsDefaultDir') when dir contains the default Claude directory after resolving links. */
+export function assertNotDefaultClaudeAncestor(dir: string): void {
+  const def = defaultDir();
+  if (realPathInside(dir, def)) throw new Error(t('account.containsDefaultDir', { dir: path.resolve(dir), default: def }));
+}
+
 /** Whether `inner` lies strictly below `outer` after resolving links (case-insensitive on Windows); a folder that
  *  contains the default account (e.g. ~/.codex is a link into ~/.codex-foo/…) must never be deleted or listed. */
 export function realPathInside(outer: string, inner: string): boolean {
