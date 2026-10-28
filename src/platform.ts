@@ -189,6 +189,47 @@ function defaultPs(args: string[]): string {
 /** The start-time probe of this platform (Windows or macOS; the Linux checks read /proc instead). */
 export const platformStartTimes: StartTimeProbe = (pids) => (isMac() ? darwinStartTimes(pids) : windowsStartTimes(pids));
 
+/** Image names of live processes by pid (Windows: `Get-Process` ProcessName, without .exe; macOS: the basename of
+ *  `ps -o comm=`); exited pids are absent; undefined when the probe fails. */
+export type ProcessNameProbe = (pids: number[]) => Map<number, string> | undefined;
+
+/** Parses `<pid> <name>` lines (both probes); the name is the basename of whatever follows the pid. */
+export function parseProcessNames(out: string): Map<number, string> {
+  const names = new Map<number, string>();
+  for (const line of out.split(/\r?\n/)) {
+    const m = /^\s*(\d+)\s+(\S.*?)\s*$/.exec(line);
+    if (m) names.set(Number(m[1]), path.win32.basename(m[2]));
+  }
+  return names;
+}
+
+/** Windows: the image names of the given processes from one `Get-Process` call (see windowsStartTimes for the pid
+ *  filtering, the empty case and the failure result). */
+export function windowsProcessNames(pids: number[], run: (script: string) => string = defaultPowerShell): Map<number, string> | undefined {
+  const ids = pids.filter((p) => Number.isInteger(p) && p > 0);
+  if (ids.length === 0) return new Map();
+  const script = `Get-Process -Id ${ids.join(',')} -ErrorAction SilentlyContinue | ForEach-Object { '{0} {1}' -f $_.Id, $_.ProcessName }`;
+  try {
+    return parseProcessNames(run(script));
+  } catch {
+    return undefined;
+  }
+}
+
+/** macOS: the executable basenames of the given processes from one `ps -o pid=,comm=` call (see darwinStartTimes). */
+export function darwinProcessNames(pids: number[], run: (args: string[]) => string = defaultPs): Map<number, string> | undefined {
+  const ids = pids.filter((p) => Number.isInteger(p) && p > 0);
+  if (ids.length === 0) return new Map();
+  try {
+    return parseProcessNames(run(['-o', 'pid=,comm=', '-p', ids.join(',')]));
+  } catch {
+    return undefined;
+  }
+}
+
+/** The process-name probe of this platform (Windows or macOS; the Linux checks read /proc instead). */
+export const platformProcessNames: ProcessNameProbe = (pids) => (isMac() ? darwinProcessNames(pids) : windowsProcessNames(pids));
+
 /**
  * Windows only: removes the links (symlinks, junctions and opaque reparse folders) anywhere inside `dir`, walking the
  * whole tree without following a link, before a recursive delete, so a delete can never descend through a junction

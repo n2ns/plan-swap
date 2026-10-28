@@ -9,6 +9,7 @@ import {
   decodeJwtPayload, deleteCodexDir, ensureCodexDir, formatCodexPlan, readCodexAccountInfo, scanCodexDirs,
 } from '../src/codex/codexPaths';
 import { assertTempHome, makeTempHome, assertMode, LINUX_ONLY, onWindows, read, type TempHome } from './helpers';
+import type { ProcessNameProbe } from '../src/platform';
 
 let tmp: TempHome;
 let home: string;
@@ -285,6 +286,9 @@ describe('scanCodexDirs / checkCodexSafeToDelete / codexDaemonAlive / deleteCode
     fs.mkdirSync(dd);
   });
   const pidFile = (name: string, obj: unknown): void => { fs.writeFileSync(path.join(dd, name), typeof obj === 'string' ? obj : JSON.stringify(obj)); };
+  // Windows and macOS: the name probe says this process is codex (the real probe would say node and never runs in tests)
+  const codex: ProcessNameProbe = (pids) => new Map(pids.map((pid) => [pid, 'codex']));
+  const alive = (dir: string, procRoot = '/proc'): boolean => codexDaemonAlive(dir, procRoot, codex);
   const clear = (): void => { for (const f of fs.readdirSync(dd)) fs.unlinkSync(path.join(dd, f)); };
 
   test('scanCodexDirs excludes symlinks, non-directories, invalid names and the default directory realpath', () => {
@@ -316,8 +320,8 @@ describe('scanCodexDirs / checkCodexSafeToDelete / codexDaemonAlive / deleteCode
   });
   test('daemon: pid is this process with matching startTicks → alive, deletion refused', () => {
     pidFile('daemon.pid', { pid: process.pid, processIdentity: { startTicks: myTicks } });
-    assert.equal(codexDaemonAlive(path.join(home, '.codex-b_1')), true);
-    assert.match(checkCodexSafeToDelete(path.join(home, '.codex-b_1')) ?? '', /codex daemon is still running/);
+    assert.equal(alive(path.join(home, '.codex-b_1')), true);
+    assert.match(checkCodexSafeToDelete(path.join(home, '.codex-b_1'), codex) ?? '', /codex daemon is still running/);
     clear();
   });
   test('daemon: a missing procRoot counts a valid pid file as alive', () => {
@@ -329,9 +333,21 @@ describe('scanCodexDirs / checkCodexSafeToDelete / codexDaemonAlive / deleteCode
   });
   test('daemon: a processStartTime string field also works', () => {
     pidFile('app-server-updater.pid', { pid: process.pid, processStartTime: String(myTicks) });
-    assert.equal(codexDaemonAlive(path.join(home, '.codex-b_1')), true);
+    assert.equal(alive(path.join(home, '.codex-b_1')), true);
     clear();
   });
+  test('daemon on Windows / macOS: a live pid counts only as a codex process; a failed probe errs towards alive', { skip: process.platform === 'linux' && 'Windows and macOS pid reuse' }, () => {
+    pidFile('daemon.pid', { pid: process.pid, processIdentity: { startTicks: 1 } });
+    const probed: number[][] = [];
+    assert.equal(codexDaemonAlive(path.join(home, '.codex-b_1'), '/proc', (pids) => { probed.push(pids); return new Map(pids.map((pid) => [pid, 'node'])); }), false, 'the pid was reused by another program');
+    assert.deepEqual(probed, [[process.pid]]);
+    assert.equal(codexDaemonAlive(path.join(home, '.codex-b_1'), '/proc', (pids) => new Map(pids.map((pid) => [pid, 'codex-x86_64-pc-windows-msvc']))), true);
+    assert.equal(codexDaemonAlive(path.join(home, '.codex-b_1'), '/proc', () => undefined), true, 'a failed probe cannot rule the daemon out');
+    assert.equal(codexDaemonAlive(path.join(home, '.codex-b_1'), '/proc', () => new Map()), false, 'exited between the two checks');
+    assert.equal(checkCodexSafeToDelete(path.join(home, '.codex-b_1'), () => new Map([[process.pid, 'node']])), undefined);
+    clear();
+  });
+
   test('daemon: startTicks mismatch / pid missing → not alive', LINUX_ONLY, () => {
     pidFile('app-server.pid', { pid: process.pid, processIdentity: { startTicks: myTicks + 1 } });
     assert.equal(codexDaemonAlive(path.join(home, '.codex-b_1')), false);

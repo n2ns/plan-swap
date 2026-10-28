@@ -6,7 +6,8 @@
 
 - Switching a Claude account while a workspace setting (`.vscode/settings.json`) sets `CLAUDE_CONFIG_DIR` is now refused with a message naming that folder, instead of writing a user setting that the workspace value keeps overriding.
 - A usage query whose `claude` or `codex` process ignores the timeout no longer lets the next query start beside it: the process is ended, forcefully after a second, and the next one waits for its exit.
-- A linked Claude account no longer fails every link repair, switch and background check because one skill or plugin in the default account is a dangling link or unreadable: that entry is reported and left unlinked, the others are linked.
+- A linked Claude or Codex account no longer fails every link repair, switch and background check because one skill, plugin or theme entry in the default account is a dangling link or unreadable: that entry is reported and left unlinked, the others are linked.
+- On Windows and macOS a Codex daemon pid file left behind by a crashed daemon no longer blocks removing or linking that account forever once another program reuses the pid: the process must be a codex process.
 - An account whose folder is temporarily unreadable (no permission, an I/O error) keeps its entry and display name instead of being dropped at the next refresh; only a folder that is really gone is dropped.
 - A registered account whose folder was replaced by a file or made unreadable no longer keeps the whole account list from rendering.
 - An API card edit lock left behind by a crashed edit no longer blocks every later edit of that card: a lock older than a minute is taken over.

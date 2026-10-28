@@ -10,7 +10,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { t } from '../i18n';
 import { realPathInside, samePath, sameRealPath } from '../paths';
-import { comparablePath, fileLinksAvailable, isWindows, lacksProcfs } from '../platform';
+import { comparablePath, fileLinksAvailable, isWindows, lacksProcfs, platformProcessNames, type ProcessNameProbe } from '../platform';
 import {
   type MergeCtx, type MigrateReport, type ShareReport, copyTree, defaultFolder, emptyReport, freeName, linkEntry, recordLink, type LinkOptions,
   finalizeMerge, linksTo, lstatOrUndefined, markElsewhere, mergeEntry, mergeLines, missingLinkResult, moveEntry, record, rememberMove, sameContent,
@@ -94,6 +94,17 @@ function configRefusalNote(refusal: string): string {
 }
 
 // Creates a missing default entry empty; returns true when created
+// Whether target is a readable, searchable folder (links followed)
+function readableFolder(target: string): boolean {
+  try {
+    if (!fs.statSync(target).isDirectory()) return false;
+    fs.accessSync(target, fs.constants.R_OK | fs.constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function ensureDefaultEntry(target: string, kind: 'file' | 'dir'): boolean {
   if (lstatOrUndefined(target)) return false;
   if (kind === 'dir') fs.mkdirSync(target, { recursive: true, mode: 0o700 });
@@ -165,7 +176,8 @@ export function isSharedCodexAccount(dir: string): boolean {
  *  win32: *.sqlite entries are never linked; an existing link is removed by removeWindowsSqliteLink (reported under
  *  `refused` and `unlinked`, or `busy` when a side file is in use). options.check: read only, as in ensureClaudeLinks
  *  (a Windows database link is expected to be removable). Absent optional themes are omitted from checks, but
- *  initialized on refresh; existing themes must resolve to an accessible directory. dir === default → empty report.
+ *  initialized on refresh; existing themes that do not resolve to an accessible directory, a skills / plugins folder
+ *  that cannot be listed and a dangling child in it are reported under `unreadable` and left unlinked. dir === default → empty report.
  *  Provider-local config is omitted rather than linked or created in the default home. procRoot is for tests. */
 export function ensureCodexLinks(dir: string, options: LinkOptions = {}, procRoot = '/proc'): ShareReport {
   const report = emptyReport();
@@ -196,10 +208,13 @@ export function ensureCodexLinks(dir: string, options: LinkOptions = {}, procRoo
     const target = path.join(def, name);
     const link = path.join(acc, name);
     if (name === 'themes') {
-      // Custom themes need no source until first use; only add/switch/repair initialize the empty directory.
+      // Custom themes need no source until first use; only add/switch/repair initialize the empty directory. A default
+      // entry that is not a readable folder (a dangling link, a file, no permission) is reported and left unlinked
       if (lstatOrUndefined(target)) {
-        if (!fs.statSync(target).isDirectory()) throw new Error(t('share.badEntry', { file: target }));
-        fs.accessSync(target, fs.constants.R_OK | fs.constants.X_OK);
+        if (!readableFolder(target)) {
+          (report.unreadable ??= []).push(name);
+          continue;
+        }
       } else if (check) {
         if (lstatOrUndefined(link) && !linksTo(link, target)) report.conflicts.push(name);
         continue;
@@ -265,10 +280,22 @@ export function ensureCodexLinks(dir: string, options: LinkOptions = {}, procRoo
     const fresh = check && folder === 'fresh';
     const accFolder = path.join(acc, rel);
     const excluded = new Set<string>(excludes);
-    const children = check && !lstatOrUndefined(defFolder) ? [] : fs.readdirSync(defFolder);
+    let children: string[];
+    try {
+      children = check && !lstatOrUndefined(defFolder) ? [] : fs.readdirSync(defFolder);
+    } catch {
+      // The default entry is a file, a dangling link or unreadable: reported, the account folder is left as it is
+      (report.unreadable ??= []).push(rel);
+      continue;
+    }
     for (const child of children) {
       if (excluded.has(child)) continue;
       const target = path.join(defFolder, child);
+      // A broken child (a dangling link in the default folder) is reported and left unlinked; the others are linked
+      if (!lstatOrUndefined(target) || !fs.existsSync(target)) {
+        (report.unreadable ??= []).push(`${rel}/${child}`);
+        continue;
+      }
       record(report, `${rel}/${child}`, fresh ? missingLinkResult(target, { fileLinks }) : linkEntry(path.join(accFolder, child), target, check ? { fileLinks } : undefined));
     }
     if (fresh) continue;
@@ -297,9 +324,9 @@ export function codexBusyText(dir: string, name: string): string {
  *  'codex' (a ' (deleted)' suffix ignored) and whose environ CODEX_HOME resolves to dir (for the default dir: unset,
  *  empty or ~/.codex). Environment alone never matches, since shells and MCP servers inherit CODEX_HOME.
  *  Unreadable /proc entries are skipped; an unreadable procRoot counts as busy. Windows and macOS with the default
- *  procRoot: codexDaemonAlive only (the host adds its own open-terminal check). procRoot is for tests. */
-export function codexAccountBusy(dir: string, procRoot = '/proc'): boolean {
-  if (codexDaemonAlive(path.resolve(dir))) return true;
+ *  procRoot: codexDaemonAlive only (the host adds its own open-terminal check). procRoot and probe are for tests. */
+export function codexAccountBusy(dir: string, procRoot = '/proc', probe: ProcessNameProbe = platformProcessNames): boolean {
+  if (codexDaemonAlive(path.resolve(dir), '/proc', probe)) return true;
   // Windows and macOS cannot read another process's environment, and a codex process is nearly always running (the
   // Codex extension's app server, which serves the effective account the callers already refuse); they also refuse
   // while the account's own terminal is open

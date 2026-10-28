@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { realPathInside, samePath, sameRealPath } from '../paths';
-import { isMac, isWindows, lacksProcfs, pidAlive, stripBom, unlinkLinks, isPlainObject } from '../platform';
+import { isMac, isWindows, lacksProcfs, pidAlive, stripBom, unlinkLinks, isPlainObject, platformProcessNames, type ProcessNameProbe } from '../platform';
 import { t } from '../i18n';
 import { assertProviderFilesLocal, preserveProviderConfig } from './codexProvider';
 // Codex account directories, read-only account info from auth.json, the config.toml seed copy and deletion safety.
@@ -386,9 +386,21 @@ function toTicks(v: unknown): number | undefined {
   return undefined;
 }
 
+// Windows and macOS reuse pids, so a pid file left by a crashed daemon could name an unrelated live process and refuse
+// deletion forever: the pid must be alive and, when the probe answers, belong to a codex process (a failed probe errs
+// towards alive, a pid the probe no longer lists has exited meanwhile)
+function codexProcessAlive(pid: number, probe: ProcessNameProbe): boolean {
+  if (!pidAlive(pid)) return false;
+  const names = probe([pid]);
+  if (!names) return true;
+  const name = names.get(pid);
+  return name !== undefined && /codex/i.test(name);
+}
+
 // macOS: the daemon's pid file format there is unverified, so an existing file counts as alive unless it names a pid
-// (a JSON object's pid, or a bare number) that is not alive: an unrecognized or unreadable file errs towards "busy"
-function macPidFileAlive(file: string): boolean {
+// (a JSON object's pid, or a bare number) that is not a live codex process: an unrecognized or unreadable file errs
+// towards "busy"
+function macPidFileAlive(file: string, probe: ProcessNameProbe): boolean {
   let text: string;
   try {
     text = fs.readFileSync(file, 'utf8');
@@ -402,11 +414,11 @@ function macPidFileAlive(file: string): boolean {
   } catch {
     pid = undefined;
   }
-  return typeof pid === 'number' && Number.isInteger(pid) && pid > 0 ? pidAlive(pid) : true;
+  return typeof pid === 'number' && Number.isInteger(pid) && pid > 0 ? codexProcessAlive(pid, probe) : true;
 }
 
-function pidFileAlive(file: string, procRoot: string): boolean {
-  if (isMac() && procRoot === '/proc') return macPidFileAlive(file);
+function pidFileAlive(file: string, procRoot: string, probe: ProcessNameProbe): boolean {
+  if (isMac() && procRoot === '/proc') return macPidFileAlive(file, probe);
   let data: unknown;
   try {
     data = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -416,8 +428,8 @@ function pidFileAlive(file: string, procRoot: string): boolean {
   if (!isPlainObject(data)) return false;
   const pid = data.pid;
   if (typeof pid !== 'number' || !Number.isInteger(pid) || pid <= 0) return false;
-  // Windows: no start ticks to compare, so a live pid counts, with or without them
-  if (lacksProcfs() && procRoot === '/proc') return pidAlive(pid);
+  // Windows: no start ticks to compare, so a live codex process under that pid counts, with or without them
+  if (lacksProcfs() && procRoot === '/proc') return codexProcessAlive(pid, probe);
   const identity = data.processIdentity;
   const ticks = toTicks(isPlainObject(identity) ? identity.startTicks : undefined) ?? toTicks(data.processStartTime);
   if (ticks === undefined) return false;
@@ -430,14 +442,15 @@ function pidFileAlive(file: string, procRoot: string): boolean {
  * Whether a Codex daemon owns dir: any of DAEMON_PID_FILES under <dir>/app-server-daemon/ whose JSON pid and start
  * ticks (processIdentity.startTicks, else processStartTime) match the start time in <procRoot>/<pid>/stat.
  * A missing file, unparsable JSON or a missing pid / start ticks → not alive. A valid pid file while procRoot itself
- * is missing → alive (cannot be ruled out). Windows with the default procRoot: a live pid alone counts. macOS with
+ * is missing → alive (cannot be ruled out). Windows with the default procRoot: a live pid counts when the probe names
+ * it a codex process (or fails); pids are reused there, so an unrelated process under a stale pid does not. macOS with
  * the default procRoot (pid file format unverified, so it errs towards alive): an existing file is alive unless the
- * pid it names (JSON pid or a bare number) is not.
- * Depends on Codex's pid-file format; re-verify after Codex upgrades. procRoot is for tests.
+ * pid it names (JSON pid or a bare number) is not a live codex process.
+ * Depends on Codex's pid-file format; re-verify after Codex upgrades. procRoot and probe are for tests.
  */
-export function codexDaemonAlive(dir: string, procRoot = '/proc'): boolean {
+export function codexDaemonAlive(dir: string, procRoot = '/proc', probe: ProcessNameProbe = platformProcessNames): boolean {
   const base = path.join(dir, 'app-server-daemon');
-  return DAEMON_PID_FILES.some((f) => pidFileAlive(path.join(base, f), procRoot));
+  return DAEMON_PID_FILES.some((f) => pidFileAlive(path.join(base, f), procRoot, probe));
 }
 
 /**
@@ -446,7 +459,7 @@ export function codexDaemonAlive(dir: string, procRoot = '/proc'): boolean {
  * (del.isDefault); does not contain the default dir after resolving links (del.containsDefault); exists
  * (del.missing); not a symlink (del.symlink); a directory (del.notDir); no live daemon (del.daemonAlive).
  */
-export function checkCodexSafeToDelete(dir: string): string | undefined {
+export function checkCodexSafeToDelete(dir: string, probe: ProcessNameProbe = platformProcessNames): string | undefined {
   const home = path.resolve(os.homedir());
   const target = path.resolve(dir);
   // Only direct children of the home directory, so a symlinked parent cannot escape the home directory
@@ -463,15 +476,15 @@ export function checkCodexSafeToDelete(dir: string): string | undefined {
   }
   if (st.isSymbolicLink()) return t('del.symlink', { dir: target });
   if (!st.isDirectory()) return t('del.notDir', { dir: target });
-  if (codexDaemonAlive(target)) return t('del.daemonAlive', { dir: target });
+  if (codexDaemonAlive(target, '/proc', probe)) return t('del.daemonAlive', { dir: target });
   return undefined;
 }
 
 /** The only Codex deletion path: throws checkCodexSafeToDelete's reason; otherwise removes links inside the tree
  *  first (unlinkLinks, Windows only, so no junction is followed) and then fs.promises.rm recursive + force, which
  *  does not follow symlinks, so a shared account loses only its own files and links. */
-export async function deleteCodexDir(dir: string): Promise<void> {
-  const reason = checkCodexSafeToDelete(dir);
+export async function deleteCodexDir(dir: string, probe: ProcessNameProbe = platformProcessNames): Promise<void> {
+  const reason = checkCodexSafeToDelete(dir, probe);
   if (reason) throw new Error(reason);
   unlinkLinks(path.resolve(dir));
   await fs.promises.rm(path.resolve(dir), { recursive: true, force: true });

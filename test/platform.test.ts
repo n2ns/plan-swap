@@ -6,8 +6,8 @@ import { spawnSync } from 'node:child_process';
 import * as path from 'node:path';
 import { setLocale } from '../src/i18n';
 import {
-  comparablePath, createLink, darwinStartTimes, isSupportedPlatform, lacksProcfs, normalizeStartTime, parseDarwinStartTimes,
-  parseStartTimes, pidAlive, renameReplacing, stripBom, windowsStartTimes,
+  comparablePath, createLink, darwinProcessNames, darwinStartTimes, isSupportedPlatform, lacksProcfs, normalizeStartTime, parseDarwinStartTimes, parseProcessNames,
+  parseStartTimes, pidAlive, renameReplacing, stripBom, windowsProcessNames, windowsStartTimes,
 } from '../src/platform';
 import { decodeEnvOutput, getUserCodexHome, getUserEnv, setUserCodexHome, setUserEnv } from '../src/codex/codexWindows';
 import { manualRestartMessages } from '../src/codex/codexCommands';
@@ -89,6 +89,21 @@ describe('platform', () => {
     assert.match(script, /^Get-Process -Id 12,34 /);
     assert.deepEqual([...(windowsStartTimes([], () => { throw new Error('not called'); }) ?? [])], []);
     assert.equal(windowsStartTimes([5], () => { throw new Error('no powershell'); }), undefined);
+  });
+
+  test('process-name probes: parsing, basenames, validated pids and failure', () => {
+    assert.deepEqual([...parseProcessNames('4242 codex\r\n\r\nnoise\r\n7 C:\\Program Files\\x\\codex.exe\r\n9 /usr/local/bin/codex  \n')],
+      [[4242, 'codex'], [7, 'codex.exe'], [9, 'codex']]);
+    let script = '';
+    const names = windowsProcessNames([12, -1, 1.5, 34], (s) => { script = s; return '12 codex\r\n'; });
+    assert.deepEqual([...(names ?? [])], [[12, 'codex']]);
+    assert.match(script, /^Get-Process -Id 12,34 .*ProcessName/);
+    assert.deepEqual([...(windowsProcessNames([], () => { throw new Error('not called'); }) ?? [])], []);
+    assert.equal(windowsProcessNames([5], () => { throw new Error('no powershell'); }), undefined);
+    let args: string[] = [];
+    assert.deepEqual([...(darwinProcessNames([3, 0], (a) => { args = a; return '3 /Applications/Codex.app/codex\n'; }) ?? [])], [[3, 'codex']]);
+    assert.deepEqual(args, ['-o', 'pid=,comm=', '-p', '3']);
+    assert.equal(darwinProcessNames([5], () => { throw new Error('no ps'); }), undefined);
   });
 
   test('macOS start-time probe: lstart lines, collapsed whitespace, validated pids and failure', () => {

@@ -7,7 +7,7 @@ import * as fs from 'node:fs';
 import fsDefault from 'node:fs';
 import * as path from 'node:path';
 import { t } from '../src/i18n';
-import { tildify } from '../src/platform';
+import { tildify, type ProcessNameProbe } from '../src/platform';
 import {
   currentMacRcFile, macBlockFiles, macLoginShell, macRcFile, macShellKind, macStartupFiles, usesKeychainStore,
 } from '../src/codex/codexMac';
@@ -296,12 +296,18 @@ describe('busy and daemon checks on macOS', () => {
     assert.equal(codexAccountBusy(dir), false);
   });
 
-  test('a live pid counts with or without start ticks, as JSON or a bare number', () => {
+  test('a live codex pid counts with or without start ticks, as JSON or a bare number; another program under that pid does not', () => {
+    const codex: ProcessNameProbe = (pids) => new Map(pids.map((pid) => [pid, 'codex-aarch64-apple-darwin']));
+    const other: ProcessNameProbe = (pids) => new Map(pids.map((pid) => [pid, 'node']));
     pidFile(JSON.stringify({ pid: process.pid }));
-    assert.equal(codexDaemonAlive(dir), true);
-    assert.equal(codexAccountBusy(dir), true);
+    assert.equal(codexDaemonAlive(dir, '/proc', codex), true);
+    assert.equal(codexAccountBusy(dir, '/proc', codex), true);
+    assert.equal(codexDaemonAlive(dir, '/proc', other), false, 'the pid was reused');
+    assert.equal(codexAccountBusy(dir, '/proc', other), false);
+    assert.equal(codexDaemonAlive(dir, '/proc', () => undefined), true, 'a failed probe errs towards alive');
     pidFile(String(process.pid));
-    assert.equal(codexDaemonAlive(dir), true);
+    assert.equal(codexDaemonAlive(dir, '/proc', codex), true);
+    assert.equal(codexDaemonAlive(dir, '/proc', other), false);
     clear();
   });
 

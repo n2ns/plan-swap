@@ -116,6 +116,30 @@ describe('ensureCodexLinks', SHARING, () => {
     }
   });
 
+  test('a broken default themes entry, an unlistable skills folder and a dangling skills child are reported, the rest linked', POSIX_ONLY, () => {
+    const acc = newAccount('a');
+    const proc = fakeProc({});
+    write(path.join(def, 'skills', 'good', 'SKILL.md'), 'good');
+    fs.symlinkSync(path.join(home, 'missing'), path.join(def, 'skills', 'gone'));
+    const first = ensureCodexLinks(acc, {}, proc);
+    assert.deepEqual(first.unreadable, ['skills/gone']);
+    assert.ok(first.linked.includes('skills/good'));
+    assert.ok(!exists(path.join(acc, 'skills', 'gone')));
+    assert.ok(fs.lstatSync(path.join(acc, 'skills', 'good')).isSymbolicLink());
+    // The default themes folder becomes a dangling link, plugins/cache a file: both reported, nothing thrown
+    fs.rmdirSync(path.join(def, 'themes'));
+    fs.symlinkSync(path.join(home, 'absent-themes'), path.join(def, 'themes'));
+    fs.rmSync(path.join(def, 'plugins', 'cache'), { recursive: true, force: true });
+    write(path.join(def, 'plugins', 'cache'), 'not a folder');
+    for (const check of [true, false]) {
+      const before = snapshot(home);
+      const r = ensureCodexLinks(acc, { check }, proc);
+      assert.deepEqual([...r.unreadable ?? []].sort(), ['plugins/cache', 'skills/gone', 'themes'], `check=${check}`);
+      if (check) assert.deepEqual(snapshot(home), before);
+    }
+    assert.ok(describeShareReport(ensureCodexLinks(acc, { check: true }, proc)).includes('themes'));
+  });
+
   test('absent optional themes preserve an account directory or foreign link as a note', () => {
     const acc = newAccount('a');
     const proc = fakeProc({});
@@ -159,7 +183,7 @@ describe('ensureCodexLinks', SHARING, () => {
     assert.deepEqual(snapshot(home), before);
   });
 
-  test('invalid or dangling default themes remain check errors rather than optional absence', () => {
+  test('invalid or dangling default themes are reported as unreadable rather than optional absence, and change nothing', () => {
     const acc = newAccount('a');
     const proc = fakeProc({});
     ensureCodexLinks(acc, {}, proc);
@@ -167,12 +191,12 @@ describe('ensureCodexLinks', SHARING, () => {
     fs.rmdirSync(target);
     fs.writeFileSync(target, 'not a directory');
     let before = snapshot(home);
-    assert.throws(() => ensureCodexLinks(acc, { check: true }, proc), { message: t('share.badEntry', { file: target }) });
+    assert.deepEqual(ensureCodexLinks(acc, { check: true }, proc).unreadable, ['themes']);
     assert.deepEqual(snapshot(home), before);
     fs.unlinkSync(target);
     fs.symlinkSync(path.join(home, 'missing-themes'), target, 'junction');
     before = snapshot(home);
-    assert.throws(() => ensureCodexLinks(acc, { check: true }, proc), { code: 'ENOENT' });
+    assert.deepEqual(ensureCodexLinks(acc, { check: true }, proc).unreadable, ['themes']);
     assert.deepEqual(snapshot(home), before);
   });
 
