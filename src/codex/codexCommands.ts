@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { NAME_RE, caseVariantOf, findSameDir, realPathInside, samePath, sameRealPath } from '../paths';
+import { findSameDir, samePath, sameRealPath } from '../paths';
 import { lstatOrUndefined } from '../claudeShare';
 import { accountTerminalShell, bundledPathAssignment, hasControlChars, shQuote, windowsAccountEnv, windowsTerminalEnvSetting } from '../terminalShell';
 import { type AccountsPanel, type PanelSource, sharedFlag, viewInfo } from '../accountsPanel';
@@ -20,6 +20,7 @@ import {
 } from './codexPaths';
 import { codexAccountBusy, codexBusyText, copyCodexIndependent, ensureCodexLinks, isSharedCodexAccount, makeCodexIndependent, migrateCodexToShared } from './codexShare';
 import { describeShareReport } from '../shareReport';
+import { validateAccountName } from '../accountName';
 import {
   STATE_FILE,
   effectiveDir,
@@ -1039,20 +1040,5 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
 // or containing ~/.codex after resolving links, a Windows case variant of an existing folder, and a dir that is a link
 // or junction
 export function validateName(name: string, store: CodexAccountStore, labels: LabelStore): string | undefined {
-  if (!name) return t('name.empty');
-  if (!NAME_RE.test(name)) return t('name.invalid');
-  if (sameName(name, CODEX_DEFAULT_NAME)) return t('name.reserved', { name: CODEX_DEFAULT_NAME });
-  if (store.all().some((a) => sameName(a.name, name))) return t('name.exists');
-  if (store.all().some((a) => sameName(labelFor(a.name, labels), name))) return t('name.dupLabel');
-  const dir = codexAccountDir(name);
-  const def = codexDefaultDir();
-  if (sameRealPath(dir, def)) return t('name.sameAsDefaultDir');
-  if (realPathInside(dir, def)) return t('account.containsDefaultDir', { dir, default: def });
-  // Windows: a kept folder that differs only in case is the same folder (its old sign-in would be reused)
-  const variant = caseVariantOf(dir);
-  if (variant) return t('name.dirCaseDiffers', { dir: variant });
-  // scanCodexDirs skips links, so a linked directory must not be registered by adding its name either (sharing would
-  // write links into the folder it points at)
-  if (lstatOrUndefined(dir)?.isSymbolicLink()) return t('name.dirIsSymlink');
-  return undefined;
+  return validateAccountName(name, { defaultName: CODEX_DEFAULT_NAME, accountDir: codexAccountDir, defaultDir: codexDefaultDir, accounts: () => store.all(), labels });
 }

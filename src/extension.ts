@@ -13,7 +13,7 @@ import { ensureCodexLinks, isSharedCodexAccount } from './codex/codexShare';
 import { CLAUDE_REFRESH_ALL_USAGE_COMMAND, CLAUDE_REFRESH_USAGE_COMMAND, CODEX_REFRESH_ALL_USAGE_COMMAND, REFRESH_USAGE_COMMAND, StatusBar, claudeUsageFailureText, codexUsageFailureText, formatDuration, liveCodexUsage, relativeReset } from './statusBar';
 import { registerCommands } from './commands';
 import { affectsSetting, currentDir, isExplicitConfigDir, settingEnv, settingEnvNames } from './claudeSettings';
-import { findBundledClaude, oneAtATime, queryClaudeUsage, queryEach, readClaudeUsage, readUsageFetchedAt, type ClaudeQueryResult } from './claudeUsage';
+import { findBundledClaude, oneAtATime, queryClaudeUsage, readClaudeUsage, readUsageFetchedAt, type ClaudeQueryResult } from './claudeUsage';
 import { ClaudeUsageMonitor, ClaudeUsageQueries } from './claudeUsageMonitor';
 import { ClaudeSubscriptionChecks, queryClaudeSubscription } from './claudeSubscription';
 import { CodexAccountStore } from './codex/codexStore';
@@ -23,7 +23,7 @@ import { checkSharedInBackground, registerToolCommands, runTool, type TerminalCh
 import { LinkCheckNotices } from './linkCheck';
 import { registerDiagnosticsCommand } from './diagnosticsCommand';
 import type { PanelMode } from './protocol';
-import { joinSentences, setLocale, t } from './i18n';
+import { setLocale, t } from './i18n';
 import { isSupportedPlatform } from './platform';
 import { migrateLegacyLanguage, resolveLocale, watchLocale } from './i18nVscode';
 import { effectiveDir, migrateLegacyCodex, upgradeRcBlocks } from './codex/codexState';
@@ -37,6 +37,7 @@ import { codexDefaultDir, readCodexAccountInfo } from './codex/codexPaths';
 import { preserveProviderConfig } from './codex/codexProvider';
 import { IdentityWarnings, claudeIdentity, codexIdentity, type IdentitySource } from './identityWarnings';
 import { UsageCooldown } from './usageCooldown';
+import { cooldownSeconds, createRefreshAll } from './usageRefreshAll';
 import { OtherAccountChecks } from './usageOthers';
 import { LowUsageNotices, type NoticeProduct, type NoticeWindow } from './usageNotices';
 
@@ -103,24 +104,6 @@ function noticeSettings(): { enabled: boolean; threshold: number } {
   const valid = typeof value === 'number' && Number.isFinite(value) ? value : 20;
   return { enabled: config.get<boolean>('notifications.enabled', true) !== false, threshold: Math.min(99, Math.max(1, valid)) };
 }
-
-interface CooldownSplit<T> { due: T[]; skipped: T[]; waitMs: number }
-
-/** Refresh-all targets that may be queried now, and those still in the manual cooldown (with the shortest wait left). */
-function splitCooldown<T extends { dir: string }>(targets: T[], remaining: (dir: string) => number): CooldownSplit<T> {
-  const split: CooldownSplit<T> = { due: [], skipped: [], waitMs: Infinity };
-  for (const target of targets) {
-    const left = remaining(target.dir);
-    if (left > 0) {
-      split.skipped.push(target);
-      split.waitMs = Math.min(split.waitMs, left);
-    } else split.due.push(target);
-  }
-  return split;
-}
-
-/** Seconds shown for a cooldown wait, rounded up so "try again in N s" is never too early. */
-const cooldownSeconds = (ms: number): number => Math.max(1, Math.ceil(ms / 1000));
 
 /**
  * Activation order matters: the UI locale is resolved first so every later string is localized; an unsupported
@@ -344,143 +327,68 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   // before switching. The result for the current account is handed to the monitor, which owns its tooltip state.
   // A second call while one runs is ignored; the unregistered external directory is not a target; accounts still in
   // the manual cooldown are skipped (and counted in the final message); cancelling aborts the running claude process
-  let refreshingAll = false;
-  const refreshAllClaudeUsage = async (): Promise<void> => {
-    if (refreshingAll) return;
-    const eligible = store.all()
+  const refreshAllClaude = createRefreshAll<ClaudeQueryResult>({
+    keys: { none: 'claude.usageAllNone', progress: 'claude.usageAllProgress', cancelled: 'claude.usageAllCancelled', done: 'claude.usageAllDone', failed: 'claude.usageAllFailed' },
+    eligible: () => store.all()
       .filter((a) => claudeIdentity(a.dir) !== undefined)
-      .map((a) => ({ dir: a.dir, label: labelFor(a.name, claudeLabels) }));
-    if (!eligible.length) {
-      void vscode.window.showInformationMessage(t('claude.usageAllNone'));
-      return;
-    }
-    const { due: targets, skipped, waitMs } = splitCooldown(eligible, claudeCooldownLeft);
-    if (!targets.length) {
-      void vscode.window.showInformationMessage(t('usage.allCooldown', { seconds: cooldownSeconds(waitMs) }));
-      return;
-    }
-    const skippedNote = skipped.length ? [t('usage.allSkipped', { n: skipped.length })] : [];
-    refreshingAll = true;
-    try {
-      const abort = new AbortController();
-      const results = await vscode.window.withProgress(
-        { location: vscode.ProgressLocation.Notification, cancellable: true },
-        (progress, token) => {
-          // Cancelling also ends the claude process that is running now
-          token.onCancellationRequested(() => abort.abort());
-          return queryEach(targets, async (dir): Promise<ClaudeQueryResult> => {
-            // The current account was refreshed from its own button after this run started (running now, or within the
-            // cooldown): join it or take its result instead of querying it a second time
-            if (samePath(dir, currentDir())) {
-              const joined = claudeUsage.current().checking;
-              if (joined) await claudeUsage.refresh();
-              if (joined || claudeCooldownLeft(dir) > 0) {
-                const failure = claudeUsage.current().failure;
-                return failure && samePath(failure.dir, dir) ? { ok: false, reason: failure.reason, detail: failure.detail } : { ok: true };
-              }
-            }
-            const result = await claudeQuery(dir, abort.signal);
-            if (!abort.signal.aborted) claudeUsage.record(dir, result);
-            return result;
-          }, (target, index) => progress.report({
-            message: t('claude.usageAllProgress', { label: target.label, done: index + 1, total: targets.length }),
-            increment: index === 0 ? 0 : 100 / targets.length,
-          }), () => abort.signal.aborted);
-        },
-      );
-      panel.refresh();
-      statusBar.update();
-      // A query ended by the cancellation is neither a success nor a failure
-      const done = results.filter((r) => r.result.ok || r.result.detail !== 'cancelled' || !abort.signal.aborted);
-      const failed = done.filter((r) => !r.result.ok);
-      if (abort.signal.aborted) {
-        void vscode.window.showInformationMessage(joinSentences(t('claude.usageAllCancelled', { ok: done.length - failed.length, n: targets.length }), ...skippedNote));
-      } else if (!failed.length) {
-        void vscode.window.showInformationMessage(joinSentences(t('claude.usageAllDone', { n: results.length }), ...skippedNote));
+      .map((a) => ({ dir: a.dir, label: labelFor(a.name, claudeLabels) })),
+    cooldownLeft: claudeCooldownLeft,
+    query: async (dir, signal) => {
+      // The current account was refreshed from its own button after this run started (running now, or within the
+      // cooldown): join it or take its result instead of querying it a second time
+      if (samePath(dir, currentDir())) {
+        const joined = claudeUsage.current().checking;
+        if (joined) await claudeUsage.refresh();
+        if (joined || claudeCooldownLeft(dir) > 0) {
+          const failure = claudeUsage.current().failure;
+          return failure && samePath(failure.dir, dir) ? { ok: false, reason: failure.reason, detail: failure.detail } : { ok: true };
+        }
       }
-      if (!failed.length) return;
-      // At most three accounts are named so the notification stays readable
-      const named = failed.slice(0, 3).map(({ target, result }) => {
-        const text = result.ok ? '' : claudeUsageFailureText(result, readClaudeUsage(target.dir, isExplicitConfigDir(target.dir)) !== undefined);
-        return `${target.label} (${text})`;
-      });
-      if (failed.length > 3) named.push(t('claude.usageAllMore', { n: failed.length - 3 }));
-      void vscode.window.showWarningMessage(joinSentences(t('claude.usageAllFailed', { ok: done.length - failed.length, n: done.length, failures: named.join('; ') }), ...(abort.signal.aborted ? [] : skippedNote)));
-    } finally {
-      refreshingAll = false;
-    }
-  };
+      // Cancelling also ends the claude process that is running now
+      const result = await claudeQuery(dir, signal);
+      if (!signal.aborted) claudeUsage.record(dir, result);
+      return result;
+    },
+    failureText: (dir, result) => claudeUsageFailureText(result, readClaudeUsage(dir, isExplicitConfigDir(dir)) !== undefined),
+    afterRun: () => { panel.refresh(); statusBar.update(); },
+  });
   // Manual only: every registered signed-in ChatGPT Codex account, one codex process at a time. The effective account
   // goes through the monitor, which owns its tooltip state; the others are recorded as observations when their sign-in
-  // did not change while the query ran. Same re-entrancy, cooldown and cancellation rules as the Claude run; refused
-  // with a warning when Codex runs inside WSL
-  let refreshingAllCodex = false;
-  const refreshAllCodexUsage = async (): Promise<void> => {
-    if (!codex || !usage || refreshingAllCodex) return;
-    if (codexRunsInWsl()) {
-      warnCodexRunsInWsl();
-      return;
-    }
-    const eligible = codex.store.all()
+  // did not change while the query ran. Same re-entrancy, cooldown and cancellation rules as the Claude run (createRefreshAll);
+  // refused with a warning when Codex runs inside WSL
+  const refreshAllCodex = createRefreshAll<UsageResult>({
+    keys: { none: 'codex.usageAllNone', progress: 'codex.usageAllProgress', cancelled: 'codex.usageAllCancelled', done: 'codex.usageAllDone', failed: 'codex.usageAllFailed' },
+    eligible: () => (codex?.store.all() ?? [])
       .filter((a) => {
         if (preserveProviderConfig(a.dir)) return false;
         const info = readCodexAccountInfo(a.dir);
         return info.loggedIn && info.plan !== 'API key';
       })
-      .map((a) => ({ dir: a.dir, label: labelFor(a.name, codexLabels) }));
-    if (!eligible.length) {
-      void vscode.window.showInformationMessage(t('codex.usageAllNone'));
-      return;
-    }
-    const { due: targets, skipped, waitMs } = splitCooldown(eligible, (dir) => codexCooldown.remaining(dir));
-    if (!targets.length) {
-      void vscode.window.showInformationMessage(t('usage.allCooldown', { seconds: cooldownSeconds(waitMs) }));
-      return;
-    }
-    const skippedNote = skipped.length ? [t('usage.allSkipped', { n: skipped.length })] : [];
-    refreshingAllCodex = true;
-    try {
-      const abort = new AbortController();
-      const results = await vscode.window.withProgress(
-        { location: vscode.ProgressLocation.Notification, cancellable: true },
-        (progress, token) => {
-          // Cancelling also ends the codex process of an account other than the effective one
-          token.onCancellationRequested(() => abort.abort());
-          return queryEach(targets, async (dir): Promise<UsageResult> => {
-            if (!samePath(dir, effectiveDir())) {
-              const result = await queryCodexAccount(dir, (d) => codexQuery(d, abort.signal), (d, r, stamp) => usageHistory.record(d, r, stamp));
-              // The history is not watched: show this account's row now instead of after the whole run
-              panel.refresh();
-              return result;
-            }
-            // A refresh from its own button that ran after this run started is not repeated; a running one is joined
-            if (usage.current().checking || codexCooldown.remaining(dir) === 0) await usage.refresh();
-            // No result: the monitor discarded the response because the sign-in changed while it ran
-            return usage.current().result ?? { ok: false, reason: 'failed', detail: 'discarded' };
-          }, (target, index) => progress.report({
-            message: t('codex.usageAllProgress', { label: target.label, done: index + 1, total: targets.length }),
-            increment: index === 0 ? 0 : 100 / targets.length,
-          }), () => abort.signal.aborted);
-        },
-      );
-      panel.refresh();
-      statusBar.update();
-      // A query ended by the cancellation is neither a success nor a failure
-      const done = results.filter((r) => r.result.ok || r.result.detail !== 'cancelled' || !abort.signal.aborted);
-      const failed = done.filter((r) => !r.result.ok);
-      if (abort.signal.aborted) {
-        void vscode.window.showInformationMessage(joinSentences(t('codex.usageAllCancelled', { ok: done.length - failed.length, n: targets.length }), ...skippedNote));
-      } else if (!failed.length) {
-        void vscode.window.showInformationMessage(joinSentences(t('codex.usageAllDone', { n: results.length }), ...skippedNote));
+      .map((a) => ({ dir: a.dir, label: labelFor(a.name, codexLabels) })),
+    cooldownLeft: (dir) => codexCooldown.remaining(dir),
+    query: async (dir, signal) => {
+      if (!samePath(dir, effectiveDir())) {
+        // Cancelling also ends the codex process of an account other than the effective one
+        const result = await queryCodexAccount(dir, (d) => codexQuery(d, signal), (d, r, stamp) => usageHistory.record(d, r, stamp));
+        // The history is not watched: show this account's row now instead of after the whole run
+        panel.refresh();
+        return result;
       }
-      if (!failed.length) return;
-      // At most three accounts are named so the notification stays readable
-      const named = failed.slice(0, 3).map(({ target, result }) => `${target.label} (${result.ok ? '' : codexUsageFailureText(result)})`);
-      if (failed.length > 3) named.push(t('claude.usageAllMore', { n: failed.length - 3 }));
-      void vscode.window.showWarningMessage(joinSentences(t('codex.usageAllFailed', { ok: done.length - failed.length, n: done.length, failures: named.join('; ') }), ...(abort.signal.aborted ? [] : skippedNote)));
-    } finally {
-      refreshingAllCodex = false;
+      // A refresh from its own button that ran after this run started is not repeated; a running one is joined
+      if (usage!.current().checking || codexCooldown.remaining(dir) === 0) await usage!.refresh();
+      // No result: the monitor discarded the response because the sign-in changed while it ran
+      return usage!.current().result ?? { ok: false, reason: 'failed', detail: 'discarded' };
+    },
+    failureText: (_dir, result) => codexUsageFailureText(result),
+    afterRun: () => { panel.refresh(); statusBar.update(); },
+  });
+  const refreshAllCodexUsage = async (): Promise<void> => {
+    if (!codex || !usage) return;
+    if (codexRunsInWsl()) {
+      warnCodexRunsInWsl();
+      return;
     }
+    await refreshAllCodex.run();
   };
   // Manual single-account refreshes waiting or running, per product (refresh-all has its own flag)
   const manualRefreshes: Record<PanelMode, number> = { claude: 0, codex: 0 };
@@ -496,8 +404,8 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   // planswap.usageAutoRefreshCurrentOnly; a run also stops when the window loses focus or automatic checks are turned off
   const othersAllowed = (product: PanelMode, refreshingAllOf: () => boolean) => (): boolean =>
     vscode.window.state.focused && usageSchedule(product).auto && !usageCurrentOnly() && !refreshingAllOf() && manualRefreshes[product] === 0;
-  const claudeOthersAllowed = othersAllowed('claude', () => refreshingAll);
-  const codexOthersAllowed = othersAllowed('codex', () => refreshingAllCodex);
+  const claudeOthersAllowed = othersAllowed('claude', refreshAllClaude.running);
+  const codexOthersAllowed = othersAllowed('codex', refreshAllCodex.running);
   const latest = (...times: Array<number | undefined>): number | undefined => {
     const known = times.filter((at): at is number => at !== undefined);
     return known.length ? Math.max(...known) : undefined;
@@ -678,7 +586,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
       }
       await manualRefresh('claude', () => claudeUsage.refresh());
     }),
-    vscode.commands.registerCommand(CLAUDE_REFRESH_ALL_USAGE_COMMAND, () => refreshAllClaudeUsage()),
+    vscode.commands.registerCommand(CLAUDE_REFRESH_ALL_USAGE_COMMAND, () => refreshAllClaude.run()),
     ...(usage
       ? [vscode.commands.registerCommand(REFRESH_USAGE_COMMAND, async () => {
         if (preserveProviderConfig(effectiveDir())) return;
