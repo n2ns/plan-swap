@@ -21,6 +21,7 @@ import {
 import { codexAccountBusy, codexBusyText, copyCodexIndependent, ensureCodexLinks, isSharedCodexAccount, makeCodexIndependent, migrateCodexToShared } from './codexShare';
 import { describeShareReport } from '../shareReport';
 import { validateAccountName } from '../accountName';
+import { handleAccountMessage, type AccountMessageOps } from '../panelMessages';
 import {
   STATE_FILE,
   effectiveDir,
@@ -46,7 +47,7 @@ import { askCopyFallback } from '../linkPolicy';
 import { type ServerKind, canAutoRestart, detectServerKind, executeRestart, planRestart } from './codexServer';
 import type { CodexAccountStore } from './codexStore';
 import { codexRunsInWsl, warnCodexRunsInWsl } from './codexSettings';
-import { runTool, type TerminalCheck, type ToolDeps } from '../tools';
+import { type TerminalCheck, type ToolDeps } from '../tools';
 import { joinSentences, t } from '../i18n';
 import type { CodexUsageHistory } from './codexUsageHistory';
 import {
@@ -58,7 +59,8 @@ import { fetchModels, ModelListError } from './providerModels';
 import type { ModelCache } from './modelCache';
 // Codex commands, panel message handling and the Codex panel data source. Command ids and restart behavior:
 // codex-design.md section 8 and docs/features.md. QuickPick items, messages and terminal names use labelFor; logic
-// uses account name and dir. Panel account messages resolve their directory through panel.resolve.
+// uses account name and dir. Panel account messages resolve their directory through panel.resolve; the messages both
+// tabs handle alike go through panelMessages.handleAccountMessage with this module's operations.
 
 export interface CodexDeps {
   store: CodexAccountStore;
@@ -895,6 +897,14 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     if (login) void vscode.window.showInformationMessage(t('account.loginTip', { vendor: 'Codex' }));
   }
 
+  // The messages both tabs handle alike (panelMessages.handleAccountMessage), with this module's operations
+  const messageOps: AccountMessageOps<CodexAccount> = {
+    mode: MODE, panel, store, exclusions, tools, accountDir: codexAccountDir, isCard: preserveProviderConfig,
+    providerErrorText, readProviderKey,
+    isProviderConfigError: (err): err is ProviderConfigError => err instanceof ProviderConfigError,
+    addAccount, listProviderModels, saveProvider, shareAccount, unshareAccount, rename, removeAccount,
+  };
+
   // Panel messages
   panel.setHandler(MODE, async (msg: FromWebview) => {
     switch (msg.type) {
@@ -912,86 +922,14 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
         if (a) openTerminal(a, !preserveProviderConfig(a.dir) && !codexLoggedIn(a.dir) && !usesKeychainStore(a.dir));
         return;
       }
-      case 'remove': {
-        const a = panel.resolve(MODE, msg.dir);
-        if (a?.kind === 'named') await removeAccount(a, true);
-        return;
-      }
-      case 'add': {
-        // Any failure still answers, so the panel never keeps waiting for the result
-        let error: string | undefined;
-        try {
-          error = await addAccount(msg.name.trim(), msg.shared !== false, msg.provider);
-        } catch (err) {
-          error = msg.provider ? t('codex.provider.createFailed', { dir: codexAccountDir(msg.name.trim()) }) : errText(err);
-        }
-        panel.post({ type: 'addResult', mode: MODE, error });
-        return;
-      }
-      case 'providerModels': {
-        const result = await listProviderModels(msg);
-        panel.post({ type: 'providerModelsResult', mode: MODE, request: msg.request, ...result });
-        return;
-      }
-      case 'saveProvider': {
-        const a = panel.resolve(MODE, msg.dir);
-        const error = a?.kind === 'named' && preserveProviderConfig(a.dir) ? await saveProvider(a, msg) : providerErrorText('unmanaged');
-        panel.post({ type: 'saveProviderResult', mode: MODE, dir: msg.dir, error });
-        return;
-      }
-      case 'revealProviderKey': {
-        // The eye button: the only path of a saved key to the page, on this explicit request only
-        const a = panel.resolve(MODE, msg.dir);
-        let key: string | undefined;
-        let error: string | undefined;
-        if (a?.kind === 'named' && preserveProviderConfig(a.dir)) {
-          try { key = readProviderKey(a.dir) || undefined; } catch (err) { error = providerErrorText(err instanceof ProviderConfigError ? err.code : 'file'); }
-        } else error = providerErrorText('unmanaged');
-        panel.post({ type: 'providerKeyResult', mode: MODE, dir: msg.dir, key, error });
-        return;
-      }
-      case 'share': {
-        const a = panel.resolve(MODE, msg.dir);
-        if (a?.kind === 'named') await shareAccount(a);
-        return;
-      }
-      case 'unshare': {
-        const a = panel.resolve(MODE, msg.dir);
-        if (a?.kind === 'named') await unshareAccount(a);
-        return;
-      }
-      case 'rename': {
-        let error: string | undefined;
-        try {
-          error = await rename(msg.dir, msg.label);
-        } catch (err) {
-          error = errText(err);
-        }
-        panel.post({ type: 'renameResult', mode: MODE, dir: msg.dir, error });
-        return;
-      }
-      case 'recommendExclude': {
-        const a = panel.resolve(MODE, msg.dir);
-        if (!a || a.kind === 'external' || preserveProviderConfig(a.dir)) return;
-        await exclusions?.set(a.name, msg.excluded !== false);
-        panel.refresh();
-        return;
-      }
-      case 'reorder': {
-        const names = msg.dirs.map((dir) => panel.resolve(MODE, dir)).filter((a) => a && a.kind !== 'external').map((a) => a!.name);
-        await store.setOrder(names);
-        panel.refresh();
-        return;
-      }
       case 'reload':
       case 'dismissBanner':
         return;
-      case 'tool':
-        await runTool(MODE, msg.tool, tools);
+      default:
+        await handleAccountMessage(msg, messageOps);
         return;
     }
   });
-
   // Command Palette entries. Rows are matched like the panel does (findSameDir), so another spelling of the effective
   // directory neither adds an external entry nor offers a switch to the account already effective and selected
   const indexOf = (all: CodexAccount[], dir: string): number => findSameDir(all.map((a) => a.dir), dir);
