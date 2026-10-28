@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type * as vscode from 'vscode';
 import { RecommendDismissals } from '../src/recommend';
-import { AccountsPanel, applySidebarDisplay, claudePanelSource, recommendationThreshold, sidebarDisplay, type PanelSource } from '../src/accountsPanel';
+import { AccountsPanel, applySidebarDisplay, claudePanelSource, recommendationThreshold, sharedFlag, sidebarDisplay, type PanelSource } from '../src/accountsPanel';
 import { usageThresholds } from '../src/usageSettings';
 import { AccountStore } from '../src/accounts';
 import { LabelStore } from '../src/labels';
@@ -388,4 +388,21 @@ test('closing the recommendation card hides it until the recommendation changes,
     currentUsed = 95;
     assert.deepEqual(recommended(), ['/h/.claude-work', '/h/.claude-work']);
   } finally { h.panel.dispose(); resetConfig(); }
+});
+
+test('a registered account whose directory became a regular file still renders as a row (shared unknown)', async () => {
+  const tmp = makeTempHome('panel-degraded');
+  try {
+    const dir = path.join(tmp.home, '.claude-file');
+    fs.writeFileSync(dir, 'not a directory');
+    const memento = new MemoryMemento();
+    const store = new AccountStore(memento);
+    await memento.update('accounts', [{ name: 'file', dir }]);
+    const rows = claudePanelSource(store, new LabelStore(memento, 'claude.labels')).accounts();
+    const row = rows.find((r) => r.dir === dir);
+    assert.ok(row, 'the row is rendered');
+    assert.equal(row.shared, undefined);
+    assert.equal(sharedFlag(() => { throw new Error('ENOTDIR'); }), undefined);
+    assert.equal(sharedFlag(() => true), true);
+  } finally { tmp.restore(); }
 });

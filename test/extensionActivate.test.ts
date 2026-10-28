@@ -16,8 +16,14 @@ import { makeTempHome, MemoryMemento, POSIX_ONLY, type TempHome } from './helper
 
 let tmp: TempHome;
 let subscriptions: Array<{ dispose(): unknown }> = [];
-beforeEach(() => { tmp = makeTempHome('activate'); });
+// Activation refreshes the public model lists in the background: no test may reach the network
+const realFetch = globalThis.fetch;
+beforeEach(() => {
+  tmp = makeTempHome('activate');
+  globalThis.fetch = async () => { throw new Error('tests are offline'); };
+});
 afterEach(() => {
+  globalThis.fetch = realFetch;
   for (const s of subscriptions) s.dispose();
   subscriptions = [];
   resetConfig();

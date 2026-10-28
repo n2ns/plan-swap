@@ -68,7 +68,7 @@ export interface UsageOptions {
   now?: () => number;
   /** Sent as clientInfo.version; default '0' */
   clientVersion?: string;
-  /** Exit grace after stdin closes, and maximum wait after termination; default 1000 for each phase. */
+  /** Exit grace after stdin closes, then after SIGTERM (before SIGKILL), then the maximum wait after SIGKILL; default 1000 for each phase. */
   graceMs?: number;
   /** Platform override for tests; default process.platform */
   platform?: NodeJS.Platform;
@@ -200,7 +200,8 @@ const unfinishedChildren = new Set<UsageChild>();
 
 /**
  * Starts `codex app-server` with CODEX_HOME=dir, performs the handshake, reads the limits, and always ends the child
- * it started (closes stdin, then kills it if it has not exited within graceMs). Only that child is ever signalled.
+ * it started (closes stdin, then SIGTERM if it has not exited within graceMs, then SIGKILL after another graceMs).
+ * Only that child is ever signalled.
  * Returns after exit or bounded cleanup; if termination is unconfirmed, later queries start nothing until it exits.
  * - No <dir>/auth.json → notLoggedIn without starting anything (existence check only; tokens are never read).
  * - Windows: when the default `codex` is not found and a PATH entry (quotes allowed) holds codex.cmd, runs the fixed
@@ -369,20 +370,33 @@ function attempt(
         // Failed spawns emit close but no exit; this also proves there is no live process left to serialize.
         child.once('close', onCleanupExit);
         const graceMs = options.graceMs ?? 1000;
-        cleanupTimer = setTimeout(() => {
-          // Exit status can be set before the exit/close event is delivered, especially after an event-loop stall.
-          if (child.exitCode !== null || child.signalCode !== null) {
-            complete();
-            return;
-          }
-          // A failed kill or a child that never reports exit must not hold the queue forever.
-          cleanupTimer = setTimeout(() => complete(true), graceMs);
+        const exited = (): boolean => child.exitCode !== null || child.signalCode !== null;
+        const tree = platform === 'win32' && spawnOptions.shell && child.pid !== undefined;
+        const end = (signal?: NodeJS.Signals): void => {
           try {
-            if (platform === 'win32' && spawnOptions.shell && child.pid !== undefined) (options.killTree ?? taskkillTree)(child.pid);
-            else child.kill();
+            if (tree) (options.killTree ?? taskkillTree)(child.pid!);
+            else child.kill(signal);
           } catch {
             // The bounded wait reports cleanup failure unless the child still exits.
           }
+        };
+        cleanupTimer = setTimeout(() => {
+          // Exit status can be set before the exit/close event is delivered, especially after an event-loop stall.
+          if (exited()) {
+            complete();
+            return;
+          }
+          // SIGTERM (the shim's tree forcefully on Windows); a child still running after graceMs gets SIGKILL, and
+          // one that never reports exit after another graceMs must not hold the queue forever
+          end();
+          cleanupTimer = setTimeout(() => {
+            if (exited() || tree) {
+              complete(!exited());
+              return;
+            }
+            end('SIGKILL');
+            cleanupTimer = setTimeout(() => complete(!exited()), graceMs);
+          }, graceMs);
         }, graceMs);
       }
       try {

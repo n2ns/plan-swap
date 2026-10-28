@@ -8,7 +8,8 @@ export type PanelMode = 'claude' | 'codex';
 // Setting planswap.usageDisplay: usage bars and percentages show what is left (the default) or what is used
 export type UsageDisplay = 'remaining' | 'used';
 // openCodexWslSetting: the Settings UI at the Codex extension's run-in-WSL setting (the banner's button)
-export type ToolId = 'openGlobalMd' | 'openSettings' | 'reloadWindow' | 'restartExtHost' | 'cliVersions' | 'sync' | 'updateCli' | 'openHelp' | 'openStar' | 'refreshUsage' | 'refreshAllUsage' | 'openCodexWslSetting';
+export const TOOL_IDS = ['openGlobalMd', 'openSettings', 'reloadWindow', 'restartExtHost', 'cliVersions', 'sync', 'updateCli', 'openHelp', 'openStar', 'refreshUsage', 'refreshAllUsage', 'openCodexWslSetting'] as const;
+export type ToolId = typeof TOOL_IDS[number];
 
 export interface AccountView {
   kind: AccountKind;

@@ -6,6 +6,8 @@ export interface UpdateRecord { section: string; key: string; value: unknown; ta
 
 const store = new Map<string, Map<string, unknown>>();
 const defaults = new Map<string, Map<string, unknown>>();
+// Workspace-scoped values (inspect().workspaceValue), which override the global value in get()
+const workspaceStore = new Map<string, Map<string, unknown>>();
 export const updates: UpdateRecord[] = [];
 
 /** Sets the value returned by getConfiguration(section).get(key); undefined means not set */
@@ -20,9 +22,16 @@ export function setConfigDefault(section: string, key: string, value: unknown): 
   defaults.get(section)!.set(key, value);
 }
 
+/** Sets a workspace-level value: inspect(key).workspaceValue, and what get(key) returns (it overrides the global value). */
+export function setWorkspaceConfig(section: string, key: string, value: unknown): void {
+  if (!workspaceStore.has(section)) workspaceStore.set(section, new Map());
+  workspaceStore.get(section)!.set(key, value);
+}
+
 export function resetConfig(): void {
   store.clear();
   defaults.clear();
+  workspaceStore.clear();
   updates.length = 0;
 }
 
@@ -48,11 +57,12 @@ export const workspace = {
   getConfiguration(section: string) {
     return {
       get<T>(key: string, defaultValue?: T): T | undefined {
-        return (store.get(section)?.get(key) as T | undefined) ?? (defaults.get(section)?.get(key) as T | undefined) ?? defaultValue;
+        return (workspaceStore.get(section)?.get(key) as T | undefined) ?? (store.get(section)?.get(key) as T | undefined)
+          ?? (defaults.get(section)?.get(key) as T | undefined) ?? defaultValue;
       },
       inspect<T>(key: string) {
         return { key: `${section}.${key}`, defaultValue: defaults.get(section)?.get(key) as T | undefined, globalValue: store.get(section)?.get(key) as T | undefined,
-          workspaceValue: undefined, workspaceFolderValue: undefined };
+          workspaceValue: workspaceStore.get(section)?.get(key) as T | undefined, workspaceFolderValue: undefined };
       },
       async update(key: string, value: unknown, target: unknown): Promise<void> {
         setConfig(section, key, value);

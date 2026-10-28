@@ -4,6 +4,7 @@ import * as fs from 'node:fs';
 import fsModule from 'node:fs';
 import * as path from 'node:path';
 import { setLocale, t } from '../src/i18n';
+import { describeShareReport } from '../src/shareReport';
 import { execFileSync, spawn } from 'node:child_process';
 import { pidAlive, type StartTimeProbe } from '../src/platform';
 import {
@@ -408,6 +409,31 @@ describe('ensureClaudeLinks', SHARING, () => {
     assert.equal(exists(path.join(acc, 'skills', 'two')), false);
     assert.ok(fs.lstatSync(path.join(acc, 'skills', 'gone')).isSymbolicLink());
     assert.equal(exists(path.join(def, 'projects')), false);
+  });
+
+  test('a broken or unreadable child of skills / plugins is reported and left unlinked; its siblings are still linked', POSIX_ONLY, () => {
+    const acc = accountDir('child-errors');
+    const procRoot = fakeProc({});
+    write(path.join(def, 'skills', 'good', 'SKILL.md'), 'good');
+    fs.symlinkSync(path.join(home, 'absent'), path.join(def, 'skills', 'dangling'));
+    fs.symlinkSync(path.join(def, 'skills', 'cycle'), path.join(def, 'skills', 'cycle'));
+    fs.mkdirSync(path.join(def, 'skills', 'closed'));
+    fs.writeFileSync(path.join(def, 'skills', 'closed', 'SKILL.md'), 'closed');
+    fs.chmodSync(path.join(def, 'skills', 'closed'), 0);
+    const unreadable = process.getuid?.() === 0 ? ['skills/cycle', 'skills/dangling'] : ['skills/closed', 'skills/cycle', 'skills/dangling'];
+    try {
+      for (const check of [true, false]) {
+        const r = ensureClaudeLinks(acc, procRoot, { check, entries: ['skills'] });
+        assert.deepEqual([...r.unreadable ?? []].sort(), unreadable, `check=${check}`);
+        assert.deepEqual(r.linked, process.getuid?.() === 0 ? ['skills/closed', 'skills/good'] : ['skills/good'], `check=${check}`);
+        assert.deepEqual(r.conflicts, []);
+      }
+      assert.ok(isLinkTo(path.join(acc, 'skills', 'good'), path.join(def, 'skills', 'good')));
+      for (const name of unreadable) assert.equal(exists(path.join(acc, name)), false, name);
+      assert.ok(describeShareReport(ensureClaudeLinks(acc, procRoot, { check: true, entries: ['skills'] })).includes('skills/dangling'));
+    } finally {
+      fs.chmodSync(path.join(def, 'skills', 'closed'), 0o700);
+    }
   });
 
   test('incorrect source types and dangling or cyclic sources fail without replacing them', POSIX_ONLY, () => {

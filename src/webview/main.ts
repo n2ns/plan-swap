@@ -1765,6 +1765,10 @@ window.addEventListener('message', (e: MessageEvent<ToWebview>) => {
       send({ type: 'setTab', mode: msg.mode });
     }
     pages[msg.mode].focusAdd();
+  } else {
+    // Every host message type is handled above; a new one is a type error here rather than a silently dropped message
+    const unhandled: never = msg;
+    console.warn('[planswap] unhandled host message', unhandled);
   }
 });
 

@@ -359,6 +359,24 @@ describe('readCodexUsage', () => {
     });
   }
 
+  test('a child that ignores SIGTERM is sent SIGKILL after the grace period and the query waits for its exit', async () => {
+    const f = fakeSpawn(server((id) => ({ id, result: LIMITS })));
+    const signals: Array<NodeJS.Signals | undefined> = [];
+    const spawn: UsageOptions['spawn'] = (command, args, options) => {
+      const child = f.spawn(command, args, options) as FakeChild;
+      child.kill = (signal?: NodeJS.Signals) => {
+        signals.push(signal);
+        if (signal === 'SIGKILL') setImmediate(() => { child.signalCode = 'SIGKILL'; child.emit('exit', null, 'SIGKILL'); });
+        return true;
+      };
+      return child;
+    };
+    assert.equal((await readCodexUsage(acct, { ...base(spawn), graceMs: 5 })).ok, true);
+    assert.deepEqual(signals, [undefined, 'SIGKILL']);
+    assert.equal(f.children[0]!.signalCode, 'SIGKILL');
+    assert.equal((await readCodexUsage(acct, base(spawn))).ok, true, 'nothing blocks the next query');
+  });
+
   test('unconfirmed termination returns a bounded failure and blocks spawning until the surviving child exits', async () => {
     const f = fakeSpawn(server((id) => ({ id, result: LIMITS })));
     const spawn: UsageOptions['spawn'] = (command, args, options) => {
@@ -370,7 +388,7 @@ describe('readCodexUsage', () => {
       assert.deepEqual(await readCodexUsage(acct, { ...base(spawn), graceMs: 5 }), {
         ok: false, reason: 'failed', detail: 'usage process did not exit after termination',
       });
-      assert.equal(f.children[0]!.killed, 1);
+      assert.equal(f.children[0]!.killed, 2, 'SIGTERM, then SIGKILL');
       assert.deepEqual(await readCodexUsage(acct, base(spawn)), {
         ok: false, reason: 'failed', detail: 'previous usage process is still exiting',
       });

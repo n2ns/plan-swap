@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { NAME_RE, caseVariantOf, findSameDir, realPathInside, samePath, sameRealPath } from '../paths';
 import { lstatOrUndefined } from '../claudeShare';
 import { accountTerminalShell, bundledPathAssignment, hasControlChars, shQuote, windowsAccountEnv, windowsTerminalEnvSetting } from '../terminalShell';
-import { type AccountsPanel, type PanelSource, viewInfo } from '../accountsPanel';
+import { type AccountsPanel, type PanelSource, sharedFlag, viewInfo } from '../accountsPanel';
 import { labelFor, sameName, type LabelStore, EXTERNAL_NAME } from '../labels';
 import type { RecommendExclusions } from '../recommend';
 import type { AccountView, ApiCardInput, ApiServiceView, FromWebview, RestartInfo } from '../protocol';
@@ -246,7 +246,7 @@ export function codexPanelSource(store: CodexAccountStore, labels: LabelStore, h
       ...codexRowInfo(a.dir),
       isCurrent: i === curIdx,
       isSelected: i === selIdx,
-      shared: a.name === CODEX_DEFAULT_NAME ? undefined : isSharedCodexAccount(a.dir),
+      shared: a.name === CODEX_DEFAULT_NAME ? undefined : sharedFlag(() => isSharedCodexAccount(a.dir)),
       recommendExcluded: exclusions?.has(a.name) || undefined,
     }));
     if (!rows.some((r) => r.isCurrent)) {

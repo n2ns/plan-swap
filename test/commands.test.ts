@@ -18,7 +18,7 @@ import { isExplicitConfigDir } from '../src/claudeSettings';
 import { usageEnv } from '../src/claudeUsage';
 import type { FromWebview, ToWebview } from '../src/protocol';
 import type { StatusBar } from '../src/statusBar';
-import { commands, resetConfig, setConfig, updates, window, type StubTerminal } from './stubs/vscode';
+import { commands, resetConfig, setConfig, setWorkspaceConfig, updates, window, type StubTerminal } from './stubs/vscode';
 import { makeTempHome, MemoryMemento, POSIX_ONLY, snapshot, type TempHome } from './helpers';
 
 let tmp: TempHome;
@@ -656,6 +656,23 @@ describe('panel message handlers (Claude)', () => {
       await h.handle({ type: 'switch', mode: 'claude', dir });
       assert.equal(asked(info.mock.calls), 1, 'no second confirmation');
       assert.equal(configured(), dir);
+    } finally {
+      h.dispose();
+    }
+  });
+
+  test('switch is refused while a workspace setting overrides CLAUDE_CONFIG_DIR, naming that folder', async (ctx) => {
+    const h = harness();
+    const dir = await add(h, 'blocked', false);
+    const ws = path.join(tmp.home, '.claude-ws');
+    const error = ctx.mock.method(window, 'showErrorMessage', async () => undefined);
+    try {
+      setConfig('planswap', CONFIRM_SWITCH_SETTING, false);
+      setWorkspaceConfig('claudeCode', 'environmentVariables', [{ name: 'CLAUDE_CONFIG_DIR', value: ws }]);
+      const before = updates.length;
+      await h.handle({ type: 'switch', mode: 'claude', dir });
+      assert.deepEqual(error.mock.calls.map((c) => c.arguments[0]), [t('claude.workspaceOverride', { dir: ws })]);
+      assert.equal(updates.length, before, 'nothing is written');
     } finally {
       h.dispose();
     }

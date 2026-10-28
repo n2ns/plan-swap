@@ -171,13 +171,13 @@ export function planRestart(): ServerPlan {
 
 /**
  * Sends SIGTERM to the server, then to each child (ESRCH and EPERM ignored for children, other errors thrown); no
- * waiting. Throws t('ext.linuxOnly') without signaling when process.platform is not 'linux'. Disconnects every WSL
+ * waiting. Throws t('ext.unsupportedPlatform') without signaling when process.platform is not 'linux'. Disconnects every WSL
  * window and closes integrated terminals. Product code calls it only after a modal confirmation and only for
  * 'antigravity' / 'vscodium'; never call it in tests.
  */
 export function executeRestart(plan: ServerPlan): void {
   // process.kill is TerminateProcess outside Linux; never signal there
-  if (process.platform !== 'linux') throw new Error(t('ext.linuxOnly'));
+  if (process.platform !== 'linux') throw new Error(t('ext.unsupportedPlatform'));
   process.kill(plan.serverPid, 'SIGTERM');
   for (const pid of plan.children) {
     try {

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { AccountStore } from '../src/accounts';
+import { directoryGone } from '../src/accountStore';
 import { RecommendExclusions } from '../src/recommend';
 import { LabelStore } from '../src/labels';
 import { CASE_SENSITIVE_FS, makeTempHome, MemoryMemento, type TempHome } from './helpers';
@@ -175,6 +176,33 @@ describe('AccountStore syncWithDisk', () => {
     await store.syncWithDisk(undefined, exclusions);
     assert.equal(store.find('gone'), undefined);
     assert.equal(exclusions.has('gone'), false);
+  });
+
+  test('an account whose directory cannot be inspected (no permission) keeps its entry, alias and recommendation mark', { skip: process.platform === 'win32' || process.getuid?.() === 0 ? 'POSIX permissions, not root' : false }, async () => {
+    const { memento, store } = make();
+    const labels = new LabelStore(memento, 'claude.labels');
+    const exclusions = new RecommendExclusions(memento, 'claude.recommendExcluded');
+    const closed = path.join(home, 'closed');
+    const dir = path.join(closed, '.claude-kept');
+    fs.mkdirSync(dir, { recursive: true });
+    await store.add({ name: 'kept', dir });
+    await labels.set('kept', 'Kept');
+    await exclusions.set('kept', true);
+    fs.chmodSync(closed, 0);
+    try {
+      await store.syncWithDisk(labels, exclusions);
+    } finally {
+      fs.chmodSync(closed, 0o700);
+    }
+    assert.deepEqual(store.find('kept'), { name: 'kept', dir });
+    assert.equal(labels.get('kept'), 'Kept');
+    assert.equal(exclusions.has('kept'), true);
+    assert.equal(directoryGone(dir), false);
+    fs.rmSync(closed, { recursive: true });
+    assert.equal(directoryGone(dir), true);
+    await store.syncWithDisk(labels, exclusions);
+    assert.equal(store.find('kept'), undefined);
+    assert.equal(labels.get('kept'), undefined);
   });
 
   test('does not write when nothing is missing', async () => {

@@ -294,6 +294,31 @@ export function withLockDir<T>(lock: string, staleMs: number, busy: () => Error,
   }
 }
 
+/**
+ * Creates the lock file exclusively (0600) and returns its descriptor. A lock file left behind (a crash between its
+ * creation and release) whose mtime is older than staleMs is removed and the creation retried once; a fresh one, or
+ * any other failure, throws busy(). The caller closes the descriptor and removes the file.
+ */
+export function openLockFile(lock: string, staleMs: number, busy: () => Error): number {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return fs.openSync(lock, 'wx', 0o600);
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'EEXIST' || attempt > 0) throw busy();
+      let mtime: number | undefined;
+      try { mtime = fs.lstatSync(lock).mtimeMs; } catch { /* released meanwhile: try again */ }
+      if (mtime !== undefined && Date.now() - mtime <= staleMs) throw busy();
+      try { fs.unlinkSync(lock); } catch { /* released meanwhile, or not ours to remove: the retry decides */ }
+    }
+  }
+}
+
+/** Removes a lock file after use; a file already gone is not an error (the real error of the edit must surface). */
+export function closeLockFile(fd: number, lock: string): void {
+  try { fs.closeSync(fd); } catch { /* already closed */ }
+  try { fs.unlinkSync(lock); } catch { /* already removed */ }
+}
+
 /** Blocks the thread for ms milliseconds (short retries of synchronous file operations). */
 export function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);

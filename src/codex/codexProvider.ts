@@ -9,7 +9,11 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { t } from '../i18n';
+import { closeLockFile, openLockFile } from '../platform';
 import { DEEPSEEK_CATALOG } from './deepseekCatalog';
+
+// An edit takes milliseconds; a .planswap-provider.lock this old was left by a crashed edit and is taken over
+const LOCK_STALE_MS = 60_000;
 
 export const DEEPSEEK_MODELS = ['deepseek-flash', 'deepseek-v4-pro'] as const;
 export type DeepSeekModel = typeof DEEPSEEK_MODELS[number];
@@ -593,8 +597,7 @@ export function editProviderConfig(dir: string, next: { service?: ApiService; mo
   // Establish that the root and owned files are local before creating the per-card edit lock.
   snapshot(dir, false, true);
   const lock = path.join(dir, '.planswap-provider.lock');
-  let lockFd: number;
-  try { lockFd = fs.openSync(lock, 'wx', 0o600); } catch { throw new ProviderConfigError('changed'); }
+  const lockFd = openLockFile(lock, LOCK_STALE_MS, () => new ProviderConfigError('changed'));
   let temporary: string | undefined;
   try {
     const current = snapshot(dir, false, true);
@@ -622,8 +625,7 @@ export function editProviderConfig(dir: string, next: { service?: ApiService; mo
     throw new ProviderConfigError('write');
   } finally {
     if (temporary) try { fs.unlinkSync(temporary); } catch { /* failed write may not have created it */ }
-    fs.closeSync(lockFd);
-    fs.unlinkSync(lock);
+    closeLockFile(lockFd, lock);
   }
 }
 

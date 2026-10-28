@@ -177,6 +177,18 @@ describe('refusals', () => {
     assert.equal(fs.existsSync(path.join(dir, '.planswap-provider.lock')), true);
   });
 
+  test('a lock file left by a crashed edit is taken over once it is a minute old', () => {
+    create();
+    const { revision } = readClaudeProviderEditState(dir);
+    const lock = path.join(dir, '.planswap-provider.lock');
+    fs.writeFileSync(lock, '');
+    const old = new Date(Date.now() - 2 * 60_000);
+    fs.utimesSync(lock, old, old);
+    editClaudeProviderConfig(dir, { model: 'm2', key: '' }, revision);
+    assert.equal(settings().env.ANTHROPIC_MODEL, 'm2');
+    assert.equal(fs.existsSync(lock), false, 'the edit released its own lock');
+  });
+
   test('malformed settings.json values are refused', () => {
     create();
     const good = settings();

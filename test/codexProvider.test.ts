@@ -487,6 +487,19 @@ describe('changing a card\'s service', () => {
     assert.equal(fs.readdirSync(dir).filter((name) => name.endsWith('.tmp')).length, 0, 'no temporary file is left');
   });
 
+  test('a lock file left by a crashed edit is taken over once it is a minute old; a fresh one still refuses', () => {
+    create();
+    const lock = path.join(dir, '.planswap-provider.lock');
+    fs.writeFileSync(lock, '');
+    assert.throws(() => editProviderConfig(dir, { model: 'deepseek-v4-pro', key: '' }, readProviderEditState(dir).revision), fails('changed'));
+    assert.equal(fs.existsSync(lock), true, 'a fresh lock is left alone');
+    const old = new Date(Date.now() - 2 * 60_000);
+    fs.utimesSync(lock, old, old);
+    editProviderConfig(dir, { model: 'deepseek-v4-pro', key: '' }, readProviderEditState(dir).revision);
+    assert.equal(readProviderInfo(dir)?.model, 'deepseek-v4-pro');
+    assert.equal(fs.existsSync(lock), false, 'the edit released its own lock');
+  });
+
   test('between two other services the reasoning effort and sign-in preference stay; a preset fills its endpoint', () => {
     createProviderConfig(dir, 'openrouter', { model: 'vendor/m', key: 'sk-or' }, def);
     const text = config().replace('model_provider = "planswap"', 'model_provider = "planswap"\nmodel_reasoning_effort = "low"\npreferred_auth_method = "apikey"');

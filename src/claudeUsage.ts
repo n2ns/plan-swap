@@ -55,6 +55,8 @@ export interface ClaudeQueryOptions {
   platform?: NodeJS.Platform;
   /** Ends the process tree of a child started through cmd.exe (Windows claude.cmd fallback); default taskkill /T /F */
   killTree?: (pid: number) => void;
+  /** Wait after ending a running child before SIGKILL, and again before giving up on its exit; default 1000 for each phase */
+  graceMs?: number;
 }
 
 // Observations older than this are not shown (Claude Code keeps the cache indefinitely)
@@ -403,11 +405,47 @@ function attempt<T>(
       child.removeListener('error', onError);
       child.removeListener('exit', onExit);
       child.on('error', () => undefined);
-      if (child.exitCode === null && child.signalCode === null) {
-        if (platform === 'win32' && spawnOptions.shell && child.pid !== undefined) (options.killTree ?? taskkillTree)(child.pid);
-        else child.kill();
+      const exited = (): boolean => child.exitCode !== null || child.signalCode !== null;
+      if (exited()) {
+        resolve(a);
+        return;
       }
-      resolve(a);
+      // A running child (timeout, cancellation, too much output) is ended, and the attempt settles only once it has
+      // exited, so the caller's serial queue never starts the next claude beside a lingering one: SIGTERM (on Windows
+      // the shim's whole tree, forcefully), after graceMs SIGKILL, after another graceMs the attempt settles anyway
+      const graceMs = options.graceMs ?? 1000;
+      const tree = platform === 'win32' && spawnOptions.shell && child.pid !== undefined;
+      const end = (signal?: NodeJS.Signals): void => {
+        try {
+          if (tree) (options.killTree ?? taskkillTree)(child.pid!);
+          else child.kill(signal);
+        } catch { /* the bounded wait below ends the attempt */ }
+      };
+      let waited = false;
+      let escalate: ReturnType<typeof setTimeout> | undefined;
+      const settle = (): void => {
+        if (waited) return;
+        waited = true;
+        clearTimeout(escalate);
+        child.removeListener('exit', settle);
+        child.removeListener('close', settle);
+        resolve(a);
+      };
+      child.once('exit', settle);
+      child.once('close', settle);
+      end();
+      if (exited()) {
+        settle();
+        return;
+      }
+      escalate = setTimeout(() => {
+        if (exited() || tree) {
+          settle();
+          return;
+        }
+        end('SIGKILL');
+        escalate = setTimeout(settle, graceMs);
+      }, graceMs);
     };
     const onData = (chunk: string): void => {
       outputBytes += Buffer.byteLength(chunk, 'utf8');

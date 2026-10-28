@@ -75,6 +75,29 @@ export function currentDir(): string {
   return getConfiguredConfigDir() ?? defaultDir();
 }
 
+// The accepted CLAUDE_CONFIG_DIR of one setting value (array or object form), as getConfiguredConfigDir picks it
+function configDirOf(raw: unknown): string | undefined {
+  const entries: EnvEntry[] = Array.isArray(raw)
+    ? raw.filter((e): e is EnvEntry => isPlainObject(e) && typeof e.name === 'string').map((e) => ({ name: e.name, value: e.value }))
+    : isPlainObject(raw) ? Object.entries(raw).map(([name, value]) => ({ name, value })) : [];
+  let found: string | undefined;
+  for (const e of entries) {
+    if (isEnvName(e.name)) found = acceptedDir(e.value) ?? found;
+  }
+  return found;
+}
+
+/**
+ * The CLAUDE_CONFIG_DIR a workspace or workspace folder setting sets, else undefined. setConfigDir writes the global
+ * setting, which such a value overrides (the effective value currentDir reads would not change), so a switch is
+ * refused while one is set. The workspace folder value wins over the workspace value, as the editor merges them.
+ */
+export function workspaceConfigDirOverride(): string | undefined {
+  const info = vscode.workspace.getConfiguration(SECTION).inspect<unknown>(KEY);
+  if (!info) return undefined;
+  return configDirOf(info.workspaceFolderValue) ?? configDirOf(info.workspaceValue);
+}
+
 /** Whether the setting's accepted CLAUDE_CONFIG_DIR (an absolute path, see acceptedDir) is dir; then Claude Code reads
  *  <dir>/.claude.json even for ~/.claude. Another spelling of the configured folder (8.3 name, '\\?\' prefix, a link
  *  to it) counts as the same folder. Passed as `explicit` to claudeJsonPath / readAccountInfo by every caller */

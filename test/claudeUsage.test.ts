@@ -469,7 +469,7 @@ test('queryClaudeUsage falls back to claude.cmd through the shell on Windows and
     const killed: number[] = [];
     const r = await withEnv({ PATH: bin }, () => queryClaudeUsage(path.join(tmp.home, '.claude-work'), true,
       // The deadline leaves a slow CI runner time to report ENOENT for claude and start claude.cmd before it expires
-      { spawn, platform: 'win32', timeoutMs: 300, killTree: (pid) => killed.push(pid),
+      { spawn, platform: 'win32', timeoutMs: 300, graceMs: 20, killTree: (pid) => killed.push(pid),
         fallback: () => assert.fail('a running shim must not fall back on timeout') }));
     assert.deepEqual(r, { ok: false, reason: 'timeout' });
     assert.equal(runs.length, 2);
@@ -865,6 +865,49 @@ test('oneAtATime runs tasks in call order without overlap, also after a failure'
   const results = await Promise.allSettled([queue(task('a')), queue(task('b', true)), queue(task('c'))]);
   assert.deepEqual(log, ['start a', 'start b', 'start c']);
   assert.deepEqual(results.map((r) => r.status), ['fulfilled', 'rejected', 'fulfilled']);
+});
+
+test('queryClaudeUsage settles a timed-out child only once it exited, escalating to SIGKILL after the grace period', POSIX_ONLY, async () => {
+  const tmp = makeTempHome('claude-usage-escalate');
+  try {
+    const dir = path.join(tmp.home, '.claude-work');
+    // A child whose kill() reports nothing: SIGTERM is ignored, SIGKILL ends it a little later
+    const signals: Array<NodeJS.Signals | undefined> = [];
+    const runs: FakeChild[] = [];
+    const spawn: ClaudeUsageSpawn = () => {
+      const child = new FakeChild();
+      child.kill = (signal?: NodeJS.Signals) => {
+        signals.push(signal);
+        if (signal === 'SIGKILL') setTimeout(() => { child.signalCode = 'SIGKILL'; child.emit('exit', null, 'SIGKILL'); }, 5);
+        return true;
+      };
+      runs.push(child);
+      return child;
+    };
+    const order: string[] = [];
+    const queue = oneAtATime();
+    const first = queue(() => queryClaudeUsage(dir, true, { spawn, timeoutMs: 20, graceMs: 30 }).then((r) => { order.push('first'); return r; }));
+    const second = queue(async () => { order.push('second'); return runs.length; });
+    assert.deepEqual(await first, { ok: false, reason: 'timeout' });
+    assert.deepEqual(signals, [undefined, 'SIGKILL'], 'SIGTERM first, SIGKILL after the grace period');
+    assert.equal(runs[0].signalCode, 'SIGKILL', 'the attempt settled after the exit');
+    assert.equal(await second, 1, 'the queue waited for the exit before the next task');
+    assert.deepEqual(order, ['first', 'second']);
+  } finally { tmp.restore(); }
+});
+
+test('queryClaudeUsage gives up on a child that never exits after SIGKILL and the grace period', POSIX_ONLY, async () => {
+  const tmp = makeTempHome('claude-usage-stuck');
+  try {
+    const signals: Array<NodeJS.Signals | undefined> = [];
+    const spawn: ClaudeUsageSpawn = () => {
+      const child = new FakeChild();
+      child.kill = (signal?: NodeJS.Signals) => { signals.push(signal); return true; };
+      return child;
+    };
+    assert.deepEqual(await queryClaudeUsage(path.join(tmp.home, '.claude-work'), true, { spawn, timeoutMs: 20, graceMs: 10 }), { ok: false, reason: 'timeout' });
+    assert.deepEqual(signals, [undefined, 'SIGKILL']);
+  } finally { tmp.restore(); }
 });
 
 test('queryClaudeUsage ends the running child when the signal aborts', POSIX_ONLY, async () => {

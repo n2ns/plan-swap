@@ -2,8 +2,8 @@
 import { after, before, beforeEach, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as path from 'node:path';
-import { affectsSetting, currentDir, isExplicitConfigDir, setConfigDir } from '../src/claudeSettings';
-import { ConfigurationTarget, resetConfig, setConfig, updates } from './stubs/vscode';
+import { affectsSetting, currentDir, isExplicitConfigDir, setConfigDir, workspaceConfigDirOverride } from '../src/claudeSettings';
+import { ConfigurationTarget, resetConfig, setConfig, setWorkspaceConfig, updates } from './stubs/vscode';
 import { assertTempHome, makeTempHome, type TempHome } from './helpers';
 
 let tmp: TempHome;
@@ -140,5 +140,24 @@ describe('affectsSetting', () => {
     assert.equal(affectsSetting(event(true)), true);
     assert.equal(affectsSetting(event(false)), false);
     assert.deepEqual(seen, ['claudeCode.environmentVariables', 'claudeCode.environmentVariables']);
+  });
+});
+
+describe('workspaceConfigDirOverride', () => {
+  test('undefined without a workspace value, or with one that sets no accepted CLAUDE_CONFIG_DIR', () => {
+    set([{ name: 'CLAUDE_CONFIG_DIR', value: path.join(home, '.claude-work') }]);
+    assert.equal(workspaceConfigDirOverride(), undefined);
+    setWorkspaceConfig('claudeCode', KEY, [{ name: 'OTHER', value: 'x' }, { name: 'CLAUDE_CONFIG_DIR', value: 'relative' }]);
+    assert.equal(workspaceConfigDirOverride(), undefined);
+  });
+  test('the workspace value that overrides the global setting (array and object form)', () => {
+    const work = path.join(home, '.claude-work');
+    const ws = path.join(home, '.claude-ws');
+    set([{ name: 'CLAUDE_CONFIG_DIR', value: work }]);
+    setWorkspaceConfig('claudeCode', KEY, [{ name: 'CLAUDE_CONFIG_DIR', value: ws }]);
+    assert.equal(workspaceConfigDirOverride(), ws);
+    assert.equal(currentDir(), ws, 'the effective value is the workspace one');
+    setWorkspaceConfig('claudeCode', KEY, { CLAUDE_CONFIG_DIR: ws });
+    assert.equal(workspaceConfigDirOverride(), ws);
   });
 });

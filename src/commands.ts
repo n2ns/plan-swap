@@ -30,7 +30,7 @@ import {
   syncClaudeAccount,
 } from './claudeShare';
 import { describeShareReport } from './shareReport';
-import { currentDir, isExplicitConfigDir, setConfigDir, settingEnv } from './claudeSettings';
+import { currentDir, isExplicitConfigDir, setConfigDir, settingEnv, workspaceConfigDirOverride } from './claudeSettings';
 import type { AccountStore } from './accounts';
 import { claudeCardLabel, claudeProviderErrorText, type AccountsPanel } from './accountsPanel';
 import {
@@ -193,6 +193,12 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
       return false;
     }
     if (!providerReady(account)) return false;
+    // The setting is written globally; a workspace value would keep overriding it, so the switch would not take effect
+    const override = workspaceConfigDirOverride();
+    if (override !== undefined) {
+      void vscode.window.showErrorMessage(t('claude.workspaceOverride', { dir: override }));
+      return false;
+    }
     // A shared current account syncs with the default account first (as the account in use), so the incoming account
     // gets what it changed. A failure cancels the switch, so nothing is left half synced behind the user's back
     const outgoing = currentDir();

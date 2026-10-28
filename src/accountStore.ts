@@ -118,7 +118,7 @@ export class AccountStoreBase<T extends StoredAccount> {
   }
 
   /**
-   * Prunes named entries whose directory no longer exists (their alias and recommendation mark are cleared through
+   * Prunes named entries whose directory no longer exists (directoryGone; their alias and recommendation mark are cleared through
    * labels / exclusions, their place in the stored order here; they are not added to the ignore list), then registers scanned directories that are not
    * ignored, not already registered by directory, and whose name does not match (sameName, case-insensitive) the
    * default name, a remaining account's name or, with labels (callers pass the vendor's LabelStore), its display
@@ -126,7 +126,7 @@ export class AccountStoreBase<T extends StoredAccount> {
    */
   async syncWithDisk(labels?: LabelStore, exclusions?: RecommendExclusions): Promise<void> {
     const stored = this.load();
-    const pruned = stored.filter((a) => a.name !== this.config.defaultName && !fs.existsSync(a.dir));
+    const pruned = stored.filter((a) => a.name !== this.config.defaultName && directoryGone(a.dir));
     for (const a of pruned) {
       await labels?.remove(a.name);
       await exclusions?.remove(a.name);
@@ -154,5 +154,17 @@ export class AccountStoreBase<T extends StoredAccount> {
       return [...current, ...added];
     });
     await this.forgetOrder(pruned.map((a) => a.name));
+  }
+}
+
+/** Whether an account directory is confirmed gone (ENOENT / ENOTDIR, links followed). Any other failure (no permission,
+ *  an I/O error, a cycle) keeps the entry and its alias: the directory may be back after the cause is fixed. */
+export function directoryGone(dir: string): boolean {
+  try {
+    fs.statSync(dir);
+    return false;
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code;
+    return code === 'ENOENT' || code === 'ENOTDIR';
   }
 }

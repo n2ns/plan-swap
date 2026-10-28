@@ -124,7 +124,7 @@ const cooldownSeconds = (ms: number): number => Math.max(1, Math.ceil(ms / 1000)
 
 /**
  * Activation order matters: the UI locale is resolved first so every later string is localized; an unsupported
- * platform (not linux / win32) only warns once and returns. Then the FileMemento state (with its one-time globalState
+ * platform (not linux / win32 / darwin) only warns once and returns. Then the FileMemento state (with its one-time globalState
  * import), the Claude store, migrateLegacyCodex and upgradeRcBlocks each in their own try/catch (an error only
  * warns), and the Codex store. A
  * Codex initialization failure is logged and degrades the Codex page to an empty, disabled source: Claude is not
@@ -138,7 +138,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   await migrateLegacyLanguage(ctx.globalState);
   setLocale(resolveLocale());
   if (!isSupportedPlatform()) {
-    void vscode.window.showWarningMessage(t('ext.linuxOnly'));
+    void vscode.window.showWarningMessage(t('ext.unsupportedPlatform'));
     return;
   }
   // Account lists, ignore lists and aliases live in ~/.config/planswap/state.json so they follow the WSL distribution (or the Windows user profile);

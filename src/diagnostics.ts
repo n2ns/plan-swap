@@ -51,7 +51,8 @@ function count(value: number): string {
 
 function platform(value: string): string {
   return value === 'linux' ? t('diagnostics.platformLinux')
-    : value === 'win32' ? t('diagnostics.platformWindows') : t('diagnostics.unknown');
+    : value === 'win32' ? t('diagnostics.platformWindows')
+      : value === 'darwin' ? t('diagnostics.platformMac') : t('diagnostics.unknown');
 }
 
 function remote(value?: string): string {

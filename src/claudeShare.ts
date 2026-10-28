@@ -70,6 +70,7 @@ export interface ShareReport {
   busy?: string[];      // entries whose repair would move or unlink account files, skipped because the account is busy (own check or LinkOptions.busy)
   failed?: string[];    // folder entries whose junction Windows could not create (not a local NTFS drive); left unlinked
   merged?: string[];    // replaced history files whose lines are merged back into the default file before relinking (also under linked)
+  unreadable?: string[]; // children of skills / plugins whose default source is broken (dangling or cyclic link, special file) or unreadable; left unlinked
   unlinked?: string[];  // links removed as a repair: a refused config link, an earlier whole-folder link, a child link whose default target is gone, a Windows database link
   stripped?: string[];  // 'settings.json' given the account's own copy without identity keys
   elsewhere?: string[]; // conflicts that are links resolving elsewhere (a subset of conflicts)
@@ -89,6 +90,18 @@ export function lstatOrUndefined(p: string): fs.Stats | undefined {
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
     throw e;
+  }
+}
+
+// Whether a child entry of a shared folder is a readable file or a readable, searchable folder (links followed)
+function readableChild(target: string): boolean {
+  try {
+    const st = fs.statSync(target);
+    if (!st.isFile() && !st.isDirectory()) return false;
+    fs.accessSync(target, st.isDirectory() ? fs.constants.R_OK | fs.constants.X_OK : fs.constants.R_OK);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -450,10 +463,12 @@ export function ensureClaudeLinks(dir: string, procRoot = '/proc', options: Link
     for (const child of children) {
       if (excluded.has(child) || !selected(`${name}/${child}`)) continue;
       const target = path.join(defFolder, child);
-      // Child entries can be files or folders; broken or inaccessible sources remain errors.
-      const childSource = fs.statSync(target);
-      if (!childSource.isFile() && !childSource.isDirectory()) throw new Error(t('share.badEntry', { file: target }));
-      fs.accessSync(target, childSource.isDirectory() ? fs.constants.R_OK | fs.constants.X_OK : fs.constants.R_OK);
+      // Child entries can be files or folders. A broken or inaccessible source (a dangling or cyclic link, a special
+      // file, no read permission) is reported for that child and left unlinked; the other children are still linked
+      if (!readableChild(target)) {
+        (report.unreadable ??= []).push(`${name}/${child}`);
+        continue;
+      }
       record(report, `${name}/${child}`, fresh ? missingLinkResult(target, { fileLinks }) : linkEntry(path.join(accFolder, child), target, check ? { fileLinks } : undefined));
     }
     if (fresh) continue;

@@ -12,6 +12,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { checkBaseUrl, ProviderConfigError, type ProviderErrorCode } from './codex/codexProvider';
+import { closeLockFile, openLockFile } from './platform';
 
 export { ProviderConfigError, type ProviderErrorCode };
 
@@ -58,6 +59,8 @@ export interface ClaudeProviderInfo {
 const MODEL_VARS = ['ANTHROPIC_MODEL', 'ANTHROPIC_DEFAULT_OPUS_MODEL', 'ANTHROPIC_DEFAULT_SONNET_MODEL', 'ANTHROPIC_DEFAULT_HAIKU_MODEL', 'CLAUDE_CODE_SUBAGENT_MODEL'] as const;
 const OWNED_VARS = ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_API_KEY', ...MODEL_VARS] as const;
 const LOCK_FILE = '.planswap-provider.lock';
+// An edit takes milliseconds; a lock file this old was left by a crashed edit and is taken over
+const LOCK_STALE_MS = 60_000;
 
 interface Config { service: ClaudeApiService; model: string; key: string; baseUrl: string }
 interface Snapshot { config: Config; settings: Record<string, unknown>; revision: string }
@@ -245,8 +248,7 @@ export function editClaudeProviderConfig(dir: string, next: { service?: ClaudeAp
   // Establish that the root and owned files are local before creating the per-card edit lock
   snapshot(dir, false);
   const lock = path.join(dir, LOCK_FILE);
-  let lockFd: number;
-  try { lockFd = fs.openSync(lock, 'wx', 0o600); } catch { throw new ProviderConfigError('changed'); }
+  const lockFd = openLockFile(lock, LOCK_STALE_MS, () => new ProviderConfigError('changed'));
   let temporary: string | undefined;
   let markerTemporary: string | undefined;
   try {
@@ -278,7 +280,6 @@ export function editClaudeProviderConfig(dir: string, next: { service?: ClaudeAp
   } finally {
     if (temporary) try { fs.unlinkSync(temporary); } catch { /* a failed write may not have created it */ }
     if (markerTemporary) try { fs.unlinkSync(markerTemporary); } catch { /* a failed write may not have created it */ }
-    fs.closeSync(lockFd);
-    fs.unlinkSync(lock);
+    closeLockFile(lockFd, lock);
   }
 }

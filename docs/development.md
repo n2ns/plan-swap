@@ -59,7 +59,7 @@ F5 in a WSL window uses the "Run Extension" launch configuration; `.vscode/tasks
 
 ### CI
 
-- `test.yml` runs type check, tests and build on `ubuntu-latest` and `windows-latest` with Node 22 and 24. The Windows runner is elevated, so the `SHARING` and `FILE_SYMLINKS` tests run on real Windows links; a step fails the job if they are skipped there. Failing tests are reported as an annotation. A separate Linux job runs the [real editor smoke tests](#real-editor-smoke-tests).
+- `test.yml` runs type check, tests and build on `ubuntu-latest`, `windows-latest` and `macos-latest` with Node 22 and 24. The Windows runner is elevated, so the `SHARING` and `FILE_SYMLINKS` tests run on real Windows links; a step fails the job if they are skipped there. Failing tests are reported as an annotation. A separate Linux job runs the [real editor smoke tests](#real-editor-smoke-tests).
 - `publish.yml` runs on every pushed `v*` tag: it checks that the tag matches the `package.json` version, tests on Linux and Windows, packages the `.vsix` and publishes it to the VS Code Marketplace and Open VSX. Pushing such a tag is therefore a release.
 
 ### Real editor smoke tests

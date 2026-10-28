@@ -6,8 +6,18 @@ import { DEFAULT_NAME, claudeJsonPath, findSameDir, readAccountInfo, samePath, t
 import { currentDir, isExplicitConfigDir } from './claudeSettings';
 import type { AccountStore } from './accounts';
 import { EXTERNAL_NAME, labelFor, type LabelStore } from './labels';
-import type { AccountView, FromWebview, PanelMode, PanelState, RestartInfo, TabState, ToWebview, ApiServiceView } from './protocol';
+import { TOOL_IDS, type AccountView, type FromWebview, type PanelMode, type PanelState, type RestartInfo, type TabState, type ToWebview, type ApiServiceView } from './protocol';
 import { isSharedClaudeAccount } from './claudeShare';
+
+/** The shared flag of a named row: undefined (shown as neither) when the directory cannot be inspected (a regular file
+ *  in its place, no permission), so one degraded account does not keep the whole tab from rendering. */
+export function sharedFlag(read: () => boolean): boolean | undefined {
+  try {
+    return read();
+  } catch {
+    return undefined;
+  }
+}
 import { CLAUDE_API_SERVICES, CLAUDE_PROVIDER_FILES, CLAUDE_SERVICE_INFO, claudeProviderLabel, hasClaudeProviderMarker, readClaudeProviderInfo, type ProviderErrorCode } from './claudeProvider';
 import type { ClaudeModelCache } from './claudeModelCache';
 import { readClaudeUsage } from './claudeUsage';
@@ -111,7 +121,7 @@ export function claudePanelSource(store: AccountStore, labels: LabelStore, exclu
       dirLabel: tildify(a.dir),
       ...claudeRowInfo(a.dir),
       isCurrent: i === curIdx,
-      shared: a.name === DEFAULT_NAME ? undefined : isSharedClaudeAccount(a.dir),
+      shared: a.name === DEFAULT_NAME ? undefined : sharedFlag(() => isSharedClaudeAccount(a.dir)),
       recommendExcluded: exclusions?.has(a.name) || undefined,
     }));
     if (!rows.some((r) => r.isCurrent)) {
@@ -444,8 +454,8 @@ const LIST_FIELDS: Partial<Record<FromWebview['type'], readonly string[]>> = { r
 
 /**
  * Checks a message from the webview (untrusted input) against the protocol: a known type, a known mode (every type but
- * 'ready'), string values for its string fields and arrays of strings for its list fields. Returns the message, or
- * undefined when it is malformed.
+ * 'ready'), string values for its string fields, arrays of strings for its list fields and a known tool id for 'tool'.
+ * Returns the message, or undefined when it is malformed.
  */
 export function checkMessage(raw: unknown): FromWebview | undefined {
   if (typeof raw !== 'object' || raw === null) return undefined;
@@ -459,6 +469,7 @@ export function checkMessage(raw: unknown): FromWebview | undefined {
   const optionalString = (v: unknown): boolean => v === undefined || typeof v === 'string';
   if (type === 'providerModels' && (typeof msg.request !== 'number' || !optionalString(msg.baseUrl) || !optionalString(msg.dir))) return undefined;
   if (type === 'saveProvider' && (!optionalString(msg.baseUrl) || !optionalString(msg.service))) return undefined;
+  if (type === 'tool' && !(TOOL_IDS as readonly string[]).includes(msg.tool as string)) return undefined;
   if (type === 'add' && msg.provider !== undefined) {
     const p = msg.provider as Record<string, unknown> | null;
     if (typeof p !== 'object' || p === null || typeof p.service !== 'string' || typeof p.key !== 'string'
