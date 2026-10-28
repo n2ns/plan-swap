@@ -1,6 +1,6 @@
 import { afterEach, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { usageTimeoutMs } from '../src/extension';
+import { usageTimeoutMs } from '../src/usageOrchestration';
 import { resetConfig, setConfig } from './stubs/vscode';
 
 afterEach(() => resetConfig());
