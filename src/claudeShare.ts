@@ -18,12 +18,6 @@ import { type ShareReport, type MigrateReport, lstatOrUndefined, linksTo, emptyR
 import { moveEntry, freeName, type MergeCtx, rememberMove, mergeEntry, finalizeMerge, defaultFolder, copyTree, unlinkIfLinksTo, unlinkChildLinks } from './shareMerge';
 import { removeSyncBase } from './claudeSync';
 
-// The link primitives, the merge machinery and the sync moved to shareLinks / shareMerge / claudeSync; re-exported
-// here until every importer names those modules directly
-export * from './shareLinks';
-export * from './shareMerge';
-export * from './claudeSync';
-
 // Whole-entry links (kind: file needs an empty-file default, dir needs an empty dir). 'projects' is the marker entry
 // that isSharedClaudeAccount checks. Not shared: .credentials.json, .claude.json (mirrored instead) and everything else
 export const CLAUDE_SHARED_ENTRIES: ReadonlyArray<{ name: string; kind: 'file' | 'dir' }> = [

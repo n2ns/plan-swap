@@ -23,8 +23,8 @@ import {
   isSharedClaudeAccount,
   makeClaudeIndependent,
   migrateClaudeToShared,
-  syncClaudeAccount,
 } from './claudeShare';
+import { syncClaudeAccount } from './claudeSync';
 import { lstatOrUndefined } from './shareLinks';
 import { describeShareReport } from './shareReport';
 import { validateAccountName } from './accountName';

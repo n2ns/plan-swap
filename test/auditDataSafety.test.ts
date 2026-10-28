@@ -11,7 +11,9 @@ import {
   accountDir, checkSafeToDelete, deleteAccountDir, readAccountInfo, realPath, realPathInside, scanAccountDirs, syncMcpServers,
 } from '../src/paths';
 import { checkCodexSafeToDelete, codexAccountDir, deleteCodexDir, scanCodexDirs } from '../src/codex/codexPaths';
-import { ensureClaudeLinks, linkEntry, syncClaudeAccount } from '../src/claudeShare';
+import { ensureClaudeLinks } from '../src/claudeShare';
+import { syncClaudeAccount } from '../src/claudeSync';
+import { linkEntry } from '../src/shareLinks';
 import { ensureCodexLinks } from '../src/codex/codexShare';
 import { renameReplacing, unlinkLinks } from '../src/platform';
 import { assertTempHome, FILE_SYMLINKS, makeTempHome, onWindows, SHARING, read, type TempHome } from './helpers';
