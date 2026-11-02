@@ -7,7 +7,7 @@ export async function run(ctx) {
     await page.evaluate((l) => { window.__label = l; }, label);
     await ctx.apply((state) => {
       const row = state.claude.accounts.find((a) => a.name === 'work');
-      Object.assign(row, { label: window.__label, shared: true, subscriptionUnavailable: true, plan: 'Max 5x', isCurrent: false });
+      Object.assign(row, { label: window.__label, shared: true, subscriptionUnavailable: true, plan: 'Max', isCurrent: false });
     }, 'claude');
     const r = await page.locator('#panel-claude .row[data-dir="/fixture/.claude-work"]').evaluate((el) => {
       const name = el.querySelector('.row-name');

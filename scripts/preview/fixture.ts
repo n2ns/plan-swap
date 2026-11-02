@@ -51,7 +51,7 @@ function account(mode: PanelMode, name: 'default' | 'work' | 'empty'): AccountVi
     base.plan = mode === 'claude' ? 'Pro' : 'Plus';
   } else if (name === 'work') {
     base.email = `${mode}-work-with-a-long-address@example.invalid`;
-    base.plan = mode === 'claude' ? 'Max 20x' : 'Pro';
+    base.plan = mode === 'claude' ? 'Ultra' : 'Pro';
     const now = Math.floor(Date.now() / 1000);
     base.usage = {
       windows: mode === 'claude' ? [

@@ -22,7 +22,7 @@ export interface AccountView {
   // For display, home directory replaced with ~
   dirLabel: string;
   email?: string;
-  // For display, formatted plan type (e.g. "Max 20x", "Plus", "API key")
+  // For display, formatted plan type (e.g. "Ultra", "Plus", "API key")
   plan?: string;
   loggedIn: boolean;
   // API cards (Codex and Claude): configuration status only, never a credential or a live connectivity/model

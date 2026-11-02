@@ -150,7 +150,7 @@ test('Claude subscription state hides historical usage while retaining account i
     unavailable = true;
     assert.equal(row().subscriptionUnavailable, true);
     assert.equal(row().usage, undefined, 'a previously valid cache no longer appears usable');
-    assert.equal(row().plan, 'Max 5x');
+    assert.equal(row().plan, 'Max');
     assert.equal(row().loggedIn, true);
     assert.equal(row().email, 'dummy@example.com');
     checking = true;
@@ -331,14 +331,14 @@ test('the email setting hides and restores both pages without altering labels or
 test('the sidebar display settings hide the email and the general 5-hour / 7-day windows of every row', () => {
   const now = Date.now();
   const rows = [{
-    name: 'work', dir: '/w', label: 'work', kind: 'named', isCurrent: true, loggedIn: true, email: 'a@example.com', plan: 'Max 5x',
+    name: 'work', dir: '/w', label: 'work', kind: 'named', isCurrent: true, loggedIn: true, email: 'a@example.com', plan: 'Max',
     usage: { checkedAt: now, windows: [{ usedPercent: 10, windowMinutes: 300 }, { usedPercent: 20, windowMinutes: 10080 }, { usedPercent: 30, windowMinutes: 10080, scope: 'Fable' }] },
   }] as Parameters<typeof applySidebarDisplay>[0];
   const all = { email: true, fiveHour: true, weekly: true };
   assert.deepEqual(applySidebarDisplay(rows, all), rows, 'everything shown by default');
   const noEmail = applySidebarDisplay(rows, { ...all, email: false })[0];
   assert.equal(noEmail.email, undefined);
-  assert.equal(noEmail.plan, 'Max 5x');
+  assert.equal(noEmail.plan, 'Max');
   const noFive = applySidebarDisplay(rows, { ...all, fiveHour: false })[0];
   assert.deepEqual(noFive.usage?.windows.map((w) => w.windowMinutes), [10080, 10080]);
   const noWeekly = applySidebarDisplay(rows, { ...all, weekly: false })[0];

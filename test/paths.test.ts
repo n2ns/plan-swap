@@ -25,9 +25,14 @@ after(() => tmp.restore());
 
 describe('formatClaudePlan', () => {
   test('combines plan name and multiplier', () => {
-    assert.equal(formatClaudePlan('claude_max', 'default_claude_max_20x'), 'Max 20x');
-    assert.equal(formatClaudePlan('claude_max', 'default_claude_max_5x'), 'Max 5x');
+    assert.equal(formatClaudePlan('claude_team', 'default_claude_max_5x'), 'Team 5x');
     assert.equal(formatClaudePlan('bar', 'x_3x'), 'Bar 3x');
+  });
+  test('shows the current names of the Max tiers, whose identifiers kept the old names', () => {
+    assert.equal(formatClaudePlan('claude_max', 'default_claude_max_20x'), 'Ultra');
+    assert.equal(formatClaudePlan('claude_max', 'default_claude_max_5x'), 'Max');
+    assert.equal(formatClaudePlan(undefined, 'default_claude_max_20x'), 'Ultra');
+    assert.equal(formatClaudePlan(undefined, 'default_claude_max_5x'), 'Max');
   });
   test('maps known plan names', () => {
     assert.equal(formatClaudePlan('claude_pro', undefined), 'Pro');
@@ -41,7 +46,7 @@ describe('formatClaudePlan', () => {
   });
   test('tier without multiplier → plan name only; multiplier only → multiplier only', () => {
     assert.equal(formatClaudePlan('claude_pro', 'default'), 'Pro');
-    assert.equal(formatClaudePlan(undefined, 'default_claude_max_20x'), '20x');
+    assert.equal(formatClaudePlan(undefined, 'x_3x'), '3x');
   });
   test('both empty → undefined', () => {
     assert.equal(formatClaudePlan(undefined, undefined), undefined);
@@ -148,7 +153,7 @@ describe('readAccountInfo', () => {
   test('email + plan', () => {
     const d = mk('.claude-r1');
     fs.writeFileSync(path.join(d, '.claude.json'), JSON.stringify({ oauthAccount: { emailAddress: 'fake@example.com', organizationType: 'claude_max', organizationRateLimitTier: 'default_claude_max_20x' } }));
-    assert.deepEqual(readAccountInfo(d), { email: 'fake@example.com', plan: 'Max 20x', loggedIn: true });
+    assert.deepEqual(readAccountInfo(d), { email: 'fake@example.com', plan: 'Ultra', loggedIn: true });
   });
   test('organizationType only', () => {
     const d = mk('.claude-r2');

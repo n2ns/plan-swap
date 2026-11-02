@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Claude plans show their current names: Max 20x is now shown as Ultra and Max 5x as Max. Ultra keeps the top plan color.
+
 ## [0.6.1] - 2026-10-28
 
 ### Fixed

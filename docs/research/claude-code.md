@@ -47,6 +47,10 @@ The following facts were read on 2026-10-23 from the native Linux x64 binary of 
 20. `firstStartTime` of `.claude.json` is written at startup whenever the file lacks it (`if(!ue().firstStartTime)` → the current ISO time, with `firstStartVersion`), not only when the file is created: an info file created by another program without it gains one at Claude Code's first start and keeps it afterwards.
 21. Every write of an info file (`.claude.json`, the path from `getGlobalClaudeFile`: `<config dir>/.claude.json`, or `~/.claude.json` without `CLAUDE_CONFIG_DIR`) is a read-modify-write under a proper-lockfile lock with `lockfilePath: <that path>.lock` (lock folder next to the file, named after the path Claude Code opens, not its link target; default stale time 10 s, the folder's mtime refreshed every 5 s while held) that re-reads the file under the lock and applies the update to what it read, so a write another process made before the lock is kept. A held lock is retried 6 times (200–4000 ms, about 10 s or more in total, "Lock acquisition took longer than expected"); still held, the write is skipped ("Config lock still held by a live process after retries; skipping").
 
+The following fact was read on 2026-11-03 from the official pricing and support pages and the Linux CLI 2.1.316.
+
+22. The Claude plans were renamed without changing their identifiers: Max 20x is now Ultra and Max 5x is now Max, while `claude auth status --json` reports `subscriptionType: max` and `.claude.json` keeps `organizationType: claude_max` with `organizationRateLimitTier: default_claude_max_20x` / `default_claude_max_5x`. The CLI contains no Ultra identifier and `/usage` names no plan. Ultra is documented as 10 times Pro's weekly usage, so the old `20x` is no longer a usable label.
+
 
 ## Directory lifecycle
 

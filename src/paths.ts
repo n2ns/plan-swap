@@ -14,7 +14,7 @@ const DIR_BASENAME_RE = /^\.claude-[A-Za-z0-9_-]+$/;
 
 // dir is always absolute (path.resolve: no '~', no trailing separator)
 export interface Account { name: string; dir: string }
-// plan: formatted plan text (formatClaudePlan, e.g. "Max 20x"). identity: opaque comparison key (account + organization)
+// plan: formatted plan text (formatClaudePlan, e.g. "Ultra"). identity: opaque comparison key (account + organization)
 // for detecting duplicate sign-ins (warning, recommendations); never displayed, logged, persisted or sent to the Webview (panel rows copy only
 // email, plan and sign-in state)
 export interface AccountInfo { email?: string; plan?: string; loggedIn: boolean; identity?: string }
@@ -178,10 +178,19 @@ const CLAUDE_PLAN_NAMES: Record<string, string> = {
   enterprise: 'Enterprise',
 };
 
-// Formats organizationType / organizationRateLimitTier from .claude.json for display, e.g. "Max 20x"; undefined when both are empty.
-// Type: CLAUDE_PLAN_NAMES, else the value without a 'claude_' prefix, first letter capitalized. Tier: a trailing
-// '_<n>x' becomes '<n>x'. Both present → '<type> <n>x'; only one → that one
+// The Max tiers kept their identifiers when the plans were renamed (Max 20x to Ultra, Max 5x to Max)
+const CLAUDE_MAX_TIER_NAMES = new Map([
+  ['default_claude_max_20x', 'Ultra'],
+  ['default_claude_max_5x', 'Max'],
+]);
+
+// Formats organizationType / organizationRateLimitTier from .claude.json for display, e.g. "Ultra"; undefined when both are empty.
+// A tier of CLAUDE_MAX_TIER_NAMES with type claude_max or no type → its current plan name. Otherwise type:
+// CLAUDE_PLAN_NAMES, else the value without a 'claude_' prefix, first letter capitalized; tier: a trailing '_<n>x'
+// becomes '<n>x'; both present → '<type> <n>x'; only one → that one
 export function formatClaudePlan(orgType?: string, tier?: string): string | undefined {
+  const maxTierName = !orgType || orgType === 'claude_max' ? CLAUDE_MAX_TIER_NAMES.get(tier ?? '') : undefined;
+  if (maxTierName) return maxTierName;
   let name: string | undefined;
   if (orgType) {
     name = CLAUDE_PLAN_NAMES[orgType];

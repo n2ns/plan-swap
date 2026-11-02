@@ -254,11 +254,11 @@ describe('Codex usage limits in the tooltip', () => {
     const rule = '<tr><td colspan="4"><hr></td></tr>';
     assert.equal(
       usageTable([
-        { product: 'Claude', identity: 'me@example.com', plan: 'Max 5x', refresh: link, rows: rows.slice(0, 1), notes: [] },
+        { product: 'Claude', identity: 'me@example.com', plan: 'Max', refresh: link, rows: rows.slice(0, 1), notes: [] },
         { product: 'Codex', identity: 'b@example.com', plan: 'Plus', rows: rows.slice(1, 2), notes: ['<em>Checking</em>'] },
         { product: 'Codex', identity: 'API key', rows: [], notes: [] },
       ]),
-      `<table>${rule}<tr><td colspan="4"><strong>Claude</strong></td></tr><tr><td colspan="3">me@example.com</td><td align="right">Max 5x ${link}</td></tr>${rows[0]}`
+      `<table>${rule}<tr><td colspan="4"><strong>Claude</strong></td></tr><tr><td colspan="3">me@example.com</td><td align="right">Max ${link}</td></tr>${rows[0]}`
       + rule + '<tr><td colspan="4"><strong>Codex</strong></td></tr><tr><td colspan="3">b@example.com</td><td align="right">Plus</td></tr>' + rows[1] + '<tr><td colspan="4"><em>Checking</em></td></tr>'
       + rule + '<tr><td colspan="4"><strong>Codex</strong></td></tr><tr><td colspan="3">API key</td><td align="right"></td></tr>' + rule + '</table>',
       'one table on one line: a rule, the product name and the email spanning name, bar and percentage, so it cannot widen the name column',
@@ -472,7 +472,7 @@ describe('both products in the status bar', POSIX_ONLY, () => {
       assert.equal(item.text, '$(dashboard) Claude 97% · Codex 82%');
       assert.equal(color(item), undefined);
       const tip = tooltipText(item.tooltip);
-      assert.match(tip, /^\| <hr> \|\n\| \*\*Claude\*\* \|\n\| me@example\.com \| Max 5x \[\$\(refresh\)\]\(command:planswap\.claude\.refreshUsage "Refresh usage limits"\) \|\n\| 5h \| ██████████ \| 97% \| \$\(clock\) 2h \|\n\| 7d \| ██████░░░░ \| 60% \| \$\(clock\) 3d \|\n\| <hr> \|\n\| \*\*Codex\*\* \|\n\| default \| \[\$\(refresh\)\]\(command:planswap\.codex\.refreshUsage "Refresh usage limits"\) \|\n\| 5h \| ████████░░ \| 82% \| \$\(clock\) 1h \|\n\| 7d \| █████░░░░░ \| 50% \| \$\(clock\) 5d \|\n\| <hr> \|$/);
+      assert.match(tip, /^\| <hr> \|\n\| \*\*Claude\*\* \|\n\| me@example\.com \| Max \[\$\(refresh\)\]\(command:planswap\.claude\.refreshUsage "Refresh usage limits"\) \|\n\| 5h \| ██████████ \| 97% \| \$\(clock\) 2h \|\n\| 7d \| ██████░░░░ \| 60% \| \$\(clock\) 3d \|\n\| <hr> \|\n\| \*\*Codex\*\* \|\n\| default \| \[\$\(refresh\)\]\(command:planswap\.codex\.refreshUsage "Refresh usage limits"\) \|\n\| 5h \| ████████░░ \| 82% \| \$\(clock\) 1h \|\n\| 7d \| █████░░░░░ \| 50% \| \$\(clock\) 5d \|\n\| <hr> \|$/);
       assert.ok(!tip.includes('Fable'), 'model-specific windows are off by default');
       assert.deepEqual(tip.match(/\(command:[^ )]+/g), ['(command:planswap.claude.refreshUsage', '(command:planswap.codex.refreshUsage'], 'only the two refresh links');
       assert.deepEqual((item.tooltip as MarkdownString).isTrusted, { enabledCommands: ['planswap.claude.refreshUsage', 'planswap.codex.refreshUsage'] });

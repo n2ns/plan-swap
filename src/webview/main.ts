@@ -165,7 +165,7 @@ function planPill(a: AccountView, unavailable: boolean): HTMLElement | null {
 }
 
 // Plan string -> color class (frontend-only mapping, written to data-plan for CSS)
-// Both sides share tiers by price: tier1 standard paid (Claude Pro / ChatGPT Plus), tier2 high (Claude Max 5x / ChatGPT Pro Lite), tier3 top (Claude Max 20x / ChatGPT Pro)
+// Both sides share tiers by price: tier1 standard paid (Claude Pro / ChatGPT Plus), tier2 high (Claude Max / ChatGPT Pro Lite), tier3 top (Claude Ultra / ChatGPT Pro)
 // Colors (panel.css; shown on the current row only, other rows keep a neutral tag): tier0 Free/Go gray, tier1 blue,
 // tier2 champagne gold, tier3 amber, team (Team/Business) teal, enterprise slate, apikey orange; none keeps the normal outline
 function planClass(plan: string | undefined, mode: PanelMode): string {
@@ -175,7 +175,7 @@ function planClass(plan: string | undefined, mode: PanelMode): string {
   if (/^Enterprise\b/i.test(plan)) return 'enterprise';
   if (/^(Free|Go)\b/i.test(plan)) return 'tier0';
   if (mode === 'claude') {
-    if (/^Max\b.*20x/i.test(plan)) return 'tier3';
+    if (/^Ultra\b/i.test(plan)) return 'tier3';
     if (/^Max\b/i.test(plan)) return 'tier2';
     if (/^Pro\b/i.test(plan)) return 'tier1';
   } else {
