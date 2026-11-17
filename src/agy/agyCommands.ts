@@ -41,6 +41,8 @@ export interface AgyDeps {
   accounts?: AgyAccounts;
   findCli?: () => string | undefined;
   readUsage?: (cli: string | undefined) => Promise<AgyUsageResult>;
+  // How long a switch waits for a stopped usage query process to exit before it is refused (default 5 s)
+  exitWaitMs?: number;
 }
 
 /** The localized text of an agy error code. */
@@ -67,6 +69,8 @@ export function registerAgy(deps: AgyDeps): vscode.Disposable[] {
   let blocked: AgyErrorCode | undefined;
   let readError: string | undefined;
   let usageRun: Promise<void> | undefined;
+  // A stopped usage query whose process was not confirmed gone; cleared once it is
+  let queryExit: Promise<void> | undefined;
 
   const labelOf = (a: AgyAccount): string => labels.get(a.name) ?? defaultLabel(a.email);
   const usageCache = (): Record<string, AgyUsage> => state.get<Record<string, AgyUsage>>(USAGE_KEY) ?? {};
@@ -152,6 +156,11 @@ export function registerAgy(deps: AgyDeps): vscode.Disposable[] {
 
   const runUsage = async (manual: boolean): Promise<void> => {
     try {
+      // A stopped query that has not exited yet: no second agy beside it
+      if (queryExit) {
+        if (manual) void vscode.window.showWarningMessage(t('agy.usage.stuck'));
+        return;
+      }
       const keyring = await store.blocked();
       if (keyring) {
         blocked = keyring;
@@ -164,6 +173,13 @@ export function registerAgy(deps: AgyDeps): vscode.Disposable[] {
         return;
       }
       const result = await readUsage(cli);
+      if (!result.ok && result.reason === 'stuck') {
+        const exited = result.exited;
+        queryExit = exited;
+        void exited.then(() => { if (queryExit === exited) queryExit = undefined; });
+        if (manual) void vscode.window.showWarningMessage(t('agy.usage.stuck'));
+        return;
+      }
       const after = await accounts.sync();
       live = after;
       if (!result.ok) {
@@ -196,8 +212,16 @@ export function registerAgy(deps: AgyDeps): vscode.Disposable[] {
 
   const switchTo = async (a: AgyAccount): Promise<void> => {
     try {
-      // A running usage query's agy must not renew and write back the previous sign-in after the switch
+      // A running usage query's agy must not renew and write back the previous sign-in after the switch: wait for it,
+      // and refuse while a stopped query's process is not confirmed gone
       while (usageRun) await usageRun;
+      if (queryExit) {
+        const pending = queryExit;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const gone = await Promise.race([pending.then(() => true), new Promise<boolean>((r) => { timer = setTimeout(() => r(false), deps.exitWaitMs ?? 5_000); })]);
+        clearTimeout(timer);
+        if (!gone) throw new AgyError('queryRunning');
+      }
       const result = await accounts.switchTo(a.name);
       if (result === 'switched') {
         void vscode.window.showInformationMessage(t('agy.switched', { label: labelOf(a) }));

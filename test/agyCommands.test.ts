@@ -58,12 +58,12 @@ beforeEach(() => {
 afterEach(() => { for (const d of disposables) d.dispose(); disposables = []; });
 after(() => tmp.restore());
 
-function start(options: { cli?: string } = { cli: '/opt/agy' }): AgyAccounts {
+function start(options: { cli?: string; exitWaitMs?: number } = { cli: '/opt/agy' }): AgyAccounts {
   const { cli } = options;
   const accounts = new AgyAccounts(store, agyAccountsRoot(tmp.home));
   disposables = registerAgy({
     panel: panel as unknown as AccountsPanel, state, labels: new LabelStore(state, 'agy.labels'), runGenericTool: async () => undefined,
-    store, accounts, findCli: () => cli, readUsage: (c) => usage(c),
+    store, accounts, findCli: () => cli, readUsage: (c) => usage(c), exitWaitMs: options.exitWaitMs,
   });
   return accounts;
 }
@@ -194,4 +194,16 @@ describe('review fixes', () => {
     assert.deepEqual(queriedFor, ['a@example.com', 'b@example.com']);
     assert.ok((state.get<Record<string, unknown>>('agy.usage') ?? {})[accountName('b@example.com')]);
   });
+});
+
+test('a switch is refused while PlanSwap\'s own usage query process has not ended', async () => {
+  const accounts = start({ cli: '/opt/agy', exitWaitMs: 20 });
+  store.value = JSON.stringify(doc('b@example.com', 'rb'));
+  await accounts.sync();
+  store.value = JSON.stringify(doc('a@example.com', 'ra'));
+  usage = async () => ({ ok: false, reason: 'stuck', exited: new Promise<void>(() => undefined) });
+  await panel.handler!({ type: 'tool', mode: 'agy', tool: 'refreshUsage' });
+  const b = panel.rows().find((r) => r.email === 'b@example.com')!;
+  await panel.handler!({ type: 'switch', mode: 'agy', dir: b.dir });
+  assert.equal(JSON.parse(store.value!).id_token_email, 'a@example.com');
 });

@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
   AgyError, WINCRED_BLOB_LIMIT, agyTokenFile, decodeLogin, encodeWincred, fileStore, keychainStore, liveStore, sameLogin,
-  secretServiceHasItem, wincredStore, type Run, type RunResult,
+  wincredStore, type Run, type RunResult,
 } from '../src/agy/agyLogin';
 import { POSIX_ONLY, assertMode, makeTempHome, type TempHome } from './helpers';
 
@@ -98,12 +98,31 @@ describe('fileStore (Linux / WSL)', () => {
   });
   test('switching is refused when the Secret Service holds agy\'s item', async () => {
     const found = fakeRun(() => ({ stdout: "([objectpath '/org/freedesktop/secrets/collection/login/7'], @ao [])" }));
-    assert.equal(await fileStore(agyTokenFile(tmp.home), found.run).blocked(), 'linuxKeyring');
+    const bus = { DBUS_SESSION_BUS_ADDRESS: 'unix:path=/run/user/1000/bus' };
+    assert.equal(await fileStore(agyTokenFile(tmp.home), found.run, bus).blocked(), 'linuxKeyring');
     assert.equal(found.calls[0].file, 'gdbus');
     assert.ok(found.calls[0].args.includes("{'service': 'gemini', 'username': 'antigravity'}"));
-    assert.equal(await fileStore(agyTokenFile(tmp.home), fakeRun(() => ({ stdout: '(@ao [], @ao [])' })).run).blocked(), undefined);
-    // No gdbus or no session bus: agy uses its file
-    assert.equal(await secretServiceHasItem(fakeRun(() => ({ code: null })).run), false);
+    assert.equal(await fileStore(agyTokenFile(tmp.home), fakeRun(() => ({ stdout: '(@ao [], @ao [])' })).run, bus).blocked(), undefined);
+  });
+  test('a keyring lookup that fails is not taken for file mode while a session bus exists', async () => {
+    const file = agyTokenFile(tmp.home);
+    const bus = { DBUS_SESSION_BUS_ADDRESS: 'unix:path=/run/user/1000/bus' };
+    // go-keyring talks to D-Bus itself, so a missing gdbus says nothing about where agy keeps its sign-in
+    const missing = fakeRun(() => ({ code: null, stderr: 'spawn gdbus ENOENT' }));
+    assert.equal(await fileStore(file, missing.run, bus).blocked(), 'keyringUnknown');
+    const timeout = fakeRun(() => ({ code: null, stderr: '' }));
+    assert.equal(await fileStore(file, timeout.run, bus).blocked(), 'keyringUnknown');
+    const other = fakeRun(() => ({ code: 1, stderr: 'Error: GDBus.Error:org.freedesktop.DBus.Error.AccessDenied: denied' }));
+    assert.equal(await fileStore(file, other.run, bus).blocked(), 'keyringUnknown');
+  });
+  test('no Secret Service, or no session bus at all, is file mode', async () => {
+    const file = agyTokenFile(tmp.home);
+    const bus = { DBUS_SESSION_BUS_ADDRESS: 'unix:path=/run/user/1000/bus' };
+    const noService = fakeRun(() => ({ code: 1, stderr: 'Error: GDBus.Error:org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.secrets was not provided by any .service files' }));
+    assert.equal(await fileStore(file, noService.run, bus).blocked(), undefined);
+    const noBus = fakeRun(() => ({ code: null, stderr: 'spawn gdbus ENOENT' }));
+    assert.equal(await fileStore(file, noBus.run, { XDG_RUNTIME_DIR: path.join(tmp.home, 'no-runtime') }).blocked(), undefined);
+    assert.equal(noBus.calls.length, 0, 'without a session bus nothing is started');
   });
 });
 

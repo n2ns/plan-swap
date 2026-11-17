@@ -6,7 +6,8 @@
 // agy 1.5 writes id_token_email instead of id_token; older documents carry an id_token whose payload has the email.
 // Where agy keeps it (go-keyring, service "gemini", user "antigravity"; the file is agy's fallback):
 // - Linux / WSL: the file ~/.gemini/antigravity-cli/antigravity-oauth-token (mode 600). When the Secret Service holds
-//   an item of that service and user, agy reads it instead, which PlanSwap cannot write: switching is refused then.
+//   an item of that service and user, agy reads it instead, which PlanSwap cannot write: switching is refused then, and
+//   also when a session bus exists but that lookup fails (go-keyring talks to D-Bus itself, so a missing gdbus proves nothing).
 // - macOS: the login Keychain generic password (service gemini, account antigravity), read and written through
 //   /usr/bin/security like go-keyring does; the value is "go-keyring-base64:" + base64 of the JSON.
 // - Windows: the Credential Manager generic credential "gemini:antigravity" (user antigravity), the bare JSON as UTF-8
@@ -36,7 +37,7 @@ export function agyTokenFile(home: string = os.homedir()): string {
 
 /** Why an agy sign-in operation failed; the command layer turns the code into a localized message. */
 export type AgyErrorCode =
-  | 'unrecognized' | 'readFailed' | 'writeFailed' | 'verifyFailed' | 'linuxKeyring' | 'tooLarge'
+  | 'unrecognized' | 'readFailed' | 'writeFailed' | 'verifyFailed' | 'linuxKeyring' | 'keyringUnknown' | 'tooLarge' | 'queryRunning'
   | 'unknownAccount' | 'removeCurrent';
 
 export class AgyError extends Error {
@@ -138,8 +139,8 @@ export interface LiveStore {
   blocked(): Promise<AgyErrorCode | undefined>;
 }
 
-/** Linux / WSL: agy's token file (atomic replace, mode 600, folder 700 when created). */
-export function fileStore(file: string = agyTokenFile(), run: Run = defaultRun): LiveStore {
+/** Linux / WSL: agy's token file (atomic replace, mode 600, folder 700 when created). env: where the session bus is looked up. */
+export function fileStore(file: string = agyTokenFile(), run: Run = defaultRun, env: NodeJS.ProcessEnv = process.env): LiveStore {
   return {
     kind: 'file',
     async read() {
@@ -167,20 +168,35 @@ export function fileStore(file: string = agyTokenFile(), run: Run = defaultRun):
         throw new AgyError('writeFailed', (err as Error).message);
       }
     },
-    blocked: () => secretServiceHasItem(run).then((found) => (found ? 'linuxKeyring' : undefined)),
+    blocked: async () => {
+      const keyring = await secretServiceState(run, env);
+      return keyring === 'item' ? 'linuxKeyring' : keyring === 'unknown' ? 'keyringUnknown' : undefined;
+    },
   };
 }
 
 /**
- * Whether the Secret Service holds an item agy would read before its file (SearchItems over D-Bus with gdbus; only
- * object paths come back, never a secret). No gdbus, no session bus or no service: false, agy then uses its file.
+ * Where agy's go-keyring would find its sign-in on Linux: 'item' when the Secret Service holds an item of agy's service
+ * and user (SearchItems over D-Bus with gdbus; only object paths come back, never a secret), 'none' when it holds none,
+ * when no Secret Service runs on the bus, or when there is no session bus at all (agy then uses its file), and
+ * 'unknown' when a session bus exists but the lookup failed (no gdbus, a timeout, another D-Bus error): go-keyring talks
+ * to D-Bus itself, so agy may still read the keyring.
  */
-export async function secretServiceHasItem(run: Run = defaultRun): Promise<boolean> {
+export async function secretServiceState(run: Run = defaultRun, env: NodeJS.ProcessEnv = process.env): Promise<'item' | 'none' | 'unknown'> {
+  if (!sessionBusExists(env)) return 'none';
   const r = await run('gdbus', ['call', '--session', '--dest', 'org.freedesktop.secrets', '--object-path', '/org/freedesktop/secrets',
     '--method', 'org.freedesktop.Secret.Service.SearchItems', `{'service': '${KEYRING_SERVICE}', 'username': '${KEYRING_USER}'}`]);
-  if (r.code !== 0) return false;
-  // Output: ([unlocked paths], [locked paths]); an empty pair prints as (@ao [], @ao [])
-  return /objectpath|\/org\/freedesktop\/secrets\/collection\//.test(r.stdout);
+  if (r.code === 0) {
+    // Output: ([unlocked paths], [locked paths]); an empty pair prints as (@ao [], @ao [])
+    return /objectpath|\/org\/freedesktop\/secrets\/collection\//.test(r.stdout) ? 'item' : 'none';
+  }
+  return /org\.freedesktop\.DBus\.Error\.ServiceUnknown/.test(r.stderr) ? 'none' : 'unknown';
+}
+
+// The session bus go-keyring would connect to: DBUS_SESSION_BUS_ADDRESS, or the systemd user bus socket
+function sessionBusExists(env: NodeJS.ProcessEnv): boolean {
+  if (env.DBUS_SESSION_BUS_ADDRESS) return true;
+  return !!env.XDG_RUNTIME_DIR && fs.existsSync(path.join(env.XDG_RUNTIME_DIR, 'bus'));
 }
 
 /** macOS: the login Keychain item through /usr/bin/security; the value goes in on stdin (security -i). */

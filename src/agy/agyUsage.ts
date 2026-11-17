@@ -4,21 +4,26 @@
 // spending quota or leaving a conversation behind (agy changelog); its payload command.data.groups[] holds the model
 // groups, each with buckets {id, name, window ('5h' | 'weekly'), remaining_fraction, reset_time}. It names no account:
 // the caller attributes the answer to the sign-in that was active before and after the query (agyCommands).
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { isPlainObject, taskkillTree } from '../platform';
+import { isPlainObject } from '../platform';
 
 const USAGE_ARGS = ['-p', '/usage', '--output-format', 'json'];
 const USAGE_TIMEOUT_MS = 60_000;
+// How long a stopped query process may take to exit before its result is 'stuck'
+const EXIT_WAIT_MS = 5_000;
 // Larger answers are not a usage report
 const MAX_OUTPUT = 256 * 1024;
 
 export interface AgyUsageWindow { usedPercent: number; windowMinutes?: number; resetsAt?: number; scope?: string }
 export interface AgyUsage { windows: AgyUsageWindow[]; checkedAt: number }
 
-export type AgyUsageResult = { ok: true; usage: AgyUsage } | { ok: false; reason: 'cliMissing' | 'failed' | 'timeout' | 'unparsed'; detail?: string };
+export type AgyUsageResult = { ok: true; usage: AgyUsage }
+  | { ok: false; reason: 'cliMissing' | 'failed' | 'timeout' | 'unparsed'; detail?: string }
+  // The stopped query process was not confirmed gone; exited settles once it is
+  | { ok: false; reason: 'stuck'; exited: Promise<void> };
 
 /** Where the agy CLI is: the first agy on PATH (Windows: agy.exe / agy.cmd), else the installer's ~/.local/bin/agy. On Linux
  *  the Windows folders WSL appends to PATH (/mnt/<drive>/...) are skipped: a Windows-side agy is never found or run. */
@@ -94,9 +99,15 @@ export type AgyUsageSpawn = (command: string, args: string[], options: { cwd: st
 
 /**
  * Runs the usage query with the agy CLI at `cli` in the home folder. Its raw output is only parsed here, never logged
- * or stored; a failure carries no output either.
+ * or stored; a failure carries no output either. A query that times out or answers too much is stopped, and its result
+ * is given only once that process has exited (on Windows through an agy.cmd shim: once taskkill ended its whole tree and
+ * the shell exited); when that is not confirmed within exitWaitMs the result is 'stuck', whose `exited` settles when
+ * the process is known to be gone (never, when a Windows tree could not be ended), so a switch can wait for it.
  */
-export function readAgyUsage(cli: string | undefined, options: { spawn?: AgyUsageSpawn; now?: () => number; timeoutMs?: number; platform?: NodeJS.Platform; killTree?: (pid: number) => void } = {}): Promise<AgyUsageResult> {
+export function readAgyUsage(cli: string | undefined, options: {
+  spawn?: AgyUsageSpawn; now?: () => number; timeoutMs?: number; platform?: NodeJS.Platform;
+  killTree?: (pid: number) => Promise<boolean>; exitWaitMs?: number;
+} = {}): Promise<AgyUsageResult> {
   if (!cli) return Promise.resolve({ ok: false, reason: 'cliMissing' });
   const run: AgyUsageSpawn = options.spawn ?? ((c, a, o) => spawn(c, a, { ...o, stdio: ['ignore', 'pipe', 'ignore'] }));
   const now = options.now ?? Date.now;
@@ -112,34 +123,58 @@ export function readAgyUsage(cli: string | undefined, options: { spawn?: AgyUsag
     }
     let out = '';
     let done = false;
+    let stopping = false;
+    let markClosed!: () => void;
+    const closed = new Promise<void>((r) => { markClosed = r; });
     const finish = (result: AgyUsageResult): void => {
       if (done) return;
       done = true;
       clearTimeout(timer);
       resolve(result);
     };
-    // Through a shell (Windows agy.cmd) kill() would end only cmd.exe and leave agy running: end the whole tree
-    const stop = (): void => {
-      if (shell && child.pid !== undefined) (options.killTree ?? taskkillTree)(child.pid);
-      else child.kill();
+    // Stops the query and gives `result` once the process is gone. Through a shell (Windows agy.cmd) kill() would end
+    // only cmd.exe and leave agy running, so the whole tree is ended and must be confirmed
+    const stopThen = (result: AgyUsageResult): void => {
+      if (done || stopping) return;
+      stopping = true;
+      clearTimeout(timer);
+      let treeEnded: Promise<boolean>;
+      if (shell && child.pid !== undefined) treeEnded = (options.killTree ?? confirmedKillTree)(child.pid);
+      else {
+        child.kill();
+        treeEnded = Promise.resolve(true);
+      }
+      const gone = Promise.all([closed, treeEnded]).then(([, ended]) => ended);
+      let waitTimer: ReturnType<typeof setTimeout> | undefined;
+      const waited = new Promise<boolean>((r) => { waitTimer = setTimeout(() => r(false), options.exitWaitMs ?? EXIT_WAIT_MS); });
+      void Promise.race([gone, waited]).then((ended) => {
+        clearTimeout(waitTimer);
+        finish(ended ? result : { ok: false, reason: 'stuck', exited: gone.then((ok) => (ok ? undefined : new Promise<void>(() => undefined))) });
+      });
     };
-    const timer = setTimeout(() => {
-      stop();
-      finish({ ok: false, reason: 'timeout' });
-    }, options.timeoutMs ?? USAGE_TIMEOUT_MS);
+    const timer = setTimeout(() => stopThen({ ok: false, reason: 'timeout' }), options.timeoutMs ?? USAGE_TIMEOUT_MS);
     child.stdout?.setEncoding('utf8');
     child.stdout?.on('data', (d: string) => {
       out += d;
-      if (out.length > MAX_OUTPUT) {
-        stop();
-        finish({ ok: false, reason: 'unparsed' });
-      }
+      if (out.length > MAX_OUTPUT) stopThen({ ok: false, reason: 'unparsed' });
     });
-    child.on('error', (err) => finish({ ok: false, reason: (err as NodeJS.ErrnoException).code === 'ENOENT' ? 'cliMissing' : 'failed', detail: err.message }));
+    child.on('error', (err) => {
+      // A process that failed to start has nothing to wait for
+      if (!stopping) finish({ ok: false, reason: (err as NodeJS.ErrnoException).code === 'ENOENT' ? 'cliMissing' : 'failed', detail: err.message });
+    });
     child.on('close', (code) => {
+      markClosed();
+      if (stopping) return;
       if (code !== 0) return finish({ ok: false, reason: 'failed', detail: `exit ${code}` });
       const usage = parseAgyUsage(out, now());
       finish(usage ? { ok: true, usage } : { ok: false, reason: 'unparsed' });
     });
+  });
+}
+
+/** Windows: ends a process tree with taskkill and reports whether taskkill succeeded. */
+function confirmedKillTree(pid: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    execFile('taskkill', ['/T', '/F', '/PID', String(pid)], { windowsHide: true }, (err) => resolve(!err));
   });
 }

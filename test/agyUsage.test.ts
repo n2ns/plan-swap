@@ -56,7 +56,8 @@ function fakeSpawn(behave: (child: EventEmitter & UsageSpawnChild & { stdout: Pa
   let killed = false;
   const spawn: AgyUsageSpawn = (command, args) => {
     calls.push({ command, args });
-    const child = Object.assign(new EventEmitter(), { stdout: new PassThrough(), kill: () => { killed = true; return true; } });
+    // A killed process exits right after the signal
+    const child = Object.assign(new EventEmitter(), { stdout: new PassThrough(), kill: () => { killed = true; setImmediate(() => child.emit('close', null)); return true; } });
     setImmediate(() => behave(child));
     return child;
   };
@@ -134,8 +135,48 @@ describe('review fixes', () => {
   });
   test('Windows: a timed-out agy.cmd query ends the whole process tree', async () => {
     const killed: number[] = [];
-    const spawn: AgyUsageSpawn = () => Object.assign(new EventEmitter(), { stdout: new PassThrough(), pid: 4242, kill: () => true });
-    assert.deepEqual(await readAgyUsage('C:\\Tools\\agy.cmd', { spawn, platform: 'win32', timeoutMs: 10, killTree: (pid) => killed.push(pid) }), { ok: false, reason: 'timeout' });
+    let child!: EventEmitter;
+    const spawn: AgyUsageSpawn = () => (child = Object.assign(new EventEmitter(), { stdout: new PassThrough(), pid: 4242, kill: () => true }));
+    const killTree = async (pid: number): Promise<boolean> => {
+      killed.push(pid);
+      setImmediate(() => child.emit('close', 1));
+      return true;
+    };
+    assert.deepEqual(await readAgyUsage('C:\\Tools\\agy.cmd', { spawn, platform: 'win32', timeoutMs: 10, killTree }), { ok: false, reason: 'timeout' });
     assert.deepEqual(killed, [4242]);
+  });
+});
+
+describe('second review fixes', () => {
+  test('a timed-out query resolves only after its own process has exited', async () => {
+    let closed = false;
+    const spawn: AgyUsageSpawn = () => {
+      const child = Object.assign(new EventEmitter(), { stdout: new PassThrough(), pid: 7, kill: () => {
+        // The process takes a moment to exit after the signal
+        setTimeout(() => { closed = true; child.emit('close', null); }, 40);
+        return true;
+      } });
+      return child;
+    };
+    const r = await readAgyUsage('/opt/agy', { spawn, timeoutMs: 10 });
+    assert.equal(closed, true, 'resolved before the query process exited');
+    assert.equal(r.ok, false);
+  });
+  test('a query process that does not exit after the signal is reported as still running', async () => {
+    const spawn: AgyUsageSpawn = () => Object.assign(new EventEmitter(), { stdout: new PassThrough(), pid: 8, kill: () => true });
+    const r = await readAgyUsage('/opt/agy', { spawn, timeoutMs: 10, exitWaitMs: 20 });
+    assert.equal(!r.ok && r.reason, 'stuck');
+  });
+  test('Windows: the shim\'s tree must be ended before the query counts as finished', async () => {
+    const spawn: AgyUsageSpawn = () => {
+      const child = Object.assign(new EventEmitter(), { stdout: new PassThrough(), pid: 9, kill: () => true });
+      return child;
+    };
+    let ended!: (ok: boolean) => void;
+    const result = readAgyUsage('C:\\Tools\\agy.cmd', { spawn, platform: 'win32', timeoutMs: 10, exitWaitMs: 50,
+      killTree: () => new Promise<boolean>((r) => { ended = r; }) });
+    setTimeout(() => ended(false), 15);
+    const r = await result;
+    assert.equal(!r.ok && r.reason, 'stuck', 'a failed taskkill leaves the query unconfirmed');
   });
 });
