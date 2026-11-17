@@ -2,7 +2,7 @@
 
 [English](user-guide.md) · [简体中文](user-guide.zh-cn.md) · [繁體中文](user-guide.zh-tw.md) · [Español](user-guide.es.md) · [日本語](user-guide.ja.md) · **한국어**
 
-PlanSwap을 사용하면 여러 Claude Code 계정과 Codex 계정에 로그인한 상태를 유지하면서 편집기가 사용할 계정을 선택할 수 있습니다. 이 설명서에서는 사이드바의 컨트롤, 계정 준비, 전환, 사용량 한도, 일상적인 관리 방법을 안내합니다. Claude와 Codex는 서로 독립적으로 관리되므로 한쪽을 전환해도 다른 쪽은 전환되지 않습니다.
+PlanSwap을 사용하면 여러 Claude Code, Codex, Antigravity CLI(agy) 계정에 로그인한 상태를 유지하면서 편집기나 agy가 사용할 계정을 선택할 수 있습니다. 이 설명서에서는 사이드바의 컨트롤, 계정 준비, 전환, 사용량 한도, 일상적인 관리 방법을 안내합니다. Claude, Codex, agy는 서로 독립적으로 관리되므로 하나를 전환해도 나머지는 전환되지 않습니다.
 
 아래의 버튼 이름은 한국어 UI 표기를 따릅니다. 아이콘 위에 마우스를 올리면 이름이 표시됩니다. 패널 하단 바닥글의 책 아이콘을 클릭하면 이 설명서가 열립니다.
 

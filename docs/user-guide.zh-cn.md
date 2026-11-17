@@ -2,7 +2,7 @@
 
 [English](user-guide.md) · **简体中文** · [繁體中文](user-guide.zh-tw.md) · [Español](user-guide.es.md) · [日本語](user-guide.ja.md) · [한국어](user-guide.ko.md)
 
-PlanSwap 让你同时保持多个 Claude Code 和 Codex 账号的登录状态，并选择编辑器使用哪一个。本说明介绍侧边栏的各项控件、账号设置、切换、用量额度和日常维护。Claude 和 Codex 相互独立管理：切换其中一个不会切换另一个。
+PlanSwap 让你同时保持多个 Claude Code、Codex 和 Antigravity CLI（agy）账号的登录状态，并选择编辑器或 agy 使用哪一个。本说明介绍侧边栏的各项控件、账号设置、切换、用量额度和日常维护。Claude、Codex 和 agy 相互独立管理：切换其中一个不会切换其他。
 
 下文按钮名称采用中文界面的文字。将鼠标悬停在图标上可以看到它的名称。面板底部页脚中的书本图标可打开本说明。
 

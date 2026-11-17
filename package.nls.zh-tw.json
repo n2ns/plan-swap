@@ -1,6 +1,6 @@
 {
-  "displayName": "PlanSwap：Claude Code 與 Codex 帳號切換器",
-  "description": "在側邊欄查看你訂閱的 Claude Code 與 Codex 帳號（Pro、Max、Plus…）還剩多少用量額度，額度不足時提示該換哪個帳號，並一鍵切換。支援 WSL/Linux、Windows 和 macOS。",
+  "displayName": "PlanSwap：Claude Code、Codex 與 Antigravity 帳號切換器",
+  "description": "在側邊欄查看你的 Claude Code、Codex 和 Antigravity CLI（agy）帳號（Pro、Max、Plus…）還剩多少用量額度，Claude 或 Codex 額度不足時提示該換哪個帳號，並一鍵切換。支援 WSL/Linux、Windows 和 macOS。",
   "command.switchAccount": "切換帳號",
   "category.claude": "Claude 帳號",
   "command.addAccount": "新增帳號（將焦點移至側邊欄輸入方塊）",

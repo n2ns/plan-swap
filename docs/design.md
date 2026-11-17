@@ -130,7 +130,7 @@ Behavior: [Features §13](features.md#13-language); rules for code and translati
 
 - UI wording is concise and idiomatic in each language. Product names and technical terms such as CLI, API key and Extension Host remain untranslated.
 - Static strings in `package.json` (`%key%` from `package.nls*.json`) are resolved by VS Code from **its own display language**, not from `planswap.language`; this is a platform limitation.
-- The brand "PlanSwap" in `displayName` (currently "PlanSwap: Claude Code & Codex Account Switcher") is permanent; the part after the colon grows as more AI tools are supported.
+- The brand "PlanSwap" in `displayName` (currently "PlanSwap: Claude Code, Codex & Antigravity Account Switcher") is permanent; the part after the colon grows as more AI tools are supported.
 - Runtime strings follow the setting immediately, without a reload: the host calls `setLocale`, re-pushes the full panel state (the Webview re-renders everything) and updates the status bar.
 - Pre-rename setting: versions 0.1.0 - 0.1.3 used `aiSwitcher.language`. On activation `migrateLegacyLanguage` copies a user-level `en` / `zh-cn` of the old key to `planswap.language` when the new key has no user-level value, then sets the `globalState` flag `legacy.languageMigrated` (client side, like the application-scope setting), so it runs only once and a later reset of the new setting is not overridden. The old key is no longer contributed, so the extension cannot write or remove it. A failure is only logged and retried on the next activation.
 

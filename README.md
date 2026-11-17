@@ -2,9 +2,9 @@
   <img src="resources/icon.png" alt="PlanSwap" width="128" height="128">
 </p>
 
-# PlanSwap: Claude Code & Codex Account Switcher
+# PlanSwap: Claude Code, Codex & Antigravity Account Switcher
 
-See how much is left on each Claude Code and Codex subscription account you own (Claude Pro / Max, ChatGPT Plus / Pro…), get told which one to use when the current one runs low, and switch with one click from a VS Code sidebar, without signing out and back in. Built for VS Code WSL remote windows, native Windows and macOS; local Linux desktops and other remote windows work too.
+See how much is left on each Claude Code and Codex subscription account you own (Claude Pro / Max, ChatGPT Plus / Pro…) and on the Google accounts of the Antigravity CLI (agy), get told which Claude or Codex account to use when the current one runs low, and switch with one click from a VS Code sidebar, without signing out and back in. Built for VS Code WSL remote windows, native Windows and macOS; local Linux desktops and other remote windows work too.
 
 [![Open VSX version](https://img.shields.io/open-vsx/v/n2ns/planswap?style=flat&label=open-vsx)](https://open-vsx.org/extension/n2ns/planswap)
 [![VS Marketplace version](https://vsmarketplacebadges.dev/version/n2ns.planswap.svg)](https://marketplace.visualstudio.com/items?itemName=n2ns.planswap)

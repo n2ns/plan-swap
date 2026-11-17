@@ -2,7 +2,7 @@
 
 **English** · [简体中文](user-guide.zh-cn.md) · [繁體中文](user-guide.zh-tw.md) · [Español](user-guide.es.md) · [日本語](user-guide.ja.md) · [한국어](user-guide.ko.md)
 
-PlanSwap lets you keep several Claude Code and Codex accounts signed in and choose which one your editor uses. This guide walks through the sidebar controls, account setup, switching, usage limits and everyday maintenance. Claude and Codex are managed independently: switching one does not switch the other.
+PlanSwap lets you keep several Claude Code, Codex and Antigravity CLI (agy) accounts signed in and choose which one your editor or agy uses. This guide walks through the sidebar controls, account setup, switching, usage limits and everyday maintenance. Claude, Codex and agy are managed independently: switching one does not switch the others.
 
 Button names below use the English UI. Hover an icon to see its name in your language. The book icon in the footer at the bottom of the panel opens this guide.
 
