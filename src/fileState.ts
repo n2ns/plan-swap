@@ -24,6 +24,9 @@ type State = Record<string, unknown>;
 export const LOCK_WAIT_MS = 5000;
 /** A lock without a readable owner that is older than this was left behind (a crash between mkdir and the owner note). */
 export const LOCK_STALE_MS = 10_000;
+/** A lock whose owner note names a live process but that is older than this was left behind too: the owner died and its
+ *  pid was reused (after a reboot or a WSL shutdown). A hold is synchronous and takes milliseconds. */
+export const LOCK_HELD_STALE_MS = 60_000;
 
 /** The Memento the state stores write through (FileMemento; an in-memory stand-in in tests) */
 export interface StateMemento extends Memento {
@@ -161,8 +164,8 @@ export class FileMemento implements StateMemento {
     }
   }
 
-  /** Removes a lock left behind by a process that is gone (owner pid not alive, or this process's own pid) or, without a readable owner note,
-   *  one older than LOCK_STALE_MS. Returns true when the caller should try mkdir again at once. The directory is
+  /** Removes a lock left behind by a process that is gone (owner pid not alive, this process's own pid, or a live pid on
+   *  a lock older than LOCK_HELD_STALE_MS) or, without a readable owner note, one older than LOCK_STALE_MS. Returns true when the caller should try mkdir again at once. The directory is
    *  renamed before it is removed: only one of several waiters succeeds, the others see it gone and retry. */
   private takeOverStaleLock(lockDir: string): boolean {
     let owner: number | undefined;
@@ -172,17 +175,17 @@ export class FileMemento implements StateMemento {
     } catch {
       // No note (yet): decided by age below
     }
-    let stale: boolean;
-    if (owner !== undefined) {
-      // This process never waits for a lock it holds (holding is synchronous): its own pid is a leftover
-      stale = owner === process.pid || !pidAlive(owner);
-    } else {
-      try {
-        stale = Date.now() - fs.statSync(lockDir).mtimeMs > LOCK_STALE_MS;
-      } catch {
-        return true; // released meanwhile
-      }
+    let age: number;
+    try {
+      age = Date.now() - fs.statSync(lockDir).mtimeMs;
+    } catch {
+      return true; // released meanwhile
     }
+    // This process never waits for a lock it holds (holding is synchronous): its own pid is a leftover; a live owner
+    // pid on a lock far older than any hold was reused after its process died
+    const stale = owner !== undefined
+      ? owner === process.pid || !pidAlive(owner) || age > LOCK_HELD_STALE_MS
+      : age > LOCK_STALE_MS;
     if (!stale) return false;
     const away = `${lockDir}.stale.${process.pid}.${Date.now()}`;
     try {

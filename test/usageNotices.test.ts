@@ -63,3 +63,15 @@ test('nothing is announced when the record cannot be saved', async () => {
   const notices = new LowUsageNotices(failing, () => NOW);
   assert.equal(await notices.take('claude', '/tmp/x', [hour(90)], 20), undefined);
 });
+
+test('another sign-in in the same folder, with another reset period, is announced again', async () => {
+  const tmp = makeTempHome('low-usage-relogin');
+  try {
+    const notices = new LowUsageNotices(new FileMemento(), () => NOW);
+    const dir = path.join(tmp.home, '.claude-work');
+    const weekResetIn = (used: number, days: number) => ({ usedPercent: used, windowMinutes: 10080, resetsAt: NOW / 1000 + days * 86400 });
+    assert.equal((await notices.take('claude', dir, [weekResetIn(85, 6)], 20))?.remaining, 15);
+    // Signed in again as another account whose weekly window resets in 2 days
+    assert.equal((await notices.take('claude', dir, [weekResetIn(90, 2)], 20))?.remaining, 10);
+  } finally { tmp.restore(); }
+});

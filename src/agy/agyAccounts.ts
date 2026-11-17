@@ -10,6 +10,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { AgyError, decodeLogin, sameLogin, type AgyLogin, type LiveStore } from './agyLogin';
+import { renameReplacing } from '../platform';
 
 const CREDENTIAL_FILE = 'credential.json';
 // Account folder names: a hash of the email, so no address appears in a path
@@ -172,7 +173,7 @@ export class AgyAccounts {
     const tmp = path.join(dir, `.${CREDENTIAL_FILE}.${process.pid}-${Date.now()}`);
     fs.writeFileSync(tmp, JSON.stringify(doc), { mode: 0o600, flag: 'wx' });
     try {
-      fs.renameSync(tmp, file);
+      renameReplacing(tmp, file);
     } catch (err) {
       fs.rmSync(tmp, { force: true });
       throw err;

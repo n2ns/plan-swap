@@ -121,8 +121,33 @@ describe('fileStore (Linux / WSL)', () => {
     const noService = fakeRun(() => ({ code: 1, stderr: 'Error: GDBus.Error:org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.secrets was not provided by any .service files' }));
     assert.equal(await fileStore(file, noService.run, bus).blocked(), undefined);
     const noBus = fakeRun(() => ({ code: null, stderr: 'spawn gdbus ENOENT' }));
-    assert.equal(await fileStore(file, noBus.run, { XDG_RUNTIME_DIR: path.join(tmp.home, 'no-runtime') }).blocked(), undefined);
+    assert.equal(await fileStore(file, noBus.run, { XDG_RUNTIME_DIR: path.join(tmp.home, 'no-runtime') }, path.join(tmp.home, 'no-run-user')).blocked(), undefined);
     assert.equal(noBus.calls.length, 0, 'without a session bus nothing is started');
+  });
+  test('POSIX: the user bus socket under /run/user/<uid> is a session bus even without the environment variables', POSIX_ONLY, async () => {
+    const runUser = path.join(tmp.home, 'run-user');
+    const socket = path.join(runUser, String(process.getuid!()), 'bus');
+    fs.mkdirSync(path.dirname(socket), { recursive: true });
+    fs.writeFileSync(socket, '');
+    const found = fakeRun(() => ({ stdout: "([objectpath '/org/freedesktop/secrets/collection/login/7'], @ao [])" }));
+    assert.equal(await fileStore(agyTokenFile(tmp.home), found.run, {}, runUser).blocked(), 'linuxKeyring');
+    const args = found.calls[0].args;
+    assert.deepEqual(args.slice(args.indexOf('--address'), args.indexOf('--address') + 2), ['--address', `unix:path=${socket}`]);
+    assert.ok(!args.includes('--session'));
+    // XDG_RUNTIME_DIR does not count: godbus looks only by uid, so another bus there is not the one agy uses
+    const other = path.join(tmp.home, 'other-runtime');
+    fs.mkdirSync(other, { recursive: true });
+    fs.writeFileSync(path.join(other, 'bus'), '');
+    const byUid = fakeRun(() => ({ stdout: '(@ao [], @ao [])' }));
+    await fileStore(agyTokenFile(tmp.home), byUid.run, { XDG_RUNTIME_DIR: other }, runUser).blocked();
+    assert.ok(byUid.calls[0].args.includes(`unix:path=${socket}`));
+    assert.ok(!byUid.calls[0].args.includes('--session'));
+    // An older system's address file instead of the socket
+    fs.rmSync(socket);
+    fs.writeFileSync(path.join(path.dirname(socket), 'dbus-session'), 'DBUS_SESSION_BUS_ADDRESS=unix:abstract=/tmp/dbus-x\n');
+    const old = fakeRun(() => ({ stdout: '(@ao [], @ao [])' }));
+    assert.equal(await fileStore(agyTokenFile(tmp.home), old.run, {}, runUser).blocked(), undefined);
+    assert.ok(old.calls[0].args.includes('unix:abstract=/tmp/dbus-x'));
   });
 });
 

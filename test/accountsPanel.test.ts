@@ -407,3 +407,28 @@ test('a registered account whose directory became a regular file still renders a
     assert.equal(sharedFlag(() => true), true);
   } finally { tmp.restore(); }
 });
+
+test('the reload banner names the account that is current now: another window\'s switch or a rename updates it', () => {
+  resetConfig();
+  let current = '/h/.claude-work';
+  let workLabel = 'work';
+  const rows = (): AccountView[] => [
+    { kind: 'default', name: 'default', label: 'default', dir: '/h/.claude', dirLabel: '~/.claude', loggedIn: true, isCurrent: current === '/h/.claude' },
+    { kind: 'named', name: 'work', label: workLabel, dir: '/h/.claude-work', dirLabel: '~/.claude-work', loggedIn: true, isCurrent: current === '/h/.claude-work' },
+  ];
+  const h = harness({ accounts: rows, enabled: () => true, pendingDir: () => undefined, watchTargets: () => [] });
+  const banner = (): string | undefined => {
+    h.messages.length = 0;
+    h.receive({ type: 'ready' });
+    const msg = h.messages[0];
+    return msg.type === 'state' ? msg.state.claude.switchedTo : undefined;
+  };
+  try {
+    h.panel.setSwitchedTo('work');
+    assert.equal(banner(), 'work');
+    workLabel = 'Office';
+    assert.equal(banner(), 'Office');
+    current = '/h/.claude';
+    assert.equal(banner(), 'default');
+  } finally { h.dispose(); }
+});

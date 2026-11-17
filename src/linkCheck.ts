@@ -57,14 +57,7 @@ export function accountProblems(c: AccountCheck): Problem[] {
   // These are retention-managed recovery copies, not plugin content. Their names remain recognizable after cleanup.
   const retiredBackup = (entry: string): boolean => c.vendor === 'claude'
     && /^plugins\/installed_plugins\.(?:set-aside\.[^/]+\.json|unreadable\.[^/]+\.kept)$/.test(entry);
-  const cache = (entry: string): boolean => {
-    if (c.def === undefined || !/^plugins\/[^/]+$/.test(entry)) return false;
-    try {
-      return fs.statSync(path.join(c.def, entry)).isFile();
-    } catch {
-      return false;
-    }
-  };
+  const cache = (entry: string): boolean => c.def !== undefined && isPluginCacheFile(c.def, entry);
   const kept = (entries: string[]): string[] => entries.filter((n) => !cache(n));
   const lists: Record<ProblemKind, string[]> = {
     missing: kept([...(r?.linked ?? []).filter((n) => !merged.has(n)), ...(r?.stripped ?? []).filter((n) => !unlinked.has(n))]),
@@ -216,4 +209,15 @@ export class LinkCheckNotices {
 
 function fingerprint(keys: readonly string[]): string {
   return createHash('sha256').update(keys.join('\n')).digest('hex').slice(0, 32);
+}
+
+/** Whether entry is a top-level file of the default plugins/ folder ('plugins/<file>'): a cache Claude Code rewrites by
+ *  rename, so an account's own copy of it is a known state, neither missing nor a conflict. */
+export function isPluginCacheFile(defaultDir: string, entry: string): boolean {
+  if (!/^plugins\/[^/]+$/.test(entry)) return false;
+  try {
+    return fs.statSync(path.join(defaultDir, entry)).isFile();
+  } catch {
+    return false;
+  }
 }

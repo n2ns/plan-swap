@@ -2,7 +2,8 @@
 import { after, before, beforeEach, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as path from 'node:path';
-import { affectsSetting, currentDir, isExplicitConfigDir, setConfigDir, workspaceConfigDirOverride } from '../src/claudeSettings';
+import { affectsSetting, currentDir, isExplicitConfigDir, setConfigDir, usageSettingEnv, workspaceConfigDirOverride } from '../src/claudeSettings';
+import { usageEnv } from '../src/claudeUsage';
 import { ConfigurationTarget, resetConfig, setConfig, setWorkspaceConfig, updates } from './stubs/vscode';
 import { assertTempHome, makeTempHome, type TempHome } from './helpers';
 
@@ -159,5 +160,19 @@ describe('workspaceConfigDirOverride', () => {
     assert.equal(currentDir(), ws, 'the effective value is the workspace one');
     setWorkspaceConfig('claudeCode', KEY, { CLAUDE_CONFIG_DIR: ws });
     assert.equal(workspaceConfigDirOverride(), ws);
+  });
+});
+
+describe('usageSettingEnv', () => {
+  test('a configured CLAUDE_CONFIG_DIR keeps its spelling for the usage query of that account only', () => {
+    const spelled = path.join(home, '.claude-work') + path.sep;
+    set([{ name: 'A', value: '1' }, { name: 'CLAUDE_CONFIG_DIR', value: spelled }]);
+    const env = usageSettingEnv();
+    assert.deepEqual(env, { A: '1', CLAUDE_CONFIG_DIR: spelled });
+    assert.equal(usageEnv(currentDir(), true, {}, env).CLAUDE_CONFIG_DIR, spelled);
+    // Another account's query gets its own resolved folder
+    assert.equal(usageEnv(path.join(home, '.claude-other'), true, {}, env).CLAUDE_CONFIG_DIR, path.join(home, '.claude-other'));
+    set([{ name: 'A', value: '1' }]);
+    assert.deepEqual(usageSettingEnv(), { A: '1' });
   });
 });

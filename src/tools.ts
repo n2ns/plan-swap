@@ -11,6 +11,7 @@ import { effectiveDir } from './codex/codexState';
 import { openCodexWslSetting } from './codex/codexSettings';
 import { claudeJsonPath, defaultDir, sameRealPath, syncMcpServers } from './paths';
 import { ensureClaudeLinks, isSharedClaudeAccount } from './claudeShare';
+import { sharedFlag } from './accountsPanel';
 import { syncClaudeAccount } from './claudeSync';
 import type { LinkOptions, ShareReport } from './shareLinks';
 import { askCopyFallback } from './linkPolicy';
@@ -176,7 +177,8 @@ function sharedAccounts(mode: PanelMode, deps: ToolDeps): SharedAccounts | undef
   return {
     vendor: mode === 'claude' ? 'Claude' : 'Codex',
     ops,
-    dirs: dirs().filter((d) => ops.isShared(d)),
+    // A folder that cannot be inspected is left out, so it does not stop the check of the others
+    dirs: dirs().filter((d) => sharedFlag(() => ops.isShared(d)) === true),
     nameOf,
     busyOf: (dir) => (accountBusy ? () => accountBusy(mode, dir) : undefined),
   };

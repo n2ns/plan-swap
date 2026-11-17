@@ -28,7 +28,7 @@ Settings (application scope, applied immediately):
 
 After a switch in this window, a banner names the new account until reload, offering **Reload Window**; closing only hides it, and a later switch updates the name.
 
-The Settings editor has five groups: **General** (7 settings), **Sidebar** (7), **Status Bar** (3), **Accounts** (5) and **Advanced** (3). Accounts lists the three Claude settings together, followed by the two Codex settings. Advanced holds `planswap.usageCheckIntervalSeconds`, `planswap.claude.usageTimeoutSeconds` and `planswap.codex.usageTimeoutSeconds`. Their keys, ranges, defaults and application scope are unchanged.
+The Settings editor has five groups: **General** (7 settings), **Sidebar** (6), **Status Bar** (3), **Accounts** (5) and **Advanced** (3). Accounts lists the three Claude settings together, followed by the two Codex settings. Advanced holds `planswap.usageCheckIntervalSeconds`, `planswap.claude.usageTimeoutSeconds` and `planswap.codex.usageTimeoutSeconds`. Their keys, ranges, defaults and application scope are unchanged.
 
 Shared colors apply immediately. Each sidebar window uses its own remaining percentage, including model-specific windows when shown; the status bar uses the lowest general remaining percentage across its shown products. Sharing thresholds does not make every window the same color. Former per-surface color keys are no longer read or contributed, and user settings are not rewritten.
 
@@ -138,7 +138,7 @@ Row link button (independent named, not current) or `planswap.shareAccount`. Aft
 
 ### 5.7 Unlink a shared account
 
-Panel only (row unlink button; shared named, not current), with the same confirmation and refusals as 5.6. The account becomes independent with a one-time copy of the default configuration; history, sessions and the login stay, and the default directory is not modified. If copying fails the account stays shared and **Re-link** repairs it.
+Panel only (row unlink button; shared named, not current), with the same confirmation and refusals as 5.6. The account becomes independent with a one-time copy of the default configuration; history, sessions and the login stay, and the default directory is not modified. An own `.claude.json` that cannot take the default MCP servers stops it before anything changes; if copying fails later, the account stays shared, the entries copied so far stay its own, and the link check lists them as conflicts.
 
 ### 5.8 Refresh usage limits `planswap.claude.refreshUsage`
 

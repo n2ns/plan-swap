@@ -442,6 +442,34 @@ export function withConfigLock<T>(file: string, real: string, commit: () => T): 
   return withLockDir(`${file}.lock`, 10_000, busy, linked ? () => withLockDir(`${real}.lock`, 10_000, busy, commit) : commit);
 }
 
+// What syncMcpServers merges: the default's servers and the account's info file target, its text and parsed object;
+// undefined when there is nothing to merge. Throws as syncMcpServers does for an unsafe or invalid target.
+function readMcpTarget(fromJson: string, dir: string) {
+  if (sameRealPath(dir, defaultDir())) return undefined;
+  const source = readJsonObject(fromJson)?.mcpServers;
+  if (!isPlainObject(source) || Object.keys(source).length === 0) return undefined;
+  const file = path.join(path.resolve(dir), claudeJsonName());
+  const target = accountInfoTarget(file, dir, fromJson);
+  let before: string | undefined;
+  if (fs.existsSync(file)) before = fs.readFileSync(target.real, 'utf8');
+  let data: unknown = {};
+  if (before !== undefined) {
+    try {
+      data = JSON.parse(stripBom(before));
+    } catch {
+      data = undefined;
+    }
+  }
+  if (!isPlainObject(data)) throw new Error(t('mcp.badTarget', { file: target.real }));
+  return { source, file, target, before, data };
+}
+
+/** Throws what syncMcpServers(fromJson, dir) would throw before writing (an unsafe or invalid account info file);
+ *  writes nothing. */
+export function checkMcpServersTarget(fromJson: string, dir: string): void {
+  readMcpTarget(fromJson, dir);
+}
+
 /**
  * Merges the user-level MCP servers (mcpServers) of the default account's info file fromJson into <dir>/.claude.json:
  * names the account lacks are added, identical ones skipped, differing ones kept (reported in kept); nothing is ever removed.
@@ -455,24 +483,10 @@ export function withConfigLock<T>(file: string, real: string, commit: () => T): 
  */
 export function syncMcpServers(fromJson: string, dir: string, beforeCommit?: () => void): McpSyncResult {
   const result: McpSyncResult = { added: [], kept: [] };
-  if (sameRealPath(dir, defaultDir())) return result;
-  const source = readJsonObject(fromJson)?.mcpServers;
-  if (!isPlainObject(source) || Object.keys(source).length === 0) return result;
-  const file = path.join(path.resolve(dir), claudeJsonName());
-  const target = accountInfoTarget(file, dir, fromJson);
-
+  const read = readMcpTarget(fromJson, dir);
+  if (!read) return result;
+  const { source, file, target, before, data } = read;
   const { real, mode } = target;
-  let before: string | undefined;
-  if (fs.existsSync(file)) before = fs.readFileSync(real, 'utf8');
-  let data: unknown = {};
-  if (before !== undefined) {
-    try {
-      data = JSON.parse(stripBom(before));
-    } catch {
-      data = undefined;
-    }
-  }
-  if (!isPlainObject(data)) throw new Error(t('mcp.badTarget', { file: real }));
 
   const current =isPlainObject(data.mcpServers) ? data.mcpServers : {};
   const merged: Record<string, unknown> = { ...current };

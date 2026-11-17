@@ -139,8 +139,12 @@ export interface LiveStore {
   blocked(): Promise<AgyErrorCode | undefined>;
 }
 
-/** Linux / WSL: agy's token file (atomic replace, mode 600, folder 700 when created). env: where the session bus is looked up. */
-export function fileStore(file: string = agyTokenFile(), run: Run = defaultRun, env: NodeJS.ProcessEnv = process.env): LiveStore {
+// Where go-keyring's godbus looks for the session bus by uid
+const RUN_USER = '/run/user';
+
+/** Linux / WSL: agy's token file (atomic replace, mode 600, folder 700 when created). env and runUser (/run/user): where
+ *  the session bus is looked up. */
+export function fileStore(file: string = agyTokenFile(), run: Run = defaultRun, env: NodeJS.ProcessEnv = process.env, runUser = RUN_USER): LiveStore {
   return {
     kind: 'file',
     async read() {
@@ -169,7 +173,7 @@ export function fileStore(file: string = agyTokenFile(), run: Run = defaultRun, 
       }
     },
     blocked: async () => {
-      const keyring = await secretServiceState(run, env);
+      const keyring = await secretServiceState(run, env, runUser);
       return keyring === 'item' ? 'linuxKeyring' : keyring === 'unknown' ? 'keyringUnknown' : undefined;
     },
   };
@@ -182,9 +186,10 @@ export function fileStore(file: string = agyTokenFile(), run: Run = defaultRun, 
  * 'unknown' when a session bus exists but the lookup failed (no gdbus, a timeout, another D-Bus error): go-keyring talks
  * to D-Bus itself, so agy may still read the keyring.
  */
-export async function secretServiceState(run: Run = defaultRun, env: NodeJS.ProcessEnv = process.env): Promise<'item' | 'none' | 'unknown'> {
-  if (!sessionBusExists(env)) return 'none';
-  const r = await run('gdbus', ['call', '--session', '--dest', 'org.freedesktop.secrets', '--object-path', '/org/freedesktop/secrets',
+export async function secretServiceState(run: Run = defaultRun, env: NodeJS.ProcessEnv = process.env, runUser = RUN_USER): Promise<'item' | 'none' | 'unknown'> {
+  const bus = sessionBus(env, runUser);
+  if (!bus) return 'none';
+  const r = await run('gdbus', ['call', ...bus, '--dest', 'org.freedesktop.secrets', '--object-path', '/org/freedesktop/secrets',
     '--method', 'org.freedesktop.Secret.Service.SearchItems', `{'service': '${KEYRING_SERVICE}', 'username': '${KEYRING_USER}'}`]);
   if (r.code === 0) {
     // Output: ([unlocked paths], [locked paths]); an empty pair prints as (@ao [], @ao [])
@@ -193,10 +198,23 @@ export async function secretServiceState(run: Run = defaultRun, env: NodeJS.Proc
   return /org\.freedesktop\.DBus\.Error\.ServiceUnknown/.test(r.stderr) ? 'none' : 'unknown';
 }
 
-// The session bus go-keyring would connect to: DBUS_SESSION_BUS_ADDRESS, or the systemd user bus socket
-function sessionBusExists(env: NodeJS.ProcessEnv): boolean {
-  if (env.DBUS_SESSION_BUS_ADDRESS) return true;
-  return !!env.XDG_RUNTIME_DIR && fs.existsSync(path.join(env.XDG_RUNTIME_DIR, 'bus'));
+// The gdbus arguments that reach the session bus go-keyring's godbus would connect to (Fact 3), undefined when there
+// is none: DBUS_SESSION_BUS_ADDRESS (--session), else by uid whatever XDG_RUNTIME_DIR says, the socket
+// /run/user/<uid>/bus or the address in /run/user/<uid>/dbus-session (--address)
+function sessionBus(env: NodeJS.ProcessEnv, runUser: string): string[] | undefined {
+  if (env.DBUS_SESSION_BUS_ADDRESS) return ['--session'];
+  const uid = process.getuid?.();
+  if (uid === undefined) return undefined;
+  const dir = path.join(runUser, String(uid));
+  if (fs.existsSync(path.join(dir, 'bus'))) return ['--address', `unix:path=${path.join(dir, 'bus')}`];
+  try {
+    const text = fs.readFileSync(path.join(dir, 'dbus-session'), 'utf8');
+    const address = text.startsWith('DBUS_SESSION_BUS_ADDRESS=') ? text.slice('DBUS_SESSION_BUS_ADDRESS='.length).replace(/[\r\n]+$/u, '') : '';
+    if (address) return ['--address', address];
+  } catch {
+    // No such file: no bus found by uid
+  }
+  return undefined;
 }
 
 /** macOS: the login Keychain item through /usr/bin/security; the value goes in on stdin (security -i). */

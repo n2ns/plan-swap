@@ -198,6 +198,19 @@ describe('Claude repair scope', POSIX_ONLY, () => {
     }
   });
 
+  test('a linked account folder that cannot be inspected does not stop the check of the others', async (ctx) => {
+    const { tmp, source, dirs } = fixture();
+    try {
+      fs.writeFileSync(source, JSON.stringify({ mcpServers: { s: { command: 's' } } }));
+      const broken = path.join(tmp.home, '.claude-broken');
+      fs.writeFileSync(broken, 'not a folder');
+      ctx.mock.method(window, 'showInformationMessage', async () => undefined);
+      ctx.mock.method(window, 'showWarningMessage', async () => undefined);
+      await checkSharedInBackground('claude', { claudeDirs: () => [broken, dirs[0]], linkNotices: new LinkCheckNotices(new MemoryMemento()) });
+      assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dirs[0], '.claude.json'), 'utf8')).mcpServers, { s: { command: 's' } });
+    } finally { tmp.restore(); }
+  });
+
   test('servers added before the sync base write fails are still named, and the failure is logged', async (ctx) => {
     const { tmp, source, dirs } = fixture();
     try {

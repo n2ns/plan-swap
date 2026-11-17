@@ -43,10 +43,10 @@ export function hookFileFor(kind: HookKind): string {
 
 let cachedKind: ServerKind | undefined;
 /** The kind of the WSL server hosting this extension host, detected once (detectServerKind; a process cannot change
- *  its parent): 'unknown' on Windows and macOS (no WSL server, so only the shared state file), outside a WSL server
- *  and in tests. */
+ *  its parent): 'unknown' on Windows and macOS (no WSL server, so only the shared state file), outside WSL (no
+ *  WSL_DISTRO_NAME, e.g. a Remote-SSH host with the same server layout), outside a WSL server and in tests. */
 export function currentServerKind(): ServerKind {
-  cachedKind ??= isWindows() || isMac() ? 'unknown' : detectServerKind();
+  cachedKind ??= isWindows() || isMac() || !process.env.WSL_DISTRO_NAME ? 'unknown' : detectServerKind();
   return cachedKind;
 }
 

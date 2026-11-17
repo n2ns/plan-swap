@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { FileMemento, LOCK_STALE_MS } from '../src/fileState';
+import { FileMemento, LOCK_HELD_STALE_MS, LOCK_STALE_MS } from '../src/fileState';
 import { setLocale, t } from '../src/i18n';
 import { makeTempHome, read, type TempHome } from './helpers';
 
@@ -76,6 +76,16 @@ if (workerSpec) {
       await assert.rejects(m.update('k', 1), /holds the state file lock/);
       assert.equal(fs.existsSync(m.lockDir), true, 'the fresh lock is left to its owner');
       fs.rmSync(m.lockDir, { recursive: true, force: true });
+    });
+
+    test('a lock whose owner pid is alive but far older than any hold is taken over (a reused pid)', async () => {
+      const m = new FileMemento(fileOf('e.json'), 1000);
+      fs.mkdirSync(m.lockDir, { recursive: true });
+      fs.writeFileSync(path.join(m.lockDir, 'owner'), String(process.ppid)); // alive, not this process
+      const old = new Date(Date.now() - LOCK_HELD_STALE_MS - 5000);
+      fs.utimesSync(m.lockDir, old, old);
+      await m.update('k', 1);
+      assert.deepEqual(JSON.parse(read(fileOf('e.json'))), { k: 1 });
     });
 
     test('a lock without an owner note is taken over only once it is old', async () => {

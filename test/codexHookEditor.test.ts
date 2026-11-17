@@ -18,6 +18,8 @@ before(() => {
   tmp = makeTempHome('codex-hook-editor');
   home = tmp.home;
   process.env.SHELL = '/bin/bash';
+  // A WSL window: the hook kinds apply only there
+  process.env.WSL_DISTRO_NAME ??= 'Ubuntu';
   const realRead = fs.readFileSync;
   mock.method(fsDefault, 'readFileSync', ((file: fs.PathOrFileDescriptor, ...args: unknown[]) => {
     if (file === `/proc/${process.ppid}/cmdline`) {

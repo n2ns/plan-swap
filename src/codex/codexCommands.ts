@@ -52,7 +52,7 @@ import { joinSentences, t } from '../i18n';
 import type { CodexUsageHistory } from './codexUsageHistory';
 import {
   API_SERVICES, DEEPSEEK_MODELS, PROVIDER_FILES, ProviderConfigError, SERVICE_INFO, checkBaseUrl, createProviderConfig,
-  editProviderConfig, hasProviderMarker, preserveProviderConfig, providerLabel, readProviderEditState, readProviderInfo, readProviderKey,
+  editProviderConfig, hasProviderMarker, model as checkModel, preserveProviderConfig, providerLabel, readProviderEditState, readProviderInfo, readProviderKey,
   validateProviderConfig, type ApiService, type ProviderErrorCode,
 } from './codexProvider';
 import { fetchModels, ModelListError } from './providerModels';
@@ -704,7 +704,7 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     const target = { service: input.service, baseUrl: input.service === 'custom' ? input.baseUrl?.trim() : undefined };
     const model = input.model.trim();
     const key = input.key;
-    if (!model) return providerErrorText('model');
+    try { checkModel(target.service, model); } catch { return providerErrorText('model'); }
     if (SERVICE_INFO[target.service].keyRequired && !key.trim()) return t('codex.provider.keyRequired');
     if (/\s|[\x00-\x1f\x7f]/u.test(key.trim())) return providerErrorText('key');
     // Fails before any directory is made, so a rejected form leaves nothing behind

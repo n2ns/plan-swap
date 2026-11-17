@@ -143,6 +143,8 @@ export class CodexUsageMonitor {
    * older than staleMs; otherwise joins a running query or does nothing. A shared observation younger than staleMs
    * (cachedUsage; one dated more than 2 minutes in the future does not count) also starts nothing and becomes the live
    * result when it is newer than the shown one, so a window opened after another's query shows its values at once.
+   * While the last attempt is recent, a shared observation made after it (another window's query) is adopted the same
+   * way.
    */
   refreshIfStale(): Promise<void> {
     if (this.skipProvider()) return Promise.resolve();
@@ -150,7 +152,13 @@ export class CodexUsageMonitor {
     if (this.needsRefresh) return this.refresh();
     const now = this.now();
     const staleMs = this.staleMs();
-    if (this.lastAttempt !== undefined && now - this.lastAttempt < staleMs) return Promise.resolve();
+    if (this.lastAttempt !== undefined && now - this.lastAttempt < staleMs) {
+      // Another window's newer observation is shown meanwhile; one from before this window's attempt does not replace
+      // what that attempt showed (a failure included)
+      const newer = this.cachedUsage(this.dirOf());
+      if (newer && newer.checkedAt > this.lastAttempt) this.adoptCached();
+      return Promise.resolve();
+    }
     const shared = this.cachedUsage(this.dirOf());
     if (shared && shared.checkedAt <= now + FUTURE_TOLERANCE_MS && now - shared.checkedAt < staleMs) {
       this.adoptCached();

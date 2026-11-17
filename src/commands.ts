@@ -16,6 +16,7 @@ import {
   checkSafeToDelete,
   configDirFromEnv,
 } from './paths';
+import { isPluginCacheFile } from './linkCheck';
 import {
   claudeAccountBusy,
   copyClaudeIndependent,
@@ -31,7 +32,7 @@ import { validateAccountName } from './accountName';
 import { handleAccountMessage, type AccountMessageOps } from './panelMessages';
 import { currentDir, isExplicitConfigDir, setConfigDir, settingEnv, workspaceConfigDirOverride } from './claudeSettings';
 import type { AccountStore } from './accounts';
-import { claudeCardLabel, claudeProviderErrorText, type AccountsPanel } from './accountsPanel';
+import { claudeCardLabel, claudeProviderErrorText, sharedFlag, type AccountsPanel } from './accountsPanel';
 import {
   CLAUDE_API_SERVICES, CLAUDE_SERVICE_INFO, ProviderConfigError, claudeModelsUrl, createClaudeProviderConfig, editClaudeProviderConfig,
   hasClaudeProviderMarker, readClaudeProviderEditState, readClaudeProviderInfo, readClaudeProviderKey, validateClaudeProviderConfig,
@@ -203,7 +204,8 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
     // gets what it changed. A failure cancels the switch, so nothing is left half synced behind the user's back
     const outgoing = currentDir();
     try {
-      if (isSharedClaudeAccount(outgoing)) syncClaudeAccount(defaultJson(), outgoing, 'full', { inUse: true });
+      // A folder that cannot be inspected (a file in its place, no permission) is no shared account to sync
+      if (sharedFlag(() => isSharedClaudeAccount(outgoing))) syncClaudeAccount(defaultJson(), outgoing, 'full', { inUse: true });
     } catch (err) {
       const all = store.all();
       const i = findSameDir(all.map((a) => a.dir), outgoing);
@@ -390,7 +392,7 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
     try {
       if (shared) {
         // The folder may already exist (kept from an earlier removal, its terminal possibly still open)
-        const report = ensureClaudeLinks(account.dir, '/proc', { ...linkOptions, busy: linkBusy(account) });
+        const report = ensureClaudeLinks(account.dir, procRoot, { ...linkOptions, busy: linkBusy(account) });
         // An existing folder that could not be linked stays independent: it only gains the default MCP servers. A
         // shared one syncs both ways, so what it changed on its own (e.g. as the current external account, which is
         // the account in use) is kept
@@ -411,7 +413,10 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
   // Re-links a shared account; returns a warning text or undefined
   function relinkShared(account: Account): string | undefined {
     try {
-      const notes = describeShareReport(ensureClaudeLinks(account.dir, procRoot, { busy: linkBusy(account) }));
+      const report = ensureClaudeLinks(account.dir, procRoot, { busy: linkBusy(account) });
+      // Plugin cache files Claude Code rewrote in the account are a known state, as in the link check
+      const known = (entry: string): boolean => isPluginCacheFile(defaultDir(), entry);
+      const notes = describeShareReport({ ...report, conflicts: report.conflicts.filter((n) => !known(n)) });
       return notes || undefined;
     } catch (err) {
       return errText(err);
@@ -538,7 +543,7 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
       if (ok !== deleteLabel || blocked()) return;
     }
 
-    const shared = isSharedClaudeAccount(account.dir);
+    const shared = sharedFlag(() => isSharedClaudeAccount(account.dir)) === true;
     await store.remove(account.name);
     await labels.remove(account.name);
     await exclusions?.remove(account.name);
@@ -682,7 +687,7 @@ export function registerCommands(deps: Deps): vscode.Disposable[] {
     }),
     vscode.commands.registerCommand('planswap.addAccount', () => panel.focusAdd(MODE)),
     vscode.commands.registerCommand('planswap.shareAccount', async () => {
-      const a = await pickAccount(store.named().filter((x) => !isSharedClaudeAccount(x.dir) && !inUse(x)), t('claude.pick.share'));
+      const a = await pickAccount(store.named().filter((x) => sharedFlag(() => isSharedClaudeAccount(x.dir)) === false && !inUse(x)), t('claude.pick.share'));
       if (a) await shareAccount(a);
     }),
     vscode.commands.registerCommand('planswap.removeAccount', async () => {

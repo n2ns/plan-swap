@@ -1165,14 +1165,15 @@ describe('makeClaudeIndependent', SHARING, () => {
     const acc = accountDir('half');
     fs.mkdirSync(acc, { mode: 0o700 });
     ensureClaudeLinks(acc);
-    write(path.join(acc, '.claude.json'), 'not json');   // syncMcpServers throws at the end of the copy
+    write(path.join(acc, '.claude.json'), 'not json');   // syncMcpServers could not add the default's servers
     const before = snapshot(def);
     assert.throws(() => makeClaudeIndependent(src(), acc));
     assert.equal(isSharedClaudeAccount(acc), true);
     assert.ok(isLinkTo(path.join(acc, 'history.jsonl'), path.join(def, 'history.jsonl')));
     assert.ok(isLinkTo(path.join(acc, 'projects'), path.join(def, 'projects')));
-    assert.deepEqual(JSON.parse(read(path.join(acc, 'settings.json'))), { model: 'm' });   // already copied, reported by ensureClaudeLinks
-    assert.ok(ensureClaudeLinks(acc).conflicts.includes('settings.json'));
+    // Stopped before anything was unlinked: the configuration still follows the default, nothing to repair
+    assert.ok(isLinkTo(path.join(acc, 'settings.json'), path.join(def, 'settings.json')));
+    assert.deepEqual(ensureClaudeLinks(acc).conflicts, []);
     assert.deepEqual(snapshot(def), before);
   });
 

@@ -174,7 +174,9 @@ export function assertProviderFilesLocal(dir: string): void {
   }
 }
 
-function model(service: ApiService, value: string | undefined): string {
+/** The model of a card for service, checked: one of DeepSeek's catalog models, or for the other services a non-empty ID
+ *  of at most 200 characters without spaces or control characters; ProviderConfigError('model') otherwise. */
+export function model(service: ApiService, value: string | undefined): string {
   if (service === 'deepseek') {
     if (!(DEEPSEEK_MODELS as readonly string[]).includes(value ?? '')) throw new ProviderConfigError('model');
   } else if (!value || value.length > 200 || /\s|[\x00-\x1f\x7f]/u.test(value)) throw new ProviderConfigError('model');

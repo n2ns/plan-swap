@@ -2,6 +2,7 @@
 import { after, beforeEach, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
+import fsModule from 'node:fs';
 import * as path from 'node:path';
 import { AgyAccounts, accountName, agyAccountsRoot } from '../src/agy/agyAccounts';
 import { AgyError, type AgyErrorCode, type LiveStore } from '../src/agy/agyLogin';
@@ -185,4 +186,25 @@ describe('review fixes', () => {
     assert.deepEqual(accounts.list().map((a) => a.email), ['a@example.com']);
     assert.equal((await accounts.sync()).unrecognized, false);
   });
+});
+
+test('Windows: replacing a saved copy retries while another handle keeps the file busy', async (ctx) => {
+  signIn('a@example.com', 'ra');
+  await accounts.sync();
+  const realPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+  const rename = fsModule.renameSync;
+  let busy = 1;
+  ctx.mock.method(fsModule, 'renameSync', (from: fs.PathLike, to: fs.PathLike) => {
+    if (busy-- > 0) throw Object.assign(new Error('busy'), { code: 'EPERM' });
+    rename(from, to);
+  });
+  Object.defineProperty(process, 'platform', { value: 'win32' });
+  try {
+    // agy renewed the token: the copy is replaced
+    signIn('a@example.com', 'ra2');
+    await accounts.sync();
+  } finally {
+    Object.defineProperty(process, 'platform', realPlatform);
+  }
+  assert.equal(accounts.find(accountName('a@example.com'))?.login.refreshToken, 'ra2');
 });

@@ -69,6 +69,21 @@ export function settingEnv(): Record<string, string> {
   return env;
 }
 
+/**
+ * settingEnv plus the setting's CLAUDE_CONFIG_DIR as written (the entry currentDir picks), for the usage query and the
+ * subscription probe: usageEnv keeps that spelling for its own folder, since on macOS Claude Code names the sign-in's
+ * Keychain item after the exact string, and replaces it for any other account.
+ */
+export function usageSettingEnv(): Record<string, string> {
+  const env = settingEnv();
+  let written: string | undefined;
+  for (const e of readEntries()) {
+    if (isEnvName(e.name) && acceptedDir(e.value) !== undefined) written = e.value as string;
+  }
+  if (written !== undefined) env[ENV_NAME] = written;
+  return env;
+}
+
 /** The current Claude account directory: the setting's CLAUDE_CONFIG_DIR as the extension picks it (array or object
  *  form), else defaultDir(). */
 export function currentDir(): string {

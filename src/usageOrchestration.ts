@@ -7,7 +7,7 @@
 // modules.
 import * as vscode from 'vscode';
 import type { AccountStore } from './accounts';
-import { currentDir, isExplicitConfigDir, settingEnv } from './claudeSettings';
+import { currentDir, isExplicitConfigDir, usageSettingEnv } from './claudeSettings';
 import { oneAtATime, queryClaudeUsage, readClaudeUsage, readUsageFetchedAt, type ClaudeQueryResult } from './claudeUsage';
 import { ClaudeUsageMonitor, ClaudeUsageQueries } from './claudeUsageMonitor';
 import { ClaudeSubscriptionChecks, queryClaudeSubscription } from './claudeSubscription';
@@ -189,7 +189,7 @@ export function createUsageOrchestration(deps: UsageDeps): UsageOrchestration {
   const claudeProcessQueue = oneAtATime();
   const claudeAbort = new AbortController();
   const claudeOptions = (signal?: AbortSignal) => ({
-    env: settingEnv(), signal: signal ? AbortSignal.any([signal, claudeAbort.signal]) : claudeAbort.signal,
+    env: usageSettingEnv(), signal: signal ? AbortSignal.any([signal, claudeAbort.signal]) : claudeAbort.signal,
     timeoutMs: usageTimeoutMs('claude'), fallback: deps.bundledClaude,
   });
   const subscription = new ClaudeSubscriptionChecks(

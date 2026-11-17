@@ -10,6 +10,18 @@
 
 ### Fixed
 
+- agy: switching is refused while agy may read its sign-in from the system keyring over the user session bus `/run/user/<uid>/bus` (or `dbus-session`), also when the editor's environment does not name it.
+- agy: on Windows, saving a renewed sign-in retries while another program briefly keeps the saved copy open.
+- Claude: a current account folder that cannot be read no longer blocks switching to another account, removing it or **Re-link**.
+- Claude: unlinking an account whose own `.claude.json` is damaged stops before anything is unlinked, instead of leaving it half independent.
+- Claude: switching to a linked account no longer warns about plugin cache files Claude Code rewrote in it.
+- Claude: on macOS, the usage query and the subscription check use `CLAUDE_CONFIG_DIR` exactly as written in the setting, so an account whose folder is written with a trailing slash no longer reads as signed out.
+- Claude and Codex: after signing in to another account in the same folder, a low usage-limit notice is shown for the new account's limit period.
+- Claude: the reload banner names the account that is current now, also after another window switched or the account was renamed.
+- Codex: an API card whose model ID is invalid is refused before its folder is created, so the same name can be used again.
+- Codex: in a remote window outside WSL, the account selection uses the shared state file and takes effect after the server restart.
+- Codex: with automatic checks on, the status bar shows a newer usage result another window just fetched.
+- PlanSwap's state file lock left behind by an editor that was shut down while holding it is taken over after a minute, even when its process number was reused.
 - agy: refreshing usage while a stopped usage query had not exited yet no longer leaves the extension host busy forever at the next refresh or switch.
 - Claude: an account's info file that Claude Code deleted and recreated no longer removes the default account's MCP servers and project settings at the next switch, also when nothing else changed after the account's first start.
 - Claude: a linked account whose default `settings.json` cannot be linked keeps the plugin settings in its own copy, so its linked plugins stay enabled.

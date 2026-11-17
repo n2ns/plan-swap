@@ -585,6 +585,25 @@ describe('panel message handlers (Claude)', () => {
     }
   });
 
+  test('switching to a shared account does not warn about a plugin cache file Claude Code rewrote in place', POSIX_ONLY, async (ctx) => {
+    const h = harness();
+    fs.mkdirSync(path.join(home, '.claude', 'plugins'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), '{}');
+    const dir = await add(h, 'p', true);
+    // Claude Code rewrites the file by rename: the link becomes the account's own file
+    fs.rmSync(path.join(dir, 'plugins', 'installed_plugins.json'));
+    fs.writeFileSync(path.join(dir, 'plugins', 'installed_plugins.json'), '{"own":1}');
+    ctx.mock.method(window, 'showInformationMessage', async () => t('claude.switchButton'));
+    const warning = ctx.mock.method(window, 'showWarningMessage', async () => undefined);
+    try {
+      await h.handle({ type: 'switch', mode: 'claude', dir });
+      assert.equal(configured(), dir);
+      assert.equal(warning.mock.callCount(), 0);
+    } finally {
+      h.dispose();
+    }
+  });
+
   test('switching away from a shared current account syncs it with the default first; a failure cancels the switch', POSIX_ONLY, async (ctx) => {
     const h = harness();
     const a = await add(h, 'a', true);
@@ -614,6 +633,29 @@ describe('panel message handlers (Claude)', () => {
       assert.deepEqual(error.mock.calls[0].arguments, [t('share.writeBackFailed', { label: 'a', error: t('mcp.badTarget', { file: path.join(a, '.claude.json') }) })]);
       assert.equal(updates.length, 0);
       assert.equal(fs.readFileSync(defJson, 'utf8'), before);
+    } finally {
+      h.dispose();
+    }
+  });
+
+  test('a current account folder that cannot be inspected does not block switching away or removing it', POSIX_ONLY, async (ctx) => {
+    const h = harness();
+    const b = await add(h, 'b', false);
+    const broken = accountDir('broken');
+    fs.writeFileSync(broken, 'not a folder');
+    await h.store.add({ name: 'broken', dir: broken });
+    setCurrent(broken);
+    ctx.mock.method(window, 'showInformationMessage', async () => t('claude.switchButton'));
+    const error = ctx.mock.method(window, 'showErrorMessage', async () => undefined);
+    ctx.mock.method(window, 'showWarningMessage', async () => undefined);
+    try {
+      await h.handle({ type: 'switch', mode: 'claude', dir: b });
+      assert.equal(error.mock.callCount(), 0);
+      assert.equal(configured(), b);
+      // No longer current: it can be removed (keeping what is on disk)
+      await h.handle({ type: 'remove', mode: 'claude', dir: broken });
+      assert.equal(h.store.find('broken'), undefined);
+      assert.equal(error.mock.callCount(), 0);
     } finally {
       h.dispose();
     }
@@ -805,6 +847,9 @@ describe('panel message handlers (Claude)', () => {
     const current = await add(h, 'current', false);
     const shared = await add(h, 'shared', true);
     const solo = await add(h, 'solo', false);
+    // A folder that cannot be inspected is not offered and does not break the list
+    fs.writeFileSync(accountDir('broken'), 'not a folder');
+    await h.store.add({ name: 'broken', dir: accountDir('broken') });
     await h.labels.set('solo', 'Work');
     setCurrent(current);
     fs.writeFileSync(path.join(solo, 'history.jsonl'), '{"from":"solo"}\n');

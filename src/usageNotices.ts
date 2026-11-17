@@ -11,7 +11,8 @@ export interface NoticeWindow { usedPercent: number; windowMinutes?: number; res
 interface Entry { product: NoticeProduct; dir: string; windowMinutes: number; resetsAt: number }
 
 const KEY = 'usage.lowNotified';
-// Later checks may report a slightly moved reset time; an entry keeps counting this long after its reset
+// Later checks may report a slightly moved reset time: an entry covers a window whose reset is this close to its own,
+// and keeps counting this long after its reset
 const RESET_GRACE_MS = 10 * 60_000;
 
 function validEntry(value: unknown): value is Entry {
@@ -40,8 +41,10 @@ export class LowUsageNotices {
     const remainingOf = (w: W): number => Math.max(0, Math.min(100, Math.floor(100 - w.usedPercent)));
     const dueOf = (raw: unknown): { entries: Entry[]; due: W[] } => {
       const entries = (Array.isArray(raw) ? raw.filter(validEntry) : []).filter((e) => e.resetsAt * 1000 + RESET_GRACE_MS > now);
-      // Until its reset, an entry covers its window whatever reset time a later check reports
-      const announced = (w: W): boolean => entries.some((e) => e.product === product && samePath(e.dir, dir) && e.windowMinutes === w.windowMinutes);
+      // An entry covers its window while a later check reports about the same reset time (moved by at most the grace);
+      // another reset period, such as another account signed in to the same folder, is announced again
+      const announced = (w: W): boolean => entries.some((e) => e.product === product && samePath(e.dir, dir) && e.windowMinutes === w.windowMinutes
+        && Math.abs(e.resetsAt - w.resetsAt!) * 1000 <= RESET_GRACE_MS);
       const due = windows.filter((w) => !w.scope && w.windowMinutes !== undefined && w.resetsAt !== undefined
         && w.resetsAt * 1000 > now && remainingOf(w) > 0 && remainingOf(w) <= threshold && !announced(w));
       return { entries, due };

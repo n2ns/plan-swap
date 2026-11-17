@@ -351,6 +351,29 @@ describe('CodexUsageMonitor', () => {
     assert.equal(h.calls.length, 0);
   });
 
+  test('refreshIfStale shows a newer shared observation of another window while its own attempt is still recent', async () => {
+    const shared = { v: undefined as CodexUsage | undefined };
+    const h = harness(undefined, 1000, { cachedUsage: () => shared.v });
+    h.queue.push({ ok: true, usage: usageAt(0) });
+    await h.monitor.refreshIfStale();
+    assert.equal(h.calls.length, 1);
+    // Another window's manual refresh writes a newer observation
+    h.clock.t = 300;
+    shared.v = usageAt(300);
+    await h.monitor.refreshIfStale();
+    assert.equal(h.calls.length, 1, 'no query of its own');
+    assert.equal(shownCheckedAt(h), 300);
+    // A failure of its own is not replaced by an observation older than that attempt
+    h.clock.t = 1400;
+    h.queue.push(failed);
+    await h.monitor.refreshIfStale();
+    assert.equal(h.monitor.current().result?.ok, false);
+    shared.v = usageAt(1200);
+    h.clock.t = 1500;
+    await h.monitor.refreshIfStale();
+    assert.equal(h.monitor.current().result?.ok, false);
+  });
+
   test('refreshIfStale takes a fresh shared observation instead of querying, and queries once it is old', async () => {
     const shared = { v: undefined as CodexUsage | undefined };
     const h = harness(undefined, 1000, { cachedUsage: () => shared.v });

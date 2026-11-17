@@ -83,13 +83,15 @@ test('creation takes the sidebar fields, keeps the key out of every view and sel
   } finally { h.close(); }
 });
 
-test('a missing required key, an unusable endpoint or an unknown service creates nothing', async () => {
+test('a missing required key, an unusable endpoint, an unknown service or an invalid model creates nothing', async () => {
   const h = harness();
   try {
     for (const [name, provider] of [
       ['nokey', { service: 'openrouter', key: '', model: 'vendor/m' }],
       ['remote', { service: 'custom', baseUrl: 'http://remote.example.test/v1', key: '', model: 'm' }],
       ['unknown', { service: 'elsewhere', key: 'k', model: 'm' }],
+      ['spaced', { service: 'openrouter', key: 'k', model: 'my model' }],
+      ['offcatalog', { service: 'deepseek', key: 'k', model: 'deepseek-other' }],
     ] as const) {
       await h.handle({ type: 'add', mode: 'codex', name, shared: false, provider });
       assert.ok((h.messages.at(-1) as { error?: string }).error, name);

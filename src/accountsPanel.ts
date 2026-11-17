@@ -365,7 +365,8 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
     const rows = source.accounts();
     const showRecommendation = vscode.workspace.getConfiguration('planswap').get<boolean>(SHOW_RECOMMENDATION_SETTING, true);
     const pendingDir = source.pendingDir();
-    const switchedTo = mode === 'claude' ? this.switchedTo : undefined;
+    // The banner names the account that is current now: a later switch in another window, or a rename, updates it
+    const switchedTo = mode === 'claude' && this.switchedTo !== undefined ? rows.find((r) => r.isCurrent)?.label ?? this.switchedTo : undefined;
     const dismissals = this.dismissals?.[mode];
     void dismissals?.releaseRecovered(rows, recommendationThreshold()).catch((err: unknown) => console.error('[planswap] releasing a closed recommendation failed:', err));
     const shown = this.recommendation(mode, rows);

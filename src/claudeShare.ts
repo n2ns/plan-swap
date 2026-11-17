@@ -11,7 +11,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { t } from './i18n';
-import { assertNotDefaultClaudeAncestor, claudeIdentitySetting, copySettingsStripped, defaultDir, isDefaultClaudeDir, samePath, sameRealPath, strippedSettings, syncMcpServers } from './paths';
+import { assertNotDefaultClaudeAncestor, checkMcpServersTarget, claudeIdentitySetting, copySettingsStripped, defaultDir, isDefaultClaudeDir, samePath, sameRealPath, strippedSettings, syncMcpServers } from './paths';
 import { comparablePath, fileLinksAvailable, lacksProcfs, normalizeStartTime, pidAlive, platformStartTimes, type StartTimeProbe, stripBom, isPlainObject } from './platform';
 import { CLAUDE_PROVIDER_FILES, ProviderConfigError, assertClaudeProviderFilesLocal, hasClaudeProviderMarker } from './claudeProvider';
 import { type ShareReport, type MigrateReport, lstatOrUndefined, linksTo, emptyReport, missingLinkResult, linkEntry, type LinkOptions, recordLink, record, mergeLines, markElsewhere, sameContent } from './shareLinks';
@@ -566,8 +566,9 @@ const INDEPENDENT_CONFIG_ENTRIES = new Set(['settings.json', 'CLAUDE.md', ...IND
 /** Converts a shared account back into an independent one. Removes only links that resolve to the default entry
  *  (unlinkIfLinksTo / unlinkChildLinks; anything else is left untouched), in this order: settings.json, CLAUDE.md, the
  *  INDEPENDENT_COPY_DIRS and the skills/ children; then copyClaudeIndependent; then history.jsonl, the session folders,
- *  the projects marker and the plugins/ children. A failed copy therefore leaves the account shared, and
- *  ensureClaudeLinks re-creates the missing links. History and sessions are neither copied nor moved; the default dir is
+ *  the projects marker and the plugins/ children. An account info file the copy could not add the MCP servers to
+ *  (checkMcpServersTarget) stops it before anything is unlinked; another failed copy leaves the account shared, with
+ *  the configuration entries copied so far as its own. History and sessions are neither copied nor moved; the default dir is
  *  never written. Throws t('unshare.default') for the default dir and t('unshare.notShared') for an account that is not
  *  shared. The account's sync base (SYNC_BASE) is removed last. Returns the removed link names (children as
  *  'skills/<child>') and the copied entries. */
@@ -588,7 +589,9 @@ export function makeClaudeIndependent(fromJson: string, dir: string): { removed:
   const unlinkChildren = (name: string): void =>
     unlinkChildLinks(path.join(acc, name), path.join(def, name), name, !!lstatOrUndefined(path.join(acc, name))?.isDirectory(), removed);
   // The configuration is unlinked and copied first; history, sessions and the projects marker only afterwards, so a
-  // failed copy leaves the account shared (missing links are re-created by ensureClaudeLinks)
+  // failed copy leaves the account shared. An info file the copy could not add the MCP servers to stops it before
+  // anything is unlinked
+  checkMcpServersTarget(fromJson, dir);
   unlinkEntries(true);
   unlinkChildren('skills');
   const { copied } = copyClaudeIndependent(fromJson, dir);
