@@ -163,7 +163,7 @@ The **agy** tab appears when the Antigravity CLI (`agy`) is installed where the 
 
 The current card shows the usage limits of each model group (5 hours and 7 days) from agy's `/usage`. Refresh them with the refresh button or **Refresh Antigravity Usage Limits**. Other cards keep their last values and show when they were checked. Only the current card has a terminal button, and it cannot be removed; removing another card deletes only PlanSwap's copy of its sign-in.
 
-If PlanSwap cannot tell which Google account agy is signed in to, the tab shows a warning and switching is turned off so that sign-in is not lost; sign in again in agy (`/logout`, then `/login`). On Linux, if agy keeps its sign-in in the system keyring, switching is not available.
+If PlanSwap cannot tell which Google account agy is signed in to, the tab shows a warning and switching is turned off so that sign-in is not lost; sign in again in agy (`/logout`, then `/login`). On Linux, if agy keeps its sign-in in the system keyring, or PlanSwap cannot rule that out, switching is not available.
 
 ## Use an API card
 

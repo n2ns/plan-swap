@@ -163,7 +163,7 @@ cmd.exe /c 'start "" "vscode://n2ns.planswap/switch?account=default&distro=Ubunt
 
 目前帳號的卡片顯示 agy `/usage` 提供的每個模型群組的用量額度（5小時和7天），可用重新整理按鈕或 **重新整理 Antigravity 用量額度** 重新整理。其他卡片保留上次的數值並顯示查詢時間。只有目前帳號的卡片有終端機按鈕，且不能移除；移除其他卡片只會刪除 PlanSwap 儲存的登入副本。
 
-如果 PlanSwap 無法確定 agy 登入的是哪個 Google 帳號，索引標籤會顯示警告並停用切換，以免遺失該登入；請在 agy 中重新登入（先 `/logout`，再 `/login`）。在 Linux 上，如果 agy 將登入儲存在系統金鑰圈中，則無法切換。
+如果 PlanSwap 無法確定 agy 登入的是哪個 Google 帳號，索引標籤會顯示警告並停用切換，以免遺失該登入；請在 agy 中重新登入（先 `/logout`，再 `/login`）。在 Linux 上，如果 agy 將登入儲存在系統金鑰圈中，或 PlanSwap 無法排除這種可能，則無法切換。
 
 ## 使用 API 卡片
 

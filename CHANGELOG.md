@@ -10,6 +10,7 @@
 
 ### Fixed
 
+- agy: switching is also refused when no session bus is found but `dbus-launch` and a system keyring service are installed, since agy then starts a bus of its own and may read its sign-in from the keyring.
 - agy: switching is refused while agy may read its sign-in from the system keyring over the user session bus `/run/user/<uid>/bus` (or `dbus-session`), also when the editor's environment does not name it.
 - agy: on Windows, saving a renewed sign-in retries while another program briefly keeps the saved copy open.
 - Claude: a current account folder that cannot be read no longer blocks switching to another account, removing it or **Re-link**.

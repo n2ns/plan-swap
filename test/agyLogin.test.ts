@@ -2,6 +2,7 @@
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
+import fsModule from 'node:fs';
 import * as path from 'node:path';
 import {
   AgyError, WINCRED_BLOB_LIMIT, agyTokenFile, decodeLogin, encodeWincred, fileStore, keychainStore, liveStore, sameLogin,
@@ -123,6 +124,43 @@ describe('fileStore (Linux / WSL)', () => {
     const noBus = fakeRun(() => ({ code: null, stderr: 'spawn gdbus ENOENT' }));
     assert.equal(await fileStore(file, noBus.run, { XDG_RUNTIME_DIR: path.join(tmp.home, 'no-runtime') }, path.join(tmp.home, 'no-run-user')).blocked(), undefined);
     assert.equal(noBus.calls.length, 0, 'without a session bus nothing is started');
+  });
+  test('POSIX: without a session bus, an installed dbus-launch and an activatable Secret Service leave the keyring possible', POSIX_ONLY, async () => {
+    const file = agyTokenFile(tmp.home);
+    const bin = path.join(tmp.home, 'bin-with-dbus-launch');
+    fs.mkdirSync(bin, { recursive: true });
+    fs.writeFileSync(path.join(bin, 'dbus-launch'), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+    const data = path.join(tmp.home, 'data-dirs');
+    const services = path.join(data, 'dbus-1', 'services');
+    fs.mkdirSync(services, { recursive: true });
+    const run = fakeRun(() => ({}));
+    const noRunUser = path.join(tmp.home, 'no-run-user');
+    const env = { PATH: bin, XDG_DATA_DIRS: data, XDG_DATA_HOME: path.join(tmp.home, 'no-data-home') };
+    const blocked = () => fileStore(file, run.run, env, noRunUser, []).blocked();
+    // No Secret Service to activate on a bus agy would start: file mode
+    fs.writeFileSync(path.join(services, 'org.example.Other.service'), '[D-BUS Service]\nName=org.example.Other\nExec=/bin/true\n');
+    assert.equal(await blocked(), undefined);
+    // agy's keyring library starts a session bus of its own with dbus-launch, where the Secret Service would be activated
+    fs.writeFileSync(path.join(services, 'org.freedesktop.secrets.service'), '[D-BUS Service]\nName=org.freedesktop.secrets\nExec=/usr/bin/gnome-keyring-daemon --start --foreground --components=secrets\n');
+    assert.equal(await blocked(), 'keyringUnknown');
+    assert.equal(run.calls.length, 0, 'PlanSwap starts no bus itself');
+    // Also found under XDG_DATA_HOME
+    fs.rmSync(path.join(services, 'org.freedesktop.secrets.service'));
+    const home = path.join(tmp.home, 'data-home', 'dbus-1', 'services');
+    fs.mkdirSync(home, { recursive: true });
+    fs.writeFileSync(path.join(home, 'keyring.service'), 'Name = org.freedesktop.secrets\n');
+    assert.equal(await fileStore(file, run.run, { ...env, XDG_DATA_HOME: path.join(tmp.home, 'data-home') }, noRunUser, []).blocked(), 'keyringUnknown');
+    // Without dbus-launch, or not executable: file mode
+    fs.chmodSync(path.join(bin, 'dbus-launch'), 0o644);
+    assert.equal(await fileStore(file, run.run, { ...env, XDG_DATA_HOME: path.join(tmp.home, 'data-home') }, noRunUser, []).blocked(), undefined);
+  });
+  test('the Windows folders WSL appends to PATH are not looked into for dbus-launch', async (ctx) => {
+    const looked: string[] = [];
+    const access = fsModule.accessSync;
+    ctx.mock.method(fsModule, 'accessSync', (p: fs.PathLike, mode?: number) => { looked.push(String(p)); return access(p, mode); });
+    const run = fakeRun(() => ({}));
+    await fileStore(agyTokenFile(tmp.home), run.run, { PATH: '/mnt/c/Windows/system32:/mnt/d/tools' }, path.join(tmp.home, 'no-run-user')).blocked();
+    assert.deepEqual(looked.filter((p) => p.startsWith('/mnt/')), []);
   });
   test('POSIX: the user bus socket under /run/user/<uid> is a session bus even without the environment variables', POSIX_ONLY, async () => {
     const runUser = path.join(tmp.home, 'run-user');

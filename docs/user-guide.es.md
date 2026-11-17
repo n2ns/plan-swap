@@ -163,7 +163,7 @@ La pestaña **agy** aparece cuando la CLI de Antigravity (`agy`) está instalada
 
 La tarjeta de la cuenta actual muestra los límites de uso de cada grupo de modelos (5 h y 7 días) según el `/usage` de agy. Actualízalos con el botón de actualizar o con **Actualizar límites de uso de Antigravity**. Las demás tarjetas conservan sus últimos valores y muestran cuándo se consultaron. Solo la tarjeta actual tiene botón de terminal y no se puede quitar; quitar otra tarjeta solo borra la copia de su sesión que guarda PlanSwap.
 
-Si PlanSwap no puede saber con qué cuenta de Google tiene la sesión iniciada agy, la pestaña muestra un aviso y el cambio se desactiva para no perder esa sesión; vuelve a iniciar sesión en agy (`/logout` y luego `/login`). En Linux, si agy guarda su sesión en el llavero del sistema, no se puede cambiar.
+Si PlanSwap no puede saber con qué cuenta de Google tiene la sesión iniciada agy, la pestaña muestra un aviso y el cambio se desactiva para no perder esa sesión; vuelve a iniciar sesión en agy (`/logout` y luego `/login`). En Linux, si agy guarda su sesión en el llavero del sistema, o PlanSwap no puede descartarlo, no se puede cambiar.
 
 ## Usar una tarjeta API
 

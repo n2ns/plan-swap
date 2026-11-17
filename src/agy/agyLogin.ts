@@ -6,8 +6,10 @@
 // agy 1.5 writes id_token_email instead of id_token; older documents carry an id_token whose payload has the email.
 // Where agy keeps it (go-keyring, service "gemini", user "antigravity"; the file is agy's fallback):
 // - Linux / WSL: the file ~/.gemini/antigravity-cli/antigravity-oauth-token (mode 600). When the Secret Service holds
-//   an item of that service and user, agy reads it instead, which PlanSwap cannot write: switching is refused then, and
-//   also when a session bus exists but that lookup fails (go-keyring talks to D-Bus itself, so a missing gdbus proves nothing).
+//   an item of that service and user, agy reads it instead, which PlanSwap cannot write: switching is refused then, also
+//   when a session bus exists but that lookup fails (go-keyring talks to D-Bus itself, so a missing gdbus proves nothing),
+//   and when there is no session bus but dbus-launch is on PATH and the Secret Service can be activated (go-keyring
+//   then starts a bus of its own, where it would start).
 // - macOS: the login Keychain generic password (service gemini, account antigravity), read and written through
 //   /usr/bin/security like go-keyring does; the value is "go-keyring-base64:" + base64 of the JSON.
 // - Windows: the Credential Manager generic credential "gemini:antigravity" (user antigravity), the bare JSON as UTF-8
@@ -139,12 +141,53 @@ export interface LiveStore {
   blocked(): Promise<AgyErrorCode | undefined>;
 }
 
+// Whether an executable named name is in one of env.PATH's folders; the Windows folders WSL appends (/mnt/<drive>/...)
+// are never looked into
+function onPath(name: string, env: NodeJS.ProcessEnv): boolean {
+  return (env.PATH ?? '').split(path.delimiter).filter((dir) => dir && !/^\/mnt\/[a-z](\/|$)/i.test(dir)).some((dir) => {
+    try {
+      fs.accessSync(path.join(dir, name), fs.constants.X_OK);
+      return fs.statSync(path.join(dir, name)).isFile();
+    } catch {
+      return false;
+    }
+  });
+}
+
 // Where go-keyring's godbus looks for the session bus by uid
 const RUN_USER = '/run/user';
+// The data folders a session bus always reads activation files from, besides XDG_DATA_HOME and XDG_DATA_DIRS
+const FIXED_DATA_DIRS = ['/usr/share'];
 
-/** Linux / WSL: agy's token file (atomic replace, mode 600, folder 700 when created). env and runUser (/run/user): where
- *  the session bus is looked up. */
-export function fileStore(file: string = agyTokenFile(), run: Run = defaultRun, env: NodeJS.ProcessEnv = process.env, runUser = RUN_USER): LiveStore {
+// Whether a session bus started now could activate the Secret Service: a .service file naming org.freedesktop.secrets in
+// one of the session bus's standard service folders (<data dir>/dbus-1/services of XDG_DATA_HOME, else ~/.local/share,
+// then XDG_DATA_DIRS, else /usr/local/share and /usr/share, then fixedDataDirs). Reads files only; /mnt/<drive> skipped
+function secretsActivatable(env: NodeJS.ProcessEnv, fixedDataDirs: readonly string[]): boolean {
+  const home = env.XDG_DATA_HOME || path.join(env.HOME || os.homedir(), '.local', 'share');
+  const system = (env.XDG_DATA_DIRS || '/usr/local/share:/usr/share').split(':');
+  return [home, ...system, ...fixedDataDirs].filter((dir) => dir && !/^\/mnt\/[a-z](\/|$)/i.test(dir)).some((dir) => {
+    const services = path.join(dir, 'dbus-1', 'services');
+    let names: string[];
+    try {
+      names = fs.readdirSync(services).filter((n) => n.endsWith('.service'));
+    } catch {
+      return false;
+    }
+    return names.some((n) => {
+      try {
+        return /^\s*Name\s*=\s*org\.freedesktop\.secrets\s*$/m.test(fs.readFileSync(path.join(services, n), 'utf8'));
+      } catch {
+        return false;
+      }
+    });
+  });
+}
+
+/** Linux / WSL: agy's token file (atomic replace, mode 600, folder 700 when created). env, runUser (/run/user) and
+ *  fixedDataDirs (/usr/share): where the session bus and the Secret Service activation files are looked up. */
+export function fileStore(
+  file: string = agyTokenFile(), run: Run = defaultRun, env: NodeJS.ProcessEnv = process.env, runUser = RUN_USER, fixedDataDirs: readonly string[] = FIXED_DATA_DIRS,
+): LiveStore {
   return {
     kind: 'file',
     async read() {
@@ -173,7 +216,7 @@ export function fileStore(file: string = agyTokenFile(), run: Run = defaultRun, 
       }
     },
     blocked: async () => {
-      const keyring = await secretServiceState(run, env, runUser);
+      const keyring = await secretServiceState(run, env, runUser, fixedDataDirs);
       return keyring === 'item' ? 'linuxKeyring' : keyring === 'unknown' ? 'keyringUnknown' : undefined;
     },
   };
@@ -182,13 +225,19 @@ export function fileStore(file: string = agyTokenFile(), run: Run = defaultRun, 
 /**
  * Where agy's go-keyring would find its sign-in on Linux: 'item' when the Secret Service holds an item of agy's service
  * and user (SearchItems over D-Bus with gdbus; only object paths come back, never a secret), 'none' when it holds none,
- * when no Secret Service runs on the bus, or when there is no session bus at all (agy then uses its file), and
- * 'unknown' when a session bus exists but the lookup failed (no gdbus, a timeout, another D-Bus error): go-keyring talks
- * to D-Bus itself, so agy may still read the keyring.
+ * when no Secret Service runs on the bus, or when there is no session bus and none with a Secret Service could be
+ * started (agy then uses its file), and 'unknown' when a session bus exists but the lookup failed (no gdbus, a timeout, another D-Bus
+ * error; go-keyring talks to D-Bus itself, so agy may still read the keyring) or when there is no session bus but
+ * dbus-launch is on PATH and the Secret Service has an activation file (go-keyring then starts a bus of its own, where
+ * the Secret Service would start; Fact 3).
  */
-export async function secretServiceState(run: Run = defaultRun, env: NodeJS.ProcessEnv = process.env, runUser = RUN_USER): Promise<'item' | 'none' | 'unknown'> {
+export async function secretServiceState(
+  run: Run = defaultRun, env: NodeJS.ProcessEnv = process.env, runUser = RUN_USER, fixedDataDirs: readonly string[] = FIXED_DATA_DIRS,
+): Promise<'item' | 'none' | 'unknown'> {
   const bus = sessionBus(env, runUser);
-  if (!bus) return 'none';
+  // Without a bus go-keyring's library starts one with dbus-launch (on PATH); when that bus could activate the Secret
+  // Service, agy may read the keyring there, which cannot be ruled out without starting a bus (PlanSwap never does)
+  if (!bus) return onPath('dbus-launch', env) && secretsActivatable(env, fixedDataDirs) ? 'unknown' : 'none';
   const r = await run('gdbus', ['call', ...bus, '--dest', 'org.freedesktop.secrets', '--object-path', '/org/freedesktop/secrets',
     '--method', 'org.freedesktop.Secret.Service.SearchItems', `{'service': '${KEYRING_SERVICE}', 'username': '${KEYRING_USER}'}`]);
   if (r.code === 0) {
