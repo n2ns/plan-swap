@@ -210,7 +210,10 @@ describe('syncClaudeAccount', () => {
     assert.deepEqual(JSON.parse(read(accCred)).claudeAiOauth, { accessToken: 'account-login' });
     assertMode(defCred, '600');
     assertMode(accCred, '600');
-    for (const token of ['d1', 'n2', 'cs', 'login']) assert.ok(!read(path.join(acc, '.planswap-sync.json')).includes(token));
+    // Only the recorded items and start markers: defaultDir is the temporary folder, whose random name may contain 'cs'
+    const syncState = JSON.parse(read(path.join(acc, '.planswap-sync.json')));
+    const recorded = JSON.stringify({ items: syncState.items, starts: syncState.starts });
+    for (const token of ['d1', 'n2', 'cs', 'login']) assert.ok(!recorded.includes(token), token);
 
     // A token refreshed by the account reaches the default; a refresh the account lacks is a quiet check group
     const accData = JSON.parse(read(accCred));
