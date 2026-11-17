@@ -9,6 +9,9 @@ Purpose: repository layout, build, test and release mechanics, localization term
 | `src/` | Extension activation, Claude flows and shared host modules. |
 | `src/codex/` | Codex account, environment and restart modules. |
 | `src/agy/` | agy (Antigravity CLI) sign-in stores, saved accounts, switching, usage query and the agy tab wiring ([agy design](agy-design.md)). |
+| `src/platform.ts` | Shared platform detection, path comparison and file-link behavior. |
+| `src/codex/codexWindows.ts`, `src/codex/codexMac.ts` | Native Windows environment persistence and macOS login-shell integration. |
+| `src/agy/agyLogin.ts` | agy's platform-specific sign-in stores and identity recognition. |
 | `src/codex/codexProvider.ts` | API card services (DeepSeek, presets, custom endpoints), recognition, local native configuration, safe creation/editing and provider configuration-sharing exclusions. |
 | `src/webview/` | Sidebar frontend; shared message types come from `src/protocol.ts`. |
 | `test/` | Unit tests, temporary-HOME helpers, in-memory Memento and the VS Code stub; `test/integration/` holds the real-editor smoke suite. |
@@ -55,6 +58,7 @@ F5 in a WSL window uses the "Run Extension" launch configuration; `.vscode/tasks
 
 - `npm test` runs `scripts/run-tests.mjs`: it bundles `test/*.test.ts` into `.test-out/` with `vscode` aliased to `test/stubs/vscode.ts` and loads `scripts/test-guard.cjs` first, which refuses `reg` / `powershell` / `pwsh` / `setx` so no test can touch the real user-level `CODEX_HOME`. The runner needs Node 21 or later because the Webview i18n module reads the global `navigator` at load time.
 - `makeTempHome` (`test/helpers.ts`) points both `HOME` and `USERPROFILE` (read by `os.homedir()` on Windows) at a temporary directory, clears inherited account variables and asserts the real home is not used. The account stores are tested with `MemoryMemento`.
+- The shared-account conversions (`migrateClaudeToShared` / `migrateCodexToShared`) default to the real `/proc`; their tests inject a fake `procRoot` as required by [test safety](../AGENTS.md#test-and-release-safety).
 - On native Windows and macOS, `test/helpers.ts` skips the categories it defines (`LINUX_ONLY`, `POSIX_ONLY` on Windows only, `RC_FILES` on macOS only, `FILE_SYMLINKS`, `SHARING`, `CASE_SENSITIVE_FS`) with the reasons given there; Linux/WSL remains the full run.
 - Unit tests use disposable fixtures. UI integration and real-account acceptance are separate and follow [Manual Verification](manual-verification.md). Record what ran and what remains unverified.
 

@@ -2,6 +2,8 @@
 
 This document owns PlanSwap's intended user-visible behavior: what each command and `planswap.*` setting does, the outcome of the key flows including cancel and failure results, and the deliberate boundary rules. Layout and message texts live in the code and the i18n tables, and the rationale lives in [Claude design](design.md), [Codex design](codex-design.md) and [agy design](agy-design.md).
 
+PlanSwap activates on Linux (including WSL), native Windows and macOS. On other platforms it shows an unsupported-platform warning and stops activation.
+
 ## 1. Accounts and directories
 
 - `default` is `~/.claude` (or the host's `CLAUDE_CONFIG_DIR`) and cannot be removed. A named account `<name>` uses `~/.claude-<name>` and is created by adding it or registered by auto-discovery (section 6).

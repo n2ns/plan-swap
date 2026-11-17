@@ -47,7 +47,7 @@ Every setting is listed in the [user guide](docs/user-guide.md#change-language-a
 
 ## Requirements
 
-- A VS Code 1.107+ compatible editor: VS Code, Antigravity IDE or VSCodium, in a WSL remote window, on native Windows, on macOS, on a local Linux desktop or in another remote window.
+- A VS Code 1.107+ compatible editor: VS Code, Antigravity IDE or VSCodium, in a WSL remote window, on native Windows, on macOS, on a local Linux desktop or in another remote window. The minimum stays at 1.107 for compatibility with Antigravity IDE.
 - The official Claude Code and/or Codex extension installed where the window runs.
 - Optional: the `claude` and/or `codex` command on the PATH there. Without it, terminal sign-in and usage checks use the CLI bundled with the corresponding official extension.
 - For Codex switching on WSL and Linux: Bash as the login shell; on macOS: zsh or bash.

@@ -38,6 +38,8 @@ An account is a directory:
 
 ### Persisted state
 
+The rename from ai-switcher to PlanSwap kept the extension id `n2ns.planswap` and the existing Memento keys. The old Codex state path and rc markers require [`migrateLegacyCodex`](codex-design.md#4-login-shell-configuration); the old language setting requires [`migrateLegacyLanguage`](#55-localization-i18n). These migrations preserve installations from 0.1.x.
+
 Everything PlanSwap persists, for both vendors:
 
 | Key or file | Store | Owner module | Written when | Migration |

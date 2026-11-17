@@ -1,28 +1,17 @@
 # AGENTS.md
 
-Project instructions for AI coding agents working on PlanSwap. Cross-project preferences belong in the user's global instructions; this file holds repository-specific rules.
+## Platform and language rules
 
-## Project scope
-
-PlanSwap is a WSL, native Windows and macOS VS Code extension with independent Claude Code and Codex account switching in one localized sidebar. Claude switching writes `CLAUDE_CONFIG_DIR` in `claudeCode.environmentVariables`. Codex switching selects `CODEX_HOME` through rc marker blocks and needs an editor WSL server restart ([Codex design §5](docs/codex-design.md#5-restarting-the-wsl-side-server)); on native Windows it uses the per-user environment variable and needs a full editor restart ([§9a](docs/codex-design.md#9a-native-windows)); on macOS it writes the block into the login shell's startup file and needs a full editor restart ([§9b](docs/codex-design.md#9b-macos)). Named accounts are shared with the default account or independent; login identities stay separate. A third tab, shown only while the `agy` CLI is found, switches the Antigravity CLI's single global Google sign-in by writing PlanSwap's saved copy of the chosen account where agy reads it ([agy design](docs/agy-design.md)).
-
-- Supported platforms: Linux (WSL), native Windows (`process.platform === 'win32'`, see [Windows support](docs/design.md#windows-support)) and macOS (`'darwin'`); on any other platform activation warns and returns. Never read across into `/mnt/c` (WSL) or the Windows profile from WSL. Platform differences live in `src/platform.ts`, `src/codex/codexWindows.ts`, `src/codex/codexMac.ts` and `src/agy/agyLogin.ts`; never signal the editor process on Windows or macOS. On macOS Claude Code keeps each config directory's sign-in in the login Keychain under a name derived from the exact `CLAUDE_CONFIG_DIR` string, so the default account never sets the variable and every other account always uses the same resolved path.
+- Never read across into `/mnt/c` or the Windows profile from WSL. Never signal the editor process on Windows or macOS.
+- On macOS, leave `CLAUDE_CONFIG_DIR` unset for the default Claude account and always use the same resolved path for each other account.
 - All repository docs, code comments and test names are written in English. User-visible strings use the i18n tables.
-- Keep Claude, Codex and agy behavior independent when changing shared modules.
+- Keep Claude, Codex and agy behavior independent when changing shared modules. Keep login identities separate between accounts, including shared accounts.
 
-## Commands
-
-```bash
-npm run typecheck   # host, Webview and test type-check scopes
-npm test            # unit tests (bundled, node --test)
-npm run build       # host to dist/extension.js, Webview to dist/media/
-npm run test:ui     # headless Chromium checks of the Webview preview in every width and locale
-npm run preview     # Webview preview at http://127.0.0.1:8768/ with synthetic data; stop it by PID
-```
+## Required checks
 
 - Before committing, `npm run typecheck`, `npm test` and `npm run build` must pass.
 - Sidebar (Webview) changes also need the UI checks their kind requires ([which checks](docs/manual-verification.md#preview-verification)): `npm run test:ui` for any Webview change, plus a preview check at every width, in every locale when sidebar text changes. Preview checks use a headless browser at 100% zoom with a fixed viewport (adjust the sidebar width, not the viewport), one browser tab per agent, reused and closed afterwards. Host-only changes need no UI checks.
-- Other commands (watch, integration, perf, package): [Development](docs/development.md#commands).
+- For command usage, read [Development](docs/development.md#commands). Stop any preview server you start by its verified PID when the task is complete.
 
 ## Read the documents relevant to the task
 
@@ -47,10 +36,10 @@ Read the relevant sections before changing their behavior or contracts; a task d
 
 ## Test and release safety
 
-- Every file-system test uses a temporary HOME (`makeTempHome` in `test/helpers.ts`), including account creation/copy/share/unshare/migration/deletion and rc/state-file writes. Never run them under the real home. Busy/restart planning checks and the shared-conversion migrations (`migrateClaudeToShared` / `migrateCodexToShared`, which default to the real `/proc`) use fake process trees (`procRoot`). Code that runs the `claude` / `codex` / `agy` CLI is tested with a fake `spawn`, never the real CLI; agy's sign-in stores (file, `security`, `gdbus`, PowerShell) are tested with fake runners or in-memory stores, never agy's real sign-in.
+- Every file-system test uses a temporary HOME (`makeTempHome` in `test/helpers.ts`), including account creation/copy/share/unshare/migration/deletion and rc/state-file writes. Never run them under the real home. Busy/restart planning checks and the shared-conversion migrations (`migrateClaudeToShared` / `migrateCodexToShared`) use fake process trees (`procRoot`). Code that runs the `claude` / `codex` / `agy` CLI is tested with a fake `spawn`, never the real CLI; agy's sign-in stores (file, `security`, `gdbus`, PowerShell) are tested with fake runners or in-memory stores, never agy's real sign-in.
 - Never test `executeRestart` or signal the editor's WSL server or its children by another means. `planRestart` and `detectServerKind` are read-only and may be called. Real-account write/delete/restart acceptance steps are performed by the user ([Manual verification](docs/manual-verification.md)).
 - New `CHANGELOG.md` entries go under `## [Unreleased]` (or the bumped, not yet tagged version); never edit a tagged version's section (`test/changelog.test.ts`). Before releasing, neither `README.md` nor `CHANGELOG.md` may contain `[Unreleased]` content, even an empty heading.
-- Packaging is separate from installation and publication; never install the `.vsix` into the user's editor. Pushing a `v*` tag publishes to the VS Code Marketplace and Open VSX (`.github/workflows/publish.yml`): create or push such a tag, or release otherwise, only with the user's explicit release authorization.
+- Never install the `.vsix` into the user's editor. Create or push a `v*` tag, or release otherwise, only with the user's explicit release authorization; packaging alone does not authorize either. Pushing a `v*` tag triggers public release.
 
 ## Account and data safety
 
@@ -65,8 +54,8 @@ Read the relevant sections before changing their behavior or contracts; a task d
 
 ## State and identity
 
-- Claude's current account comes only from `CLAUDE_CONFIG_DIR` in the setting (`currentDir`); never persist a second current-account value. Use `defaultDir()` for the default and `claudeJsonPath(dir, isExplicitConfigDir(dir))` for account-info reads and watchers, and do not use `claudeCode.claudeProcessWrapper`. Codex's effective directory comes only from the extension host's `process.env.CODEX_HOME` (`effectiveDir`), its selected directory only from `~/.config/planswap/codex-home` or, in a VS Code / VSCodium WSL window, that editor's `codex-home.<kind>` (`readSelectedDir`, [Codex design 4a](docs/codex-design.md#4a-per-editor-selection-and-the-server-env-setup-hook)); never set `process.env.CODEX_HOME` yourself (it would report a selection as effective before the Codex processes use it).
-- Persisted state uses `FileMemento` (`~/.config/planswap/state.json`), not `globalState`, which is shared across WSL distributions; `globalState` holds only `panel.activeTab` and `legacy.languageMigrated`. Keep the ai-switcher 0.1.x migrations (`migrateLegacyCodex`, `migrateLegacyLanguage`); the extension id `n2ns.planswap` and memento keys were not renamed, and future persisted-name changes need migrations too.
+- Claude's current account comes only from `CLAUDE_CONFIG_DIR` in the setting (`currentDir`); never persist a second current-account value. Use `defaultDir()` for the default and `claudeJsonPath(dir, isExplicitConfigDir(dir))` for account-info reads and watchers, and do not use `claudeCode.claudeProcessWrapper`. Codex's effective directory comes only from the extension host's `process.env.CODEX_HOME` (`effectiveDir`), its selected directory only from `~/.config/planswap/codex-home` or, in a VS Code / VSCodium WSL window, that editor's `codex-home.<kind>` (`readSelectedDir`, [Codex design 4a](docs/codex-design.md#4a-per-editor-selection-and-the-server-env-setup-hook)); never set `process.env.CODEX_HOME` yourself.
+- Store persisted state in `FileMemento` (`~/.config/planswap/state.json`); use `globalState` only for `panel.activeTab` and `legacy.languageMigrated`. Keep the ai-switcher 0.1.x migrations (`migrateLegacyCodex`, `migrateLegacyLanguage`); future persisted-name changes require migrations too.
 - Aliases affect display only: logic uses account name/dir, visible labels use `labelFor`, validation goes through `LabelStore` (names and aliases cannot collide within a vendor; default/external rows cannot be renamed); clear the alias when removing an account.
 
 ## Implementation boundaries
@@ -74,5 +63,5 @@ Read the relevant sections before changing their behavior or contracts; a task d
 - TypeScript strict, ESM-style imports. The host depends only on `vscode` and Node built-ins with the `node:` prefix; modules documented as having no runtime `vscode` import keep that boundary.
 - The host owns business logic and validation: incoming account directories go through `panel.resolve`, account names through `validateName`. All host/Webview messages are typed in `src/protocol.ts`.
 - Webview: no Node or `vscode` imports, account text rendered with `textContent`, and the CSP is never relaxed; the full boundaries are in the headers of `src/webview/main.ts` and `src/accountsPanel.ts`.
-- Pin dependencies exactly (no `^`/`~` except `engines.vscode`); verify a new dependency is necessary and choose the latest stable release. Keep the VS Code engine baseline and `@types/vscode` at 1.107 for Antigravity compatibility ([Development](docs/development.md#dependencies-and-build)).
+- Pin dependencies exactly (no `^`/`~` except `engines.vscode`); verify a new dependency is necessary and choose the latest stable release. Keep the VS Code engine baseline and `@types/vscode` at 1.107 ([Development](docs/development.md#dependencies-and-build)).
 - All visible strings use host/Webview `t()` with matching keys in every locale of `LOCALES` (`src/i18n.ts`); English is the source of truth. Manifest strings use `%key%` and `package.nls*.json`. Translations use the terms in [Localization terminology](docs/development.md#localization-terminology). The translated user guides are updated in the same change as `docs/user-guide.md`. Never localize rc marker text, shell commands, file names, setting/command ids or account terminal names (`Claude (<label>)` / `Codex (<label>)` / `Antigravity (<label>)`).
