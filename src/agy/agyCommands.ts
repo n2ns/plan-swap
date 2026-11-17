@@ -150,8 +150,11 @@ export function registerAgy(deps: AgyDeps): vscode.Disposable[] {
   const refreshUsage = async (manual: boolean, fresh = false): Promise<void> => {
     if (usageRun && !manual && !fresh) return usageRun;
     while (usageRun) await usageRun;
-    usageRun = runUsage(manual);
-    return usageRun;
+    // Cleared only while it is still this run: a run that returns before its first await settles before it is stored
+    const run = runUsage(manual);
+    usageRun = run;
+    void run.finally(() => { if (usageRun === run) usageRun = undefined; });
+    return run;
   };
 
   const runUsage = async (manual: boolean): Promise<void> => {
@@ -198,7 +201,6 @@ export function registerAgy(deps: AgyDeps): vscode.Disposable[] {
     } catch (err) {
       if (manual) void vscode.window.showWarningMessage(t('agy.usage.failed', { error: errorMessage(err) }));
     } finally {
-      usageRun = undefined;
       panel.refresh();
     }
   };

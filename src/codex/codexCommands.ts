@@ -52,7 +52,7 @@ import { joinSentences, t } from '../i18n';
 import type { CodexUsageHistory } from './codexUsageHistory';
 import {
   API_SERVICES, DEEPSEEK_MODELS, PROVIDER_FILES, ProviderConfigError, SERVICE_INFO, checkBaseUrl, createProviderConfig,
-  editProviderConfig, preserveProviderConfig, providerLabel, readProviderEditState, readProviderInfo, readProviderKey,
+  editProviderConfig, hasProviderMarker, preserveProviderConfig, providerLabel, readProviderEditState, readProviderInfo, readProviderKey,
   validateProviderConfig, type ApiService, type ProviderErrorCode,
 } from './codexProvider';
 import { fetchModels, ModelListError } from './providerModels';
@@ -577,8 +577,9 @@ export function registerCodexCommands(deps: CodexDeps): vscode.Disposable[] {
     if (auto) restart(kind);
   }
 
+  // Only a PlanSwap API card is checked: an account's own unmarked DeepSeek config.toml is preserved, not refused
   function providerReady(dir: string): boolean {
-    if (!preserveProviderConfig(dir)) return true;
+    if (!hasProviderMarker(dir)) return true;
     try {
       validateProviderConfig(dir);
       return true;

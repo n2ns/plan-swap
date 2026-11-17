@@ -176,6 +176,28 @@ test('invalid provider cards cannot switch or open a subscription sign-in termin
   } finally { env.remoteName = previousRemote; h.close(); }
 });
 
+test('an account whose own unmarked config.toml selects DeepSeek still switches and opens its terminal', POSIX_ONLY, async (ctx) => {
+  const h = harness();
+  const previousRemote = env.remoteName;
+  env.remoteName = undefined;
+  const terminal = ctx.mock.method(window, 'createTerminal', () => ({ sendText() {}, show() {} }));
+  const errors: string[] = [];
+  ctx.mock.method(window, 'showErrorMessage', async (text: string) => { errors.push(text); return undefined; });
+  ctx.mock.method(window, 'showWarningMessage', async (_text: string, _options: unknown, button: string) => button);
+  try {
+    const dir = path.join(h.home, '.codex-own-deepseek');
+    fs.mkdirSync(dir);
+    fs.writeFileSync(path.join(dir, 'config.toml'), 'model_provider = "deepseek"\n');
+    await h.store.add({ name: 'own-deepseek', dir });
+    installRcBlocks();
+    await h.handle({ type: 'terminal', mode: 'codex', dir });
+    await h.handle({ type: 'switch', mode: 'codex', dir });
+    assert.deepEqual(errors, []);
+    assert.equal(terminal.mock.callCount(), 1);
+    assert.equal(readSelectedDir(), dir);
+  } finally { env.remoteName = previousRemote; h.close(); }
+});
+
 test('provider homes with auth files bypass subscription reads, cached quota and CLI queries', async () => {
   const tmp = makeTempHome('provider-no-quota');
   try {

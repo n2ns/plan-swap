@@ -204,7 +204,9 @@ function readBase(dir: string, origin: BaseOrigin): { items: Map<string, string>
     for (const key of items.keys()) if (!MCP_AUTH_KEYS.includes((JSON.parse(key) as string[])[0])) items.delete(key);
     return { items, stale: true };
   }
-  return { items, stale: false };
+  // A file recorded without a firstStartTime that has one now is the same file: the base is rewritten with it, so a
+  // later recreation is told apart even when no item changes meanwhile
+  return { items, stale: origin.starts.some((start, i) => starts[i] === null && start !== null) };
 }
 
 /** Forgets the last synced state of an account dir, when it stops or starts being shared: what changed meanwhile on

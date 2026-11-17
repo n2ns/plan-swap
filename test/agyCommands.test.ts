@@ -12,6 +12,7 @@ import { applySidebarDisplay, checkMessage } from '../src/accountsPanel';
 import { LabelStore } from '../src/labels';
 import type { AccountView, FromWebview, ToWebview } from '../src/protocol';
 import { MemoryMemento, makeTempHome, type TempHome } from './helpers';
+import { commands as stubCommands } from './stubs/vscode';
 
 const doc = (email: string, refresh: string) => ({ token: { access_token: `access-${refresh}`, refresh_token: refresh }, auth_method: 'consumer', id_token_email: email });
 
@@ -206,4 +207,41 @@ test('a switch is refused while PlanSwap\'s own usage query process has not ende
   const b = panel.rows().find((r) => r.email === 'b@example.com')!;
   await panel.handler!({ type: 'switch', mode: 'agy', dir: b.dir });
   assert.equal(JSON.parse(store.value!).id_token_email, 'a@example.com');
+});
+
+test('a switch from the palette is refused while PlanSwap\'s own usage query process has not ended', async (ctx) => {
+  const accounts = start({ cli: '/opt/agy', exitWaitMs: 20 });
+  store.value = JSON.stringify(doc('b@example.com', 'rb'));
+  await accounts.sync();
+  store.value = JSON.stringify(doc('a@example.com', 'ra'));
+  usage = async () => ({ ok: false, reason: 'stuck', exited: new Promise<void>(() => undefined) });
+  await panel.handler!({ type: 'tool', mode: 'agy', tool: 'refreshUsage' });
+  ctx.mock.method(vscode.window, 'showQuickPick', async (items: Array<{ description?: string }>) => items.find((i) => i.description === 'b@example.com'));
+  const errors = ctx.mock.method(vscode.window, 'showErrorMessage', async () => undefined);
+  await stubCommands.registered['planswap.agy.switchAccount']();
+  assert.equal(JSON.parse(store.value!).id_token_email, 'a@example.com');
+  assert.equal(errors.mock.callCount(), 1, 'the switch reaches the refusal');
+});
+
+test('a refresh while a stopped query has not exited leaves no finished run behind that blocks later queries', async (ctx) => {
+  let focus: ((e: { focused: boolean }) => void) | undefined;
+  ctx.mock.method(vscode.window, 'onDidChangeWindowState', (listener: (e: { focused: boolean }) => void) => {
+    focus = listener;
+    return { dispose() {} };
+  });
+  const accounts = start({ cli: '/opt/agy', exitWaitMs: 20 });
+  store.value = JSON.stringify(doc('a@example.com', 'ra'));
+  await accounts.sync();
+  let exit!: () => void;
+  const exited = new Promise<void>((r) => { exit = r; });
+  let queries = 0;
+  usage = async () => (++queries === 1 ? { ok: false, reason: 'stuck', exited } : fullUsage(20));
+  await panel.handler!({ type: 'tool', mode: 'agy', tool: 'refreshUsage' });
+  await panel.handler!({ type: 'tool', mode: 'agy', tool: 'refreshUsage' });
+  assert.equal(queries, 1, 'no second agy beside the stopped one');
+  exit();
+  for (let i = 0; i < 3; i++) await settle();
+  focus!({ focused: true });
+  for (let i = 0; i < 10; i++) await settle();
+  assert.equal(queries, 2, 'an automatic refresh queries again once the stopped process exited');
 });

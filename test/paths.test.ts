@@ -234,7 +234,7 @@ describe('copySettingsStripped', () => {
     const work = accountDir('work');
     ensureAccountDir(work);
     assertMode(work, '700');
-    assert.equal(copySettingsStripped(def, work), true);
+    assert.equal(copySettingsStripped(def, work, true), true);
     // forceLoginOrgUUID only pre-selects an organization outside managed settings: kept
     assert.deepEqual(JSON.parse(read(path.join(work, 'settings.json'))), { env: { KEEP: '1' }, forceLoginOrgUUID: 'x', model: 'opus', permissions: { allow: ['Bash'] } });
     assertMode(path.join(work, 'settings.json'), '600');
@@ -244,6 +244,33 @@ describe('copySettingsStripped', () => {
     fs.writeFileSync(path.join(def, 'settings.json'), JSON.stringify({ env: { ANTHROPIC_ORGANIZATION_ID: 'o' } }));
     assert.equal(copySettingsStripped(def, solo), true);
     assert.deepEqual(JSON.parse(read(path.join(solo, 'settings.json'))), { env: { ANTHROPIC_ORGANIZATION_ID: 'o' } });
+  });
+  test('a linked account\'s copy keeps the plugin keys; only an independent copy drops them', () => {
+    fs.writeFileSync(path.join(def, 'settings.json'), JSON.stringify({ apiKeyHelper: 'x', enabledPlugins: { p: true }, extraKnownMarketplaces: { m: {} }, additionalMarketplaces: ['a'] }));
+    const linked = accountDir('linked-plugins');
+    ensureAccountDir(linked);
+    assert.equal(copySettingsStripped(def, linked), true);
+    assert.deepEqual(JSON.parse(read(path.join(linked, 'settings.json'))), { enabledPlugins: { p: true }, extraKnownMarketplaces: { m: {} }, additionalMarketplaces: ['a'] });
+    const solo = accountDir('solo-plugins');
+    ensureAccountDir(solo);
+    assert.equal(copySettingsStripped(def, solo, true), true);
+    assert.deepEqual(JSON.parse(read(path.join(solo, 'settings.json'))), {});
+  });
+  test('a stripped third-party credential takes its endpoint and model variables with it', () => {
+    const models = { ANTHROPIC_MODEL: 'm', ANTHROPIC_DEFAULT_OPUS_MODEL: 'm', ANTHROPIC_DEFAULT_SONNET_MODEL: 'm', ANTHROPIC_DEFAULT_HAIKU_MODEL: 'm', ANTHROPIC_DEFAULT_FABLE_MODEL: 'm', CLAUDE_CODE_SUBAGENT_MODEL: 'm' };
+    for (const [name, credential] of [['gw-token', { env: { ANTHROPIC_AUTH_TOKEN: 'x' } }], ['gw-key', { env: { ANTHROPIC_API_KEY: 'x' } }], ['gw-helper', { apiKeyHelper: 'x', env: {} }]] as const) {
+      fs.writeFileSync(path.join(def, 'settings.json'), JSON.stringify({ ...credential, env: { ...credential.env, ANTHROPIC_BASE_URL: 'https://gw.example', ...models, KEEP: '1' } }));
+      const dir = accountDir(name);
+      ensureAccountDir(dir);
+      assert.equal(copySettingsStripped(def, dir), true);
+      assert.deepEqual(JSON.parse(read(path.join(dir, 'settings.json'))), { env: { KEEP: '1' } }, name);
+    }
+    // An endpoint without a credential in the file (a proxy for the account's own sign-in) is kept
+    fs.writeFileSync(path.join(def, 'settings.json'), JSON.stringify({ forceLoginMethod: 'claudeai', env: { ANTHROPIC_BASE_URL: 'https://proxy.example', ANTHROPIC_MODEL: 'm' } }));
+    const proxy = accountDir('proxy');
+    ensureAccountDir(proxy);
+    assert.equal(copySettingsStripped(def, proxy), true);
+    assert.deepEqual(JSON.parse(read(path.join(proxy, 'settings.json'))), { env: { ANTHROPIC_BASE_URL: 'https://proxy.example', ANTHROPIC_MODEL: 'm' } });
   });
   test('reads a settings.json saved with a byte order mark', () => {
     fs.writeFileSync(path.join(def, 'settings.json'), '﻿{"model":"opus","apiKeyHelper":"x"}');

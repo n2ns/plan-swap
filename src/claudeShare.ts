@@ -531,7 +531,7 @@ export function copyClaudeIndependent(fromJson: string, dir: string): { copied: 
   const acc = path.resolve(dir);
   fs.mkdirSync(acc, { recursive: true, mode: 0o700 });
 
-  if (copySettingsStripped(def, acc)) copied.push('settings.json');
+  if (copySettingsStripped(def, acc, true)) copied.push('settings.json');
   const rules = path.join(def, 'CLAUDE.md');
   if (fs.existsSync(rules) && fs.statSync(rules).isFile() && !lstatOrUndefined(path.join(acc, 'CLAUDE.md'))) {
     fs.copyFileSync(rules, path.join(acc, 'CLAUDE.md'), fs.constants.COPYFILE_EXCL);

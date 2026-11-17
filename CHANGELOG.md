@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- agy: refreshing usage while a stopped usage query had not exited yet no longer leaves the extension host busy forever at the next refresh or switch.
+- Claude: an account's info file that Claude Code deleted and recreated no longer removes the default account's MCP servers and project settings at the next switch, also when nothing else changed after the account's first start.
+- Claude: a linked account whose default `settings.json` cannot be linked keeps the plugin settings in its own copy, so its linked plugins stay enabled.
+- Claude: a copy of a default `settings.json` set up for a third-party API key or API key helper also leaves out that service's address and model, so the new account's own sign-in is not sent there.
+- Codex: an account whose own `config.toml` selects DeepSeek without being a PlanSwap API card, the default account included, can be switched to and opens its terminal again.
+
 ## [0.7.0] - 2026-11-18
 
 ### Added

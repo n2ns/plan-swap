@@ -56,7 +56,7 @@ export interface ClaudeProviderInfo {
 }
 
 // The env entries a card owns; every other settings.json key and env entry belongs to Claude Code or the user
-const MODEL_VARS = ['ANTHROPIC_MODEL', 'ANTHROPIC_DEFAULT_OPUS_MODEL', 'ANTHROPIC_DEFAULT_SONNET_MODEL', 'ANTHROPIC_DEFAULT_HAIKU_MODEL', 'CLAUDE_CODE_SUBAGENT_MODEL'] as const;
+export const MODEL_VARS = ['ANTHROPIC_MODEL', 'ANTHROPIC_DEFAULT_OPUS_MODEL', 'ANTHROPIC_DEFAULT_SONNET_MODEL', 'ANTHROPIC_DEFAULT_HAIKU_MODEL', 'CLAUDE_CODE_SUBAGENT_MODEL'] as const;
 const OWNED_VARS = ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_API_KEY', ...MODEL_VARS] as const;
 const LOCK_FILE = '.planswap-provider.lock';
 // An edit takes milliseconds; a lock file this old was left by a crashed edit and is taken over

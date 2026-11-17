@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { t } from './i18n';
 import { comparablePath, isMac, isWindows, renameReplacing, stripBom, unlinkLinks, isPlainObject, withLockDir } from './platform';
-import { hasClaudeProviderMarker } from './claudeProvider';
+import { hasClaudeProviderMarker, MODEL_VARS } from './claudeProvider';
 
 export const DEFAULT_NAME = 'default';
 export const NAME_RE = /^[A-Za-z0-9_-]+$/;
@@ -30,8 +30,12 @@ const CLAUDE_IDENTITY_SETTING_KEYS = {
   // Workload Identity Federation outranks /login only with both set
   envTogether: ['ANTHROPIC_FEDERATION_RULE_ID', 'ANTHROPIC_ORGANIZATION_ID'],
 } as const;
-// Plugin keys also stay out of an independent account's copy
-const STRIP_TOP_KEYS = [...CLAUDE_IDENTITY_SETTING_KEYS.top, 'enabledPlugins', 'extraKnownMarketplaces', 'additionalMarketplaces'];
+// Plugin keys also stay out of an independent account's copy, which gets no plugins/ links
+const PLUGIN_KEYS = ['enabledPlugins', 'extraKnownMarketplaces', 'additionalMarketplaces'];
+// A third-party service's credential takes its endpoint and model variables along: without it they would send the
+// account's own sign-in to that endpoint with a model it does not know
+const THIRD_PARTY_CREDENTIALS = { top: ['apiKeyHelper'], env: ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_API_KEY'] };
+const THIRD_PARTY_ENV = ['ANTHROPIC_BASE_URL', ...MODEL_VARS, 'ANTHROPIC_DEFAULT_FABLE_MODEL'];
 
 
 /** The first identity key a parsed settings.json sets (CLAUDE_IDENTITY_SETTING_KEYS), named as written: a top-level key
@@ -256,14 +260,16 @@ export function scanAccountDirs(): Account[] {
 }
 
 /** Copies <fromDir>/settings.json to <toDir> (mode 0600, never overwriting) without the identity keys
- *  (CLAUDE_IDENTITY_SETTING_KEYS; the federation pair only when both are set) and the plugin keys. false, writing
+ *  (CLAUDE_IDENTITY_SETTING_KEYS; the federation pair only when both are set), without `env.ANTHROPIC_BASE_URL` and
+ *  the model variables when a third-party credential (`apiKeyHelper`, `env.ANTHROPIC_AUTH_TOKEN` or
+ *  `env.ANTHROPIC_API_KEY`) is among them, and, for an independent account, without the plugin keys. false, writing
  *  nothing, when the source is missing, unparsable or not an object, the target already exists, or either folder is
  *  a Claude API card (its settings.json is its own and never copied to or from). Used by
  *  claudeShare.copyClaudeIndependent and for a linked account whose default settings.json cannot be linked. */
-export function copySettingsStripped(fromDir: string, toDir: string): boolean {
+export function copySettingsStripped(fromDir: string, toDir: string, independent = false): boolean {
   const dst = path.join(toDir, 'settings.json');
   if (hasClaudeProviderMarker(toDir) || hasClaudeProviderMarker(fromDir) || fs.existsSync(dst)) return false;
-  const data = strippedSettings(fromDir);
+  const data = strippedSettings(fromDir, independent);
   if (!data) return false;
   // wx: fail if the target exists; never overwrite
   fs.writeFileSync(dst, JSON.stringify(data, null, 2) + '\n', { mode: 0o600, flag: 'wx' });
@@ -272,7 +278,7 @@ export function copySettingsStripped(fromDir: string, toDir: string): boolean {
 
 /** <fromDir>/settings.json without the keys copySettingsStripped strips (read only); undefined when it is missing,
  *  unparsable or not an object. */
-export function strippedSettings(fromDir: string): Record<string, unknown> | undefined {
+export function strippedSettings(fromDir: string, independent = false): Record<string, unknown> | undefined {
   const src = path.join(fromDir, 'settings.json');
   if (!fs.existsSync(src)) return undefined;
   let data: unknown;
@@ -282,11 +288,13 @@ export function strippedSettings(fromDir: string): Record<string, unknown> | und
     return undefined;
   }
   if (!isPlainObject(data)) return undefined;
-  for (const k of STRIP_TOP_KEYS) delete data[k];
   const env = data.env;
+  const thirdParty = THIRD_PARTY_CREDENTIALS.top.some((k) => Object.hasOwn(data, k))
+    || (isPlainObject(env) && THIRD_PARTY_CREDENTIALS.env.some((k) => Object.hasOwn(env, k)));
+  for (const k of [...CLAUDE_IDENTITY_SETTING_KEYS.top, ...(independent ? PLUGIN_KEYS : [])]) delete data[k];
   if (isPlainObject(env)) {
     const federation = CLAUDE_IDENTITY_SETTING_KEYS.envTogether.every((k) => Object.hasOwn(env, k));
-    for (const k of [...CLAUDE_IDENTITY_SETTING_KEYS.env, ...(federation ? CLAUDE_IDENTITY_SETTING_KEYS.envTogether : [])]) delete env[k];
+    for (const k of [...CLAUDE_IDENTITY_SETTING_KEYS.env, ...(federation ? CLAUDE_IDENTITY_SETTING_KEYS.envTogether : []), ...(thirdParty ? THIRD_PARTY_ENV : [])]) delete env[k];
   }
   return data;
 }

@@ -303,6 +303,24 @@ describe('syncClaudeAccount', () => {
     assert.deepEqual(JSON.parse(read(src())).mcpServers, { a: { command: 'a' } });
   });
 
+  test('a firstStartTime gained without any item change is recorded, so a later recreated info file removes nothing', () => {
+    write(src(), JSON.stringify({ firstStartTime: 'd', mcpServers: { a: { command: 'a' } }, projects: { '/w': { hasTrustDialogAccepted: true } } }));
+    const acc = accountDir('first-start-quiet');
+    fs.mkdirSync(acc);
+    syncClaudeAccount(src(), acc);
+    // Claude Code's first start adds only firstStartTime; the next sync has no item to change
+    const data = info(acc);
+    data.firstStartTime = 'y';
+    write(path.join(acc, '.claude.json'), JSON.stringify(data));
+    syncClaudeAccount(src(), acc, 'full', { inUse: true });
+    // The account's info file is deleted and recreated by Claude Code with another firstStartTime
+    write(path.join(acc, '.claude.json'), JSON.stringify({ firstStartTime: 'z' }));
+    syncClaudeAccount(src(), acc, 'full', { inUse: true });
+    assert.deepEqual(JSON.parse(read(src())).mcpServers, { a: { command: 'a' } });
+    assert.equal(JSON.parse(read(src())).projects['/w'].hasTrustDialogAccepted, true);
+    assert.deepEqual(info(acc).mcpServers, { a: { command: 'a' } });
+  });
+
   test('sign-ins are not synced while either credentials file is missing, and none is created', () => {
     write(src(), '{}');
     const defCred = path.join(def, '.credentials.json');
