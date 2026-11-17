@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Changed
+
+- agy: within each model group the 5-hour limit is shown above the 7-day limit.
+- agy: the Gemini 4 Argon limits, when the plan has them, are shown above the other Gemini models' limits.
+- agy: model groups have short names: **Argon**, **Gemini** and **Claude/GPT**.
+
 ### Fixed
 
 - agy: refreshing usage while a stopped usage query had not exited yet no longer leaves the extension host busy forever at the next refresh or switch.

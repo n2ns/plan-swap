@@ -58,6 +58,42 @@ export function windowMinutes(window: unknown): number | undefined {
   return Number(m[1]) * (m[2] === 'm' ? 1 : m[2] === 'h' ? 60 : 1440);
 }
 
+// The group of a /usage answer, by its name and bucket ids: Gemini 4 Argon (mentions Argon), the other Gemini models,
+// Claude and GPT (mentions either, or a '3p-' bucket), or another one
+type GroupKind = 'argon' | 'gemini' | 'thirdParty' | 'other';
+function groupKind(group: unknown): GroupKind {
+  if (!isPlainObject(group)) return 'other';
+  const ids = Array.isArray(group.buckets) ? group.buckets.map((b) => (isPlainObject(b) && typeof b.id === 'string' ? b.id.toLowerCase() : '')) : [];
+  const text = [typeof group.name === 'string' ? group.name.toLowerCase() : '', ...ids].join(' ');
+  if (text.includes('argon')) return 'argon';
+  if (text.includes('gemini')) return 'gemini';
+  if (/\b(claude|gpt)\b/u.test(text) || ids.some((id) => id.startsWith('3p-'))) return 'thirdParty';
+  return 'other';
+}
+
+// Short display names of the known groups (product names, not translated)
+const SHORT_NAMES: Partial<Record<GroupKind, string>> = { argon: 'Argon', gemini: 'Gemini', thirdParty: 'Claude/GPT' };
+
+// A group's display name: the short name of a known group, otherwise agy's name without a trailing "Models"
+// (never emptied)
+function groupName(group: Record<string, unknown>): string | undefined {
+  const short = SHORT_NAMES[groupKind(group)];
+  if (short) return short;
+  const name = group.name;
+  if (typeof name !== 'string' || !name.trim()) return undefined;
+  return name.trim().replace(/\s+models$/iu, '') || undefined;
+}
+
+// agy's group order, with the Argon groups moved right above the first Gemini group when there is one
+function byDisplayOrder(groups: unknown[]): unknown[] {
+  const gemini = groups.findIndex((g) => groupKind(g) === 'gemini');
+  if (gemini < 0) return groups;
+  const argon = groups.filter((g) => groupKind(g) === 'argon');
+  const rest = groups.filter((g) => groupKind(g) !== 'argon');
+  const at = rest.findIndex((g) => groupKind(g) === 'gemini');
+  return [...rest.slice(0, at), ...argon, ...rest.slice(at)];
+}
+
 /** The usage windows of a /usage JSON answer, scoped by model group; undefined when it is not one. */
 export function parseAgyUsage(text: string, now: number): AgyUsage | undefined {
   let payload: unknown;
@@ -70,9 +106,10 @@ export function parseAgyUsage(text: string, now: number): AgyUsage | undefined {
   const groups = payload.command.data.groups;
   if (!Array.isArray(groups)) return undefined;
   const windows: AgyUsageWindow[] = [];
-  for (const group of groups) {
+  for (const group of byDisplayOrder(groups)) {
     if (!isPlainObject(group) || !Array.isArray(group.buckets)) continue;
-    const scope = typeof group.name === 'string' && group.name.trim() ? group.name.trim() : undefined;
+    const scope = groupName(group);
+    const start = windows.length;
     for (const bucket of group.buckets) {
       if (!isPlainObject(bucket) || typeof bucket.remaining_fraction !== 'number' || !Number.isFinite(bucket.remaining_fraction)) continue;
       const remaining = Math.min(1, Math.max(0, bucket.remaining_fraction));
@@ -84,6 +121,9 @@ export function parseAgyUsage(text: string, now: number): AgyUsage | undefined {
         scope,
       });
     }
+    // agy lists the weekly bucket first; within a group the shorter window comes first (unknown lengths last)
+    const length = (w: AgyUsageWindow): number => w.windowMinutes ?? Infinity;
+    windows.splice(start, windows.length - start, ...windows.slice(start).sort((a, b) => length(a) - length(b)));
   }
   return windows.length ? { windows, checkedAt: now } : undefined;
 }

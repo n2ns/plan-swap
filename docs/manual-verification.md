@@ -168,7 +168,7 @@ Performed by the user with an installed build. Local switching saves the selecti
 User-operated, with two Google accounts that can sign in to agy. PlanSwap writes agy's real sign-in here; agents do not run these steps.
 
 1. **Tab**: with `agy` installed the sidebar shows an **agy** tab; after renaming the binary (or in a window without it) and refocusing the window, the tab and the agy commands are gone, and they return once it is back.
-2. **First account**: signed in to agy with account A, the agy tab lists A as the current card with usage limits per model group (Gemini Models; Claude and GPT models) matching agy's `/usage`.
+2. **First account**: signed in to agy with account A, the agy tab lists A as the current card with usage limits per model group (Gemini; Claude/GPT) matching agy's `/usage`.
 3. **Second account**: **Open agy**, run `/logout`, then `/login` with account B: the tab lists A and B with B current; A's card keeps its earlier usage values and time.
 4. **Switch** to A with an agy session of B still running: no confirmation; the message says new sessions use A. A new `agy` session runs as A (its `/usage` matches A's card); the running session is not stopped. Later, note whether the running B session wrote B's sign-in back (the tab then shows B current again).
 5. **Failure**: on Linux with agy's sign-in kept in the Secret Service, the tab shows the keyring warning and switching does nothing.

@@ -77,9 +77,9 @@ function agyAccounts(): AccountView[] {
     email, loggedIn: true, isCurrent, usageEligible: isCurrent,
     usage: {
       windows: [
-        { usedPercent: usedPercent[0], windowMinutes: 300, resetsAt: now + 2 * 60 * 60, scope: 'Gemini Models' },
-        { usedPercent: usedPercent[1], windowMinutes: 10080, resetsAt: now + 5 * 24 * 60 * 60, scope: 'Gemini Models' },
-        { usedPercent: usedPercent[2], windowMinutes: 10080, resetsAt: now + 6 * 24 * 60 * 60, scope: 'Claude and GPT models' },
+        { usedPercent: usedPercent[0], windowMinutes: 300, resetsAt: now + 2 * 60 * 60, scope: 'Gemini' },
+        { usedPercent: usedPercent[1], windowMinutes: 10080, resetsAt: now + 5 * 24 * 60 * 60, scope: 'Gemini' },
+        { usedPercent: usedPercent[2], windowMinutes: 10080, resetsAt: now + 6 * 24 * 60 * 60, scope: 'Claude/GPT' },
       ],
       checkedAt: Date.UTC(2026, 8, 30, 12),
     },

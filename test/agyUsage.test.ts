@@ -26,15 +26,33 @@ const ANSWER = JSON.stringify({
 });
 
 describe('parseAgyUsage', () => {
-  test('every bucket becomes a window scoped by its model group', () => {
+  test('every bucket becomes a window scoped by its model group, the shorter window first within a group', () => {
     assert.deepEqual(parseAgyUsage(ANSWER, NOW), {
       checkedAt: NOW,
       windows: [
-        { usedPercent: 25, windowMinutes: 10080, resetsAt: Date.parse('2026-11-22T13:02:51Z') / 1000, scope: 'Gemini Models' },
-        { usedPercent: 0, windowMinutes: 300, resetsAt: Date.parse('2026-11-17T19:17:15Z') / 1000, scope: 'Gemini Models' },
-        { usedPercent: 90, windowMinutes: 10080, resetsAt: undefined, scope: 'Claude and GPT models' },
+        { usedPercent: 0, windowMinutes: 300, resetsAt: Date.parse('2026-11-17T19:17:15Z') / 1000, scope: 'Gemini' },
+        { usedPercent: 25, windowMinutes: 10080, resetsAt: Date.parse('2026-11-22T13:02:51Z') / 1000, scope: 'Gemini' },
+        { usedPercent: 90, windowMinutes: 10080, resetsAt: undefined, scope: 'Claude/GPT' },
       ],
     });
+  });
+  test('a Gemini 4 Argon group is shown above the Gemini group', () => {
+    const group = (name: string, id: string) => ({ name, buckets: [{ id, window: 'weekly', remaining_fraction: 0.5 }] });
+    const scopes = (groups: unknown[]) => parseAgyUsage(JSON.stringify({ command: { data: { groups } } }), NOW)!.windows.map((w) => w.scope);
+    assert.deepEqual(scopes([group('Gemini Models', 'gemini-weekly'), group('Claude and GPT models', '3p-weekly'), group('Gemini 4 Argon', 'gemini-argon-wtu-weekly')]),
+      ['Argon', 'Gemini', 'Claude/GPT']);
+    // Recognized by its bucket id too; without a Gemini group the order is agy's
+    assert.deepEqual(scopes([group('Gemini Models', 'gemini-weekly'), group('Pro', 'gemini-argon-wtu-weekly')]), ['Argon', 'Gemini']);
+    assert.deepEqual(scopes([group('Claude and GPT models', '3p-weekly'), group('Gemini 4 Argon', 'gemini-argon-wtu-weekly')]), ['Claude/GPT', 'Argon']);
+  });
+  test('known groups get short names; another group keeps agy\'s name without a trailing "Models"', () => {
+    const scope = (name: string, id?: string) => parseAgyUsage(JSON.stringify({ command: { data: { groups: [{ name, buckets: [{ id, window: '5h', remaining_fraction: 1 }] }] } } }), NOW)!.windows[0].scope;
+    assert.equal(scope('Gemini Models'), 'Gemini');
+    assert.equal(scope('Claude and GPT models'), 'Claude/GPT');
+    assert.equal(scope('Third-party', '3p-5h'), 'Claude/GPT');
+    assert.equal(scope('Gemini 4 Argon'), 'Argon');
+    assert.equal(scope('Image Models'), 'Image');
+    assert.equal(scope('Models'), 'Models');
   });
   test('anything else is not a usage report', () => {
     for (const text of ['', 'not json', '{}', JSON.stringify({ command: { data: { groups: [] } } }), JSON.stringify({ command: { data: { groups: [{ buckets: [{ remaining_fraction: 'x' }] }] } } })]) {
