@@ -1,6 +1,6 @@
 // Signs a Claude account out through the official CLI right before the account is deleted (macOS: Claude Code keeps
 // each config directory's sign-in in the login Keychain, which deleting the folder would leave behind). PlanSwap never
-// touches the Keychain itself and never reads the CLI's output. No vscode import.
+// touches Claude's Keychain items itself and never reads the CLI's output. No vscode import.
 import type { SpawnOptions } from 'node:child_process';
 import * as os from 'node:os';
 import * as path from 'node:path';

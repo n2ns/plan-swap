@@ -6,7 +6,7 @@ import { DEFAULT_NAME, claudeJsonPath, findSameDir, readAccountInfo, samePath, t
 import { currentDir, isExplicitConfigDir } from './claudeSettings';
 import type { AccountStore } from './accounts';
 import { EXTERNAL_NAME, labelFor, type LabelStore } from './labels';
-import { TOOL_IDS, type AccountView, type FromWebview, type PanelMode, type PanelState, type RestartInfo, type TabState, type ToWebview, type ApiServiceView } from './protocol';
+import { TOOL_IDS, type AccountView, type FromWebview, type PanelMode, type PanelState, type RestartInfo, type TabMode, type TabState, type ToWebview, type ApiServiceView } from './protocol';
 import { isSharedClaudeAccount } from './claudeShare';
 
 /** The shared flag of a named row: undefined (shown as neither) when the directory cannot be inspected (a regular file
@@ -61,10 +61,11 @@ export function recommendationThreshold(): number {
  * Applies the sidebar display settings to the rows of either page: a hidden email is not sent, and the general 5-hour
  * and 7-day windows are dropped when hidden (model-specific windows follow their own setting). A row left with no
  * window keeps its usage with an empty window list, so the observation time stays available (the recommendation card
- * shows it); the Webview renders no usage block for it.
+ * shows it); the Webview renders no usage block for it. groupScopes: the scope names a model group whose windows are the
+ * account's general limits (agy), so the 5-hour and 7-day settings apply to them too.
  */
-export function applySidebarDisplay(rows: AccountView[], display: SidebarDisplay): AccountView[] {
-  const hidden = (w: { windowMinutes?: number; scope?: string }): boolean => !w.scope &&
+export function applySidebarDisplay(rows: AccountView[], display: SidebarDisplay, groupScopes = false): AccountView[] {
+  const hidden = (w: { windowMinutes?: number; scope?: string }): boolean => (groupScopes || !w.scope) &&
     ((!display.fiveHour && w.windowMinutes === FIVE_HOURS) || (!display.weekly && w.windowMinutes === SEVEN_DAYS));
   return rows.map((row) => {
     const next = display.email ? row : { ...row, email: undefined };
@@ -97,6 +98,8 @@ export interface PanelSource {
   identityOf?(dir: string): string | undefined;
   // Copied into TabState.apiServices: the services an API card of the tab can use
   apiServices?(): ApiServiceView[];
+  // agy only; copied into TabState.notice on every push
+  notice?(): string | undefined;
 }
 
 /**
@@ -162,6 +165,9 @@ export function claudePanelSource(store: AccountStore, labels: LabelStore, exclu
 
 type Handler = (msg: FromWebview) => void | Promise<void>;
 
+// The agy tab's source while none is set (its messages then find no rows)
+const EMPTY_SOURCE: PanelSource = { accounts: () => [], enabled: () => false, pendingDir: () => undefined, watchTargets: () => [] };
+
 /**
  * The single sidebar webview provider hosting both tabs; the constructor already syncs the file watchers.
  *
@@ -173,10 +179,12 @@ type Handler = (msg: FromWebview) => void | Promise<void>;
  */
 export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposable {
   private view?: vscode.WebviewView;
-  private readonly handlers: Partial<Record<PanelMode, Handler>> = {};
+  private readonly handlers: Partial<Record<TabMode, Handler>> = {};
+  // The agy tab's source while the agy CLI is found (setAgySource); without it the state carries no agy tab
+  private agySource?: PanelSource;
   private switchedTo?: string;
   // Focus request received before the panel page is ready
-  private pendingFocusAdd?: PanelMode;
+  private pendingFocusAdd?: TabMode;
   private ready = false;
   private pageStartedAt = 0;
   private readonly changed = new vscode.EventEmitter<void>();
@@ -195,29 +203,46 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
     this.syncWatchers();
   }
 
-  setHandler(mode: PanelMode, handler: Handler): void {
+  setHandler(mode: TabMode, handler: Handler): void {
     this.handlers[mode] = handler;
+  }
+
+  /** Shows (a source) or hides (undefined) the agy tab; pushes the state when it changed. */
+  setAgySource(source: PanelSource | undefined): void {
+    if (source === this.agySource) return;
+    this.agySource = source;
+    this.refresh();
+  }
+
+  get hasAgy(): boolean {
+    return this.agySource !== undefined;
+  }
+
+  private source(mode: TabMode): PanelSource {
+    if (mode === 'agy') return this.agySource ?? EMPTY_SOURCE;
+    return this.sources[mode];
   }
 
   get visible(): boolean {
     return this.view?.visible ?? false;
   }
 
-  /** The tab last clicked (memento 'panel.activeTab'); 'claude' by default. */
-  get activeTab(): PanelMode {
-    return this.memento.get<PanelMode>(ACTIVE_TAB_KEY) === 'codex' ? 'codex' : 'claude';
+  /** The tab last clicked (memento 'panel.activeTab'); 'claude' by default, and while the agy tab is not shown. */
+  get activeTab(): TabMode {
+    const tab = this.memento.get<TabMode>(ACTIVE_TAB_KEY);
+    return tab === 'codex' || (tab === 'agy' && this.agySource) ? tab : 'claude';
   }
 
   /** Account rows currently displayed */
-  accounts(mode: PanelMode): AccountView[] {
-    return this.sources[mode].accounts();
+  accounts(mode: TabMode): AccountView[] {
+    return this.source(mode).accounts();
   }
 
   /**
    * Finds a displayed account by directory (samePath); only accepts directories present in the list, so every `dir`
    * from the webview is checked here before it is acted on.
    */
-  resolve(mode: PanelMode, dir: string): (Account & { kind: AccountView['kind'] }) | undefined {
+  resolve(mode: TabMode, dir: string): (Account & { kind: AccountView['kind'] }) | undefined {
     const row = this.accounts(mode).find((r) => samePath(r.dir, dir));
     return row && { name: row.name, dir: row.dir, kind: row.kind };
   }
@@ -240,7 +265,7 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
   }
 
   /** Focuses the view, then asks the page to open and focus its add input; queued until the page sent 'ready'. */
-  focusAdd(mode: PanelMode): void {
+  focusAdd(mode: TabMode): void {
     void vscode.commands.executeCommand(`${VIEW_ID}.focus`).then(() => {
       if (this.ready) this.post({ type: 'focusAdd', mode });
       else this.pendingFocusAdd = mode;
@@ -296,7 +321,9 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
   async dispatch(msg: FromWebview): Promise<void> {
     if (!('mode' in msg)) return;
     try {
-      if (msg.type === 'recommendDismiss') await this.dismissRecommendation(msg.mode, msg.dir);
+      if (msg.type === 'recommendDismiss') {
+        if (msg.mode !== 'agy') await this.dismissRecommendation(msg.mode, msg.dir);
+      }
       else await this.handlers[msg.mode]?.(msg);
     } catch (err) {
       console.error(`[planswap] panel action ${msg.type} failed:`, err);
@@ -358,6 +385,18 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
     };
   }
 
+  // The agy tab: no recommendations, no API cards; email, sidebar display and notice as the source gives them
+  private agyTabState(source: PanelSource): TabState {
+    const display = sidebarDisplay();
+    return {
+      enabled: true,
+      accounts: applySidebarDisplay(source.accounts(), display, true),
+      hideEmail: display.email ? undefined : true,
+      hideRecommendation: true,
+      notice: source.notice?.(),
+    };
+  }
+
   private pushState(): void {
     const startedAt = performance.now();
     const state: PanelState = {
@@ -365,6 +404,7 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
       locale: getLocale(),
       claude: this.tabState('claude'),
       codex: this.tabState('codex'),
+      agy: this.agySource && this.agyTabState(this.agySource),
       usageDisplay: usageDisplay() === 'used' ? 'used' : undefined,
       usageThresholds: usageThresholds(),
     };
@@ -405,7 +445,7 @@ export class AccountsPanel implements vscode.WebviewViewProvider, vscode.Disposa
   // Keep the watcher set equal to the union of both sources' watchTargets(); watcher callbacks only push state (no re-sync) to avoid loops
   private syncWatchers(): void {
     // Keyed by comparablePath: on Windows two spellings of one file (drive letter or folder case) share one watcher
-    const files = new Map([...this.sources.claude.watchTargets(), ...this.sources.codex.watchTargets()].map((f) => [comparablePath(f), f]));
+    const files = new Map([...this.sources.claude.watchTargets(), ...this.sources.codex.watchTargets(), ...(this.agySource?.watchTargets() ?? [])].map((f) => [comparablePath(f), f]));
     for (const [key, w] of this.watchers) {
       if (!files.has(key)) {
         w.dispose();
@@ -462,7 +502,7 @@ export function checkMessage(raw: unknown): FromWebview | undefined {
   const msg = raw as Record<string, unknown>;
   if (typeof msg.type !== 'string' || !Object.hasOwn(MESSAGE_FIELDS, msg.type)) return undefined;
   const type = msg.type as FromWebview['type'];
-  if (type !== 'ready' && msg.mode !== 'claude' && msg.mode !== 'codex') return undefined;
+  if (type !== 'ready' && msg.mode !== 'claude' && msg.mode !== 'codex' && msg.mode !== 'agy') return undefined;
   if (!MESSAGE_FIELDS[type].every((f) => typeof msg[f] === 'string')) return undefined;
   const isStringList = (v: unknown): boolean => Array.isArray(v) && v.every((s) => typeof s === 'string');
   if (!(LIST_FIELDS[type] ?? []).every((f) => isStringList(msg[f]))) return undefined;

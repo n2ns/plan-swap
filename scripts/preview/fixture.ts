@@ -1,8 +1,8 @@
 // Synthetic host transport for the real bundled Webview. No account files or CLIs are accessed.
-import type { AccountView, FromWebview, PanelMode, PanelState, ToWebview } from '../../src/protocol';
+import type { AccountView, FromWebview, PanelState, TabMode, ToWebview } from '../../src/protocol';
 
 type Locale = PanelState['locale'];
-type ApplyOptions = { locale: Locale; width: number; active?: PanelMode };
+type ApplyOptions = { locale: Locale; width: number; active?: TabMode };
 type PreviewApi = {
   apply(options: ApplyOptions): void;
   state(): PanelState;
@@ -19,8 +19,8 @@ declare global {
     preview: PreviewApi;
     acquireVsCodeApi: () => {
       postMessage(message: FromWebview): void;
-      getState(): { tab?: PanelMode } | undefined;
-      setState(state: { tab?: PanelMode }): void;
+      getState(): { tab?: TabMode } | undefined;
+      setState(state: { tab?: TabMode }): void;
     };
   }
 }
@@ -30,14 +30,15 @@ const locales: Locale[] = ['en', 'zh-cn', 'zh-tw', 'es', 'ja', 'ko'];
 const locale = locales.find((value) => value === params.get('locale')) ?? 'en';
 const initialWidth = Number(params.get('width'));
 const width = Number.isInteger(initialWidth) && initialWidth >= 180 && initialWidth <= 1000 ? initialWidth : 340;
-const active: PanelMode = params.get('active') === 'codex' ? 'codex' : 'claude';
+const activeParam = params.get('active');
+const active: TabMode = activeParam === 'codex' || activeParam === 'agy' ? activeParam : 'claude';
 const sidebar = document.getElementById('sidebar')!;
 const messages: FromWebview[] = [];
 let currentState: PanelState;
-let savedState: { tab?: PanelMode } = { tab: active };
+let savedState: { tab?: TabMode } = { tab: active };
 let suppressTabMessage = false;
 
-function account(mode: PanelMode, name: 'default' | 'work' | 'empty'): AccountView {
+function account(mode: 'claude' | 'codex', name: 'default' | 'work' | 'empty'): AccountView {
   const dir = `/fixture/.${mode === 'claude' ? 'claude' : 'codex'}${name === 'default' ? '' : `-${name}`}`;
   const base: AccountView = {
     kind: name === 'default' ? 'default' : 'named',
@@ -68,6 +69,27 @@ function account(mode: PanelMode, name: 'default' | 'work' | 'empty'): AccountVi
   return base;
 }
 
+// The agy tab: saved copies of agy sign-ins, the signed-in one current; windows scoped by agy's model groups
+function agyAccounts(): AccountView[] {
+  const now = Math.floor(Date.now() / 1000);
+  const row = (name: string, label: string, email: string, isCurrent: boolean, usedPercent: number[]): AccountView => ({
+    kind: 'named', name, label, dir: `/fixture/.config/planswap/agy/accounts/${name}`, dirLabel: `/fixture/.config/planswap/agy/accounts/${name}`,
+    email, loggedIn: true, isCurrent, usageEligible: isCurrent,
+    usage: {
+      windows: [
+        { usedPercent: usedPercent[0], windowMinutes: 300, resetsAt: now + 2 * 60 * 60, scope: 'Gemini Models' },
+        { usedPercent: usedPercent[1], windowMinutes: 10080, resetsAt: now + 5 * 24 * 60 * 60, scope: 'Gemini Models' },
+        { usedPercent: usedPercent[2], windowMinutes: 10080, resetsAt: now + 6 * 24 * 60 * 60, scope: 'Claude and GPT models' },
+      ],
+      checkedAt: Date.UTC(2026, 8, 30, 12),
+    },
+  });
+  return [
+    row('g000000000001', 'personal', 'personal@example.invalid', true, [10, 35, 0]),
+    row('g000000000002', 'work-with-a-long-name', 'work-with-a-long-address@example.invalid', false, [0, 92, 50]),
+  ];
+}
+
 function claudeApiCards(): AccountView[] {
   const card = (name: string, label: string, view: Partial<AccountView>): AccountView => ({
     kind: 'named', name, label, dir: `/fixture/.claude-${name}`, dirLabel: `/fixture/.claude-${name}`,
@@ -85,7 +107,7 @@ function claudeApiCards(): AccountView[] {
   ];
 }
 
-function makeState(nextLocale: Locale, nextActive: PanelMode): PanelState {
+function makeState(nextLocale: Locale, nextActive: TabMode): PanelState {
   return {
     active: nextActive, locale: nextLocale,
     claude: {
@@ -114,6 +136,7 @@ function makeState(nextLocale: Locale, nextActive: PanelMode): PanelState {
         { id: 'custom', name: '', keyRequired: false },
       ],
     },
+    agy: { enabled: true, accounts: agyAccounts(), hideRecommendation: true },
   };
 }
 

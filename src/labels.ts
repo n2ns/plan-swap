@@ -20,7 +20,7 @@ type Labels = Record<string, string>;
 export class LabelStore {
   constructor(
     private readonly state: StateMemento,
-    private readonly key: 'claude.labels' | 'codex.labels',
+    private readonly key: 'claude.labels' | 'codex.labels' | 'agy.labels',
   ) {}
 
   /** Returns undefined when not set */

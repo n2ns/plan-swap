@@ -13,6 +13,7 @@ Los nombres de botones de esta guía son los de la interfaz en español. Pasa el
 - [Añadir una cuenta e iniciar sesión](#añadir-una-cuenta-e-iniciar-sesión)
 - [Cambiar de cuenta de Claude](#cambiar-de-cuenta-de-claude)
 - [Activar y cambiar cuentas de Codex](#activar-y-cambiar-cuentas-de-codex)
+- [Cambiar las cuentas de la CLI de Antigravity (agy)](#cambiar-las-cuentas-de-la-cli-de-antigravity-agy)
 - [Usar una tarjeta API](#usar-una-tarjeta-api)
 - [Usar una tarjeta API de Claude](#usar-una-tarjeta-api-de-claude)
 - [Elegir cuentas vinculadas o independientes](#elegir-cuentas-vinculadas-o-independientes)
@@ -61,7 +62,7 @@ Hay dos tipos de botones de actualizar:
 - El botón de actualizar de la barra de título del panel vuelve a examinar ambas listas de cuentas y recarga la información de sesión.
 - Los iconos junto a **Todas las cuentas** consultan los límites de uso. Consulta [Consultar y actualizar los límites de uso](#consultar-y-actualizar-los-límites-de-uso).
 
-El pie, en la parte inferior del panel, sigue visible en ambas pestañas. Sus botones muestran las versiones, abren esta guía, recargan la ventana, reinician el Extension Host y abren el repositorio de GitHub. Debajo aparece la versión de PlanSwap instalada.
+El pie, en la parte inferior del panel, sigue visible en todas las pestañas. Sus botones muestran las versiones, abren esta guía, recargan la ventana, reinician el Extension Host y abren el repositorio de GitHub. Debajo aparece la versión de PlanSwap instalada.
 
 ## Añadir una cuenta e iniciar sesión
 
@@ -151,6 +152,18 @@ Reiniciar un servidor WSL desconecta sus ventanas del editor y cierra sus termin
 Hasta que se complete el reinicio, un aviso indica la cuenta seleccionada, y la fila resaltada sigue siendo la cuenta en vigor en esta ventana. Para volver a ver los pasos de reinicio, ejecuta **Aplicar cuenta de Codex: reiniciar o ver instrucciones** (Apply Codex Account: Restart or Show Instructions) desde la paleta de comandos (en la categoría **Cuenta de Codex**).
 
 ¿Cambiaste de idea antes de reiniciar? Haz clic en el icono de flecha de la fila resaltada (efectiva). Esto cancela la selección pendiente; no hace falta reiniciar.
+
+## Cambiar las cuentas de la CLI de Antigravity (agy)
+
+La pestaña **agy** aparece cuando la CLI de Antigravity (`agy`) está instalada donde se ejecuta el editor (en `PATH`, o en `~/.local/bin/agy` en Linux y WSL). agy mantiene una sola sesión de Google a la vez; PlanSwap guarda una copia de cada cuenta con la que agy inicia sesión y vuelve a poner la que elijas. No cambia la sesión del IDE de escritorio de Antigravity, y en una ventana WSL solo cambia el agy de WSL.
+
+1. Inicia sesión en agy como siempre. La cuenta aparece en la pestaña **agy** como cuenta actual.
+2. Para añadir otra cuenta, haz clic en **+** y luego en **Abrir agy**. En agy, ejecuta `/logout`, luego `/login`, e inicia sesión con la otra cuenta de Google. PlanSwap la guarda y la cuenta anterior sigue en la lista.
+3. Para cambiar, haz clic en el botón de cambiar de una tarjeta, haz doble clic en ella o ejecuta **Cambiar de cuenta de Antigravity** (en **Cuenta de Antigravity** de la paleta de comandos). No hay confirmación. Las sesiones de agy que inicies después usan esa cuenta; las que ya están en marcha conservan la suya hasta que las reinicies.
+
+La tarjeta de la cuenta actual muestra los límites de uso de cada grupo de modelos (5 h y 7 días) según el `/usage` de agy. Actualízalos con el botón de actualizar o con **Actualizar límites de uso de Antigravity**. Las demás tarjetas conservan sus últimos valores y muestran cuándo se consultaron. Solo la tarjeta actual tiene botón de terminal y no se puede quitar; quitar otra tarjeta solo borra la copia de su sesión que guarda PlanSwap.
+
+Si PlanSwap no puede saber con qué cuenta de Google tiene la sesión iniciada agy, la pestaña muestra un aviso y el cambio se desactiva para no perder esa sesión; vuelve a iniciar sesión en agy (`/logout` y luego `/login`). En Linux, si agy guarda su sesión en el llavero del sistema, no se puede cambiar.
 
 ## Usar una tarjeta API
 

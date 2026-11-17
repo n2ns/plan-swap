@@ -15,7 +15,7 @@ English is the source of truth; every string exists in all six locales of `LOCAL
 | Sidebar Webview | `src/webview/i18n.ts` (same six tables) | Webview `t()`; render account text with `textContent` |
 | `package.json` contributions: command titles, view names, setting titles and descriptions, enum labels | `package.nls.json` plus `package.nls.zh-cn.json`, `package.nls.zh-tw.json`, `package.nls.es.json`, `package.nls.ja.json`, `package.nls.ko.json` | `%key%` in the manifest |
 
-Placeholders are `{name}`-style and keep the same names in every locale. Never localize rc marker text, shell commands, file names, setting or command ids, or the account terminal names `Claude (<label>)` / `Codex (<label>)`.
+Placeholders are `{name}`-style and keep the same names in every locale. Never localize rc marker text, shell commands, file names, setting or command ids, or the account terminal names `Claude (<label>)` / `Codex (<label>)` / `Antigravity (<label>)`.
 
 ## 2. Wording
 

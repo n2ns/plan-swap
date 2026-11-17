@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- An **agy** tab for the Antigravity CLI, shown only while `agy` is installed: PlanSwap saves every Google account agy signs in to, switches agy's sign-in to another saved account with one click (without stopping running agy sessions, which keep their account until restarted), and shows each account's usage limits per model group from agy's `/usage`. **Open agy** in the add section opens a terminal to sign in another account. Switching checks the written sign-in and puts the previous one back if the check fails; it is not available when agy keeps its sign-in in the Linux system keyring. Command Palette: Switch, Sign In Another and Refresh Usage Limits of the Antigravity account.
+
 ## [0.6.2] - 2026-11-03
 
 ### Changed

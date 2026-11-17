@@ -7,6 +7,7 @@ import { chromium } from 'playwright';
 import { startPreview } from './preview/server.mjs';
 import { cachedListGuards, run as deepseekCards } from '../test/preview/checks/deepseek.mjs';
 import { run as claudeApiCards } from '../test/preview/checks/claude-api.mjs';
+import { run as agyTab } from '../test/preview/checks/agy.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const output = path.join(root, '.test-out', 'ui');
@@ -1168,6 +1169,7 @@ try {
     // Behavior rather than layout: one case is enough
     if (locale === 'en' && width === 280) await cachedListGuards(codexCtx);
     await claudeApiCards(apiCtx('claude-api', 'claude'));
+    await agyTab(apiCtx('agy', 'agy'));
   }
   assert.deepEqual(results.consoleErrors, [], 'preview console must have no errors or warnings');
   console.log(`UI preview passed: ${results.cases.length} layout cases, ${codexShots} Codex screenshots, ${results.interactions.length} interactions`);

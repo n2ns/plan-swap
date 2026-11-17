@@ -8,12 +8,13 @@ Purpose: repository layout, build, test and release mechanics, localization term
 |---|---|
 | `src/` | Extension activation, Claude flows and shared host modules. |
 | `src/codex/` | Codex account, environment and restart modules. |
+| `src/agy/` | agy (Antigravity CLI) sign-in stores, saved accounts, switching, usage query and the agy tab wiring ([agy design](agy-design.md)). |
 | `src/codex/codexProvider.ts` | API card services (DeepSeek, presets, custom endpoints), recognition, local native configuration, safe creation/editing and provider configuration-sharing exclusions. |
 | `src/webview/` | Sidebar frontend; shared message types come from `src/protocol.ts`. |
 | `test/` | Unit tests, temporary-HOME helpers, in-memory Memento and the VS Code stub; `test/integration/` holds the real-editor smoke suite. |
 | `scripts/` | Test, UI-test, preview and measurement runners. |
 | `resources/` | Marketplace, activity-bar and README artwork, plus bundled third-party licenses under `licenses/`. |
-| `docs/` | Claude/Codex design (rationale, verified external facts), `features.md` (user-visible behavior), `manual-verification.md`, this file, and the user guides (`user-guide*.md`). Agent rules and the document routing table are in [AGENTS.md](../AGENTS.md#read-the-documents-relevant-to-the-task). |
+| `docs/` | Claude/Codex/agy design (rationale, verified external facts), `features.md` (user-visible behavior), `manual-verification.md`, this file, and the user guides (`user-guide*.md`). Agent rules and the document routing table are in [AGENTS.md](../AGENTS.md#read-the-documents-relevant-to-the-task). |
 | `docs/research/` | Dated upstream evidence and reproducible measurements. |
 | `docs/plans/` | Proposals not yet implemented; removed once implemented or abandoned ([document map](doc-map.md#rules)). |
 | `.vscode/` | F5 launch configuration and its pre-launch build task. |

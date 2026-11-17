@@ -35,7 +35,7 @@ See how much is left on each Claude Code and Codex subscription account you own 
 
 ### Manage your accounts
 
-- **One sidebar, two tabs**: Claude and Codex accounts side by side, each with its email and plan.
+- **One sidebar, one tab per tool**: Claude and Codex accounts side by side, each with its email and plan, plus an **agy** tab for the Antigravity CLI's Google accounts while `agy` is installed ([guide](docs/user-guide.md#switch-antigravity-cli-agy-accounts)).
 - **Your own order**: drag the cards into the order you want (the current account stays first); it is kept for every editor on the same machine or WSL distribution.
 - **Stay signed in everywhere**: sign in once per account, then switch with one click.
 - **Linked or independent accounts**: share the default account's setup and history, or keep them separate.
@@ -107,7 +107,7 @@ You can change an account's mode later, and **Re-link** in Tools checks linked a
 
 ## Known limitations
 
-- **Open sessions keep their account** until you reload (Claude) or restart (Codex).
+- **Open sessions keep their account** until you reload (Claude) or restart (Codex, agy).
 - **Switching is not per window**: other windows of the same editor switch too.
 - **Continuing another account's session can fail**, especially between Codex accounts in different ChatGPT organizations.
 - **Some sign-ins apply to every account**, such as an `ANTHROPIC_API_KEY` in the environment; PlanSwap warns you ([details](docs/user-guide.md#sign-ins-that-apply-to-every-account)).
@@ -115,11 +115,12 @@ You can change an account's mode later, and **Re-link** in Tools checks linked a
 - **On Windows**, linking single files needs Developer Mode, and Codex thread databases stay per account ([details](docs/user-guide.md#linking-on-windows)). While the Codex extension runs Codex inside WSL (`chatgpt.runCodexInWindowsSubsystemForLinux`), manage Codex accounts from a WSL window ([details](docs/user-guide.md#enable-once)).
 - **Not yet verified everywhere**: switching and usage limits have been tested end to end with real accounts in Antigravity IDE, VS Code and VSCodium in WSL, on native Windows and on a local Linux desktop. In VS Code on macOS (Intel, zsh), Claude accounts were tested end to end with a real account, and Codex switching without a Codex sign-in. Other remote windows have not been tested with real accounts.
 - **API cards** (DeepSeek, OpenRouter, Z.ai, Kimi, xAI, Ollama, LM Studio or a custom Responses endpoint such as a LiteLLM gateway) use independent Codex configuration and do not provide per-window backend isolation. Real-client acceptance is partly pending; see the [guide](docs/user-guide.md#use-an-api-card) and [TODO](TODO.md).
+- **agy (Antigravity CLI)** has one sign-in per machine or WSL distribution: PlanSwap keeps a copy of each account's sign-in and writes the chosen one back, so a switch applies to every agy session started afterwards, and in WSL only to the agy inside WSL. It does not switch the Antigravity desktop IDE's sign-in. The sign-in file and the usage report were checked with agy 1.5.10 on WSL; switching between real accounts, and macOS and Windows, are pending ([TODO](TODO.md)).
 - **Claude API cards** (DeepSeek, Kimi, OpenRouter, Z.ai, Ollama or a custom Anthropic-compatible endpoint) run Claude Code against another service; Anthropic does not support Claude Code with non-Claude models, and acceptance with real services is pending ([guide](docs/user-guide.md#use-a-claude-api-card), [TODO](TODO.md)).
 
 ## Privacy
 
-PlanSwap has no telemetry. Its only network requests of its own are model lists for API cards (`GET <endpoint>/models`): after the editor starts, without any key, for OpenRouter and for Ollama and LM Studio on this machine; and from an API card form, to the endpoint you chose with the key you entered, when no saved list covers it. Usage limits are read through the official `claude` and `codex` CLIs, which contact their own services as usual. When Claude usage is unavailable, a minimal official CLI model request can check subscription access; it may consume a small amount of quota. PlanSwap never copies, moves or sends your Claude or Codex sign-in; between linked Claude accounts it syncs only the sign-ins to MCP servers, and it changes your shell or environment configuration only after you confirm (afterwards it keeps the blocks it added up to date). Details: [privacy](docs/privacy.md).
+PlanSwap has no telemetry. Its only network requests of its own are model lists for API cards (`GET <endpoint>/models`): after the editor starts, without any key, for OpenRouter and for Ollama and LM Studio on this machine; and from an API card form, to the endpoint you chose with the key you entered, when no saved list covers it. Usage limits are read through the official `claude`, `codex` and `agy` CLIs, which contact their own services as usual. When Claude usage is unavailable, a minimal official CLI model request can check subscription access; it may consume a small amount of quota. PlanSwap never copies, moves or sends your Claude or Codex sign-in; for agy, which has a single sign-in, it keeps a private copy of each account's sign-in on this machine to switch between them; between linked Claude accounts it syncs only the sign-ins to MCP servers, and it changes your shell or environment configuration only after you confirm (afterwards it keeps the blocks it added up to date). Details: [privacy](docs/privacy.md).
 
 API keys entered for API cards are saved in plaintext in each card's own Codex configuration or Claude `settings.json`. Codex or Claude Code sends those cards' model requests directly to the card's service; PlanSwap does not proxy requests or check subscription quotas for them.
 
@@ -131,7 +132,7 @@ Before uninstalling PlanSwap:
 2. If you enabled Codex switching, run **Codex Account: Disable Codex Account Switching** from the Command Palette to remove its shell configuration and the blocks in each editor's `server-env-setup` (on Windows, the user environment variable `CODEX_HOME`; on macOS, the block in your shell startup file).
 3. Uninstall PlanSwap from the Extensions view in the window where you installed it (WSL, Windows or macOS).
 
-Your account directories (`~/.claude-<name>` and `~/.codex-<name>`) are kept, including the `.planswap-sync.json` file of each linked Claude account. To clear PlanSwap's saved account list, display names and usage records as well, delete `~/.config/planswap/state.json`. This does not delete the accounts' own files.
+Your account directories (`~/.claude-<name>` and `~/.codex-<name>`) are kept, including the `.planswap-sync.json` file of each linked Claude account. To clear PlanSwap's saved account list, display names and usage records as well, delete `~/.config/planswap/state.json`. This does not delete the accounts' own files. PlanSwap's copies of agy sign-ins are in `~/.config/planswap/agy/`; deleting that folder removes them and leaves agy's own current sign-in as it is.
 
 ## Documentation
 

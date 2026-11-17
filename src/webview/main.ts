@@ -10,13 +10,13 @@ import '@vscode-elements/elements/dist/vscode-textfield/index.js';
 import '@vscode-elements/elements/dist/vscode-single-select/index.js';
 import '@vscode-elements/elements/dist/vscode-toolbar-button/index.js';
 import '@vscode-elements/elements/dist/vscode-icon/index.js';
-import type { AccountView, ApiServiceView, FromWebview, PanelMode, PanelState, RestartInfo, TabState, ToolId, ToWebview, UsageDisplay } from '../protocol';
+import type { AccountView, ApiServiceView, FromWebview, PanelMode, PanelState, RestartInfo, TabMode, TabState, ToolId, ToWebview, UsageDisplay } from '../protocol';
 import { getLocale, intlLocale, joinSentences, matchLocale, setLocale, t, WEB_LOCALE_INFO, type MessageKey } from './i18n';
 
 declare const __PLANSWAP_VERSION__: string;
 
 interface WebviewState {
-  tab?: PanelMode;
+  tab?: TabMode;
 }
 declare function acquireVsCodeApi(): {
   postMessage(msg: FromWebview): void;
@@ -30,7 +30,11 @@ const send = (msg: FromWebview): void => vscode.postMessage(msg);
 
 const NAME_RE = /^[A-Za-z0-9_-]+$/;
 const MAX_LABEL_LENGTH = 32;
-const MODES: PanelMode[] = ['claude', 'codex'];
+const MODES: TabMode[] = ['claude', 'codex', 'agy'];
+// The agy tab only exists while the host found the agy CLI (state.agy present)
+const shownModes = (): TabMode[] => (state.agy ? MODES : MODES.filter((m) => m !== 'agy'));
+// An agy page before its first state, or after the host stopped sending one
+const NO_TAB: TabState = { enabled: true, accounts: [] };
 
 type TextField = HTMLElement & { value: string; invalid: boolean; focus(): void };
 type Select = HTMLElement & { value: string; disabled: boolean; combobox: boolean; creatable: boolean; filter: string; options: Array<{ label: string; value: string; selected?: boolean }> };
@@ -47,13 +51,14 @@ let state: PanelState = {
   locale: getLocale(),
 };
 // Tab remembered by the frontend; wins over the host's active (the host only decides when there is no local record yet)
-let activeTab: PanelMode | undefined = vscode.getState()?.tab;
+let activeTab: TabMode | undefined = vscode.getState()?.tab;
 
 // Per-mode constants that are never translated (directory prefixes until the host sends its own, file names);
 // translated text lives in i18n.ts
 const TEXT = {
   claude: { dirPrefix: '~/.claude-', mdLabel: 'CLAUDE.md' },
   codex: { dirPrefix: '~/.codex-', mdLabel: 'AGENTS.md' },
+  agy: { dirPrefix: '', mdLabel: '' },
 } as const;
 
 // Restart action wording follows the host-reported context; before the first state arrives, keep the WSL wording
@@ -168,7 +173,7 @@ function planPill(a: AccountView, unavailable: boolean): HTMLElement | null {
 // Both sides share tiers by price: tier1 standard paid (Claude Pro / ChatGPT Plus), tier2 high (Claude Max / ChatGPT Pro Lite), tier3 top (Claude Ultra / ChatGPT Pro)
 // Colors (panel.css; shown on the current row only, other rows keep a neutral tag): tier0 Free/Go gray, tier1 blue,
 // tier2 champagne gold, tier3 amber, team (Team/Business) teal, enterprise slate, apikey orange; none keeps the normal outline
-function planClass(plan: string | undefined, mode: PanelMode): string {
+function planClass(plan: string | undefined, mode: TabMode): string {
   if (!plan) return 'none';
   if (/API/i.test(plan)) return 'apikey';
   if (/^(Team|Business)\b/i.test(plan)) return 'team';
@@ -372,7 +377,7 @@ class ApiFields {
   private autoTimer?: ReturnType<typeof setTimeout>;
   private loadedFor?: string;
 
-  constructor(private readonly mode: PanelMode, private readonly onChange: () => void, private readonly editing?: { dir: string; service: string; baseUrl?: string; model?: string; hasKey?: boolean }) {
+  constructor(private readonly mode: TabMode, private readonly onChange: () => void, private readonly editing?: { dir: string; service: string; baseUrl?: string; model?: string; hasKey?: boolean }) {
     this.model.combobox = true;
     this.model.filter = 'contains';
     this.model.disabled = true;
@@ -645,7 +650,7 @@ class ApiFields {
 
 /** One tab page: its own add section, adding state, confirmingDir and inline-rename state */
 class Page {
-  readonly text: (typeof TEXT)[PanelMode];
+  readonly text: (typeof TEXT)[TabMode];
   readonly root: HTMLElement;
   // Banners, the disabled card and the loading line; the list section below is created once so the add form keeps its focus
   private readonly top = h('div', { class: 'page-top' });
@@ -680,6 +685,7 @@ class Page {
   private editError?: string;
   private saving = false;
   private readonly addHelp = h('div', { class: 'help' });
+  private readonly agySignIn: HTMLElement;
   private tools: HTMLElement;
   private syncButton!: HTMLElement;
   private readonly addSection: HTMLElement;
@@ -707,7 +713,7 @@ class Page {
   private dropped = false;
   private renderDeferred = false;
 
-  constructor(readonly mode: PanelMode) {
+  constructor(readonly mode: TabMode) {
     this.text = TEXT[mode];
     this.addField = h('vscode-textfield') as TextField;
     // Icon-only submit (a check mark), so the heading's "+" stays the only plus sign; its label is the aria-label
@@ -735,15 +741,20 @@ class Page {
       this.addError = undefined;
       this.updateAddHelp();
     });
-    this.addSection = h(
-      'div',
-      { class: 'add', id: `add-${mode}`, hidden: true },
-      this.addProvider,
-      h('div', { class: 'input-group' }, this.addField, this.addButton),
-      this.apiFields.root,
-      this.addMode,
-      this.addHelp,
-    );
+    // agy has no account folders to name: its add section explains how agy itself signs in another Google account and
+    // opens an agy terminal for that; the account appears here once agy is signed in to it
+    this.agySignIn = withAction(onClick(h('vscode-button', { icon: 'terminal' }), () => this.send({ type: 'tool', tool: 'agySignIn' })), 'agySignIn');
+    this.addSection = mode === 'agy'
+      ? h('div', { class: 'add', id: `add-${mode}`, hidden: true }, this.addHelp, h('div', { class: 'add-actions' }, this.agySignIn))
+      : h(
+        'div',
+        { class: 'add', id: `add-${mode}`, hidden: true },
+        this.addProvider,
+        h('div', { class: 'input-group' }, this.addField, this.addButton),
+        this.apiFields.root,
+        this.addMode,
+        this.addHelp,
+      );
     this.addToggle = h('button', { type: 'button', class: 'add-toggle', 'aria-expanded': 'false', 'aria-controls': `add-${mode}` }, this.addToggleIcon);
     this.addToggle.addEventListener('click', () => {
       this.setAddOpen(!this.addOpen);
@@ -813,6 +824,8 @@ class Page {
     this.addProvider.setAttribute('aria-label', t(this.mode === 'claude' ? 'provider.typeClaude' : 'provider.type'));
     this.addSignIn.textContent = t(this.mode === 'claude' ? 'provider.claude' : 'provider.codex');
     this.addApi.textContent = t('provider.api');
+    this.agySignIn.textContent = t('agy.signIn');
+    this.agySignIn.title = t('agy.signInTitle');
     this.apiFields.applyLocale();
     this.editFields?.applyLocale();
     // A host add error is in the old locale; drop it so the help line shows the local validation in the new one
@@ -833,7 +846,7 @@ class Page {
   }
 
   get tab(): TabState {
-    return state[this.mode];
+    return (this.mode === 'agy' ? state.agy : state[this.mode]) ?? NO_TAB;
   }
 
   // The host's spelling of a new account folder (backslashes on Windows); the fixed one before the first state arrives
@@ -929,7 +942,8 @@ class Page {
   focusAdd(): void {
     if (!receivedState || !this.tab.enabled) return;
     this.setAddOpen(true);
-    this.addField.focus();
+    if (this.mode === 'agy') focusElement(this.agySignIn);
+    else this.addField.focus();
     this.addSection.scrollIntoView?.({ block: 'nearest' });
   }
 
@@ -1089,6 +1103,11 @@ class Page {
   }
 
   private updateAddHelp(): void {
+    if (this.mode === 'agy') {
+      this.addHelp.className = 'help';
+      this.addHelp.textContent = t('agy.addHelp');
+      return;
+    }
     const api = this.addApi.checked;
     this.addLinked.textContent = t(api ? 'provider.addLinked' : 'add.mode.linked');
     this.addIndependent.textContent = t(api ? 'provider.addIndependent' : 'add.mode.independent');
@@ -1171,6 +1190,12 @@ class Page {
     );
   }
 
+  // agy: the host's warning that its sign-in cannot be recognized or switched here
+  private renderNotice(): HTMLElement | null {
+    if (this.mode !== 'agy' || !this.tab.notice) return null;
+    return h('div', { class: 'banner banner-notice', role: 'status' }, h('div', { class: 'banner-body' }, bannerTitle('warning', this.tab.notice)));
+  }
+
   // Claude: reload banner
   private renderBanner(): HTMLElement | null {
     if (this.mode !== 'claude' || !this.tab.switchedTo) return null;
@@ -1198,7 +1223,7 @@ class Page {
   // hides it until the recommendation changes (the host decides that too). The card carries no data-dir: focus restore
   // must not take it for the recommended account's row
   private renderRecommendation(): HTMLElement | null {
-    if (this.mode === 'claude' ? this.tab.switchedTo : this.tab.pendingDir) return null;
+    if (this.mode === 'agy' || (this.mode === 'claude' ? this.tab.switchedTo : this.tab.pendingDir)) return null;
     const a = this.tab.recommended !== undefined && !this.tab.hideRecommendation ? this.tab.accounts.find((x) => x.dir === this.tab.recommended && !x.provider) : undefined;
     if (!a) return null;
     const display = state.usageDisplay ?? 'remaining';
@@ -1269,7 +1294,8 @@ class Page {
     const editing = this.renamingDir === a.dir && !!this.renameField;
     const selected = this.mode === 'codex' && a.isSelected === true;
     // The host refuses a Codex switch to the external directory (it never becomes the selection), so it offers none
-    const canSwitch = (!a.isCurrent || (this.mode === 'codex' && a.isSelected === false)) && !(this.mode === 'codex' && a.kind === 'external');
+    // agy: only saved accounts can be switched to; an unrecognized sign-in (the external row) has nothing to switch to
+    const canSwitch = (!a.isCurrent || (this.mode === 'codex' && a.isSelected === false)) && !(this.mode !== 'claude' && a.kind === 'external');
     if (editing) classes.push('is-editing');
 
     // Built in edit mode too: CSS hides it there (visibility: hidden) so the card keeps its height and columns
@@ -1296,7 +1322,7 @@ class Page {
       // Subscription accounts offer sign-in when logged out; API cards always use a terminal icon and let the host
       // validate their configuration. Neither appears while the host refuses Codex terminals (runsInWsl).
       const terminals = !this.tab.runsInWsl;
-      if (!provider && !a.loggedIn && terminals) {
+      if (this.mode !== 'agy' && !provider && !a.loggedIn && terminals) {
         textButtons.append(
           onClick(
             h('vscode-button', { class: 'row-btn', title: t(`${this.mode}.loginTitle`), 'data-action': 'terminal' }, t('row.login')),
@@ -1315,7 +1341,8 @@ class Page {
       if (provider && a.kind === 'named') {
         iconButtons.append(withAction(toolbarButton('settings-gear', t('provider.edit'), () => (this.editingDir === a.dir ? (this.stopEdit(), this.render()) : this.startEdit(a))), 'editProvider'));
       }
-      if ((a.loggedIn || provider) && terminals) {
+      // agy has one global sign-in, so only the current account's terminal runs as that account
+      if ((a.loggedIn || provider) && terminals && (this.mode !== 'agy' || a.isCurrent)) {
         iconButtons.append(withAction(toolbarButton('terminal', t(`${this.mode}.terminalTitle`), () => this.send({ type: 'terminal', dir: a.dir })), 'terminal'));
       }
       // Registered accounts with usage limits can be left out of recommendations (the host keeps the mark)
@@ -1394,7 +1421,7 @@ class Page {
         !inlineActions && actions,
         provider && a.providerError && h('div', { class: 'row-hint provider-error' }, a.providerError),
         provider && this.editingDir === a.dir && this.renderEdit(),
-        !provider && !a.loggedIn && !a.isCurrent && !this.tab.runsInWsl && h('div', { class: 'row-hint' }, t(`${this.mode}.loginHint`)),
+        this.mode !== 'agy' && !provider && !a.loggedIn && !a.isCurrent && !this.tab.runsInWsl && h('div', { class: 'row-hint' }, t(`${this.mode}.loginHint`)),
         editing && this.renameError && h('div', { class: 'row-error', role: 'alert' }, this.renameError),
       ),
     );
@@ -1495,6 +1522,11 @@ class Page {
   private renderTools(): HTMLElement {
     const btn = (icon: string, label: string, title: string, tool: ToolId): HTMLElement =>
       onClick(h('vscode-button', { secondary: true, icon, title }, label), () => this.send({ type: 'tool', tool }));
+    // agy has no global instructions file, settings or linked accounts PlanSwap manages: no page tools
+    if (this.mode === 'agy') {
+      this.syncButton = h('span', { hidden: true });
+      return h('div', { class: 'page-tools', hidden: true });
+    }
     this.syncButton = btn('sync', t('tools.sync'), t(`${this.mode}.syncTitle`), 'sync');
     this.updateSyncButton();
     return h(
@@ -1514,7 +1546,7 @@ class Page {
 
   // Re-link only acts on linked accounts, so it is hidden while the page has none
   private updateSyncButton(): void {
-    this.syncButton.hidden = !this.tab.accounts.some((a) => a.kind === 'named' && a.shared === true);
+    this.syncButton.hidden = this.mode === 'agy' || !this.tab.accounts.some((a) => a.kind === 'named' && a.shared === true);
   }
 
   // A refresh button acts on the current account (refresh-all: on every registered one), so it needs one that can be queried;
@@ -1522,7 +1554,7 @@ class Page {
   private updateUsageButtons(): void {
     const accounts = receivedState && this.tab.enabled ? this.tab.accounts : [];
     this.refreshButton.hidden = !accounts.some((a) => !a.provider && a.isCurrent && a.usageEligible);
-    this.refreshAllButton.hidden = !accounts.some((a) => !a.provider && a.kind !== 'external' && a.usageEligible);
+    this.refreshAllButton.hidden = this.mode === 'agy' || !accounts.some((a) => !a.provider && a.kind !== 'external' && a.usageEligible);
   }
 
   private renderList(): void {
@@ -1595,7 +1627,7 @@ class Page {
         return;
       }
       this.listSection.hidden = false;
-      this.top.replaceChildren(...[this.renderRunsInWsl(), this.renderPending(), this.renderBanner(), this.renderRecommendation()].filter((n): n is HTMLElement => !!n));
+      this.top.replaceChildren(...[this.renderRunsInWsl(), this.renderPending(), this.renderBanner(), this.renderNotice(), this.renderRecommendation()].filter((n): n is HTMLElement => !!n));
       this.renderList();
       this.updateAddHelp();
     } finally {
@@ -1609,11 +1641,11 @@ class Page {
 }
 
 // ---------- Tab bar and page assembly ----------
-const pages: Record<PanelMode, Page> = { claude: new Page('claude'), codex: new Page('codex') };
-// Codicon product glyphs; Codex has none of its own, so it uses the OpenAI mark
-const TAB_ICONS: Record<PanelMode, string> = { claude: 'claude', codex: 'openai' };
-const tabLabels: Record<PanelMode, HTMLElement> = { claude: h('span', { class: 'tab-label' }), codex: h('span', { class: 'tab-label' }) };
-function tabButton(mode: PanelMode): HTMLElement {
+const pages: Record<TabMode, Page> = { claude: new Page('claude'), codex: new Page('codex'), agy: new Page('agy') };
+// Codicon product glyphs; Codex has none of its own, so it uses the OpenAI mark, and agy (Antigravity) the rocket
+const TAB_ICONS: Record<TabMode, string> = { claude: 'claude', codex: 'openai', agy: 'rocket' };
+const tabLabels: Record<TabMode, HTMLElement> = { claude: h('span', { class: 'tab-label' }), codex: h('span', { class: 'tab-label' }), agy: h('span', { class: 'tab-label' }) };
+function tabButton(mode: TabMode): HTMLElement {
   const button = h('button', { class: 'tab', type: 'button', role: 'tab', id: `tab-${mode}`, 'aria-controls': `panel-${mode}` },
     h('vscode-icon', { name: TAB_ICONS[mode], size: '14', 'aria-hidden': 'true' }), tabLabels[mode]);
   return onClick(button, () => {
@@ -1622,17 +1654,18 @@ function tabButton(mode: PanelMode): HTMLElement {
     send({ type: 'setTab', mode });
   });
 }
-const tabButtons: Record<PanelMode, HTMLElement> = { claude: tabButton('claude'), codex: tabButton('codex') };
-const tabBar = h('div', { class: 'tabs', role: 'tablist' }, tabButtons.claude, tabButtons.codex);
+const tabButtons: Record<TabMode, HTMLElement> = { claude: tabButton('claude'), codex: tabButton('codex'), agy: tabButton('agy') };
+const tabBar = h('div', { class: 'tabs', role: 'tablist' }, tabButtons.claude, tabButtons.codex, tabButtons.agy);
 tabBar.addEventListener('keydown', (event) => {
-  const index = MODES.findIndex((mode) => tabButtons[mode] === event.target);
+  const modes = shownModes();
+  const index = modes.findIndex((mode) => tabButtons[mode] === event.target);
   if (index < 0) return;
-  let next: PanelMode;
+  let next: TabMode;
   switch (event.key) {
-    case 'ArrowRight': next = MODES[(index + 1) % MODES.length]; break;
-    case 'ArrowLeft': next = MODES[(index + MODES.length - 1) % MODES.length]; break;
-    case 'Home': next = MODES[0]; break;
-    case 'End': next = MODES[MODES.length - 1]; break;
+    case 'ArrowRight': next = modes[(index + 1) % modes.length]; break;
+    case 'ArrowLeft': next = modes[(index + modes.length - 1) % modes.length]; break;
+    case 'Home': next = modes[0]; break;
+    case 'End': next = modes[modes.length - 1]; break;
     default: return;
   }
   event.preventDefault();
@@ -1641,15 +1674,23 @@ tabBar.addEventListener('keydown', (event) => {
 });
 
 
-function setActiveTab(mode: PanelMode): void {
+function setActiveTab(mode: TabMode): void {
   activeTab = mode;
   vscode.setState({ tab: mode });
   renderTabs();
 }
 
+// The tab shown: the remembered one, or the host's; a remembered agy tab shows Claude while the agy tab is absent (the
+// memory is kept, so the agy tab comes back selected once agy is found again)
+function shownTab(): TabMode {
+  const tab = activeTab ?? state.active;
+  return shownModes().includes(tab) ? tab : 'claude';
+}
+
 function renderTabs(): void {
-  const active = activeTab ?? state.active;
+  const active = shownTab();
   for (const mode of MODES) {
+    tabButtons[mode].hidden = !shownModes().includes(mode);
     const selected = mode === active;
     tabButtons[mode].classList.toggle('is-active', selected);
     tabButtons[mode].setAttribute('aria-selected', String(selected));
@@ -1659,7 +1700,7 @@ function renderTabs(): void {
 }
 
 const app = document.getElementById('app')!;
-app.replaceChildren(tabBar, pages.claude.root, pages.codex.root);
+app.replaceChildren(tabBar, pages.claude.root, pages.codex.root, pages.agy.root);
 
 // Fixed toolbar at the bottom of the panel: shared by both pages, mode is the current tab. Groups are divided by a
 // separator: information and help, the two disruptive actions together, and the star link on its own
@@ -1683,7 +1724,7 @@ function renderFooter(): void {
             versionsCard.hidden = true;
             return;
           }
-          send({ type: 'tool', mode: activeTab ?? state.active, tool });
+          send({ type: 'tool', mode: shownTab(), tool });
         }),
       ),
     ]).filter((n): n is HTMLElement => !!n),
@@ -1719,7 +1760,7 @@ function applyLocale(): void {
   renderFooter();
   renderVersions();
   // Item labels and values are host strings in the old locale; ask the host to regenerate them
-  if (!versionsCard.hidden) send({ type: 'tool', mode: activeTab ?? state.active, tool: 'cliVersions' });
+  if (!versionsCard.hidden) send({ type: 'tool', mode: shownTab(), tool: 'cliVersions' });
   for (const mode of MODES) pages[mode].applyLocale();
 }
 

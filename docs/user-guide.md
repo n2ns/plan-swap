@@ -13,6 +13,7 @@ Button names below use the English UI. Hover an icon to see its name in your lan
 - [Add and sign in to an account](#add-and-sign-in-to-an-account)
 - [Switch Claude accounts](#switch-claude-accounts)
 - [Enable and switch Codex accounts](#enable-and-switch-codex-accounts)
+- [Switch Antigravity CLI (agy) accounts](#switch-antigravity-cli-agy-accounts)
 - [Use an API card](#use-an-api-card)
 - [Use a Claude API card](#use-a-claude-api-card)
 - [Choose linked or independent accounts](#choose-linked-or-independent-accounts)
@@ -61,7 +62,7 @@ Two kinds of refresh buttons:
 - The refresh button in the panel title bar rescans both account lists and reloads sign-in information.
 - The icons next to **All accounts** check usage limits. See [Read and refresh usage limits](#read-and-refresh-usage-limits).
 
-The footer at the bottom of the panel stays visible on both tabs. Its buttons show versions, open this guide, reload the window, restart the extension host and open the GitHub repository. Your installed PlanSwap version appears below them.
+The footer at the bottom of the panel stays visible on every tab. Its buttons show versions, open this guide, reload the window, restart the extension host and open the GitHub repository. Your installed PlanSwap version appears below them.
 
 ## Add and sign in to an account
 
@@ -151,6 +152,18 @@ Restarting a WSL server disconnects its editor windows and closes their integrat
 Until the restart is done, a banner names the selected account, and the highlighted row is still the account in effect in this window. To see the restart steps again, run **Apply Codex Account: Restart or Show Instructions** from the Command Palette (listed under **Codex Account**).
 
 Changed your mind before restarting? Click the arrow icon on the highlighted (effective) row. This cancels the pending selection; no restart is needed.
+
+## Switch Antigravity CLI (agy) accounts
+
+The **agy** tab appears when the Antigravity CLI (`agy`) is installed where the editor runs (on `PATH`, or `~/.local/bin/agy` on Linux and WSL). agy keeps one Google sign-in at a time; PlanSwap saves a copy of every account agy signs in to and puts back the one you choose. It does not change the Antigravity desktop IDE's sign-in, and in a WSL window it switches only the agy inside WSL.
+
+1. Sign in to agy as usual. The account appears in the **agy** tab as the current card.
+2. To add another account, click **+** and then **Open agy**. In agy, run `/logout`, then `/login`, and sign in with the other Google account. PlanSwap saves it, and the earlier account stays in the list.
+3. To switch, click the switch button on a card, double-click the card, or run **Switch Antigravity Account** (under **Antigravity Account** in the Command Palette). There is no confirmation. agy sessions you start afterwards use that account; sessions that are already running keep theirs until you restart them.
+
+The current card shows the usage limits of each model group (5 hours and 7 days) from agy's `/usage`. Refresh them with the refresh button or **Refresh Antigravity Usage Limits**. Other cards keep their last values and show when they were checked. Only the current card has a terminal button, and it cannot be removed; removing another card deletes only PlanSwap's copy of its sign-in.
+
+If PlanSwap cannot tell which Google account agy is signed in to, the tab shows a warning and switching is turned off so that sign-in is not lost; sign in again in agy (`/logout`, then `/login`). On Linux, if agy keeps its sign-in in the system keyring, switching is not available.
 
 ## Use an API card
 

@@ -5,10 +5,13 @@ import type { Locale } from './i18n';
 
 export type AccountKind = 'default' | 'named' | 'external';
 export type PanelMode = 'claude' | 'codex';
+// Every sidebar tab: the two account vendors plus the Antigravity CLI (agy) tab, which exists only while the agy CLI is found
+export type TabMode = PanelMode | 'agy';
 // Setting planswap.usageDisplay: usage bars and percentages show what is left (the default) or what is used
 export type UsageDisplay = 'remaining' | 'used';
-// openCodexWslSetting: the Settings UI at the Codex extension's run-in-WSL setting (the banner's button)
-export const TOOL_IDS = ['openGlobalMd', 'openSettings', 'reloadWindow', 'restartExtHost', 'cliVersions', 'sync', 'updateCli', 'openHelp', 'openStar', 'refreshUsage', 'refreshAllUsage', 'openCodexWslSetting'] as const;
+// openCodexWslSetting: the Settings UI at the Codex extension's run-in-WSL setting (the banner's button); agySignIn: an
+// integrated terminal running agy, where the user signs in another Google account (agy tab only)
+export const TOOL_IDS = ['openGlobalMd', 'openSettings', 'reloadWindow', 'restartExtHost', 'cliVersions', 'sync', 'updateCli', 'openHelp', 'openStar', 'refreshUsage', 'refreshAllUsage', 'openCodexWslSetting', 'agySignIn'] as const;
 export type ToolId = typeof TOOL_IDS[number];
 
 export interface AccountView {
@@ -92,6 +95,8 @@ export interface TabState {
   hideRecommendation?: boolean;
   // The services an API card of this tab can use, in the order the add form lists them
   apiServices?: ApiServiceView[];
+  // agy only: a localized warning banner (agy's sign-in cannot be recognized or switched on this system)
+  notice?: string;
 }
 
 /** One API card service as the forms list it: id (codexProvider API_SERVICES / claudeProvider CLAUDE_API_SERVICES), display name ('' for custom, which the
@@ -114,11 +119,13 @@ export interface ApiCardInput {
 }
 
 export interface PanelState {
-  active: PanelMode;
+  active: TabMode;
   // UI locale resolved on the host (one of the host LOCALES, from getLocale())
   locale: Locale;
   claude: TabState;
   codex: TabState;
+  // Absent while no agy CLI is found: the page then shows no agy tab
+  agy?: TabState;
   // Setting planswap.usageDisplay; absent means 'remaining'
   usageDisplay?: UsageDisplay;
   // Shared planswap.usageWarningThreshold / usageErrorThreshold: remaining percentages at or below which a usage bar
@@ -129,63 +136,63 @@ export interface PanelState {
 export type ToWebview =
   | { type: 'state'; state: PanelState }
   // Answer to 'add'; error undefined means success. The host posts it even when the add flow throws
-  | { type: 'addResult'; mode: PanelMode; error?: string }
+  | { type: 'addResult'; mode: TabMode; error?: string }
   // Answer to 'rename' for the row `dir`; error undefined means success. Also posted when the rename throws
-  | { type: 'renameResult'; mode: PanelMode; dir: string; error?: string }
+  | { type: 'renameResult'; mode: TabMode; dir: string; error?: string }
   // The webview switches to that tab and focuses the input
-  | { type: 'focusAdd'; mode: PanelMode }
+  | { type: 'focusAdd'; mode: TabMode }
   // CLI and extension versions, shown in a card at the bottom of the panel
   | { type: 'versions'; items: Array<{ label: string; value: string }> }
   // Answer to 'providerModels' with the same request number: the model IDs, or a localized error
-  | { type: 'providerModelsResult'; mode: PanelMode; request: number; models?: string[]; error?: string }
+  | { type: 'providerModelsResult'; mode: TabMode; request: number; models?: string[]; error?: string }
   // Answer to 'saveProvider' for the card `dir`; error undefined means saved
-  | { type: 'saveProviderResult'; mode: PanelMode; dir: string; error?: string }
+  | { type: 'saveProviderResult'; mode: TabMode; dir: string; error?: string }
   // Answer to 'revealProviderKey': the card's saved key, the only message that carries a saved key to the page, posted
   // only on that explicit request; key undefined when the card has none or cannot be read (error: localized reason)
-  | { type: 'providerKeyResult'; mode: PanelMode; dir: string; key?: string; error?: string };
+  | { type: 'providerKeyResult'; mode: TabMode; dir: string; key?: string; error?: string };
 
 // Every message except 'ready' carries the page's mode; the host dispatches by it
 export type FromWebview =
   | { type: 'ready' }
   // The user clicked a tab; the host remembers it
-  | { type: 'setTab'; mode: PanelMode }
-  | { type: 'switch'; mode: PanelMode; dir: string }
-  | { type: 'terminal'; mode: PanelMode; dir: string }
-  | { type: 'subscriptionCheck'; mode: PanelMode; dir: string }
+  | { type: 'setTab'; mode: TabMode }
+  | { type: 'switch'; mode: TabMode; dir: string }
+  | { type: 'terminal'; mode: TabMode; dir: string }
+  | { type: 'subscriptionCheck'; mode: TabMode; dir: string }
   // Sent after the frontend's inline confirmation; the host only handles named rows
-  | { type: 'remove'; mode: PanelMode; dir: string }
+  | { type: 'remove'; mode: TabMode; dir: string }
   // shared: the add section's checkbox; the host treats a missing value as true. provider: an API card, with the
   // key typed in the sidebar (sent only in this message, providerModels and saveProvider; a saved key goes back to the
   // page only in providerKeyResult, on the user's explicit request)
-  | { type: 'add'; mode: PanelMode; name: string; shared: boolean; provider?: ApiCardInput }
+  | { type: 'add'; mode: TabMode; name: string; shared: boolean; provider?: ApiCardInput }
   // List the models of a service's endpoint for an API card form. dir: the card being edited, whose saved key is used
   // when key is '' and service is the card's own. request: echoed in the answer so a stale list is ignored
-  | { type: 'providerModels'; mode: PanelMode; request: number; service: string; baseUrl?: string; key: string; dir?: string }
+  | { type: 'providerModels'; mode: TabMode; request: number; service: string; baseUrl?: string; key: string; dir?: string }
   // An API card edit form's values; key '' keeps the saved key, baseUrl applies to every card except Codex DeepSeek ones.
   // service: another service than the card's changes it; the saved key never follows (key '' then means no key)
-  | { type: 'saveProvider'; mode: PanelMode; dir: string; model: string; baseUrl?: string; key: string; service?: string }
+  | { type: 'saveProvider'; mode: TabMode; dir: string; model: string; baseUrl?: string; key: string; service?: string }
   // The eye button of an API card's edit area: show that card's saved key (answer: providerKeyResult)
-  | { type: 'revealProviderKey'; mode: PanelMode; dir: string }
+  | { type: 'revealProviderKey'; mode: TabMode; dir: string }
   // Convert an independent named account into one shared with the default account (the host confirms with a modal)
-  | { type: 'share'; mode: PanelMode; dir: string }
+  | { type: 'share'; mode: TabMode; dir: string }
   // Convert a shared named account back into an independent one (links removed, default configuration copied; the host
   // confirms with a modal)
-  | { type: 'unshare'; mode: PanelMode; dir: string }
+  | { type: 'unshare'; mode: TabMode; dir: string }
   // Only sent for named rows; the host ignores the default and external rows
-  | { type: 'rename'; mode: PanelMode; dir: string; label: string }
+  | { type: 'rename'; mode: TabMode; dir: string; label: string }
   // Row button: exclude the registered account from recommendations (excluded true) or include it again; the host
   // ignores the external row and treats a non-boolean value as true
-  | { type: 'recommendExclude'; mode: PanelMode; dir: string; excluded: boolean }
+  | { type: 'recommendExclude'; mode: TabMode; dir: string; excluded: boolean }
   // The recommendation card's close button (dir: the recommended account); handled by the panel itself, which hides the
   // card until the recommendation changes
-  | { type: 'recommendDismiss'; mode: PanelMode; dir: string }
+  | { type: 'recommendDismiss'; mode: TabMode; dir: string }
   // After a card was dragged or moved with the keyboard: every row of the page in its new order, the current row
   // first as shown; the host stores the registered rows' names in that order and skips the external row
-  | { type: 'reorder'; mode: PanelMode; dirs: string[] }
+  | { type: 'reorder'; mode: TabMode; dirs: string[] }
   // reload / dismissBanner: the Codex host ignores them
-  | { type: 'reload'; mode: PanelMode }
-  | { type: 'dismissBanner'; mode: PanelMode }
+  | { type: 'reload'; mode: TabMode }
+  | { type: 'dismissBanner'; mode: TabMode }
   // enable: handled by the Codex host only
-  | { type: 'enable'; mode: PanelMode }
+  | { type: 'enable'; mode: TabMode }
   // Per-page Tools buttons, footer toolbar buttons (mode = the current tab) and the usage refresh buttons
-  | { type: 'tool'; mode: PanelMode; tool: ToolId };
+  | { type: 'tool'; mode: TabMode; tool: ToolId };

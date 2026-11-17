@@ -15,9 +15,10 @@ Which document owns which kind of information, and the rules for keeping them. R
 
 | Document | Owns (not) |
 |---|---|
-| [Features](features.md) | Observable behavior of Claude/Codex flows, commands, tools and localization: what the user can see or do in the sidebar, status bar, commands, settings, notifications and the files the user is told about (not storage keys, message names, function or module names, signatures, upstream research or test records). |
+| [Features](features.md) | Observable behavior of Claude/Codex/agy flows, commands, tools and localization: what the user can see or do in the sidebar, status bar, commands, settings, notifications and the files the user is told about (not storage keys, message names, function or module names, signatures, upstream research or test records). |
 | [Claude design](design.md) | Claude switching and shared UI architecture, data model (storage keys included), message protocol, algorithms, rationale, limitations, and the conclusions drawn from upstream facts (not the dated evidence itself, build steps, module inventories or acceptance scripts). |
 | [Codex design](codex-design.md) | Codex switching, shell/env propagation, editor restart, sharing design, Codex storage keys, limitations, and the conclusions drawn from upstream facts (not the dated evidence itself, shared contracts or developer setup). |
+| [agy design](agy-design.md) | Antigravity CLI (agy) account copies, switching, live sign-in stores per platform, usage attribution, agy storage keys, limitations, and the conclusions drawn from upstream facts (not the dated evidence itself or developer setup). |
 | [Development](development.md) | Repository layout, setup, dependencies, build/test/package, release checks, localization terminology, editor troubleshooting (not feature specs or acceptance scripts). |
 | [Third-party notices](../THIRD_PARTY_NOTICES.md) | Attribution and license location for redistributed source/assets (not feature behavior or provider compatibility). |
 | [Manual verification](manual-verification.md) | Preview requirements, WSL acceptance setup, user-operated account checks, expected observations, cleanup (not results of checks; pending verification goes in TODO). |
@@ -27,7 +28,7 @@ Which document owns which kind of information, and the rules for keeping them. R
 
 | Document | Owns (not) |
 |---|---|
-| Research: [Claude Code](research/claude-code.md), [Codex](research/codex.md), [Windows](research/windows.md), [macOS](research/macos.md), [Claude usage](research/claude-usage.md), [Account-read baseline](research/account-read-performance.md) | All dated upstream evidence: the numbered facts the designs rest on, each with its version and source, upstream and own measurements, and how each was obtained (source inspection or runtime check) (not design decisions, implemented behavior or real-account acceptance). |
+| Research: [Claude Code](research/claude-code.md), [Codex](research/codex.md), [agy](research/agy.md), [Windows](research/windows.md), [macOS](research/macos.md), [Claude usage](research/claude-usage.md), [Account-read baseline](research/account-read-performance.md) | All dated upstream evidence: the numbered facts the designs rest on, each with its version and source, upstream and own measurements, and how each was obtained (source inspection or runtime check) (not design decisions, implemented behavior or real-account acceptance). |
 | [Feature feasibility research](research/feature-feasibility.md) | Dated official-interface evidence and verification limits for proposed account workflow improvements. |
 | [Feature expansion proposal](plans/feature-expansion.md) | Proposed delivery order, scope, acceptance criteria, and research gates (not implemented behavior or release commitments). |
 

@@ -147,6 +147,24 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "planswap.agy.switchAccount",
+        "title": "%command.agy.switchAccount%",
+        "category": "%category.agy%",
+        "icon": "$(arrow-swap)"
+      },
+      {
+        "command": "planswap.agy.signIn",
+        "title": "%command.agy.signIn%",
+        "category": "%category.agy%",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "planswap.agy.refreshUsage",
+        "title": "%command.agy.refreshUsage%",
+        "category": "%category.agy%",
+        "icon": "$(refresh)"
+      },
+      {
         "command": "planswap.tools.openClaudeMd",
         "title": "%command.tools.openClaudeMd%",
         "category": "%category.tools%",
@@ -491,6 +509,20 @@
           "command": "planswap.refresh",
           "when": "view == planswap.accounts",
           "group": "navigation@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "planswap.agy.switchAccount",
+          "when": "planswap.agyAvailable"
+        },
+        {
+          "command": "planswap.agy.signIn",
+          "when": "planswap.agyAvailable"
+        },
+        {
+          "command": "planswap.agy.refreshUsage",
+          "when": "planswap.agyAvailable"
         }
       ]
     }

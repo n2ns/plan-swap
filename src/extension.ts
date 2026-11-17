@@ -32,6 +32,7 @@ import { codexDefaultDir } from './codex/codexPaths';
 import { preserveProviderConfig } from './codex/codexProvider';
 import { IdentityWarnings, claudeIdentity, codexIdentity, type IdentitySource } from './identityWarnings';
 import { createUsageOrchestration } from './usageOrchestration';
+import { registerAgy } from './agy/agyCommands';
 
 // Official extensions whose bundled binaries answer usage queries (and start account terminals) when the CLI is not on PATH
 const CLAUDE_EXTENSION_ID = 'anthropic.claude-code';
@@ -208,6 +209,13 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     for (const id of ['enable', 'disable', 'switchAccount', 'addAccount', 'shareAccount', 'removeAccount', 'openTerminal', 'restartServer', 'refreshUsage', 'refreshAllUsage']) {
       ctx.subscriptions.push(vscode.commands.registerCommand(`planswap.codex.${id}`, notify));
     }
+  }
+
+  // The agy tab (shown only while the agy CLI is found); a failure here only loses that tab
+  try {
+    ctx.subscriptions.push(...registerAgy({ panel, state, labels: new LabelStore(state, 'agy.labels'), runGenericTool: (tool) => runTool('claude', tool, tools) }));
+  } catch (err) {
+    console.error('[planswap] agy initialization failed:', err);
   }
 
   ctx.subscriptions.push(

@@ -1,0 +1,48 @@
+# PlanSwap: agy (Antigravity CLI) Design
+
+How PlanSwap switches the Google account of the Antigravity CLI (`agy`) and shows its usage limits. Upstream evidence: [agy research](research/agy.md) ("Fact N"). Observable behavior: [Features 16](features.md#16-agy-antigravity-cli-accounts). Module contracts: the headers of `src/agy/agyLogin.ts`, `agyAccounts.ts`, `agyUsage.ts` and `agyCommands.ts`.
+
+## 1. Goals and scope
+
+- Manage the Google accounts the agy CLI signs in to: keep a copy of every account agy has signed in to, switch agy's sign-in to one of them when the user asks, and show each account's usage limits.
+- Scope is the agy CLI on the machine or WSL distribution the extension host runs in. It is not a Gemini API key provider, and it does not switch the Antigravity desktop IDE's own sign-in or Windows-side agy from WSL (it never reads `/mnt/c` or Windows credentials).
+- Switching is the user's action: no confirmation dialog, no check that agy is running, no stopping of agy processes and no automatic switching when a limit runs out (Fact 8). Sessions that are already running keep the account they started with until the user restarts them, which the success message says.
+- The tab exists only while the agy CLI is found (`findAgy`: the first `agy` on PATH, on Windows `agy.exe` / `agy.cmd`, otherwise `~/.local/bin/agy`, Fact 7; on Linux the Windows folders WSL appends to PATH, `/mnt/<drive>/...`, are skipped, so a Windows-side agy is never found or run), checked on activation and whenever the window regains focus. Saved accounts stay on disk while the CLI is missing.
+
+## 2. Why copies of the sign-in
+
+agy has one global sign-in and no per-account folder or option (Fact 1), so unlike Claude (`CLAUDE_CONFIG_DIR`) and Codex (`CODEX_HOME`) an account cannot be selected by pointing the CLI at another directory. PlanSwap therefore keeps its own copy of each sign-in and writes the chosen copy into the place agy reads (Facts 2 to 5). This is the only place where PlanSwap stores and writes credentials of an official client; the rules are in [AGENTS.md](../AGENTS.md#account-and-data-safety).
+
+## 3. Data model
+
+- **Saved accounts**: `~/.config/planswap/agy/accounts/<name>/credential.json`, the sign-in document as JSON, folders 700 and the file 600 (POSIX; native Windows uses the profile's ACLs). `<name>` is `g` plus 12 hex digits of the SHA-256 of the lower-cased email, so no address appears in a path. Written by temporary file and rename.
+- **Identity**: the email from the `id_token` payload (no signature check) or `id_token_email`, lower-cased. A sign-in is matched to a saved account by its refresh token first, then by its email (agy 1.5 drops `id_token`, and a re-login keeps the email). The refresh token is compared in memory only.
+- **State (`state.json`)**: `agy.labels` (aliases by account name), `agy.order` (card order by account name) and `agy.usage` (the last usage observation per account name: windows and `checkedAt`). No token, email or identity is stored there. `panel.activeTab` may be `agy`; while the tab is absent the page shows Claude and keeps the stored tab.
+- **Live sign-in** (`liveStore`): Linux / WSL the file `~/.gemini/antigravity-cli/antigravity-oauth-token`; macOS the Keychain item through `/usr/bin/security`, value `go-keyring-base64:` + base64; Windows the Credential Manager item `gemini:antigravity` through PowerShell `CredReadW` / `CredWriteW`, bare JSON of at most 2560 bytes (an oversized `id_token` is replaced by `id_token_email`, as agy 1.5 writes it). The document travels on stdin, never in arguments, the environment or logs.
+
+## 4. Reading the live sign-in
+
+`AgyAccounts.sync` reads agy's sign-in and saves it: a sign-in of a saved account replaces that copy when it differs (agy renewed its tokens; a renewed document without an email keeps the saved email as `id_token_email`, the field agy 1.5 itself writes, so the copy stays recognizable), a sign-in with a new email becomes a new account, and a sign-in without an email that matches no saved account is **unrecognized** (not saved; the tab shows a warning and refuses to switch, so it is never overwritten). `sync`, `switchTo` and `remove` run one at a time (a Keychain or Credential Manager access is a separate process, and interleaved switches could report a switch the other one undid). The panel caches the result (a Keychain or Credential Manager read starts a process) and reads again on activation, on focus, after each action and, on Linux / WSL, when agy's token file changes (a file watcher of its own, so a token renewal is saved at once).
+
+## 5. Switching
+
+`AgyAccounts.switchTo(name)`:
+
+1. Refuse when agy would not read what PlanSwap writes: on Linux, an item for service `gemini` / user `antigravity` in the Secret Service (looked up with `gdbus` `SearchItems`, which returns object paths only; Fact 3). No gdbus or no session bus means agy uses its file.
+2. Wait for a running usage query (its agy must not write back the previous sign-in after the switch), then `sync`, so the current account's latest tokens are saved before they are replaced; refuse an unrecognized sign-in; do nothing when the target is already signed in.
+3. Write the target's copy, read it back and check that it is the target's sign-in (refresh token, then email). On a mismatch write the previous account's copy back and report the failure; a failure is never shown as a switch.
+4. Refresh the panel and query the new account's usage limits.
+
+PlanSwap never refreshes tokens, signs in or contacts Google itself. A running agy that renews its tokens after a switch may write the previous account's sign-in back (Fact 9); that is not handled beyond the message that running sessions keep their account.
+
+## 6. Usage limits
+
+`agy -p /usage --output-format json` (Fact 6), run by the user's agy CLI in the home folder for the signed-in account only, on activation and on focus once the last observation is 15 minutes old, after a switch, and from the refresh button or command. The answer names no account, so it is kept only when `sync` reports the same account before and after the query; otherwise it is dropped. While agy reads the Linux keyring (5, step 1) no row is current and nothing is queried, since PlanSwap's file may hold another account. An automatic request joins a running query; a manual one and the one after a switch wait for it and run their own. A timed-out query through a Windows `agy.cmd` shim ends its whole process tree. Each bucket becomes a usage window scoped by its model group (`5h` → 5 hours, `weekly` → 7 days); the other rows show their own last observation with its time. Raw CLI output is parsed in memory and never logged or stored. The agy tab has no recommendations and no refresh-all (only the signed-in account can be queried).
+
+## 7. User interface
+
+The third sidebar tab (rocket icon, label `agy`) is in the state only while the CLI is found (`PanelState.agy`). Rows are the saved accounts: the signed-in one first, with its terminal button (a terminal running `agy`) and the refresh button; the others with Switch and Remove. Rename and drag ordering work as on the other tabs; the default label is the email's local part. The add section explains signing in another account in agy and opens an agy terminal (`agySignIn`). A host-localized warning (`TabState.notice`) appears when the sign-in cannot be read, is unrecognized or cannot be switched on this system. Remove deletes only PlanSwap's copy (and its alias, order entry and usage record); the signed-in account cannot be removed. Command Palette: `planswap.agy.switchAccount`, `planswap.agy.signIn`, `planswap.agy.refreshUsage`, shown only while `planswap.agyAvailable` is set.
+
+## 8. Platforms and verification
+
+Verified on WSL with agy 1.5.10 (file store, `/usage` format). The macOS Keychain and Windows Credential Manager paths follow the encodings of Facts 4 and 5 and are covered by unit tests with fake processes only; switching with two real accounts, and agy's behavior after a switch, are pending user acceptance ([TODO](../TODO.md)).

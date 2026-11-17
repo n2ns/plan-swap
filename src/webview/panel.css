@@ -105,6 +105,8 @@ body {
   min-width: 0;
   transition: background var(--ease), color var(--ease), box-shadow var(--ease);
 }
+/* The agy tab is hidden while the host finds no agy CLI; display above would override [hidden] */
+.tab[hidden] { display: none; }
 .tab vscode-icon { flex: none; color: inherit; }
 .tab-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tab:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 6%, transparent); }
@@ -144,6 +146,8 @@ body {
 .banner-title { display: flex; align-items: flex-start; gap: 6px; font-weight: 600; }
 .banner-icon { flex: none; color: var(--banner-color); margin-top: 1px; }
 .banner-title-text { min-width: 0; overflow-wrap: anywhere; }
+/* agy notice: a full sentence from the host, read as body text beside its warning icon */
+.banner-notice .banner-title { font-weight: normal; }
 .banner-text { color: var(--muted); font-size: max(11px, 0.9em); overflow-wrap: anywhere; }
 /* Usage summary of the recommended account: one readable line, wrapping at the separators */
 .banner-text.recommend-text { color: var(--secondary); }
