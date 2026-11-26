@@ -54,16 +54,17 @@ test('settings: a missing settings.json is created as an empty object after the 
   ctx.mock.method(window, 'showInformationMessage', async () => t('tools.create'));
   await openAgySettings();
   assert.equal(fs.readFileSync(agySettingsFile(tmp.home), 'utf8'), '{}\n');
-  assert.equal(fs.statSync(agySettingsFile(tmp.home)).mode & 0o777, 0o600);
+  // POSIX file modes only; Windows keeps the profile's ACLs
+  if (process.platform !== 'win32') assert.equal(fs.statSync(agySettingsFile(tmp.home)).mode & 0o777, 0o600);
   fs.writeFileSync(agySettingsFile(tmp.home), '{"a":1}');
   await openAgySettings();
   assert.equal(fs.readFileSync(agySettingsFile(tmp.home), 'utf8'), '{"a":1}');
 });
 
-test('update: a terminal runs the found CLI with update', (ctx) => {
+test('update: a terminal runs the found CLI with update (Windows: agy by name)', (ctx) => {
   const created = ctx.mock.method(window, 'createTerminal', window.createTerminal);
   updateAgy('/opt/my agy');
   const terminal = created.mock.calls[0].result as StubTerminal;
-  assert.deepEqual(terminal.sent, ["'/opt/my agy' update"]);
+  assert.deepEqual(terminal.sent, [process.platform === 'win32' ? 'agy update' : "'/opt/my agy' update"]);
   assert.equal(terminal.shown, 1);
 });

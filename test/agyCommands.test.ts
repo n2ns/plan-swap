@@ -145,7 +145,8 @@ test('the Update CLI tool runs agy update with the found CLI', async (ctx) => {
   const created = ctx.mock.method(window, 'createTerminal', window.createTerminal);
   start();
   await panel.handler!({ type: 'tool', mode: 'agy', tool: 'updateCli' });
-  assert.deepEqual((created.mock.calls[0].result as StubTerminal).sent, ["'/opt/agy' update"]);
+  // Windows runs agy by name (it is found on PATH there); elsewhere the found file by its quoted path
+  assert.deepEqual((created.mock.calls[0].result as StubTerminal).sent, [process.platform === 'win32' ? 'agy update' : "'/opt/agy' update"]);
 });
 
 test('checkMessage accepts the agy tab and its sign-in tool', () => {
