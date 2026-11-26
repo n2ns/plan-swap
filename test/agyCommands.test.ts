@@ -12,7 +12,7 @@ import { applySidebarDisplay, checkMessage } from '../src/accountsPanel';
 import { LabelStore } from '../src/labels';
 import type { AccountView, FromWebview, ToWebview } from '../src/protocol';
 import { MemoryMemento, makeTempHome, type TempHome } from './helpers';
-import { commands as stubCommands } from './stubs/vscode';
+import { commands as stubCommands, window, type StubTerminal } from './stubs/vscode';
 
 const doc = (email: string, refresh: string) => ({ token: { access_token: `access-${refresh}`, refresh_token: refresh }, auth_method: 'consumer', id_token_email: email });
 
@@ -139,6 +139,13 @@ describe('agy tab', () => {
     await panel.handler!({ type: 'switch', mode: 'agy', dir: '/elsewhere' });
     assert.equal(store.value, undefined);
   });
+});
+
+test('the Update CLI tool runs agy update with the found CLI', async (ctx) => {
+  const created = ctx.mock.method(window, 'createTerminal', window.createTerminal);
+  start();
+  await panel.handler!({ type: 'tool', mode: 'agy', tool: 'updateCli' });
+  assert.deepEqual((created.mock.calls[0].result as StubTerminal).sent, ["'/opt/agy' update"]);
 });
 
 test('checkMessage accepts the agy tab and its sign-in tool', () => {

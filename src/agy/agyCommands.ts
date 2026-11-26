@@ -20,6 +20,7 @@ import type { AccountView, FromWebview, ToolId } from '../protocol';
 import { accountTerminalShell, hasControlChars, shQuote } from '../terminalShell';
 import { AgyAccounts, type AgyAccount, type LiveState } from './agyAccounts';
 import { AgyError, agyTokenFile, liveStore, type AgyErrorCode, type LiveStore } from './agyLogin';
+import { openAgyRules, openAgySettings, updateAgy } from './agyTools';
 import { findAgy, readAgyUsage, type AgyUsage, type AgyUsageResult } from './agyUsage';
 
 const MODE = 'agy';
@@ -27,7 +28,7 @@ const ORDER_KEY = 'agy.order';
 const USAGE_KEY = 'agy.usage';
 // The signed-in account's limits are queried again on focus once its last observation is this old
 const USAGE_STALE_MS = 15 * 60_000;
-// Footer tools that do not depend on the tab; the agy page has no other tools
+// Footer tools that do not depend on the tab; the page's own tools are in agyTools
 const GENERIC_TOOLS: readonly ToolId[] = ['openHelp', 'openStar', 'reloadWindow', 'restartExtHost', 'cliVersions'];
 
 export interface AgyDeps {
@@ -326,6 +327,9 @@ export function registerAgy(deps: AgyDeps): vscode.Disposable[] {
       case 'tool':
         if (msg.tool === 'agySignIn') signIn();
         else if (msg.tool === 'refreshUsage' || msg.tool === 'refreshAllUsage') await refreshUsage(true);
+        else if (msg.tool === 'openGlobalMd') await openAgyRules();
+        else if (msg.tool === 'openSettings') await openAgySettings();
+        else if (msg.tool === 'updateCli') { if (cli) updateAgy(cli); }
         else if (GENERIC_TOOLS.includes(msg.tool)) await deps.runGenericTool(msg.tool);
         return;
       default:

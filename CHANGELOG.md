@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- agy: the page has a **Tools** section: **Rules** opens one of agy's global rules files, **agy Settings** opens agy's `settings.json`, and **Update CLI** runs `agy update`.
+- agy: the versions card in the footer also lists the agy CLI version.
+
 ## [0.7.1] - 2026-11-18
 
 ### Changed

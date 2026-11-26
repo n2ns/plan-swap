@@ -163,6 +163,8 @@ cmd.exe /c 'start "" "vscode://n2ns.planswap/switch?account=default&distro=Ubunt
 
 当前账号的卡片显示 agy `/usage` 给出的每个模型组的用量额度（5小时和7天），可用刷新按钮或 **刷新 Antigravity 用量额度** 刷新。其他卡片保留上次的数值并显示查询时间。只有当前账号的卡片有终端按钮，且不能移除；移除其他卡片只会删除 PlanSwap 保存的登录副本。
 
+**工具** 中，**规则** 会列出已存在的 agy 全局规则文件（`~/.gemini/GEMINI.md`、`~/.gemini/AGENTS.md`、`~/.gemini/config/` 下的同名两个文件，以及 `~/.gemini/config/rules/` 中的 `.md` 文件），打开你选中的那个；一个都没有时，会询问是否创建 `~/.gemini/GEMINI.md`。**agy 设置** 打开 `~/.gemini/antigravity-cli/settings.json`（不存在时询问是否创建），**更新 CLI** 在终端中运行 `agy update`。
+
 如果 PlanSwap 无法确定 agy 登录的是哪个 Google 账号，标签页会显示警告并停用切换，以免丢失该登录；请在 agy 中重新登录（先 `/logout`，再 `/login`）。在 Linux 上，如果 agy 把登录保存在系统密钥环中，或 PlanSwap 无法排除这种可能，则无法切换。
 
 ## 使用 API 卡片
@@ -329,7 +331,7 @@ PlanSwap 启动或刷新时，会把在你的主目录中找到的、名称有�
 
 | 按钮 | 作用 |
 | --- | --- |
-| 显示 CLI 与插件版本 | 显示或隐藏一张卡片，列出两个 CLI 和两个官方插件。未安装的项显示 **未找到**。 |
+| 显示 CLI 与插件版本 | 显示或隐藏一张卡片，列出 Claude Code、Codex 和 agy 三个 CLI 以及两个官方插件。未安装的项显示 **未找到**。 |
 | 使用说明 | 在 GitHub 上打开本说明。 |
 | 重新加载窗口 | 立即重新加载当前窗口，不会询问。 |
 | 重启扩展宿主 | 立即重启扩展宿主，不会询问。 |

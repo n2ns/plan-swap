@@ -163,6 +163,8 @@ The **agy** tab appears when the Antigravity CLI (`agy`) is installed where the 
 
 The current card shows the usage limits of each model group (5 hours and 7 days) from agy's `/usage`. Refresh them with the refresh button or **Refresh Antigravity Usage Limits**. Other cards keep their last values and show when they were checked. Only the current card has a terminal button, and it cannot be removed; removing another card deletes only PlanSwap's copy of its sign-in.
 
+Under **Tools**, **Rules** lists agy's global rules files that exist (`~/.gemini/GEMINI.md`, `~/.gemini/AGENTS.md`, the same two under `~/.gemini/config/`, and the `.md` files in `~/.gemini/config/rules/`) and opens the one you pick; if there are none, it offers to create `~/.gemini/GEMINI.md`. **agy Settings** opens `~/.gemini/antigravity-cli/settings.json` (offering to create it when missing), and **Update CLI** runs `agy update` in a terminal.
+
 If PlanSwap cannot tell which Google account agy is signed in to, the tab shows a warning and switching is turned off so that sign-in is not lost; sign in again in agy (`/logout`, then `/login`). On Linux, if agy keeps its sign-in in the system keyring, or PlanSwap cannot rule that out, switching is not available.
 
 ## Use an API card
@@ -329,7 +331,7 @@ The footer provides:
 
 | Button | Action |
 | --- | --- |
-| Show CLI and extension versions | Shows or hides a card listing both CLIs and both official extensions. Anything not installed shows **Not found**. |
+| Show CLI and extension versions | Shows or hides a card listing the Claude Code, Codex and agy CLIs and the two official extensions. Anything not installed shows **Not found**. |
 | User guide | Opens this guide on GitHub. |
 | Reload Window | Reloads the current window right away, without asking. |
 | Restart Extension Host | Restarts the extension host right away, without asking. |

@@ -163,6 +163,8 @@ La pestaña **agy** aparece cuando la CLI de Antigravity (`agy`) está instalada
 
 La tarjeta de la cuenta actual muestra los límites de uso de cada grupo de modelos (5 h y 7 días) según el `/usage` de agy. Actualízalos con el botón de actualizar o con **Actualizar límites de uso de Antigravity**. Las demás tarjetas conservan sus últimos valores y muestran cuándo se consultaron. Solo la tarjeta actual tiene botón de terminal y no se puede quitar; quitar otra tarjeta solo borra la copia de su sesión que guarda PlanSwap.
 
+En **Herramientas**, **Reglas** muestra los archivos de reglas globales de agy que existen (`~/.gemini/GEMINI.md`, `~/.gemini/AGENTS.md`, los mismos dos en `~/.gemini/config/` y los archivos `.md` de `~/.gemini/config/rules/`) y abre el que elijas; si no hay ninguno, ofrece crear `~/.gemini/GEMINI.md`. **Ajustes de agy** abre `~/.gemini/antigravity-cli/settings.json` (y ofrece crearlo si falta), y **Actualizar CLI** ejecuta `agy update` en un terminal.
+
 Si PlanSwap no puede saber con qué cuenta de Google tiene la sesión iniciada agy, la pestaña muestra un aviso y el cambio se desactiva para no perder esa sesión; vuelve a iniciar sesión en agy (`/logout` y luego `/login`). En Linux, si agy guarda su sesión en el llavero del sistema, o PlanSwap no puede descartarlo, no se puede cambiar.
 
 ## Usar una tarjeta API
@@ -329,7 +331,7 @@ El pie ofrece:
 
 | Botón | Acción |
 | --- | --- |
-| Ver versiones de CLI y extensiones | Muestra u oculta una tarjeta con ambas CLI y ambas extensiones oficiales. Lo que no esté instalado muestra **No encontrado**. |
+| Ver versiones de CLI y extensiones | Muestra u oculta una tarjeta con las CLI de Claude Code, Codex y agy y las dos extensiones oficiales. Lo que no esté instalado muestra **No encontrado**. |
 | Guía de uso | Abre esta guía en GitHub. |
 | Recargar ventana | Recarga la ventana actual de inmediato, sin preguntar. |
 | Reiniciar Extension Host | Reinicia el Extension Host de inmediato, sin preguntar. |

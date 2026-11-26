@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import fsModule from 'node:fs';
 import * as path from 'node:path';
-import { checkSharedInBackground, runTool } from '../src/tools';
+import { agyCliVersion, checkSharedInBackground, runTool } from '../src/tools';
 import { LinkCheckNotices } from '../src/linkCheck';
 import { ensureClaudeLinks } from '../src/claudeShare';
 import { syncClaudeAccount } from '../src/claudeSync';
@@ -549,5 +549,21 @@ describe('user guide button', () => {
         assert.equal(String(open.mock.calls.at(-1)?.arguments[0]), `https://github.com/n2ns/plan-swap/blob/main/docs/${file}`, locale);
       }
     } finally { setLocale('en'); }
+  });
+});
+
+describe('agyCliVersion', () => {
+  test('runs --version of the found agy', POSIX_ONLY, async () => {
+    const tmp = makeTempHome('versions-agy');
+    try {
+      // Not named agy: the test guard refuses to run any file of that name
+      const agy = path.join(tmp.home, 'fake-agy');
+      fs.writeFileSync(agy, '#!/bin/sh\n[ "$1" = --version ] && echo 9.8.7\n', { mode: 0o755 });
+      assert.equal(await agyCliVersion(agy), '9.8.7');
+    } finally { tmp.restore(); }
+  });
+
+  test('shows Not found when no agy is found', async () => {
+    assert.equal(await agyCliVersion(undefined), t('tools.ver.notFound'));
   });
 });

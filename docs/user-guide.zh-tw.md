@@ -163,6 +163,8 @@ cmd.exe /c 'start "" "vscode://n2ns.planswap/switch?account=default&distro=Ubunt
 
 目前帳號的卡片顯示 agy `/usage` 提供的每個模型群組的用量額度（5小時和7天），可用重新整理按鈕或 **重新整理 Antigravity 用量額度** 重新整理。其他卡片保留上次的數值並顯示查詢時間。只有目前帳號的卡片有終端機按鈕，且不能移除；移除其他卡片只會刪除 PlanSwap 儲存的登入副本。
 
+**工具** 中，**規則** 會列出已存在的 agy 全域規則檔（`~/.gemini/GEMINI.md`、`~/.gemini/AGENTS.md`、`~/.gemini/config/` 下的同名兩個檔案，以及 `~/.gemini/config/rules/` 中的 `.md` 檔），開啟你選取的那個；一個都沒有時，會詢問是否建立 `~/.gemini/GEMINI.md`。**agy 設定** 開啟 `~/.gemini/antigravity-cli/settings.json`（不存在時詢問是否建立），**更新 CLI** 在終端機中執行 `agy update`。
+
 如果 PlanSwap 無法確定 agy 登入的是哪個 Google 帳號，索引標籤會顯示警告並停用切換，以免遺失該登入；請在 agy 中重新登入（先 `/logout`，再 `/login`）。在 Linux 上，如果 agy 將登入儲存在系統金鑰圈中，或 PlanSwap 無法排除這種可能，則無法切換。
 
 ## 使用 API 卡片
@@ -329,7 +331,7 @@ PlanSwap 啟動或重新整理時，會把在你的主目錄中找到、名稱�
 
 | 按鈕 | 動作 |
 | --- | --- |
-| 顯示 CLI 與擴充功能版本 | 顯示或隱藏一張卡片，列出兩個 CLI 和兩個官方擴充功能。未安裝的項目會顯示 **找不到**。 |
+| 顯示 CLI 與擴充功能版本 | 顯示或隱藏一張卡片，列出 Claude Code、Codex 和 agy 三個 CLI 以及兩個官方擴充功能。未安裝的項目會顯示 **找不到**。 |
 | 使用指南 | 在 GitHub 上開啟本指南。 |
 | 重新載入視窗 | 立即重新載入目前視窗，不會詢問。 |
 | 重新啟動擴充功能主機 | 立即重新啟動擴充功能主機，不會詢問。 |

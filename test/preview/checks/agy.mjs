@@ -1,6 +1,7 @@
 // The agy (Antigravity CLI) tab: shown only while the host sends its state; the signed-in account first with the
 // terminal button and the refresh button, other saved accounts with Switch and Remove; scoped usage windows; the add
-// section's sign-in button and help; the warning banner; nothing outside the sidebar
+// section's sign-in button and help; the Tools section (rules, settings, Update CLI, no Re-link); the warning banner;
+// nothing outside the sidebar
 export async function run(ctx) {
   const { page, locale, width, step, shot } = ctx;
   const inside = (selector) => page.evaluate((sel) => {
@@ -39,10 +40,23 @@ export async function run(ctx) {
   await step('refresh shown, refresh-all hidden',
     await page.locator('#panel-agy [data-action="refreshUsage"]').isVisible() && await page.locator('#panel-agy [data-action="refreshAllUsage"]').isHidden());
   await step('no recommendation exclude toggles', await page.locator('#panel-agy [data-action="recommendExclude"]').count() === 0);
-  await step('no page tools', await page.locator('#panel-agy .page-tools').isHidden());
+  const tools = page.locator('#panel-agy .page-tools-row vscode-button:visible');
+  await step('page tools: rules, settings and Update CLI, no Re-link',
+    await tools.count() === 3 && JSON.stringify(await tools.evaluateAll((bs) => bs.map((b) => b.getAttribute('icon')))) === JSON.stringify(['symbol-ruler', 'settings-gear', 'cloud-download']));
+  await step('page tool labels are not cut off', await tools.evaluateAll((bs) => bs.every((b) => {
+    const base = b.shadowRoot.querySelector('[part~="base"]');
+    return !!base && base.scrollWidth <= base.clientWidth + 1;
+  })));
+  await step('page tools stay inside the sidebar', await inside('#panel-agy .page-tools, #panel-agy .page-tools *'));
   await step('rows stay inside the sidebar', await inside('#panel-agy .row, #panel-agy .row *'));
   await step('no horizontal scroll', await noHorizontalScroll());
   await shot(`${locale}-${width}-agy.png`);
+
+  // Each page tool sends its tool id with the agy mode
+  await page.evaluate(() => window.preview.clearMessages());
+  for (let i = 0; i < 3; i++) await tools.nth(i).click();
+  const toolMessages = await page.evaluate(() => window.preview.messages.filter((m) => m.type === 'tool').map((m) => `${m.mode}:${m.tool}`));
+  await step('page tools send openGlobalMd, openSettings and updateCli', JSON.stringify(toolMessages) === JSON.stringify(['agy:openGlobalMd', 'agy:openSettings', 'agy:updateCli']));
 
   // Switch sends the row's directory
   await page.evaluate(() => window.preview.clearMessages());

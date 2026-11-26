@@ -1518,16 +1518,12 @@ class Page {
   }
 
   // Page tools, including CLI updates (shown even when Codex is not enabled), always shown; Re-link only when the page
-  // has a linked account, so it comes last and its showing or hiding never moves the other buttons
+  // has a linked account, so it comes last and its showing or hiding never moves the other buttons. agy has no linked
+  // accounts, so no Re-link; its rules button opens a picker of agy's global rules files
   private renderTools(): HTMLElement {
     const btn = (icon: string, label: string, title: string, tool: ToolId): HTMLElement =>
       onClick(h('vscode-button', { secondary: true, icon, title }, label), () => this.send({ type: 'tool', tool }));
-    // agy has no global instructions file, settings or linked accounts PlanSwap manages: no page tools
-    if (this.mode === 'agy') {
-      this.syncButton = h('span', { hidden: true });
-      return h('div', { class: 'page-tools', hidden: true });
-    }
-    this.syncButton = btn('sync', t('tools.sync'), t(`${this.mode}.syncTitle`), 'sync');
+    this.syncButton = this.mode === 'agy' ? h('span', { hidden: true }) : btn('sync', t('tools.sync'), t(`${this.mode}.syncTitle`), 'sync');
     this.updateSyncButton();
     return h(
       'div',
@@ -1536,7 +1532,7 @@ class Page {
       h(
         'div',
         { class: 'page-tools-row' },
-        btn('symbol-ruler', this.text.mdLabel, t(`${this.mode}.mdTitle`), 'openGlobalMd'),
+        btn('symbol-ruler', this.mode === 'agy' ? t('agy.rulesLabel') : this.text.mdLabel, t(`${this.mode}.mdTitle`), 'openGlobalMd'),
         btn('settings-gear', t(`${this.mode}.settingsLabel`), t(`${this.mode}.settingsTitle`), 'openSettings'),
         btn('cloud-download', t('tools.updateCli'), t('tools.updateCliTitle'), 'updateCli'),
         this.syncButton,
@@ -1702,7 +1698,7 @@ function renderTabs(): void {
 const app = document.getElementById('app')!;
 app.replaceChildren(tabBar, pages.claude.root, pages.codex.root, pages.agy.root);
 
-// Fixed toolbar at the bottom of the panel: shared by both pages, mode is the current tab. Groups are divided by a
+// Fixed toolbar at the bottom of the panel: shared by all pages, mode is the current tab. Groups are divided by a
 // separator: information and help, the two disruptive actions together, and the star link on its own
 const FOOTER_GROUPS = [
   [['info', 'footer.versions', 'cliVersions'], ['book', 'footer.help', 'openHelp']],

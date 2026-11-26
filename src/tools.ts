@@ -1,7 +1,8 @@
-// Tools of the sidebar: the footer toolbar shared by both tabs (versions, user guide, reload window, restart extension
-// host, star) and each page's "Tools" section (global rules file, settings, Re-link, Update CLI), plus their Command
-// Palette entries. One host implementation serves both entry points; openGlobalMd, openSettings, sync, updateCli and
-// the usage refresh tools depend on the mode, the others ignore it. All texts come from t().
+// Tools of the sidebar: the footer toolbar shared by all tabs (versions, user guide, reload window, restart extension
+// host, star) and the Claude and Codex pages' "Tools" section (global rules file, settings, Re-link, Update CLI), plus
+// their Command Palette entries; the agy page's own tools are in src/agy/agyTools.ts. One host implementation serves
+// both entry points; openGlobalMd, openSettings, sync, updateCli and the usage refresh tools depend on the mode, the
+// others ignore it. All texts come from t().
 import * as vscode from 'vscode';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -22,6 +23,7 @@ import { getLocale, joinSentences, LOCALE_INFO, t } from './i18n';
 import { CLAUDE_REFRESH_ALL_USAGE_COMMAND, CLAUDE_REFRESH_USAGE_COMMAND, CODEX_REFRESH_ALL_USAGE_COMMAND, REFRESH_USAGE_COMMAND } from './statusBar';
 import { isWindows, errText } from './platform';
 import { accountTerminalShell } from './terminalShell';
+import { findAgy } from './agy/agyUsage';
 
 export interface ShareOps {
   isShared(dir: string): boolean;
@@ -354,7 +356,15 @@ async function repairShared(mode: PanelMode, deps: ToolDeps): Promise<void> {
 
 // claude → <current Claude effective dir>/CLAUDE.md; codex → <current Codex effective dir>/AGENTS.md
 async function openGlobalMd(mode: PanelMode): Promise<void> {
-  const file = mode === 'claude' ? path.join(currentDir(), 'CLAUDE.md') : path.join(effectiveDir(), 'AGENTS.md');
+  await openOrCreateFile(mode === 'claude' ? path.join(currentDir(), 'CLAUDE.md') : path.join(effectiveDir(), 'AGENTS.md'));
+}
+
+/**
+ * Opens file in an editor. A missing file is created after a modal confirmation (0600, exclusive, holding content);
+ * for a dangling same-name symlink its target is created instead. createDir also creates the missing parent folders
+ * (0700); without it a missing folder is a create error.
+ */
+export async function openOrCreateFile(file: string, options: { content?: string; createDir?: boolean } = {}): Promise<void> {
   if (!fs.existsSync(file)) {
     // A dangling symlink (e.g. to a deleted default rules file): create its target so the link works again
     const target = danglingLinkTarget(file) ?? file;
@@ -362,7 +372,8 @@ async function openGlobalMd(mode: PanelMode): Promise<void> {
     const ok = await vscode.window.showInformationMessage(t('tools.fileMissingCreate', { file: target }), { modal: true }, createLabel);
     if (ok !== createLabel) return;
     try {
-      fs.writeFileSync(target, '', { mode: 0o600, flag: 'wx' });
+      if (options.createDir) fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
+      fs.writeFileSync(target, options.content ?? '', { mode: 0o600, flag: 'wx' });
     } catch (err) {
       void vscode.window.showErrorMessage(t('tools.createFailed', { error: errText(err) }));
       return;
@@ -426,17 +437,26 @@ function extVersion(id: string): string {
 }
 
 /**
- * Read-only `--version` of the claude and codex CLIs (in parallel, PATH inherited from the extension host, 8 s timeout)
- * and the versions of the Claude Code and Codex extensions. Not found, timed out, failed (first line of the error) and
- * no output each get their own text. No network access and no update check.
+ * `--version` of the found agy CLI (collectVersions passes findAgy, the one the agy tab uses); Not found when none.
+ * Windows runs it by name, since findAgy found it on PATH there.
+ */
+export async function agyCliVersion(found: string | undefined): Promise<string> {
+  return found ? cliVersion(isWindows() ? 'agy' : found) : t('tools.ver.notFound');
+}
+
+/**
+ * Read-only `--version` of the claude, codex and agy CLIs (in parallel, PATH inherited from the extension host, 8 s
+ * timeout; agy through agyCliVersion) and the versions of the Claude Code and Codex extensions. Not found, timed out,
+ * failed (first line of the error) and no output each get their own text. No network access and no update check.
  */
 export async function collectVersions(): Promise<Array<{ label: string; value: string }>> {
-  const [claudeCli, codexCli] = await Promise.all([cliVersion('claude'), cliVersion('codex')]);
+  const [claudeCli, codexCli, agyCli] = await Promise.all([cliVersion('claude'), cliVersion('codex'), agyCliVersion(findAgy())]);
   return [
     { label: 'Claude Code CLI', value: claudeCli },
     { label: t('tools.ver.claudeExt'), value: extVersion('anthropic.claude-code') },
     { label: 'Codex CLI', value: codexCli },
     { label: t('tools.ver.codexExt'), value: extVersion('openai.chatgpt') },
+    { label: 'Antigravity CLI', value: agyCli },
   ];
 }
 
